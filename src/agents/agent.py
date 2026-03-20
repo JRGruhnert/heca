@@ -1,19 +1,10 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from src.modules.buffer import Buffer
 from src.observation.observation import StateValueDict
 from src.skills.skill import Skill
 
 
-@dataclass
-class AgentConfig:
-    pass
-
 
 class Agent(ABC):
-    def __init__(self, config: AgentConfig, buffer: Buffer):
-        self.config = config
-        self.buffer = buffer
 
     @abstractmethod
     def act(
@@ -40,8 +31,9 @@ class Agent(ABC):
 
     @abstractmethod
     def load(self):
+        """Load model from checkpoint path."""
         raise NotImplementedError("Load method not implemented yet.")
-
+    
     @abstractmethod
     def metadata(self) -> dict:
         """Return agent metadata as a dictionary."""

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-
+from torch_geometric.data import Batch, HeteroData
 from src.observation.observation import StateValueDict
 
 

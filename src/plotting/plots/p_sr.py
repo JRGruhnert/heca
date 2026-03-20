@@ -61,7 +61,6 @@ def plot(collection: RunDataCollection):
         plt.xlabel(MAP_LABEL[p_tag])
         plt.ylabel(LABEL_SR)
         # plt.title(f"Network Comparison: {p_tag}")
-        plt.grid(True, alpha=0.3)
         plt.ylim(0, 1.0)
         set_y_ticks()
         save_plot(f"comparison_{p_tag}.png")

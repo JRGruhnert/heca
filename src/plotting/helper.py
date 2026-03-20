@@ -5,6 +5,7 @@ import matplotlib.patches as mpatches
 
 # Sets a gloabal style. Every plot uses this still if this file is imported.
 plt.style.use("seaborn-v0_8")
+
 plt.rcParams.update(
     {
         "font.size": 20,
@@ -89,6 +90,10 @@ MODE_RETRAIN_EVAL = "re"
 MODE_RETRAIN_DOMAIN = "rd"
 
 
+LEGEND_WITHOUT_TREE_AND_EVAL = [
+    mpatches.Patch(facecolor=MAP_COLOR[NT_MLP]["main"], label=MAP_LABEL[NT_MLP]),
+    mpatches.Patch(facecolor=MAP_COLOR[NT_GNN]["main"], label=MAP_LABEL[NT_GNN]),
+]
 LEGEND_WITHOUT_TREE = [
     mpatches.Patch(facecolor=MAP_COLOR[NT_MLP]["main"], label=MAP_LABEL[NT_MLP]),
     mpatches.Patch(facecolor=MAP_COLOR[NT_GNN]["main"], label=MAP_LABEL[NT_GNN]),
@@ -119,6 +124,13 @@ LEGEND_RETRAIN = [
         hatch=HATCH_PATTERN,
         label="Evaluation",
         edgecolor="black",
+        linewidth=1.0,
+    ),
+    mpatches.Patch(
+        facecolor="white",
+        hatch=HATCH_PATTERN,
+        label="Zero-Shot",
+        edgecolor=MAP_COLOR[NT_TREE]["main"],
         linewidth=1.0,
     ),
 ]

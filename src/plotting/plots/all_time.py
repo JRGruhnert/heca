@@ -37,7 +37,7 @@ def plot(collection: RunDataCollection):
     x = np.arange(len(LIST_DOMAIN_SMALL))
     width = 0.20
 
-    fig, ax = plt.subplots(figsize=FIG_SIZE_FLAT)
+    fig, ax = plt.subplots(figsize=FIG_SIZE_HIGH)
 
     ax.bar(
         x - width / 2,
@@ -56,9 +56,9 @@ def plot(collection: RunDataCollection):
 
     ax.set_xlabel(LABEL_SKILLSET)
     ax.set_ylabel(LABEL_EPOCH)
-    set_y_ticks(ax)
+    # set_y_ticks(ax)
     ax.set_xticks(x)
     ax.set_xticklabels(LIST_DOMAIN_SMALL)
-    ax.legend(handles=LEGEND_WITHOUT_TREE)
+    ax.legend(handles=LEGEND_WITHOUT_TREE_AND_EVAL)
     ax.set_title("Comparison of time until 80% Success Rate")
     save_plot("comparison_all_time.png")

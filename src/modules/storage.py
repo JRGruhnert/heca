@@ -103,3 +103,7 @@ class Storage:
     @property
     def skills(self) -> list[Skill]:
         return self._skills
+    
+
+    def skill_by_index(self, idx: int) -> Skill:
+        return self.skills[idx]

@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from src.plotting.helper import *
 
-domains = ["slider", "red\tpink\tblue", "sr", "srp", "srpb"]
+domains = ["slider", "red/pink/blue", "sr", "srp", "srpb"]
 gnn_flops = [125840, 125936, 161840, 197840, 233840]
 gnn_params = [12754, 13410, 13410, 13410, 13410]
 
@@ -21,7 +21,7 @@ def plot():
     width = 0.35
 
     # Create figure with 2 subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 5))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=FIG_SIZE_HIGH)
 
     # Plot 1: FLOPs comparison
     ax1.bar(
@@ -44,7 +44,6 @@ def plot():
     ax1.set_title("FLOPs per Forward Pass")
     ax1.set_xticks(x)
     ax1.set_xticklabels(domains)
-    ax1.legend()
     ax1.set_yscale("log")  # Log scale since difference is large
 
     # Plot 2: Parameters comparison
@@ -68,10 +67,8 @@ def plot():
     ax2.set_title("Network Parameters")
     ax2.set_xticks(x)
     ax2.set_xticklabels(domains)
-    ax2.legend()
     ax2.set_yscale("log")  # Log scale since difference is large
-
-    plt.tight_layout()
+    plt.legend(handles=LEGEND_WITHOUT_TREE_AND_EVAL)
     save_plot("network_stats.png")
 
 
@@ -90,14 +87,14 @@ def plot_ratio():
         x - width / 2,
         flops_ratio,
         width,
-        color=MAP_COLOR[NT_GNN]["main"],
+        color="red",
         label="FLOPs",
     )
     ax.bar(
         x + width / 2,
         params_ratio,
         width,
-        color=MAP_COLOR[NT_MLP]["main"],
+        color=MAP_COLOR[NT_TREE]["main"],
         label="Parameters",
     )
 
@@ -109,7 +106,7 @@ def plot_ratio():
     ax.legend()
 
     # Add horizontal line at 1 for reference
-    ax.axhline(y=1, color="black", linestyle="--", alpha=0.3)
+    # ax.axhline(y=1, color="black", linestyle="--", alpha=0.3)
 
     plt.tight_layout()
     save_plot("network_efficiency_ratio.png")

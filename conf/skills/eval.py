@@ -5,27 +5,28 @@ from src.modules.evaluators.skill import SkillEvaluatorConfig
 from src.modules.evaluators.sparse import SparseEvaluatorConfig
 from src.modules.logger import LogMode, LoggerConfig
 from src.modules.storage import StorageConfig
+from src.variables import SET_SRPB
 
 mode = LogMode.TERMINAL
-render = True
+render = False
 tag = "eval"
 
 config = SkillEvalConfig(
     tag=tag,
-    iterations=5,
+    iterations=100,
     logger=LoggerConfig(
         mode=mode,
         wandb_tag=tag,
     ),
     storage=StorageConfig(
-        used_skills="DrawerBlock",
-        used_states="Debug",
+        used_skills=SET_SRPB,
+        used_states=SET_SRPB,
         tag=tag,
         network="none",
     ),
     experiment=SkillCheckExperimentConfig(
         evaluator=SkillEvaluatorConfig(),
-        max_sample_attempts=100,
+        max_sample_attempts=20,
         sample_with_precons=True,
     ),
     environment=CalvinEnvironmentConfig(render=render),

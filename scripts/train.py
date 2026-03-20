@@ -7,7 +7,7 @@ from src.modules.buffer import BufferConfig, Buffer
 from src.modules.evaluators.evaluator import EvaluatorConfig
 from src.modules.storage import Storage, StorageConfig
 from src.environments.environment import EnvironmentConfig
-from src.agents.agent import AgentConfig
+from src.agents.ppo import PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
 from wandb.wandb_run import Run
 from src.factory import (
@@ -20,7 +20,7 @@ from src.factory import (
 
 @dataclass
 class TrainConfig:
-    agent: AgentConfig
+    agent: PPOAgentConfig
     buffer: BufferConfig
     logger: LoggerConfig
     storage: StorageConfig

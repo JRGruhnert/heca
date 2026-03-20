@@ -24,12 +24,12 @@ def plot(collection: RunDataCollection):
     set_y_ticks(ax4)
 
     for run in [
-        {"run": run_s_g, "name": "GNN Sparse", "color": MAP_COLOR[NT_GNN]["secondary"]},
-        {"run": run_s_b, "name": "MLP Sparse", "color": MAP_COLOR[NT_MLP]["secondary"]},
-        {"run": run_t_g, "name": "GNN Dense", "color": MAP_COLOR[NT_GNN]["main"]},
-        {"run": run_t_b, "name": "MLP Dense", "color": MAP_COLOR[NT_MLP]["main"]},
+        # {"run": run_s_g, "name": "GNN Sparse", "color": MAP_COLOR[NT_GNN]["secondary"]},
+        {"run": run_s_b, "name": "Sparse", "color": MAP_COLOR[NT_TREE]["main"]},
+        # {"run": run_t_g, "name": "GNN Dense", "color": MAP_COLOR[NT_GNN]["main"]},
+        {"run": run_t_b, "name": "Dense", "color": MAP_COLOR[NT_GNN]["main"]},
     ]:
-        batch_stats = run["run"].stats["batch_stats"]
+        batch_stats = run["run"].stats["batch_stats"][0:200]
         epoch_indices = list(range(len(batch_stats)))
         episode_rewards = smooth_data(
             [batch["mean_episode_reward"] for batch in batch_stats]
@@ -95,5 +95,5 @@ def plot(collection: RunDataCollection):
         ax1.get_legend_handles_labels()
     )  # Get the legend handles and labels from one of the axes
     plt.legend(handles, labels)  # Adjust location and layout
-    plt.title(f"Comparison of Reward Modes on the SR SKill Set")
+    # plt.title(f"Comparison of Reward Modes on the SR SKill Set")
     save_plot(f"reward_mode_comparison.png")

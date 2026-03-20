@@ -6,26 +6,48 @@ from src.plotting.helper import *
 
 def plot(collection: RunDataCollection):
     data: dict[str, list] = {
-        "domains": ["slider -> red", "red -> pink", "pink -> blue", "blue -> slider"],
+        "domains": [
+            #    "blue -> slider",
+            #    "slider -> red",
+            #    "red -> pink",
+            #    "pink -> blue",
+            "blue -> slider",
+            "slider -> blue",
+            "blue -> pink",
+            "pink -> blue",
+            "blue -> red",
+            "red -> blue",
+        ],
         NT_GNN: [],
         NT_MLP: [],
     }
 
     for nt in [NT_GNN, NT_MLP]:
-        for domain in ["slider", "red", "pink", "blue"]:
+        for domain in [
+            #    ["blue", "slider"],
+            #    ["slider", "red"],
+            #    ["red", "pink"],
+            #    ["pink", "blue"],
+            ["blue", "slider"],
+            ["slider", "red"],
+            ["red", "pink"],
+            ["pink", "blue"],
+            ["red", "green"],
+            ["pink", "yellow"],
+        ]:
             run_t = collection.get(
                 nt=nt,
-                mode=MODE_TRAIN,
-                origin=domain,
-                dest=domain,
+                mode=MODE_EVAL,
+                origin=domain[0],
+                dest=domain[0],
                 pe=0.0,
                 pr=0.0,
             )
             run_d = collection.get(
                 nt=nt,
                 mode=MODE_DOMAIN,
-                origin=domain,
-                dest=domain,
+                origin=domain[1],
+                dest=domain[1],
                 pe=0.0,
                 pr=0.0,
             )
@@ -39,28 +61,22 @@ def plot(collection: RunDataCollection):
     fig, ax = plt.subplots(figsize=FIG_SIZE_FLAT)
 
     gnn_values = np.array(data[NT_GNN])
-    gnn_colors = np.where(
-        gnn_values >= 0,
-        MAP_COLOR[NT_GNN]["main"],
-        MAP_COLOR[NT_TREE]["secondary"],
-    )
 
     ax.bar(
         x + width / 2,
         gnn_values,
         width,
-        color=gnn_colors,
+        color=MAP_COLOR[NT_GNN]["main"],
         label=f"{MAP_LABEL[NT_GNN]}",
     )
 
     baseline_values = np.array(data[NT_MLP])
-    baseline_colors = np.where(baseline_values >= 0, "green", "red")
 
     ax.bar(
         x - width / 2,
         baseline_values,
         width,
-        color=baseline_colors,
+        color=MAP_COLOR[NT_MLP]["main"],
         label=f"{MAP_LABEL[NT_MLP]}",
     )
 
@@ -69,6 +85,6 @@ def plot(collection: RunDataCollection):
     ax.set_xticklabels(data["domains"])
     ax.set_ylabel("Delta Difference")
     ax.set_xlabel("Skill Set Transfer")
-    ax.set_title("Success Rate Difference between Domain and Evaluation")
+    ax.set_title("Zero-Shot Evaluation between Skill Sets")
     ax.legend()
     save_plot("comparison_domain_sr.png")

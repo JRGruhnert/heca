@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import json
+import loguru
 from omegaconf import OmegaConf, SCMode
 from tapas_gmm.utils.argparse import parse_and_build_config
 from src.factory import select_environment, select_evaluator
@@ -30,28 +31,38 @@ class SkillEvaluator:
         evaluator = select_evaluator(config.evaluator, self.storage)
         env = select_environment(config.environment, evaluator, self.storage)
         self.experiment = SkillCheckExperiment(config.experiment, env, self.storage)
-        self.results: dict[str, float] = {}
+        self.results: dict[str, dict[str, int]] = {}
 
-    def evaluate_skill(self, skill: Skill) -> float:
-        success_count = 0.0
+    def evaluate_skill(self, skill: Skill) -> tuple[int, int]:
+        success_count = 0
+        failed_to_sample_count = 0
         for _ in range(self.config.iterations):
             if self.experiment.sample_task(skill):
+                loguru.logger.info(f"Evaluating skill: {skill.name}")
                 if self.experiment.step(skill):
-                    success_count += 1.0
+                    success_count += 1
             else:
-                print(f"Could not sample suitable task for skill {skill.name}")
-                break
-        return success_count / self.config.iterations
+                failed_to_sample_count += 1
+        return success_count, failed_to_sample_count
 
     def run(self):
         self.logger.initialize({"iterations_per_skill": self.config.iterations})
 
         # Evaluate all skills
         for index, skill in enumerate(self.storage.skills):
-            self.results[skill.name] = self.evaluate_skill(skill)
+            successes, failed_to_sample = self.evaluate_skill(skill)
+            self.results[skill.name] = {
+                "successes": successes,
+                "failed_to_sample": failed_to_sample,
+                "failures": self.config.iterations - successes - failed_to_sample,
+                "total_attempts": self.config.iterations,
+            }
             metrics = {
                 "skill_name": skill.name,
-                "success_rate": self.results[skill.name],
+                "successes": successes,
+                "failed_to_sample": failed_to_sample,
+                "failures": self.config.iterations - successes - failed_to_sample,
+                "total_attempts": self.config.iterations,
             }
             self.logger.log(metrics)
 

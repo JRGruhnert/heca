@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from loguru import logger
+import loguru
 import torch
 from src.modules.evaluators.skill import SkillEvaluator, SkillEvaluatorConfig
 from src.modules.storage import Storage
@@ -34,8 +35,9 @@ class SkillCheckExperiment(Experiment):
         pre_skill = self._get_prerequisite_skill(skill)
         attempts = 0
         while attempts < self.config.max_sample_attempts:
+            logger.debug(f"Sampling task for skill: {skill.name}, attempt {attempts + 1}")
             current, goal = self.env.sample_task()
-
+            logger.debug(f"Sampled task for skill: {skill.name}, attempt {attempts + 1}")
             if pre_skill:
                 # If the skill has prerequisite (can only be evaluated by executing prerequisite first)
                 pre_precons = self._to_custom_observation(
@@ -56,11 +58,13 @@ class SkillCheckExperiment(Experiment):
                 # print(f"{current['ee_position']}")
                 logger.debug(f"Skill precons: {skill.precons}")
                 equal = self.evaluator.is_equal(main_precons, current)
+            logger.debug(f"Skill: {skill.name}, equal={equal}")
             main_postcons = self._to_custom_observation(
                 skill.postcons,
                 goal,
                 skill.name,
             )
+            logger.debug(f"Skill after: {skill.name}, equal={equal}")
             same_areas = self.evaluator.same_areas(main_postcons, goal)
             logger.debug(f"Sampling attempt: equal={equal}, same_areas={same_areas}")
             if equal and same_areas:
@@ -95,10 +99,10 @@ class SkillCheckExperiment(Experiment):
         # For these skills I can't compare the ee_position
         # Cause they don't start near origin
         if skill_name in [
-            #    "CloseDrawerBack",
+            "CloseDrawerBack",
             "OpenDrawerBack",
-            #    "OpenSlideBack",
-            #    "CloseSlideBack",
+            "OpenSlideBack",
+            "CloseSlideBack",
         ]:
             values.pop("ee_position")
             values.pop("ee_rotation")
@@ -112,6 +116,7 @@ class SkillCheckExperiment(Experiment):
 
     def _get_prerequisite_skill(self, skill: Skill) -> Skill | None:
         """Get the prerequisite skill for a given skill name."""
+        loguru.logger.debug(f"Checking for prerequisite skill for: {skill.name}")
         skill_name = skill.name
         if skill_name.endswith("Back"):
             pre_skill_name = skill_name.removesuffix("Back")

@@ -13,11 +13,11 @@ eval = False
 retrain = True
 
 
-retrain_tag = "t_srpb_sr_pe0.0_pr0.0"
+retrain_tag = "rf_srpb_srp_pe0.0_pr0.0"
 
 network = "baseline"
 
-skills_eval_states = "srp"
+skills_eval_states = "srpb"
 used_states = "srpb"
 
 

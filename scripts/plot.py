@@ -12,19 +12,21 @@ import src.plotting.plots.p_sr as p_sr
 import src.plotting.plots.retrain_sr as retrain_sr
 import src.plotting.plots.reward_sr as reward_sr
 import src.plotting.plots.network_stats as network_stats
+import src.plotting.plots.actions as actions
 
 
 def make_plots(collection: RunDataCollection):
     print("Making plots...")
-    dual_time.plot(collection)  # done
-    all_sr.plot(collection)  # done
-    all_time.plot(collection)  # done
-    domain_sr.plot(collection)  # done
-    p_sr.plot(collection)  # done
-    retrain_sr.plot(collection)  # done
-    # reward_sr.plot(collection)  # done
-    network_stats.plot()  # done
-    network_stats.plot_ratio()  # done
+    # all_sr.plot(collection) # done
+    # all_time.plot(collection) # done
+    #domain_sr.plot(collection)
+    # p_sr.plot(collection)  # done
+    # retrain_sr.plot(collection) # done
+    # reward_sr.plot(collection)
+    # network_stats.plot() # done
+    # network_stats.plot_ratio() # done
+    #dual_time.plot(collection)  # done
+    actions.plot(collection)  # done
 
 
 def entry_point():
@@ -38,11 +40,15 @@ def entry_point():
         "re_srpb_srp",
         "re_srpb_srpb",
         "s_srpb_sr",
+        "rd_srpb_srp",
+        "rd_srpb_srpb",
+        "d_yellow_yellow",
+        "d_green_green",
     ]
     # Default tags and patterns for parsing filenames
     idents = ["t", "r", "e"]
-    origins = ["slider", "red", "pink", "blue", "srpb"]
-    dests = ["slider", "red", "pink", "blue", "sr", "srp", "srpb"]
+    origins = ["slider", "red", "pink", "blue", "srpb", "yellow", "green"]
+    dests = ["slider", "red", "pink", "blue", "sr", "srp", "srpb" "yellow", "green"]
 
     # Generate all combinations of tags
     tags = [
@@ -79,7 +85,9 @@ def entry_point():
                         "dest": tag_match.group("dest"),
                     }
                     # Collect data for further analysis
-                    collection.add(RunData(path, metadata))
+                    run = RunData(path, metadata)
+                    #print(run.stats["batch_stats"][-1])
+                    collection.add(run)
                 else:
                     pass  # print(f"    No tag match for: {file_match.group('tag')}")  # Debug
             else:

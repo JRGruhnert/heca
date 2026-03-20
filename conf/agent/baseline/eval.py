@@ -1,4 +1,4 @@
-from src.agents.ppo.baseline import BaselineAgentConfig
+from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.modules.buffer import BufferConfig
 from src.modules.logger import LogMode, LoggerConfig
@@ -6,25 +6,26 @@ from src.modules.storage import StorageConfig
 from src.experiments.pepr import PePrConfig
 from scripts.train import TrainConfig
 from conf.common.evaluator import dense3_evaluator
+from src.networks.baseline import BaselineNetworkConfig
 
 mode = LogMode.TERMINAL
 render = False
 retrain = False
 eval = True
 
-skills_eval_states = "srpb"
-used_states = "srpb"
-
 network = "baseline"
-checkpoint_tag = f"t_{used_states}_{skills_eval_states}_pe0.0_pr0.0"
+checkpoint_tag = f"t_blue_blue_pe0.0_pr0.0"
+
+skills_eval_states = "red"
+used_states = "red"
 
 
-prefix = "e"
+prefix = "d_blue"
 tag = f"{prefix}_{used_states}_{skills_eval_states}"
 wandb_tag = f"{network}_{tag}"
-
 config = TrainConfig(
-    agent=BaselineAgentConfig(
+    agent=PPOAgentConfig(
+        network=BaselineNetworkConfig(),
         eval=eval,
         max_batches=1,
         early_stop_patience=1,

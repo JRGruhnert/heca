@@ -1,7 +1,6 @@
-from src.agents.agent import Agent, AgentConfig
+from src.agents.agent import Agent
 from src.agents.human import HumanAgent, HumanAgentConfig
-from src.agents.ppo.baseline import BaselineAgent, BaselineAgentConfig
-from src.agents.ppo.gnn import GNNAgent, GNNAgentConfig
+from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.agents.search_tree import SearchTreeAgent, SearchTreeAgentConfig
 from src.environments.environment import Environment, EnvironmentConfig
 from src.modules.buffer import Buffer
@@ -19,6 +18,9 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
     CalvinEnvironmentConfig,
 )
+from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
+from src.networks.gnn import GraphNetwork, GraphNetworkConfig
+from src.networks.network import Network, NetworkConfig
 
 
 def select_experiment(
@@ -37,16 +39,13 @@ def select_experiment(
 
 
 def select_agent(
-    config: AgentConfig,
+    config,
     storage_module: Storage,
     buffer_module: Buffer,
 ) -> Agent:
     """Create agent from config - simple factory function"""
-
-    if isinstance(config, BaselineAgentConfig):
-        return BaselineAgent(config, storage_module, buffer_module)
-    elif isinstance(config, GNNAgentConfig):
-        return GNNAgent(config, storage_module, buffer_module)
+    if isinstance(config, PPOAgentConfig):
+        return PPOAgent(config, buffer_module, storage_module)
     elif isinstance(config, SearchTreeAgentConfig):
         return SearchTreeAgent(config, storage_module, buffer_module)
     elif isinstance(config, HumanAgentConfig):
@@ -86,3 +85,15 @@ def select_environment(
         )
     else:
         raise ValueError(f"Unknown environment type: {type(config)}")
+
+
+def select_network(
+    config: NetworkConfig,
+) -> Network:
+    """Create network from config - simple factory function"""
+    if isinstance(config, BaselineNetworkConfig):
+        return BaselineNetwork(config)
+    elif isinstance(config, GraphNetworkConfig):
+        return GraphNetwork(config)
+    else:
+        raise ValueError(f"Unknown network type: {type(config)}")

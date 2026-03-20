@@ -93,7 +93,7 @@ def plot(collection: RunDataCollection):
         linewidth=1.0,
         hatch=HATCH_PATTERN,
         label=MAP_LABEL[NT_MLP],
-        color=MAP_COLOR[NT_MLP]["main"],
+        color=MAP_COLOR[NT_MLP]["secondary"],
     )
     ax.bar(
         x - width / 2,
@@ -110,7 +110,7 @@ def plot(collection: RunDataCollection):
         linewidth=1.0,
         hatch=HATCH_PATTERN,
         label=MAP_LABEL[NT_GNN],
-        color=MAP_COLOR[NT_GNN]["main"],
+        color=MAP_COLOR[NT_GNN]["secondary"],
     )
     ax.bar(
         x + 2 * width,

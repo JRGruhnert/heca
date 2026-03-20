@@ -3,6 +3,9 @@ import glob
 import torch
 import numpy as np
 
+from src.variables import SET_SRPB
+from src.states.states import STATES_BY_TAG
+
 
 class RunData:
     def __init__(self, path: str, metadata: dict):
@@ -78,30 +81,49 @@ class RunData:
         terminals: list[bool] = batch_data["terminals"].tolist()
 
         batch_size = len(rewards)
-        # Handle action distribution with -1 as special category
-        if len(actions.shape) > 1:
-            action_indices = actions.argmax(axis=1)
+        actions = batch_data["actions"]
+        if len(actions.shape) == 2 and actions.shape[1] == 1:
+            action_indices = actions.flatten()
         else:
             action_indices = actions.astype(int)
 
         # Count -1s separately, then bincount the rest
         negative_count = np.sum(action_indices == -1)
         positive_actions = action_indices[action_indices >= 0]
-
+        #print(f"Batch size: {batch_size}, Negative actions: {negative_count}, Positive actions: {len(positive_actions)}")
         if len(positive_actions) > 0:
-            action_distribution = np.bincount(positive_actions).tolist()
+            action_distribution = np.bincount(positive_actions, minlength=len(STATES_BY_TAG.get(SET_SRPB, []))).tolist()
         else:
-            action_distribution = []
+            action_distribution = [0] * len(STATES_BY_TAG.get(SET_SRPB, []))
 
         # Append -1 count at the end
         action_distribution.append(int(negative_count))
 
         sr = success.count(True) / max(1, terminals.count(True))
 
+        episode_lengths = []
+        episode_successes = []
+        current_length = 0
+        for i, terminal in enumerate(terminals):
+            current_length += 1
+            if terminal:
+                episode_lengths.append(current_length)
+                episode_successes.append(success[i])  # success at episode end
+                current_length = 0
+
+        # Separate lengths for successful and failed episodes
+        success_lengths = [l for l, s in zip(episode_lengths, episode_successes) if s]
+        failure_lengths = [l for l, s in zip(episode_lengths, episode_successes) if not s]
+
+        mean_success_length = sum(success_lengths) / max(1, len(success_lengths))
+        mean_failure_length = sum(failure_lengths) / max(1, len(failure_lengths))
+        
         return {
             "batch_size": batch_size,
             "total_episodes": max(1, terminals.count(True)),
             "mean_episode_length": batch_size / max(1, terminals.count(True)),
+            "mean_success_episode_length": mean_success_length,
+            "mean_failure_episode_length": mean_failure_length,
             "total_rewards": sum(rewards),
             "mean_episode_reward": sum(rewards) / max(1, terminals.count(True)),
             "success_rate": sr,

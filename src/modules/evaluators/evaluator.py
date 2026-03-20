@@ -39,7 +39,11 @@ class Evaluator(ABC):
         for state in self.storage.eval_states:
             if state.name in current.keys():
                 if state.evaluate(current[state.name], goal[state.name]):
+                    print(f"State {state.name} is finished.")
+
                     finished_states += 1
+                else:
+                    print(f"State {state.name} is not finished.")
         self.percentage_done = finished_states / max(len(self.storage.eval_states), 1)
         return finished_states == len(self.storage.eval_states)
 

@@ -3,68 +3,24 @@ import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
 import wandb
+from torch_geometric.data import HeteroData
+from torch_geometric.explain import Explainer, CaptumExplainer
+from torch.distributions import Categorical
+from src.factory import select_network
 from src.hardware import device
-from src.agents.agent import Agent, AgentConfig
+from src.agents.agent import Agent
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
+from src.modules.watcher import Watcher
 from src.observation.observation import StateValueDict
-from src.networks.actor_critic import ActorCriticBase
+from src.networks.network import Network, NetworkConfig
 from src.skills.skill import Skill
 from loguru import logger
 from thop import profile
 
-# Batch Size	The number of samples used
-# in each training batch.	Larger batch sizes typically lead
-# to more stable training but may require
-# more memory and computational resources.
-# Clip Range	The threshold for clipping
-# the ratio of policy probabilities.	Clipping the ratio helps to prevent overly large policy updates, ensuring
-# stability during training.
-# Entropy Coefficient	A coefficient balancing between
-# exploration and exploitation.	Higher values encourage more
-# exploration, while lower values prioritize exploitation.
-# The parameter controlling the balance between
-# bias and variance in estimating advantages.	Lower values increase bias
-# but reduce variance, leading to more stable training
-# but potentially less accurate value estimates.
-# Learning Rate	The rate at which the model’s
-# parameters are updated during training.	A higher learning rate can accelerate learning but may lead to instability
-# or divergence if too large.
-# Log Std Init	The initial value for the logarithm
-# of the standard deviation of the policy.	A higher initial value can encourage more exploration
-# in the early stages of training.
-# Epochs Number	The number of times the entire dataset is used during training.	Increasing the number of epochs allows for more passes through
-# the data, utilizing data more efficiently.
-# Steps Number	The number of steps taken when accumulating the dataset.	More step numbers allow for more information to be gathered per iteration,
-# potentially leading to more efficient and stable learning.
-# Normalize Advantages	Whether to normalize advantages
-# before using them in training.	Normalization can help to stabilize training by scaling advantages to have
-# a consistent impact on policy updates.
-# Target KL	The target value for the Kullback-Leibler (KL)
-# divergence between old and new policies.	Adjusting the target KL helps to regulate the magnitude of policy updates,
-# promoting smoother learning.
-# Value Coefficient	The coefficient balancing between the
-# value loss and policy loss in the total loss function.	A higher value coefficient places more emphasis on the value function,
-# potentially leading to more stable training.
-
-# from torch.utils.data import DataLoader, Dataset
-
-# from tapas.build.lib.tapas_gmm import dataset
-
-
-# class PPOBufferDataset(Dataset):
-#    def __init__(self, obs, goal, actions, logprobs, advantages, rewards):
-#        self.data = list(zip(obs, goal, actions, logprobs, advantages, rewards))
-#
-#    def __len__(self):
-#        return len(self.data)
-#    def __getitem__(self, idx):
-#        return self.data[idx]
-
-
 @dataclass
-class PPOAgentConfig(AgentConfig):
-    # Default values
+class PPOAgentConfig:
+    network: NetworkConfig
     retrain: bool = False
     eval: bool = False
     early_stop_patience: int = 5
@@ -89,87 +45,28 @@ class PPOAgentConfig(AgentConfig):
     clip_value_loss: bool = True
 
 
-class ProgressWatcher:
-    def __init__(
-        self,
-        patience: int,
-        min_batches: int,
-        max_batches: int,
-        use_ema: bool,
-        smoothing_factor: float = 0.1,
-    ):
-        self.patience = patience
-        self.min_batches = min_batches
-        self.max_batches = max_batches
-        self.use_ema = use_ema
-        self.smoothing_factor = smoothing_factor
-        self.best_value = -float("inf")
-        self.counter = 0
-        self.ema = None
-
-    def update(self, metric: float, current_batch: int) -> bool:
-        """
-        Determines if training should stop and whether the metric is a new high.
-        Returns:
-            should_stop (bool): Whether early stopping should trigger.
-            is_new_high (bool): Whether the current metric is a new high.
-        """
-        if self.use_ema:
-            should_stop = self._ema_check(metric)
-        else:
-            should_stop = self._metric_check(metric)
-
-        # Enforce min and max batch constraints
-        if current_batch < self.min_batches:
-            return False
-        elif current_batch >= self.max_batches:
-            return True
-        else:
-            return should_stop
-
-    def _ema_check(self, metric: float) -> bool:
-        # Update EMA
-        if self.ema is None:
-            self.ema = metric  # Initialize EMA with the first metric value
-        else:
-            self.ema = (
-                self.smoothing_factor * metric + (1 - self.smoothing_factor) * self.ema
-            )
-
-        return self._metric_check(self.ema)
-
-    def _metric_check(self, metric: float) -> bool:
-        if metric > self.best_value:
-            self.best_value = metric
-            self.counter = 0
-        else:
-            self.counter += 1
-        return self.counter >= self.patience
-
-
 class PPOAgent(Agent):
     def __init__(
         self,
         config: PPOAgentConfig,
-        policy_new: ActorCriticBase,
-        policy_old: ActorCriticBase,
         buffer: Buffer,
         storage: Storage,
     ):
         ### Initialize hyperparameters
         self.config = config
         ### Initialize the agent
-        self.buffer: Buffer = buffer
-        self.storage: Storage = storage
+        self.buffer = buffer
+        self.storage = storage
         self.mse_loss = nn.MSELoss()
-        self.policy_new: ActorCriticBase = policy_new.to(device)
-        self.policy_old: ActorCriticBase = policy_old.to(device)
+        self.policy_new: Network = select_network(config.network)(storage.states, storage.skills).to(device)
+        self.policy_old: Network = select_network(config.network)(storage.states, storage.skills).to(device)
         self.optimizer = torch.optim.AdamW(
             self.policy_new.parameters(),
             lr=self.config.learning_rate,
         )
+        self.load()  # Load model if checkpoint path is provided in network config
 
-        self.stop_watcher = ProgressWatcher(
+        self.watcher = Watcher(
             patience=self.config.early_stop_patience,
             min_batches=self.config.min_batches,
             max_batches=self.config.max_batches,
@@ -190,10 +87,52 @@ class PPOAgent(Agent):
         obs: StateValueDict,
         goal: StateValueDict,
     ) -> Skill:
-        with torch.no_grad():
-            action, action_logprob, state_val = self.policy_old.act(obs, goal)
+        action, action_logprob, state_val = self._act(obs, goal)
         self.buffer.act_values(obs, goal, action, action_logprob, state_val)
-        return self.storage.skills[int(action.item())]  # Can safely be accessed
+        return self.storage.skill_by_index(int(action.item()))
+
+    def _act(
+            self,
+            obs: StateValueDict,
+            goal: StateValueDict,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)  # Add batch dimension
+            logits, value = self.policy_old.forward(batch)
+        assert logits.shape == (
+            1,
+            self.policy_old.dim_skills,
+        ), f"Expected logits shape ({1}, {self.policy_old.dim_skills}), got {logits.shape}"
+        assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
+
+        dist = Categorical(logits=logits)
+        if self.policy_old.is_eval_mode:
+            action = logits.argmax(dim=-1)
+        else:
+            action = dist.sample()  # shape: [B]
+        logprob = dist.log_prob(action)  # shape: [B]
+        return action.detach(), logprob.detach(), value.detach()
+
+    def evaluate(
+        self,
+        obs: list[StateValueDict],
+        goal: list[StateValueDict],
+        action: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
+        assert len(obs) == len(goal), "Observation and Goal lists have different sizes."
+        batch = self.policy_old.to_encoded_batch(obs, goal)
+        logits, value = self.policy_old.forward(batch)
+        assert logits.shape == (
+            len(obs),
+            self.policy_old.dim_skills,
+        ), f"Expected logits shape ({len(obs)}, {self.policy_old.dim_skills}), got {logits.shape}"
+        assert value.shape == (
+            len(obs),
+        ), f"Expected value shape ({len(obs)},), got {value.shape}"
+
+        dist = Categorical(logits=logits)
+        action_logprobs = dist.log_prob(action)
+        return action_logprobs, value, dist
 
     def feedback(self, reward: float, success: bool, terminal: bool) -> bool:
         return self.buffer.feedback(reward, success, terminal)
@@ -253,7 +192,7 @@ class PPOAgent(Agent):
         )
 
         # Check batch success rate for early stopping
-        if self.stop_watcher.update(batch_success_rate, self._current_epoch):
+        if self.watcher.update(batch_success_rate, self._current_epoch):
             logger.info(
                 f"Early stopping training after {self._current_epoch} epochs because of no improvement in the smoothed success rate."
             )
@@ -510,3 +449,8 @@ class PPOAgent(Agent):
                 self.policy_new, inputs=(obs_batch, goal_batch), verbose=False
             )
             return int(result[0]), int(result[1])
+
+
+    def load(self):
+        self.policy_new.load()
+        self.policy_old.load()

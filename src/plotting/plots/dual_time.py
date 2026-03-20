@@ -66,7 +66,6 @@ def plot(collection: RunDataCollection):
         ax1.set_xlabel(LABEL_EPOCH)
         ax1.set_ylabel(LABEL_REWARD)
         ax1.set_title("Episode Rewards")
-        ax1.grid(True, alpha=0.3)
 
         # Success rate
         ax2.plot(
@@ -100,7 +99,6 @@ def plot(collection: RunDataCollection):
         ax3.set_xlabel(LABEL_EPOCH)
         ax3.set_ylabel(LABEL_LENGTH)
         ax3.set_title("Episode Lengths")
-        ax3.grid(True, alpha=0.3)
 
         # Max success rates
         ax4.plot(
@@ -121,7 +119,7 @@ def plot(collection: RunDataCollection):
 
         handles, labels = ax1.get_legend_handles_labels()
         plt.legend(handles, labels)
-        plt.title(f"Comparison of Training Progress")
+        # plt.title(f"Comparison of Training Progress")
         save_plot(
             f"{run1.metadata['mode']}_{run1.metadata['origin']}_{run1.metadata['dest']}_{run1.metadata['pe']}_{run1.metadata['pr']}_comparison.png",
             subdir=f"comparison",

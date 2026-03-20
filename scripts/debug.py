@@ -2,14 +2,10 @@ from omegaconf import OmegaConf, SCMode
 
 from tapas_gmm.utils.argparse import parse_and_build_config
 from scripts.train import TrainConfig
-from src.agents.ppo.ppo import PPOAgent
+from src.agents.ppo import PPOAgent
 from src.modules.buffer import Buffer
-from src.modules.logger import LoggerConfig, Logger
 from src.modules.storage import Storage, StorageConfig
-from src.modules.evaluators.evaluator import EvaluatorConfig
-from src.environments.environment import EnvironmentConfig
-from src.agents.agent import AgentConfig
-from src.experiments.experiment import ExperimentConfig
+
 from src.factory import (
     select_agent,
     select_environment,
