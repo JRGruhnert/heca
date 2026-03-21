@@ -48,7 +48,7 @@ class Network(nn.Module, ABC):
     def forward(
         self,
         batch,
-    ) -> tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         pass
 
 

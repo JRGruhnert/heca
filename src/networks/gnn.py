@@ -1,20 +1,23 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from functools import cached_property
+from typing import Any, Union
 import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
-from build.lib.src.skills.skill import Skill
-from src.networks.layers.mlp import (
-    GinStandardMLP,
-    UnactivatedMLP
-)
-from functools import cached_property
-from src.networks.network import Network, NetworkConfig
 from src.observation.observation import StateValueDict
+from src.skills.skill import Skill
+from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
+from src.networks.network import Network, NetworkConfig
 from src.states.state import State
-
+from torch_geometric.data import HeteroData
+from torch_geometric.explain import (
+    Explainer,
+    CaptumExplainer,
+    Explanation,
+    HeteroExplanation,
+)
 
 
 class ReadoutNetwork(nn.Module):
@@ -51,7 +54,9 @@ class ReadoutNetwork(nn.Module):
         )
 
     @abstractmethod
-    def readout(self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict) -> torch.Tensor:
+    def readout(
+        self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict
+    ) -> torch.Tensor:
         raise NotImplementedError("Readout method must be implemented by subclass.")
 
     def forward(self, batch: Batch) -> torch.Tensor:
@@ -72,16 +77,22 @@ class ReadoutNetwork(nn.Module):
 
         return self.readout(x2, x_dict, edge_index_dict)
 
+
 class ActorReadoutNetwork(ReadoutNetwork):
-    def readout(self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict) -> torch.Tensor:
+    def readout(
+        self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict
+    ) -> torch.Tensor:
         logits = self.readout_net(
             x=(x, x_dict["actor"]),
             edge_index=edge_index_dict[("task", "task-actor", "actor")],
         )
         return logits.view(-1, self.dim_skills)
 
+
 class CriticReadoutNetwork(ReadoutNetwork):
-    def readout(self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict) -> torch.Tensor:
+    def readout(
+        self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict
+    ) -> torch.Tensor:
         value = self.readout_net(
             x=(x, x_dict["critic"]),
             edge_index=edge_index_dict[("task", "task-critic", "critic")],
@@ -91,8 +102,11 @@ class CriticReadoutNetwork(ReadoutNetwork):
 
 @dataclass
 class GraphNetworkConfig(NetworkConfig):
-    explain_mode: bool = False # Network cant be trained in explain mode, only used for generating explanations with a trained model.
-   
+    explain_mode: bool = (
+        False  # Network cant be trained in explain mode, only used for generating explanations with a trained model.
+    )
+
+
 class GraphNetwork(Network):
 
     def __init__(
@@ -101,7 +115,7 @@ class GraphNetwork(Network):
         states: list[State],
         skills: list[Skill],
     ):
-        super().__init__(config, states, skills) # type: ignore
+        super().__init__(config, states, skills)  # type: ignore
         self.config = config
 
         self.actor = ActorReadoutNetwork(
@@ -114,16 +128,59 @@ class GraphNetwork(Network):
             dim_state=self.dim_states,
             dim_skill=self.dim_skills,
         )
+        self.indices = torch.arange(self.dim_skills)
+        self.actor_explainer = Explainer(
+            self.actor,  # It is assumed that model outputs a single tensor.
+            algorithm=CaptumExplainer("IntegratedGradients"),
+            explanation_type="model",
+            node_mask_type="attributes",
+            edge_mask_type="object",
+            model_config=dict(
+                mode="multiclass_classification",
+                task_level="node",
+                return_type="probs",  # Model returns probabilities.
+            ),
+        )
+
+        self.critic_explainer = Explainer(
+            self.critic,  # It is assumed that model outputs a single tensor.
+            algorithm=CaptumExplainer("IntegratedGradients"),
+            explanation_type="model",
+            node_mask_type="attributes",
+            edge_mask_type="object",
+            model_config=dict(
+                mode="multiclass_classification",
+                task_level="node",
+                return_type="probs",  # Model returns probabilities.
+            ),
+        )
 
     def forward(
         self,
         batch: Batch,
-    ) -> tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
-        if self.config.explain_mode:
-            return self.actor(batch) # Logits only in explain mode
-        return self.actor(batch), self.critic(batch) # Logits, Value
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.actor(batch), self.critic(batch)  # Logits, Value
 
-    def _to_batch(self, current: list[Tensor], goal: list[Tensor], obs: list[StateValueDict]) -> Batch:
+    def explain(
+        self, batch: Batch
+    ) -> tuple[
+        Union[Explanation, HeteroExplanation], Union[Explanation, HeteroExplanation]
+    ]:
+        actor_explanation = self.actor_explainer(
+            batch.get_example(0).x_dict,
+            batch.get_example(0).edge_index_dict,
+            index=self.indices,
+        )
+        critic_explanation = self.critic_explainer(
+            batch.get_example(0).x_dict,
+            batch.get_example(0).edge_index_dict,
+            index=self.indices,
+        )
+        return actor_explanation, critic_explanation
+
+    def _to_batch(
+        self, current: list[Tensor], goal: list[Tensor], obs: list[StateValueDict]
+    ) -> Batch:
         batch_data = []
         for c, g, o in zip(current, goal, obs):
             data = HeteroData()
@@ -141,8 +198,7 @@ class GraphNetwork(Network):
             data[("task", "task-critic", "critic")].edge_index = self.skill_to_single
             batch_data.append(data)
         return Batch.from_data_list(batch_data)
-    
-    
+
     def skill_state_distances(
         self,
         obs: StateValueDict,
@@ -261,7 +317,6 @@ class GraphNetwork(Network):
             self.state_skill_full[1], self.state_skill_full[0]
         ]  # [E, 2]
         return edge_attr
-
 
     def _load(self, checkpoint: Any):
         self.policy_old.load_state_dict(checkpoint["model_state"], strict=False)

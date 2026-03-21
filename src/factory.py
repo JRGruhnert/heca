@@ -1,3 +1,4 @@
+from src.skills.skill import Skill
 from src.agents.agent import Agent
 from src.agents.human import HumanAgent, HumanAgentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
@@ -21,6 +22,7 @@ from src.environments.calvin import (
 from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from src.networks.gnn import GraphNetwork, GraphNetworkConfig
 from src.networks.network import Network, NetworkConfig
+from src.states.state import State
 
 
 def select_experiment(
@@ -89,11 +91,13 @@ def select_environment(
 
 def select_network(
     config: NetworkConfig,
+    states: list[State],
+    skills: list[Skill],
 ) -> Network:
     """Create network from config - simple factory function"""
     if isinstance(config, BaselineNetworkConfig):
         return BaselineNetwork(config)
     elif isinstance(config, GraphNetworkConfig):
-        return GraphNetwork(config)
+        return GraphNetwork(config, states, skills)
     else:
         raise ValueError(f"Unknown network type: {type(config)}")

@@ -3,8 +3,6 @@ import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
 import wandb
-from torch_geometric.data import HeteroData
-from torch_geometric.explain import Explainer, CaptumExplainer
 from torch.distributions import Categorical
 from src.factory import select_network
 from src.hardware import device
@@ -17,6 +15,7 @@ from src.networks.network import Network, NetworkConfig
 from src.skills.skill import Skill
 from loguru import logger
 from thop import profile
+
 
 @dataclass
 class PPOAgentConfig:
@@ -58,8 +57,12 @@ class PPOAgent(Agent):
         self.buffer = buffer
         self.storage = storage
         self.mse_loss = nn.MSELoss()
-        self.policy_new: Network = select_network(config.network)(storage.states, storage.skills).to(device)
-        self.policy_old: Network = select_network(config.network)(storage.states, storage.skills).to(device)
+        self.policy_new: Network = select_network(
+            config.network, storage.states, storage.skills
+        ).to(device)
+        self.policy_old: Network = select_network(
+            config.network, storage.states, storage.skills
+        ).to(device)
         self.optimizer = torch.optim.AdamW(
             self.policy_new.parameters(),
             lr=self.config.learning_rate,
@@ -92,12 +95,14 @@ class PPOAgent(Agent):
         return self.storage.skill_by_index(int(action.item()))
 
     def _act(
-            self,
-            obs: StateValueDict,
-            goal: StateValueDict,
+        self,
+        obs: StateValueDict,
+        goal: StateValueDict,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)  # Add batch dimension
+            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(
+                0
+            )  # Add batch dimension
             logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             1,
@@ -449,7 +454,6 @@ class PPOAgent(Agent):
                 self.policy_new, inputs=(obs_batch, goal_batch), verbose=False
             )
             return int(result[0]), int(result[1])
-
 
     def load(self):
         self.policy_new.load()
