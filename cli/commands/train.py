@@ -1,7 +1,5 @@
 from dataclasses import dataclass
-from omegaconf import OmegaConf, SCMode
 
-from tapas_gmm.utils.argparse import parse_and_build_config
 from src.modules.logger import LoggerConfig, Logger
 from src.modules.buffer import BufferConfig, Buffer
 from src.modules.evaluators.evaluator import EvaluatorConfig
@@ -79,31 +77,6 @@ class Trainer:
         self.experiment.close()
 
 
-def train_agent(config: TrainConfig):
+def entry_point(config: TrainConfig):
     trainer = Trainer(config)
     trainer.run()
-
-
-def entry_point(p_empty: float | None = None, p_rand: float | None = None):
-    _, dict_config = parse_and_build_config(data_load=False, need_task=False)
-    if p_empty is not None:
-        dict_config["experiment"]["p_empty"] = p_empty
-    if p_rand is not None:
-        dict_config["experiment"]["p_rand"] = p_rand
-
-    dict_config["storage"]["tag"] = (
-        dict_config["storage"]["tag"]
-        + f"_pe{dict_config['experiment']['p_empty']}_pr{dict_config['experiment']['p_rand']}"
-    )
-    dict_config["logger"]["wandb_tag"] = (
-        dict_config["logger"]["wandb_tag"]
-        + f"_pe{dict_config['experiment']['p_empty']}_pr{dict_config['experiment']['p_rand']}"
-    )
-    config = OmegaConf.to_container(
-        dict_config, resolve=True, structured_config_mode=SCMode.INSTANTIATE
-    )
-    train_agent(config)  # type: ignore
-
-
-if __name__ == "__main__":
-    entry_point()

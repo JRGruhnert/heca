@@ -39,6 +39,11 @@ class HumanAgent(Agent):
             return None
         return self.storage.skills[choice]
 
+    def explain(
+        self, current: StateValueDict, goal: StateValueDict, skill: Skill
+    ) -> str:
+        raise NotImplementedError("")
+
     def feedback(self, reward: float, success: bool, terminal: bool) -> bool:
         """Pass feedback from the environment. Returns True if the buffer reached the targeted batch size."""
         if self.do_reset:

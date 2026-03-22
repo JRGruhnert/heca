@@ -9,9 +9,12 @@ from src.states.state import State
 from src.skills.skill import Skill
 from loguru import logger
 
+
 @dataclass
 class NetworkConfig:
+    name: str
     checkpoint_path: str | None = None
+
 
 class Network(nn.Module, ABC):
 
@@ -49,8 +52,11 @@ class Network(nn.Module, ABC):
         self,
         batch,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        pass
+        raise NotImplementedError("Subclasses must implement the forward method.")
 
+    @abstractmethod
+    def explain(self, batch) -> Any:
+        raise NotImplementedError("This network does not support explanations.")
 
     def _encode_states(self, x: StateValueDict) -> torch.Tensor:
         encoded_x = [
@@ -59,34 +65,46 @@ class Network(nn.Module, ABC):
         ]
         return torch.stack(encoded_x, dim=0)
 
-    def to_encoded_batch(self, current: list[StateValueDict] | StateValueDict, goal: list[StateValueDict] | StateValueDict) -> torch.Tensor:
+    def to_encoded_batch(
+        self,
+        current: list[StateValueDict] | StateValueDict,
+        goal: list[StateValueDict] | StateValueDict,
+    ) -> torch.Tensor:
         """Converts lists of observations and goals into a batch suitable for the network."""
         if isinstance(current, StateValueDict):
             current = [current]
         if isinstance(goal, StateValueDict):
             goal = [goal]
-        assert len(current) == len(goal), "Current and goal lists must have the same length."
-        
+        assert len(current) == len(
+            goal
+        ), "Current and goal lists must have the same length."
+
         current_encoded = [self._encode_states(x) for x in current]
         goal_encoded = [self._encode_states(x) for x in goal]
 
         return self._to_batch(current_encoded, goal_encoded)
 
     @abstractmethod
-    def _to_batch(self, current: list[torch.Tensor], goal: list[torch.Tensor]) -> torch.Tensor:
+    def _to_batch(
+        self, current: list[torch.Tensor], goal: list[torch.Tensor]
+    ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
-    
+
     def load(self):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint)
-            logger.info(f"Loading network checkpoint from: {self.config.checkpoint_path}")   
+            logger.info(
+                f"Loading network checkpoint from: {self.config.checkpoint_path}"
+            )
         else:
-            logger.info("No checkpoint path provided in network config. Starting with a new model.")
+            logger.info(
+                "No checkpoint path provided in network config. Starting with a new model."
+            )
 
     @abstractmethod
     def _load(self, checkpoint: Any):
-         raise NotImplementedError("Subclasses must implement the _load method.")
-    
+        raise NotImplementedError("Subclasses must implement the _load method.")
+
     def _load_checkpoint(self, checkpoint_path: str) -> Any:
-        return torch.load(checkpoint_path, map_location=torch.device('cpu'))
+        return torch.load(checkpoint_path, map_location=torch.device("cpu"))

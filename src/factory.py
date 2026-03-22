@@ -1,8 +1,8 @@
 from src.skills.skill import Skill
-from src.agents.agent import Agent
+from src.agents.agent import Agent, AgentConfig
 from src.agents.human import HumanAgent, HumanAgentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
-from src.agents.search_tree import SearchTreeAgent, SearchTreeAgentConfig
+from src.agents.search import SearchTreeAgent, SearchTreeAgentConfig
 from src.environments.environment import Environment, EnvironmentConfig
 from src.modules.buffer import Buffer
 from src.modules.evaluators.dense import DenseEvaluator, DenseEvaluatorConfig
@@ -41,7 +41,7 @@ def select_experiment(
 
 
 def select_agent(
-    config,
+    config: AgentConfig,
     storage_module: Storage,
     buffer_module: Buffer,
 ) -> Agent:

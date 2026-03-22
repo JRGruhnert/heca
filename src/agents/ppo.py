@@ -6,7 +6,7 @@ import wandb
 from torch.distributions import Categorical
 from src.factory import select_network
 from src.hardware import device
-from src.agents.agent import Agent
+from src.agents.agent import Agent, AgentConfig
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
 from src.modules.watcher import Watcher
@@ -18,7 +18,7 @@ from thop import profile
 
 
 @dataclass
-class PPOAgentConfig:
+class PPOAgentConfig(AgentConfig):
     network: NetworkConfig
     retrain: bool = False
     eval: bool = False
@@ -90,19 +90,8 @@ class PPOAgent(Agent):
         obs: StateValueDict,
         goal: StateValueDict,
     ) -> Skill:
-        action, action_logprob, state_val = self._act(obs, goal)
-        self.buffer.act_values(obs, goal, action, action_logprob, state_val)
-        return self.storage.skill_by_index(int(action.item()))
-
-    def _act(
-        self,
-        obs: StateValueDict,
-        goal: StateValueDict,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(
-                0
-            )  # Add batch dimension
+            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)
             logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             1,
@@ -114,9 +103,22 @@ class PPOAgent(Agent):
         if self.policy_old.is_eval_mode:
             action = logits.argmax(dim=-1)
         else:
-            action = dist.sample()  # shape: [B]
-        logprob = dist.log_prob(action)  # shape: [B]
-        return action.detach(), logprob.detach(), value.detach()
+            action = dist.sample()
+        logprob = dist.log_prob(action)
+        self.buffer.act_values(
+            obs, goal, action.detach(), logprob.detach(), value.detach()
+        )
+        return self.storage.skill_by_index(int(action.item()))
+
+    def explain(
+        self,
+        obs: StateValueDict,
+        goal: StateValueDict,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)
+            actor_explanation, critic_explanation = self.policy_old.explain(batch)
+        return actor_explanation, critic_explanation
 
     def evaluate(
         self,
