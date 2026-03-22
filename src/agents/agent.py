@@ -1,7 +1,13 @@
 from abc import ABC, abstractmethod
+from typing import Any
 from src.observation.observation import StateValueDict
 from src.skills.skill import Skill
+from dataclasses import dataclass
 
+
+@dataclass
+class AgentConfig:
+    pass
 
 
 class Agent(ABC):
@@ -14,6 +20,16 @@ class Agent(ABC):
     ) -> Skill:
         """Select an action given the current observation and goal observation."""
         raise NotImplementedError("Act method not implemented yet.")
+
+    @abstractmethod
+    def explain(
+        self,
+        current: StateValueDict,
+        goal: StateValueDict,
+        skill: Skill,
+    ) -> Any:
+        """Return explanations for the actor and critic's decisions. By default, returns None."""
+        raise NotImplementedError("Explain method not implemented yet.")
 
     @abstractmethod
     def feedback(self, reward: float, success: bool, terminal: bool) -> bool:
@@ -33,7 +49,7 @@ class Agent(ABC):
     def load(self):
         """Load model from checkpoint path."""
         raise NotImplementedError("Load method not implemented yet.")
-    
+
     @abstractmethod
     def metadata(self) -> dict:
         """Return agent metadata as a dictionary."""

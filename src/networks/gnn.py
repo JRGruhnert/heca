@@ -102,9 +102,9 @@ class CriticReadoutNetwork(ReadoutNetwork):
 
 @dataclass
 class GraphNetworkConfig(NetworkConfig):
-    explain_mode: bool = (
-        False  # Network cant be trained in explain mode, only used for generating explanations with a trained model.
-    )
+    # Network cant be trained in explain mode, only used for generating explanations with a trained model.
+    explain_mode: bool = False
+    name: str = "gnn"
 
 
 class GraphNetwork(Network):
@@ -161,11 +161,7 @@ class GraphNetwork(Network):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
-    def explain(
-        self, batch: Batch
-    ) -> tuple[
-        Union[Explanation, HeteroExplanation], Union[Explanation, HeteroExplanation]
-    ]:
+    def explain(self, batch: Batch) -> tuple[HeteroExplanation, HeteroExplanation]:
         actor_explanation = self.actor_explainer(
             batch.get_example(0).x_dict,
             batch.get_example(0).edge_index_dict,
@@ -176,6 +172,8 @@ class GraphNetwork(Network):
             batch.get_example(0).edge_index_dict,
             index=self.indices,
         )
+        assert isinstance(actor_explanation, HeteroExplanation)
+        assert isinstance(critic_explanation, HeteroExplanation)
         return actor_explanation, critic_explanation
 
     def _to_batch(

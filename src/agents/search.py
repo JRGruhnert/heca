@@ -106,6 +106,14 @@ class SearchTreeAgent(Agent):
         self.buffer.act_values_tree(obs, goal, skill.id)
         return skill
 
+    def explain(
+        self,
+        current: StateValueDict,
+        goal: StateValueDict,
+        skill: Skill,
+    ) -> str:
+        raise NotImplementedError("")
+
     def best_first_search(self) -> Optional[TreeNode]:
         """Expand tree by applying skill postconditions"""
         nodes_expanded = 0

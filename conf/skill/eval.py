@@ -1,4 +1,3 @@
-from scripts.eval_skills import SkillEvalConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.experiments.skill_check import SkillCheckExperimentConfig
 from src.modules.evaluators.skill import SkillEvaluatorConfig

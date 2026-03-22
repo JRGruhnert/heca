@@ -2,39 +2,19 @@ import wandb
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.experiments.pepr import PePrConfig
 from src.modules.buffer import BufferConfig
+from src.modules.evaluators.dense3 import Dense3EvaluatorConfig
 from src.modules.logger import LoggerConfig
 from src.modules.storage import StorageConfig
-from src.agents.ppo.baseline import BaselineAgentConfig
-from src.agents.ppo.gnn import GNNAgentConfig
-
-from scripts.train import TrainConfig, Trainer
-from conf.common.evaluator import dense1_evaluator, dense2_evaluator, sparse_evaluator
+from src.agents.ppo import PPOAgentConfig
+from cli.hoopgn import TrainConfig, Trainer
 
 
 def entry_point():
     run = wandb.init()
-    # Use wandb.config to override TrainConfig
-    if wandb.config["evaluator"] == "dense1":
-        print("Using Dense1EvaluatorConfig from wandb config.")
-        evaluator = dense1_evaluator
-    elif wandb.config["evaluator"] == "dense2":
-        print("Using Dense2EvaluatorConfig from wandb config.")
-        evaluator = dense2_evaluator
-    elif wandb.config["evaluator"] == "sparse":
-        print("Using SparseEvaluatorConfig from wandb config.")
-        evaluator = sparse_evaluator
-    else:
-        raise ValueError(f"Unsupported evaluator type: {wandb.config['evaluator']}")
-
-    if wandb.config["storage.network"] == "gnn":
-        agent_type = GNNAgentConfig
-    elif wandb.config["storage.network"] == "baseline":
-        agent_type = BaselineAgentConfig
-    else:
-        raise ValueError(f"Unsupported agent type: {wandb.config['storage.network']}")
 
     config = TrainConfig(
-        agent=agent_type(
+        agent=PPOAgentConfig(
+            network=wandb.config["agent.network"],
             eval=wandb.config["agent.eval"],
             early_stop_patience=wandb.config["agent.early_stop_patience"],
             use_ema_for_early_stopping=wandb.config["agent.use_ema_for_early_stopping"],
@@ -71,7 +51,7 @@ def entry_point():
             p_rand=wandb.config["experiment.p_rand"],
         ),
         environment=CalvinEnvironmentConfig(render=False),
-        evaluator=evaluator,
+        evaluator=Dense3EvaluatorConfig(),
     )
 
     trainer = Trainer(config, run)

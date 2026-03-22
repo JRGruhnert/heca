@@ -6,10 +6,12 @@ from src.networks.network import Network, NetworkConfig
 from src.observation.observation import StateValueDict
 from collections import defaultdict
 
+
 @dataclass
 class BaselineNetworkConfig(NetworkConfig):
-    pass
-  
+    name: str = "baseline"
+
+
 class BaselineNetwork(Network):
 
     def __init__(
@@ -63,10 +65,11 @@ class BaselineNetwork(Network):
 
     def _to_batch(
         self,
-        current: list[torch.Tensor], goal: list[torch.Tensor], obs: list[StateValueDict]
+        current: list[torch.Tensor],
+        goal: list[torch.Tensor],
+        obs: list[StateValueDict],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return torch.stack(current, dim=0), torch.stack(goal, dim=0)
-    
 
     def _load(self, checkpoint: Any):
         old_state_dict: dict[str, torch.Tensor] = (
@@ -114,3 +117,6 @@ class BaselineNetwork(Network):
 
         new_tensor[tuple(slices)] = old_tensor[tuple(slices)]
         return new_tensor
+
+    def explain(self, batch) -> Any:
+        raise NotImplementedError("This network does not support explanations.")
