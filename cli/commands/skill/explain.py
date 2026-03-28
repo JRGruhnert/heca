@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from src.modules.storage import Storage, StorageConfig
 from src.plotting.object_point import ObjectLocationPoint
-from src.plotting.plots.object_skill import ObjectConditionsPlot
+from src.plotting.plots.skill.tp import ObjectConditionsPlot
 from src.skills.skill import Skill
 
 
