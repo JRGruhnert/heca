@@ -16,11 +16,11 @@ class Skill(ABC):
         self.id = id
 
     @abstractmethod
-    def _load_demo_precons(self) -> list[dict[str, torch.Tensor]]:
+    def _load_demo_precons(self) -> dict[str, torch.Tensor]:
         raise NotImplementedError("")
 
     @abstractmethod
-    def _load_demo_postcons(self) -> list[dict[str, torch.Tensor]]:
+    def _load_demo_postcons(self) -> dict[str, torch.Tensor]:
         raise NotImplementedError("")
 
     @abstractmethod
@@ -52,11 +52,11 @@ class Skill(ABC):
         return self._load_postcons()
 
     @cached_property
-    def demo_precons(self) -> list[dict[str, torch.Tensor]]:
+    def demo_precons(self) -> dict[str, torch.Tensor]:
         return self._load_demo_precons()
 
     @cached_property
-    def demo_postcons(self) -> list[dict[str, torch.Tensor]]:
+    def demo_postcons(self) -> dict[str, torch.Tensor]:
         return self._load_demo_postcons()
 
     def distances(

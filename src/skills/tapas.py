@@ -133,7 +133,7 @@ class TapasSkill(Skill):
         return temp
 
     @cached_property
-    def leaf_tp_labels(self) -> set[str]:
+    def tp_labels(self) -> set[str]:
         values = set()
         for state in self.states:
             value = state.run_addon(
