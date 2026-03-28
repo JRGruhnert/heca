@@ -51,7 +51,6 @@ class TapasSkill(Skill):
         self.first_prediction = True
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
-        self.states: list[State] = []
         self.goal: StateValueDict | None = None
 
     def _policy_checkpoint_name(self) -> pathlib.Path:
@@ -119,11 +118,28 @@ class TapasSkill(Skill):
         policy.eval()
         return policy
 
+    def _load_demo_precons(self) -> list[dict[str, torch.Tensor]]:
+        return []
+
+    def _load_demo_postcons(self) -> list[dict[str, torch.Tensor]]:
+        return []
+
+    def initialize_task_parameters(self, states: list[State]):
+        """
+        Initialize the task parameters based on the active states.
+        """
+        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
+        tapas_tp: set[str] = set()
+        for _, segment in enumerate(tpgmm.segment_frames):  # type: ignore
+            for _, frame_idx in enumerate(segment):
+                pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
+                tapas_tp.add(pos_str)
+                tapas_tp.add(rot_str)
+
     def initialize_conditions(self, states: list[State]):
         """
         Initialize the task parameters based on the active states.
         """
-        self.states = states
         tpgmm: AutoTPGMM = self.policy.model  # type: ignore
         # Taskparameters of the AutoTPGMM model
         tapas_tp: set[str] = set()
@@ -186,6 +202,7 @@ class TapasSkill(Skill):
     def predict(
         self,
         current: CalvinEnvObservation,
+        states: list[State] | None = None,
     ) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
         assert isinstance(
@@ -196,7 +213,7 @@ class TapasSkill(Skill):
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
                     self.predictions, _ = self.policy.predict(  # type: ignore
-                        self._to_skill_format(current, self.goal)
+                        self._to_skill_format(current, self.goal, states=states)
                     )
                 except FloatingPointError as e:
                     logger.error(f"Numerical error in GMM prediction: {e}")
@@ -212,7 +229,7 @@ class TapasSkill(Skill):
         else:
             try:
                 self.prediction, _ = self.policy.predict(  # type: ignore
-                    self._to_skill_format(current, self.goal)
+                    self._to_skill_format(current, self.goal, states=states)
                 )
             except FloatingPointError as e:
                 logger.error(f"Numerical error in GMM prediction: {e}")
@@ -239,6 +256,7 @@ class TapasSkill(Skill):
         self,
         obs: CalvinEnvObservation,
         goal: StateValueDict | None = None,
+        states: list[State] | None = None,
     ) -> SceneObservation:  # type: ignore
         """
         Convert the observation from the environment to a SceneObservation. This format is used for TAPAS.
@@ -248,7 +266,6 @@ class TapasSkill(Skill):
         SceneObservation
             The observation in common format as SceneObservation.
         """
-
         if obs.action is None:
             action = None
         else:
@@ -284,9 +301,7 @@ class TapasSkill(Skill):
         object_poses_dict = obs.object_poses
         object_states_dict = obs.object_states
         if goal is not None and self.reversed:
-            states_dict = (
-                {state.name: state for state in self.states} if self.states else {}
-            )
+            states_dict = {state.name: state for state in states} if states else {}
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
             # logger.debug(f"Overriding Tapas Task {task.name}")

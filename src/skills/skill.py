@@ -16,6 +16,14 @@ class Skill(ABC):
         self._precons: dict[str, torch.Tensor] = {}
         self._postcons: dict[str, torch.Tensor] = {}
 
+    @abstractmethod
+    def _load_demo_precons(self) -> list[dict[str, torch.Tensor]]:
+        raise NotImplementedError("")
+
+    @abstractmethod
+    def _load_demo_postcons(self) -> list[dict[str, torch.Tensor]]:
+        raise NotImplementedError("")
+
     @property
     def name(self) -> str:
         return self._name
@@ -31,6 +39,14 @@ class Skill(ABC):
     @property
     def postcons(self) -> dict[str, torch.Tensor]:
         return self._postcons
+
+    @property
+    def demo_precons(self) -> list[dict[str, torch.Tensor]]:
+        return self._load_demo_precons()
+
+    @property
+    def demo_postcons(self) -> list[dict[str, torch.Tensor]]:
+        return self._load_demo_postcons()
 
     def distances(
         self,

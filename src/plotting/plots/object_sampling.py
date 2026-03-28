@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.lines import Line2D
 
 
-class Positions3DPlot:
+class ObjectSamplingPlot:
     def __init__(
         self,
         color_map={
@@ -211,7 +211,10 @@ class Positions3DPlot:
                     label="Orientation",
                 ),
                 Line2D(
-                    [0], [0], color=self.color_map.get("solved", "g"), label="Solved"
+                    [0],
+                    [0],
+                    color=self.color_map.get("solved", "g"),
+                    label="Solved",
                 ),
                 Line2D(
                     [0],

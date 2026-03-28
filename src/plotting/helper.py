@@ -174,3 +174,15 @@ def save_plot(filename: str, subdir: str = ""):
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.close()
     print(f"Saved Plot: {plot_path}")
+
+
+def get_color_map(x: float, special_color="gray", cmap_name="tab10"):
+    cmap = plt.get_cmap(cmap_name)
+
+    def color_fn(i):
+        if i == -1:
+            return special_color
+        else:
+            return cmap((i - 1) % x)
+
+    return color_fn

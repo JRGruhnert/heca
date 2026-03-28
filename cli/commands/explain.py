@@ -17,7 +17,7 @@ from src.factory import (
     select_evaluator,
 )
 from src.observation.observation import StateValueDict
-from src.plotting.plots.positions import Positions3DPlot
+from src.plotting.plots.object_sampling import ObjectSamplingPlot
 from src.states.calvin import AreaEulerState
 from src.states.state import State
 from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
@@ -48,7 +48,7 @@ class ExplainScript:
         env = select_environment(config.environment, evaluator, self.storage)
         self.experiment = select_experiment(config.experiment, env, self.storage)
         self.agent: PPOAgent = select_agent(config.agent, self.storage, self.buffer)  # type: ignore
-        self.plot = Positions3DPlot()
+        self.plot = ObjectSamplingPlot()
 
         self.relevant_objects = {
             SET_RED: "block_red",
