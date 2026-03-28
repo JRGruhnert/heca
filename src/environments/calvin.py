@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from tapas_gmm.env.calvin import Calvin
+from tapas_gmm.env.calvin import Calvin, CalvinConfig
 from src.modules.evaluators.evaluator import Evaluator
 from src.modules.storage import Storage
 from src.environments.environment import Environment, EnvironmentConfig
@@ -9,7 +9,6 @@ from src.skills.skill import Skill
 
 from src.observation.calvin import CalvinObservation
 from src.skills.tapas import TapasSkill
-from tapas_gmm.env.calvin import CalvinConfig
 
 
 @dataclass

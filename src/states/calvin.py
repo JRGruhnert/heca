@@ -148,6 +148,8 @@ class AreaEulerState(EulerState):
             ),
             eval_normalizer=IdentityValue(),
         )
+        self.eval_surfaces = eval_surfaces
+        self.spawn_surfaces = spawn_surfaces
 
     def is_in_an_existing_area(self, value: torch.Tensor) -> bool:
         """Checks if the given euler value is within the defined areas."""

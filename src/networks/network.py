@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import torch
 import torch.nn as nn
@@ -11,9 +11,29 @@ from loguru import logger
 
 
 @dataclass
+class StateTypeConfig:
+    type: str
+    size: int
+
+
+@dataclass
 class NetworkConfig:
+    skill_count: int
+    state_count: int
     name: str
+    dim_encoder: int = 32
     checkpoint_path: str | None = None
+    state_types: list[StateTypeConfig] = field(
+        default_factory=lambda: [
+            StateTypeConfig(type="EulerPrecise", size=3),
+            StateTypeConfig(type="EulerArea", size=6),
+            StateTypeConfig(type="Quat", size=4),
+            StateTypeConfig(type="Range", size=1),
+            StateTypeConfig(type="Bool", size=1),
+            StateTypeConfig(type="Flip", size=1),
+            StateTypeConfig(type="State", size=10),
+        ]
+    )
 
 
 class Network(nn.Module, ABC):
@@ -21,24 +41,15 @@ class Network(nn.Module, ABC):
     def __init__(
         self,
         config: NetworkConfig,
-        states: list[State],
-        skills: list[Skill],
     ):
         super().__init__()
         self.config = config
         self.is_eval_mode = False
-        self.states = states
-        self.skills = skills
-        self.dim_states = len(states)
-        self.dim_skills = len(skills)
-        self.dim_encoder = 32
-
-        input_dims = {state.type: state.size for state in states}
 
         self.encoders = nn.ModuleDict(
             {
-                type_str: StateEncoder(input_dim, self.dim_encoder)
-                for type_str, input_dim in input_dims.items()
+                state.type: StateEncoder(state.size, self.config.dim_encoder)
+                for state in config.state_types
             }
         )
 
@@ -50,18 +61,19 @@ class Network(nn.Module, ABC):
     @abstractmethod
     def forward(
         self,
-        batch,
+        *args,
+        **kwargs,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError("Subclasses must implement the forward method.")
 
     @abstractmethod
-    def explain(self, batch) -> Any:
+    def explain(self, batch, skill: Skill) -> Any:
         raise NotImplementedError("This network does not support explanations.")
 
-    def _encode_states(self, x: StateValueDict) -> torch.Tensor:
+    def _encode_states(self, x: StateValueDict, states: list[State]) -> torch.Tensor:
         encoded_x = [
             self.encoders[state.type](state.make_input(x[state.name]))
-            for state in self.states
+            for state in states
         ]
         return torch.stack(encoded_x, dim=0)
 
@@ -69,6 +81,7 @@ class Network(nn.Module, ABC):
         self,
         current: list[StateValueDict] | StateValueDict,
         goal: list[StateValueDict] | StateValueDict,
+        states: list[State],
     ) -> torch.Tensor:
         """Converts lists of observations and goals into a batch suitable for the network."""
         if isinstance(current, StateValueDict):
@@ -79,21 +92,24 @@ class Network(nn.Module, ABC):
             goal
         ), "Current and goal lists must have the same length."
 
-        current_encoded = [self._encode_states(x) for x in current]
-        goal_encoded = [self._encode_states(x) for x in goal]
+        current_encoded = [self._encode_states(x, states) for x in current]
+        goal_encoded = [self._encode_states(x, states) for x in goal]
 
-        return self._to_batch(current_encoded, goal_encoded)
+        return self._to_batch(current_encoded, goal_encoded, current)
 
     @abstractmethod
     def _to_batch(
-        self, current: list[torch.Tensor], goal: list[torch.Tensor]
+        self,
+        current: list[torch.Tensor],
+        goal: list[torch.Tensor],
+        obs: list[StateValueDict],
     ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 
-    def load(self):
+    def load(self, skills: list[Skill], states: list[State]):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
-            self._load(checkpoint)
+            self._load(checkpoint, skills, states)
             logger.info(
                 f"Loading network checkpoint from: {self.config.checkpoint_path}"
             )
@@ -103,7 +119,7 @@ class Network(nn.Module, ABC):
             )
 
     @abstractmethod
-    def _load(self, checkpoint: Any):
+    def _load(self, checkpoint: Any, skills: list[Skill], states: list[State]):
         raise NotImplementedError("Subclasses must implement the _load method.")
 
     def _load_checkpoint(self, checkpoint_path: str) -> Any:

@@ -20,8 +20,9 @@ from src.factory import (
 )
 import numpy as np
 
-from src.plotting.plots.positions import Positions3DPlot
+from src.plotting.plots.positions_skill import PositionsSkill3DPlot
 from src.skills.skill import Skill
+from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
 
 
 @dataclass
@@ -31,8 +32,25 @@ class SkillExplainManagerConfig:
 
 class SkillExplainScript:
     def __init__(self, config: SkillExplainManagerConfig):
+        self.config = config
         self.storage = Storage(config.storage)
-        self.plot = Positions3DPlot()
+        self.plot = PositionsSkill3DPlot()
+
+        self.relevant_objects = {
+            SET_RED: "block_red",
+            SET_BLUE: "block_blue",
+            SET_PINK: "block_pink",
+            SET_SLIDE: "block_slide",
+        }
+        self.object_pattern = re.compile(r"(red|blue|pink|slide)")
+        # print(f"Checkpoint path: {self.config.agent.network.checkpoint_path}")
+        match = self.object_pattern.search(
+            self.config.agent.network.checkpoint_path or ""
+        )
+        if match:
+            object_name = match.group(1)  # 'red', 'blue', 'pink', or 'slide'
+        self.trained_object = self.relevant_objects[object_name]
+        self.current_object = self.relevant_objects[self.config.storage.used_states]
 
     def run(self):
         for skill in self.storage.skills:
@@ -41,31 +59,35 @@ class SkillExplainScript:
     def make_explanation(self, skill: Skill):
         """Returns an explanation for the given observation, goal and skill."""
         pattern = re.compile(r"(.*)_(position)$")
-        quick_map = {"blue": "b", "pink": "p", "red": "r"}
 
         for key, precon in skill.precons.items():
+            print(
+                f"Processing precondition {key} for with value {precon} skill {skill.name}"
+            )
             m = pattern.match(key)
             if m:
                 postcon = skill.postcons[key]
                 assert postcon is not None, f"Post condition for {key} is missing"
                 prefix = m.group(1)
-                self.plot.print_object(
-                    precon.tolist(),
-                    skill.precons[f"{prefix}_rotation"].tolist(),
-                    color=quick_map.get(prefix, "k"),
+                self.plot.set_object(
+                    pos={"current": precon.tolist(), "goal": postcon.tolist()},
+                    quat={
+                        "current": skill.precons[f"{prefix}_rotation"].tolist(),
+                        "goal": skill.postcons[f"{prefix}_rotation"].tolist(),
+                    },
+                    different=not np.allclose(precon, postcon),
+                    solved=skill.is_solved(precon, postcon),
                 )
-                self.plot.print_object(
-                    postcon.tolist(),
-                    skill.postcons[f"{prefix}_rotation"].tolist(),
-                    color=quick_map.get(prefix, "k"),
-                )
-                self.plot.connect_objects(
-                    precon.tolist(),
-                    postcon.tolist(),
-                    color=quick_map.get(prefix, "k"),
+
+                self.plot.show_edges(
                     alpha=0.5,
                 )
-        self.plot.create(show=True, save=False)
+        self.plot.create(
+            title=f"Skill: {skill.name} - Taskparameters.",
+            show=True,
+            save=False,
+            path=f"{self.storage.agent_saving_path(self.config.agent.network.name)}/plots/{self.trained_object}_s_{self.current_object}.png",
+        )
 
 
 def entry_point(config: SkillExplainManagerConfig):

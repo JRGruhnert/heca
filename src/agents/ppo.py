@@ -4,12 +4,13 @@ from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
 import wandb
 from torch.distributions import Categorical
-from src.factory import select_network
 from src.hardware import device
 from src.agents.agent import Agent, AgentConfig
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
 from src.modules.watcher import Watcher
+from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
+from src.networks.gnn import GraphNetwork, GraphNetworkConfig
 from src.observation.observation import StateValueDict
 from src.networks.network import Network, NetworkConfig
 from src.skills.skill import Skill
@@ -44,6 +45,16 @@ class PPOAgentConfig(AgentConfig):
     clip_value_loss: bool = True
 
 
+def select_network(config: NetworkConfig) -> Network:
+    """Create network from config - simple factory function"""
+    if isinstance(config, BaselineNetworkConfig):
+        return BaselineNetwork(config)
+    elif isinstance(config, GraphNetworkConfig):
+        return GraphNetwork(config)
+    else:
+        raise ValueError(f"Unknown network type: {type(config)}")
+
+
 class PPOAgent(Agent):
     def __init__(
         self,
@@ -57,12 +68,8 @@ class PPOAgent(Agent):
         self.buffer = buffer
         self.storage = storage
         self.mse_loss = nn.MSELoss()
-        self.policy_new: Network = select_network(
-            config.network, storage.states, storage.skills
-        ).to(device)
-        self.policy_old: Network = select_network(
-            config.network, storage.states, storage.skills
-        ).to(device)
+        self.policy_new: Network = select_network(config.network).to(device)
+        self.policy_old: Network = select_network(config.network).to(device)
         self.optimizer = torch.optim.AdamW(
             self.policy_new.parameters(),
             lr=self.config.learning_rate,
@@ -91,12 +98,12 @@ class PPOAgent(Agent):
         goal: StateValueDict,
     ) -> Skill:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)
+            batch = self.policy_old.to_encoded_batch(obs, goal, self.storage.states)
             logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             1,
-            self.policy_old.dim_skills,
-        ), f"Expected logits shape ({1}, {self.policy_old.dim_skills}), got {logits.shape}"
+            self.config.network.skill_count,
+        ), f"Expected logits shape ({1}, {self.config.network.skill_count}), got {logits.shape}"
         assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
 
         dist = Categorical(logits=logits)
@@ -112,12 +119,15 @@ class PPOAgent(Agent):
 
     def explain(
         self,
-        obs: StateValueDict,
+        current: StateValueDict,
         goal: StateValueDict,
+        skill: Skill,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(obs, goal).unsqueeze(0)
-            actor_explanation, critic_explanation = self.policy_old.explain(batch)
+            batch = self.policy_old.to_encoded_batch(current, goal, self.storage.states)
+            actor_explanation, critic_explanation = self.policy_old.explain(
+                batch, skill
+            )
         return actor_explanation, critic_explanation
 
     def evaluate(
@@ -127,12 +137,12 @@ class PPOAgent(Agent):
         action: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
         assert len(obs) == len(goal), "Observation and Goal lists have different sizes."
-        batch = self.policy_old.to_encoded_batch(obs, goal)
+        batch = self.policy_old.to_encoded_batch(obs, goal, self.storage.states)
         logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             len(obs),
-            self.policy_old.dim_skills,
-        ), f"Expected logits shape ({len(obs)}, {self.policy_old.dim_skills}), got {logits.shape}"
+            self.config.network.skill_count,
+        ), f"Expected logits shape ({len(obs)}, {self.config.network.skill_count}), got {logits.shape}"
         assert value.shape == (
             len(obs),
         ), f"Expected value shape ({len(obs)},), got {value.shape}"
@@ -174,7 +184,7 @@ class PPOAgent(Agent):
 
         ### Saves batch values
         batch_success_rate = self.buffer.save(
-            self.storage.buffer_saving_path,
+            self.storage.buffer_saving_path(self.config.network.name),
             self._current_epoch,
         )
 
@@ -398,14 +408,15 @@ class PPOAgent(Agent):
         Save the model to the specified path.
         """
         if tag == "":
-            checkpoint_path = (
-                self.storage.agent_saving_path
-                + "model_cp_epoch_{}.pth".format(
-                    self._current_epoch,
-                )
+            checkpoint_path = self.storage.agent_saving_path(
+                self.config.network.name
+            ) + "model_cp_epoch_{}.pth".format(
+                self._current_epoch,
             )
         else:
-            checkpoint_path = self.storage.agent_saving_path + "model_cp_{}.pth".format(
+            checkpoint_path = self.storage.agent_saving_path(
+                self.config.network.name
+            ) + "model_cp_{}.pth".format(
                 tag,
             )
 
@@ -458,5 +469,5 @@ class PPOAgent(Agent):
             return int(result[0]), int(result[1])
 
     def load(self):
-        self.policy_new.load()
-        self.policy_old.load()
+        self.policy_new.load(self.storage.skills, self.storage.states)
+        self.policy_old.load(self.storage.skills, self.storage.states)

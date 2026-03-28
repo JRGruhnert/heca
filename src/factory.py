@@ -87,17 +87,3 @@ def select_environment(
         )
     else:
         raise ValueError(f"Unknown environment type: {type(config)}")
-
-
-def select_network(
-    config: NetworkConfig,
-    states: list[State],
-    skills: list[Skill],
-) -> Network:
-    """Create network from config - simple factory function"""
-    if isinstance(config, BaselineNetworkConfig):
-        return BaselineNetwork(config)
-    elif isinstance(config, GraphNetworkConfig):
-        return GraphNetwork(config, states, skills)
-    else:
-        raise ValueError(f"Unknown network type: {type(config)}")

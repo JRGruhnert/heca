@@ -10,26 +10,32 @@ from conf.common import (
 )
 from src.modules.buffer import BufferConfig
 from src.modules.logger import LogMode
+from src.modules.storage import Storage
 
 
 def get_explain_config(
+    skill_count: int,
+    state_count: int,
     skill_set_tag: str,
     state_set_tag: str,
-    is_baseline: bool = False,
+    checkpoint_name: str,
+    is_gnn: bool = True,
     prefix_tag: str = "",
-    checkpoint_name: str | None = None,
 ) -> ExplainManagerConfig:
+
     network = network_config(
+        is_gnn,
         checkpoint_name,
-        is_baseline,
         explain_mode=True,
+        skill_count=skill_count,
+        state_count=state_count,
     )
     return ExplainManagerConfig(
         agent=agent_config(
             network,
             True,
         ),
-        buffer=BufferConfig(steps=1024),
+        buffer=BufferConfig(steps=16),
         logger=logger_config(
             LogMode.TERMINAL,
             network.name,
@@ -38,7 +44,6 @@ def get_explain_config(
             skill_set_tag,
         ),
         storage=storage_config(
-            network.name,
             prefix_tag,
             state_set_tag,
             skill_set_tag,

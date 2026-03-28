@@ -6,6 +6,7 @@ import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
+from src.modules.explainer import HoopgnExplainer
 from src.observation.observation import StateValueDict
 from src.skills.skill import Skill
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
@@ -24,33 +25,27 @@ class ReadoutNetwork(nn.Module):
     def __init__(
         self,
         dim_features: int,
-        dim_skill: int,
-        dim_state: int,
     ):
         super().__init__()
-        self.dim_skills = dim_skill
-        self.dim_state = dim_state
-        self.dim_features = dim_features
-
         self.state_state_gin = GINConv(
             nn=GinStandardMLP(
-                in_dim=self.dim_features,
-                out_dim=self.dim_features,
-                hidden_dim=self.dim_features,
+                in_dim=dim_features,
+                out_dim=dim_features,
+                hidden_dim=dim_features,
             ),
             # edge_dim=1,
         )
 
         self.state_skill_gin = GINEConv(
             nn=GinStandardMLP(
-                in_dim=self.dim_features,
-                out_dim=self.dim_features,
-                hidden_dim=self.dim_features,
+                in_dim=dim_features,
+                out_dim=dim_features,
+                hidden_dim=dim_features,
             ),
             edge_dim=2,
         )
         self.readout_net = GINConv(
-            nn=UnactivatedMLP(self.dim_features, 1),
+            nn=UnactivatedMLP(dim_features, 1),
         )
 
     @abstractmethod
@@ -59,10 +54,42 @@ class ReadoutNetwork(nn.Module):
     ) -> torch.Tensor:
         raise NotImplementedError("Readout method must be implemented by subclass.")
 
-    def forward(self, batch: Batch) -> torch.Tensor:
-        x_dict = batch.x_dict  # type: ignore
-        edge_index_dict = batch.edge_index_dict  # type: ignore
-        edge_attr_dict = batch.edge_attr_dict  # type: ignore
+    def set_edge_attr_dict(self, edge_attr_dict):
+        self.edge_attr_dict = edge_attr_dict
+
+    def forward(self, *args, **kwargs) -> torch.Tensor:
+        # for a in args:
+        #    print(type(a))
+        # for k, v in kwargs.items():
+        #    print(k, type(v))
+
+        if len(args) == 1 and isinstance(args[0], Batch):
+            batch = args[0]
+            x_dict = batch.x_dict  # type: ignore
+            edge_index_dict = batch.edge_index_dict  # type: ignore
+            edge_attr_dict = batch.edge_attr_dict  # type: ignore
+        elif len(args) == 2 and isinstance(args[0], dict) and isinstance(args[1], dict):
+            x_dict = args[0]
+            edge_index_dict = args[1]
+            edge_attr_dict = self.edge_attr_dict
+        elif (
+            len(args) == 3
+            and isinstance(args[0], dict)
+            and isinstance(args[1], dict)
+            and isinstance(args[2], dict)  # This is likely the mask from Captum
+        ):
+            x_dict = args[0]
+            edge_index_dict = args[1]
+            edge_attr_dict = args[2]
+            # args[2] is the mask, which you may need to apply to x_dict or ignore
+        elif len(args) == 3 and isinstance(args[0], dict) and isinstance(args[1], dict):
+            x_dict = args[0]
+            edge_index_dict = args[1]
+            edge_attr_dict = self.edge_attr_dict
+        else:
+            raise ValueError(
+                f"Invalid arguments {len(args)}. Expected (Batch), (x_dict, edge_index_dict), (x_dict, edge_index_dict, mask), or (x_dict, edge_index_dict, edge_attr_dict)."
+            )
 
         x1 = self.state_state_gin(
             x=(x_dict["goal"], x_dict["obs"]),
@@ -86,7 +113,7 @@ class ActorReadoutNetwork(ReadoutNetwork):
             x=(x, x_dict["actor"]),
             edge_index=edge_index_dict[("task", "task-actor", "actor")],
         )
-        return logits.view(-1, self.dim_skills)
+        return logits.view(1, -1)
 
 
 class CriticReadoutNetwork(ReadoutNetwork):
@@ -112,24 +139,12 @@ class GraphNetwork(Network):
     def __init__(
         self,
         config: GraphNetworkConfig,
-        states: list[State],
-        skills: list[Skill],
     ):
-        super().__init__(config, states, skills)  # type: ignore
-        self.config = config
+        super().__init__(config)
 
-        self.actor = ActorReadoutNetwork(
-            dim_features=self.dim_encoder,
-            dim_state=self.dim_states,
-            dim_skill=self.dim_skills,
-        )
-        self.critic = CriticReadoutNetwork(
-            dim_features=self.dim_encoder,
-            dim_state=self.dim_states,
-            dim_skill=self.dim_skills,
-        )
-        self.indices = torch.arange(self.dim_skills)
-        self.actor_explainer = Explainer(
+        self.actor = ActorReadoutNetwork(dim_features=self.config.dim_encoder)
+        self.critic = CriticReadoutNetwork(dim_features=self.config.dim_encoder)
+        self.actor_explainer = HoopgnExplainer(
             self.actor,  # It is assumed that model outputs a single tensor.
             algorithm=CaptumExplainer("IntegratedGradients"),
             explanation_type="model",
@@ -142,7 +157,7 @@ class GraphNetwork(Network):
             ),
         )
 
-        self.critic_explainer = Explainer(
+        self.critic_explainer = HoopgnExplainer(
             self.critic,  # It is assumed that model outputs a single tensor.
             algorithm=CaptumExplainer("IntegratedGradients"),
             explanation_type="model",
@@ -155,25 +170,116 @@ class GraphNetwork(Network):
             ),
         )
 
+    @cached_property
+    def state_state_full(self) -> torch.Tensor:
+        src = (
+            torch.arange(self.config.state_count)
+            .unsqueeze(1)
+            .repeat(1, self.config.state_count)
+            .flatten()
+        )
+        dst = torch.arange(self.config.state_count).repeat(self.config.state_count)
+        return torch.stack([src, dst], dim=0)
+
+    @cached_property
+    def state_skill_full(self) -> torch.Tensor:
+        src = (
+            torch.arange(self.config.state_count)
+            .unsqueeze(1)
+            .repeat(1, self.config.skill_count)
+            .flatten()
+        )
+        dst = torch.arange(self.config.skill_count).repeat(self.config.state_count)
+        return torch.stack([src, dst], dim=0)
+
+    @cached_property
+    def state_state_sparse(self) -> torch.Tensor:
+        indices = torch.arange(self.config.state_count)
+        return torch.stack([indices, indices], dim=0)
+
+    @cached_property
+    def skill_skill_sparse(self) -> torch.Tensor:
+        indices = torch.arange(self.config.skill_count)
+        return torch.stack([indices, indices], dim=0)
+
+    @cached_property
+    def state_skill_sparse(self) -> torch.Tensor:
+        edge_list = []
+        for task_idx, skill in enumerate(self.skills):
+            for state_idx, state in enumerate(self.states):
+                if state.name in skill.precons.keys():
+                    edge_list.append((state_idx, task_idx))
+        return torch.tensor(edge_list, dtype=torch.long).t()
+
+    @cached_property
+    def skill_to_single(self) -> torch.Tensor:
+        indices = torch.arange(self.config.skill_count)
+        return torch.stack([indices, torch.zeros_like(indices)], dim=0)
+
+    @cached_property
+    def single_to_skill(self) -> torch.Tensor:
+        indices = torch.arange(self.config.skill_count)
+        return torch.stack([torch.zeros_like(indices), indices], dim=0)
+
+    @cached_property
+    def state_to_single(self) -> torch.Tensor:
+        indices = torch.arange(self.config.state_count)
+        return torch.stack([indices, torch.zeros_like(indices)], dim=0)
+
+    @cached_property
+    def single_to_state(self) -> torch.Tensor:
+        indices = torch.arange(self.config.state_count)
+        return torch.stack([torch.zeros_like(indices), indices], dim=0)
+
+    @cached_property
+    def state_state_01_attr(self) -> torch.Tensor:
+        return (
+            (self.state_state_full[0] == self.state_state_full[1])
+            .to(torch.float)
+            .unsqueeze(-1)
+        )
+
+    @cached_property
+    def state_skill_01_attr(self) -> torch.Tensor:
+        sparse = (
+            self.state_skill_sparse[0] * self.config.skill_count
+            + self.state_skill_sparse[1]
+        )
+        full = (
+            self.state_skill_full[0] * self.config.skill_count
+            + self.state_skill_full[1]
+        )
+        return torch.isin(full, sparse).float().unsqueeze(-1)
+
     def forward(
         self,
         batch: Batch,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
-    def explain(self, batch: Batch) -> tuple[HeteroExplanation, HeteroExplanation]:
+    def explain(
+        self, batch: Batch, skill: Skill
+    ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
+        d: HeteroData = batch.get_example(0)  # type: ignore
+        # print(batch)
         actor_explanation = self.actor_explainer(
-            batch.get_example(0).x_dict,
-            batch.get_example(0).edge_index_dict,
-            index=self.indices,
+            d.x_dict,
+            d.edge_index_dict,
+            d.edge_attr_dict,
         )
         critic_explanation = self.critic_explainer(
-            batch.get_example(0).x_dict,
-            batch.get_example(0).edge_index_dict,
-            index=self.indices,
+            d.x_dict,
+            d.edge_index_dict,
+            d.edge_attr_dict,
         )
-        assert isinstance(actor_explanation, HeteroExplanation)
-        assert isinstance(critic_explanation, HeteroExplanation)
+        assert (
+            isinstance(actor_explanation, HeteroExplanation)
+            or actor_explanation is None
+        )
+        assert (
+            isinstance(critic_explanation, HeteroExplanation)
+            or critic_explanation is None
+        )
         return actor_explanation, critic_explanation
 
     def _to_batch(
@@ -184,8 +290,10 @@ class GraphNetwork(Network):
             data = HeteroData()
             data["goal"].x = g
             data["obs"].x = c
-            data["task"].x = torch.zeros(self.dim_skills, self.dim_encoder)
-            data["actor"].x = torch.zeros(self.dim_skills, 1)
+            data["task"].x = torch.zeros(
+                self.config.skill_count, self.config.dim_encoder
+            )
+            data["actor"].x = torch.zeros(self.config.skill_count, 1)
             data["critic"].x = torch.zeros(1, 1)
 
             data[("goal", "goal-obs", "obs")].edge_index = self.state_state_sparse
@@ -208,83 +316,6 @@ class GraphNetwork(Network):
             distances = skill.distances(obs, self.states, pad, sparse)
             features.append(distances)
         return torch.stack(features, dim=0).float()
-
-    @cached_property
-    def state_state_full(self) -> torch.Tensor:
-        src = (
-            torch.arange(self.dim_states)
-            .unsqueeze(1)
-            .repeat(1, self.dim_states)
-            .flatten()
-        )
-        dst = torch.arange(self.dim_states).repeat(self.dim_states)
-        return torch.stack([src, dst], dim=0)
-
-    @cached_property
-    def state_skill_full(self) -> torch.Tensor:
-        src = (
-            torch.arange(self.dim_states)
-            .unsqueeze(1)
-            .repeat(1, self.dim_skills)
-            .flatten()
-        )
-        dst = torch.arange(self.dim_skills).repeat(self.dim_states)
-        return torch.stack([src, dst], dim=0)
-
-    @cached_property
-    def state_state_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_states)
-        return torch.stack([indices, indices], dim=0)
-
-    @cached_property
-    def skill_skill_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_skills)
-        return torch.stack([indices, indices], dim=0)
-
-    @cached_property
-    def state_skill_sparse(self) -> torch.Tensor:
-        edge_list = []
-        for task_idx, skill in enumerate(self.skills):
-            for state_idx, state in enumerate(self.states):
-                if state.name in skill.precons.keys():
-                    edge_list.append((state_idx, task_idx))
-        return torch.tensor(edge_list, dtype=torch.long).t()
-
-    @cached_property
-    def skill_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_skills)
-        return torch.stack([indices, torch.zeros_like(indices)], dim=0)
-
-    @cached_property
-    def single_to_skill(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_skills)
-        return torch.stack([torch.zeros_like(indices), indices], dim=0)
-
-    @cached_property
-    def state_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_states)
-        return torch.stack([indices, torch.zeros_like(indices)], dim=0)
-
-    @cached_property
-    def single_to_state(self) -> torch.Tensor:
-        indices = torch.arange(self.dim_states)
-        return torch.stack([torch.zeros_like(indices), indices], dim=0)
-
-    @cached_property
-    def state_state_01_attr(self) -> torch.Tensor:
-        return (
-            (self.state_state_full[0] == self.state_state_full[1])
-            .to(torch.float)
-            .unsqueeze(-1)
-        )
-
-    @cached_property
-    def state_skill_01_attr(self) -> torch.Tensor:
-        sparse = (
-            self.state_skill_sparse[0] * self.dim_skills + self.state_skill_sparse[1]
-        )
-        full = self.state_skill_full[0] * self.dim_skills + self.state_skill_full[1]
-        return torch.isin(full, sparse).float().unsqueeze(-1)
 
     def s_s_attr(
         self,
@@ -316,6 +347,7 @@ class GraphNetwork(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any):
-        self.policy_old.load_state_dict(checkpoint["model_state"], strict=False)
-        self.policy_new.load_state_dict(checkpoint["model_state"], strict=False)
+    def _load(self, checkpoint: Any, skills: list[Skill], states: list[State]):
+        self.skills = skills
+        self.states = states
+        self.load_state_dict(checkpoint["model_state"], strict=False)

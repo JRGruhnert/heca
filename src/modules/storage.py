@@ -13,7 +13,6 @@ from src.states.states import STATES_BY_TAG
 class StorageConfig:
     used_skills: str
     used_states: str
-    network: str
     tag: str = "untagged_run"
     storage_path: str = "data"
     results_path: str = "results"
@@ -58,39 +57,35 @@ class Storage:
             os.makedirs(path)
         return path
 
-    @cached_property
-    def agent_saving_path(self) -> str:
+    def agent_saving_path(self, network_name: str) -> str:
         directory_path = (
-            self.config.results_path
-            + "/"
-            + self.config.network
-            + "/"
-            + self.config.tag
-            + "/"
+            self.config.results_path + "/" + network_name + "/" + self.config.tag + "/"
         )
         return self.create_directory(directory_path)
 
-    @cached_property
-    def buffer_saving_path(self) -> str:
-        directory_path = self.agent_saving_path + self.config.buffer_path + "/"
+    def buffer_saving_path(self, network_name: str) -> str:
+        directory_path = (
+            self.agent_saving_path(network_name) + self.config.buffer_path + "/"
+        )
         return self.create_directory(directory_path)
 
-    @cached_property
-    def plots_saving_path(self) -> str:
-        directory_path = self.agent_saving_path + self.config.plots_path + "/"
+    def plots_saving_path(self, network_name: str) -> str:
+        directory_path = (
+            self.agent_saving_path(network_name) + self.config.plots_path + "/"
+        )
         return self.create_directory(directory_path)
 
-    def get_skill_by_name(self, name: str) -> Skill | None:
+    def get_skill_by_name(self, name: str) -> Skill:
         for skill in self.skills:
             if skill.name == name:
                 return skill
-        return None
+        raise ValueError(f"Skill with name {name} not found in storage.")
 
-    def get_state_by_name(self, name: str) -> State | None:
+    def get_state_by_name(self, name: str) -> State:
         for state in self.states:
             if state.name == name:
                 return state
-        return None
+        raise ValueError(f"State with name {name} not found in storage.")
 
     @property
     def states(self) -> list[State]:
@@ -103,7 +98,6 @@ class Storage:
     @property
     def skills(self) -> list[Skill]:
         return self._skills
-    
 
     def skill_by_index(self, idx: int) -> Skill:
         return self.skills[idx]

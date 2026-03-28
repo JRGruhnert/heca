@@ -6,6 +6,8 @@ from src.networks.network import Network, NetworkConfig
 from src.observation.observation import StateValueDict
 from collections import defaultdict
 
+from src.states.state import State
+
 
 @dataclass
 class BaselineNetworkConfig(NetworkConfig):
@@ -16,12 +18,13 @@ class BaselineNetwork(Network):
 
     def __init__(
         self,
-        *args,
-        **kwargs,
+        config: BaselineNetworkConfig,
     ):
-        super().__init__(*args, **kwargs)
+        super().__init__(config)
 
-        self.combined_feature_dim = self.dim_encoder * self.dim_states * 2
+        self.combined_feature_dim = (
+            self.config.dim_encoder * self.config.state_count * 2
+        )
 
         h_dim1 = self.combined_feature_dim // 2
         h_dim2 = h_dim1 // 2
@@ -30,7 +33,7 @@ class BaselineNetwork(Network):
             nn.ReLU(),
             nn.Linear(h_dim1, h_dim2),
             nn.ReLU(),
-            nn.Linear(h_dim2, self.dim_skills),
+            nn.Linear(h_dim2, self.config.skill_count),
         )
         # critic
         self.critic = nn.Sequential(
@@ -55,10 +58,11 @@ class BaselineNetwork(Network):
     def state_type_dict_values(
         self,
         x: StateValueDict,
+        states: list[State],
     ) -> dict[str, torch.Tensor]:
         """Group state values by their type strings."""
         grouped = defaultdict(list)
-        for state in self.states:
+        for state in states:
             value = state.make_input(x[state.name])
             grouped[state.type].append(value)
         return {k: torch.stack(v).float() for k, v in grouped.items()}
@@ -77,7 +81,7 @@ class BaselineNetwork(Network):
         )
 
         # Get current model state dict
-        new_state_dict = self.policy_old.state_dict()
+        new_state_dict = self.state_dict()
 
         # Copy compatible weights
         for name, old_param in old_state_dict.items():
@@ -99,8 +103,7 @@ class BaselineNetwork(Network):
                     )
 
         # Load the modified state dict
-        self.policy_old.load_state_dict(new_state_dict, strict=False)
-        self.policy_new.load_state_dict(new_state_dict, strict=False)
+        self.load_state_dict(new_state_dict, strict=False)
 
     def _expand_tensor_dims(self, old_tensor, target_shape):
         """Expand tensor dimensions by copying/padding"""

@@ -1,22 +1,26 @@
-from collections import defaultdict
 from dataclasses import dataclass
 import re
+
+from tqdm import trange
 
 from src.modules.logger import LoggerConfig, Logger
 from src.modules.buffer import BufferConfig, Buffer
 from src.modules.evaluators.evaluator import EvaluatorConfig
 from src.modules.storage import Storage, StorageConfig
 from src.environments.environment import EnvironmentConfig
-from src.agents.ppo import PPOAgentConfig
+from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
-from wandb.wandb_run import Run
 from src.factory import (
     select_agent,
     select_environment,
     select_experiment,
     select_evaluator,
 )
+from src.observation.observation import StateValueDict
 from src.plotting.plots.positions import Positions3DPlot
+from src.states.calvin import AreaEulerState
+from src.states.state import State
+from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
 
 
 @dataclass
@@ -33,63 +37,96 @@ class ExplainManagerConfig:
 class ExplainScript:
     """Manages training loop"""
 
-    def __init__(self, config: ExplainManagerConfig, run: Run | None = None):
+    def __init__(self, config: ExplainManagerConfig):
+        if config is None:
+            raise ValueError("Config cannot be None")
+        self.config = config
         self.storage = Storage(config.storage)
         self.buffer = Buffer(config.buffer)
-        self.logger = Logger(config.logger, run)
-
+        self.logger = Logger(config.logger)
         evaluator = select_evaluator(config.evaluator, self.storage)
         env = select_environment(config.environment, evaluator, self.storage)
         self.experiment = select_experiment(config.experiment, env, self.storage)
-        self.agent = select_agent(config.agent, self.storage, self.buffer)
+        self.agent: PPOAgent = select_agent(config.agent, self.storage, self.buffer)  # type: ignore
         self.plot = Positions3DPlot()
-        self.quick_map = {"blue": "b", "pink": "p", "red": "r"}
-        self.pattern = re.compile(r"(.*)_(position)$")
+
+        self.relevant_objects = {
+            SET_RED: "block_red",
+            SET_BLUE: "block_blue",
+            SET_PINK: "block_pink",
+            SET_SLIDE: "base__slide",
+        }
+        self.object_pattern = re.compile(r"(red|blue|pink|slider)")
+        # print(f"Checkpoint path: {self.config.agent.network.checkpoint_path}")
+        match = self.object_pattern.search(
+            self.config.agent.network.checkpoint_path or ""
+        )
+        if match:
+            object_name = match.group(1)  # 'red', 'blue', 'pink', or 'slide'
+        self.trained_object = self.relevant_objects[object_name]
+        self.current_object = self.relevant_objects[self.config.storage.used_states]
+
+        self.pos_state: State = self.storage.get_state_by_name(
+            f"{self.current_object}_position"
+        )
+        self.quat_state: State = self.storage.get_state_by_name(
+            f"{self.current_object}_rotation"
+        )
+
+    def is_different_on_start(self, current: StateValueDict, goal: StateValueDict):
+        if self.pos_state is None or self.quat_state is None:
+            raise ValueError("Position or rotation state not found in storage.")
+        pos_eq = self.pos_state.evaluate(
+            current[f"{self.current_object}_position"],
+            goal[f"{self.current_object}_position"],
+        )
+        rot_eq = self.quat_state.evaluate(
+            current[f"{self.current_object}_rotation"],
+            goal[f"{self.current_object}_rotation"],
+        )
+        return not pos_eq
+
+    def do_task(self, current: StateValueDict, goal: StateValueDict) -> bool:
+        episode_ended = False
+        done = False
+        while not episode_ended:
+            skill = self.agent.act(current, goal)
+            # expl_actor, _ = self.agent.explain(current, goal, skill)
+            current, reward, done, episode_ended = self.experiment.step(skill)
+            if self.agent.feedback(reward, done, episode_ended):
+                self.agent.buffer.clear()
+
+        return done
 
     def run_batch(self):
         """Collect experiences until batch is ready"""
-        info_obs = defaultdict(list)
-        info_goal = defaultdict(list)
-        sample = True
-        while sample:
-            obs, goal = self.experiment.sample_task()
-            for prefix in self.quick_map.keys():
-                info_obs[f"{prefix}_position"].append(
-                    obs[f"{prefix}_position"],
-                )
-                info_goal[f"{prefix}_position"].append(
-                    goal[f"{prefix}_position"],
-                )
-                self.plot.print_object(
-                    obs[f"{prefix}_position"].tolist(),
-                    obs[f"{prefix}_rotation"].tolist(),
-                    self.quick_map.get(prefix, "k"),
-                )
-                self.plot.print_object(
-                    goal[f"{prefix}_position"].tolist(),
-                    goal[f"{prefix}_rotation"].tolist(),
-                    self.quick_map.get(prefix, "k"),
-                )
 
-            episode_ended = False
-            while not episode_ended:
-                skill = self.agent.act(obs, goal)
-                expl_actor, _ = self.agent.explain(obs, goal, skill)
-                if skill:
-                    obs, reward, done, episode_ended = self.experiment.step(skill)
-                sample = not self.agent.feedback(reward, done, episode_ended)
+        for i in trange(self.config.buffer.steps):
+            current, goal = self.experiment.sample_task()
+            self.plot.set_object(
+                {
+                    "current": current[f"{self.current_object}_position"].tolist(),
+                    "goal": goal[f"{self.current_object}_position"].tolist(),
+                },
+                {
+                    "current": current[f"{self.current_object}_rotation"].tolist(),
+                    "goal": goal[f"{self.current_object}_rotation"].tolist(),
+                },
+                different=self.is_different_on_start(current, goal),
+                solved=self.do_task(current, goal),
+            )
 
-        for prefix in ["red", "blue", "pink"]:
-            self.plot.make_ellipsoid(
-                info_obs[prefix + "_position"],
-                self.quick_map[prefix],
-                alpha=0.3,
-            )
-            self.plot.make_ellipsoid(
-                info_goal[prefix + "_position"],
-                self.quick_map[prefix],
-                alpha=0.3,
-            )
+        if isinstance(self.pos_state, AreaEulerState):
+            self.plot.show_spawn_area(self.pos_state.eval_surfaces)
+        self.plot.show_objects()
+        # self.plot.show_ellipsoid()
+        self.plot.show_edges()
+        self.plot.create(
+            f"Sampled Start and Goal Positions of {self.trained_object} and {self.current_object}.",
+            True,
+            True,
+            f"{self.storage.agent_saving_path(self.config.agent.network.name)}/plots/{self.trained_object}_s_{self.current_object}.png",
+        )
 
     def run(self):
         """Main training loop"""

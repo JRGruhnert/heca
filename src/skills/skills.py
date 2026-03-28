@@ -211,6 +211,11 @@ _S = {
     ),
 }
 
+
+def get_number_of_skills_by_tag(tag: str) -> int:
+    return len(SKILLS_BY_TAG.get(tag, []))
+
+
 SKILLS_BY_TAG = {
     # "Drawer": [
     #    _S["CloseDrawer"],
@@ -363,10 +368,10 @@ SKILLS_BY_TAG = {
         _S["PlacePinkDrawer"],
     ],
     SET_SRPB: [
-        #_S["CloseDrawer"],
-        #_S["CloseDrawerBack"],
-        #_S["OpenDrawer"],
-        #_S["OpenDrawerBack"],
+        # _S["CloseDrawer"],
+        # _S["CloseDrawerBack"],
+        # _S["OpenDrawer"],
+        # _S["OpenDrawerBack"],
         _S["PressButton"],
         _S["PressButtonBack"],
         _S["OpenSlide"],

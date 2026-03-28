@@ -27,7 +27,6 @@ def experiment_config(p_empty: float, p_rand: float) -> PePrConfig:
 
 
 def storage_config(
-    network: str,
     prefix_tag: str,
     state_set_tag: str,
     skill_set_tag: str,
@@ -37,7 +36,6 @@ def storage_config(
         used_states=state_set_tag,
         eval_states=skill_set_tag,
         tag=f"{prefix_tag}_{state_set_tag}_{skill_set_tag}",
-        network=network,
     )
 
 
@@ -66,10 +64,15 @@ def logger_config(
 
 
 def network_config(
-    checkpoint_name: str | None, is_baseline: bool, explain_mode: bool
+    is_gnn: bool,
+    checkpoint_name: str | None,
+    explain_mode: bool,
+    skill_count: int,
+    state_count: int,
 ) -> NetworkConfig:
+    network_name = "gnn" if is_gnn else "baseline"
     checkpoint_path = (
-        f"results/{is_baseline}/{checkpoint_name}/model_cp_best.pth"
+        f"results/{network_name}/{checkpoint_name}/model_cp_best.pth"
         if checkpoint_name
         else None
     )
@@ -77,10 +80,14 @@ def network_config(
         GraphNetworkConfig(
             checkpoint_path=checkpoint_path,
             explain_mode=explain_mode,
+            skill_count=skill_count,
+            state_count=state_count,
         )
-        if not is_baseline
+        if is_gnn
         else BaselineNetworkConfig(
             checkpoint_path=checkpoint_path,
+            skill_count=skill_count,
+            state_count=state_count,
         )
     )
 

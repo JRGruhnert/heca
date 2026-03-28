@@ -120,6 +120,11 @@ _S = {
     ),
 }
 
+
+def get_number_of_states_by_tag(tag: str) -> int:
+    return len(STATES_BY_TAG.get(tag, []))
+
+
 STATES_BY_TAG = {
     "Debug": [
         _S["ee_position"],
