@@ -1,3 +1,4 @@
+from functools import cached_property
 import pathlib
 import numpy as np
 import torch
@@ -34,20 +35,18 @@ class TapasSkill(Skill):
         self,
         name: str,
         id: int,
+        states: list[State],
         reversed: bool,
         overrides: list[str],
         predict_as_batch: bool,
         control_duration: int = -1,  # Only relevant if not predict_as_batch
-        policy_name: str = "gmm",
     ):
         super().__init__(name, id)
+        self.states = states
         self.reversed = reversed
         self.overrides = overrides
         self.predict_as_batch = predict_as_batch
         self.control_duration = control_duration
-        self.policy_name = policy_name
-        self.overrides_dict: dict[str, np.ndarray] = {}
-        self.policy: GMMPolicy = self._load_policy()
         self.first_prediction = True
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
@@ -62,7 +61,8 @@ class TapasSkill(Skill):
             / ("demos" + "_" + "gmm" + "_policy" + "-release")
         ).with_suffix(".pt")
 
-    def _get_config(self) -> GMMPolicyConfig:
+    @cached_property
+    def config(self) -> GMMPolicyConfig:
         """
         Get the configuration for the OpenDrawer policy.
         """
@@ -107,82 +107,92 @@ class TapasSkill(Skill):
             invert_prediction_batch=self.reversed,
         )
 
-    def _load_policy(self) -> GMMPolicy:
-        PolicyClass = import_policy(self.policy_name)
-        config = self._get_config()
-        policy: GMMPolicy = PolicyClass(config).to(device)
+    @cached_property
+    def policy(self) -> GMMPolicy:
+        PolicyClass = import_policy("gmm")
+        temp: GMMPolicy = PolicyClass(self.config).to(device)
 
         file_name = self._policy_checkpoint_name()  # type: ignore
         logger.info("Loading policy checkpoint from {}", file_name)
-        policy.from_disk(file_name)  # type: ignore
-        policy.eval()
-        return policy
+        temp.from_disk(file_name)  # type: ignore
+        temp.eval()
+        return temp
 
-    def _load_demo_precons(self) -> list[dict[str, torch.Tensor]]:
-        return []
+    @cached_property
+    def model(self) -> AutoTPGMM:
+        return self.policy.model
 
-    def _load_demo_postcons(self) -> list[dict[str, torch.Tensor]]:
-        return []
-
-    def initialize_task_parameters(self, states: list[State]):
-        """
-        Initialize the task parameters based on the active states.
-        """
-        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
-        tapas_tp: set[str] = set()
-        for _, segment in enumerate(tpgmm.segment_frames):  # type: ignore
+    @cached_property
+    def tapas_tp_labels(self) -> set[str]:
+        temp: set[str] = set()
+        for _, segment in enumerate(self.model.segment_frames):  # type: ignore
             for _, frame_idx in enumerate(segment):
-                pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
-                tapas_tp.add(pos_str)
-                tapas_tp.add(rot_str)
+                pos_str, rot_str = self.model.frame_mapping[frame_idx]
+                temp.add(pos_str)
+                temp.add(rot_str)
+        return temp
 
-    def initialize_conditions(self, states: list[State]):
-        """
-        Initialize the task parameters based on the active states.
-        """
-        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
-        # Taskparameters of the AutoTPGMM model
-        tapas_tp: set[str] = set()
-        for _, segment in enumerate(tpgmm.segment_frames):  # type: ignore
-            for _, frame_idx in enumerate(segment):
-                pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
-                tapas_tp.add(pos_str)
-                tapas_tp.add(rot_str)
-        # TODO: Currently assumes tapas tps are euler and quaternion
-        # My whole code does not generalize to other Task Parameterized models and state types
-        for state in states:
-            pre_value = state.run_addon(
+    @cached_property
+    def leaf_tp_labels(self) -> set[str]:
+        values = set()
+        for state in self.states:
+            value = state.run_addon(
                 "tapas",
-                tpgmm.start_values[state.name],
-                tpgmm.end_values[state.name],
-                self.reversed,
-                True if state.name in tapas_tp else False,
+                self.model.start_values[state.name],
+                self.model.end_values[state.name],
+                reversed,
+                True if state.name in self.tapas_tp_labels else False,
             )
-            post_value = state.run_addon(
-                "tapas",
-                tpgmm.start_values[state.name],
-                tpgmm.end_values[state.name],
-                not self.reversed,
-                True if state.name in tapas_tp else False,
-            )
-            if pre_value is not None:
-                self.precons[state.name] = pre_value
-            if post_value is not None:
-                self.postcons[state.name] = post_value
+            if value is not None:
+                values.add(state.name)
+        return values
 
-    def initialize_overrides(self, states: list[State]):
-        """
-        Initialize the task parameters based on the active states.
-        """
+    def _load_demo_precons(self) -> dict[str, torch.Tensor]:
+        return self.load_demo_cons(self.reversed)
+
+    def _load_demo_postcons(self) -> dict[str, torch.Tensor]:
+        return self.load_demo_cons(not self.reversed)
+
+    def load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
+        values = {}
+        for state in self.states:
+            if reversed:
+                values[state.name] = self.model.start_values[state.name]
+            else:
+                values[state.name] = self.model.end_values[state.name]
+        return values
+
+    def _load_tp_precons(self) -> dict[str, torch.Tensor]:
+        return self.load_tp_cons(self.reversed)
+
+    def _load_tp_postcons(self) -> dict[str, torch.Tensor]:
+        return self.load_tp_cons(not self.reversed)
+
+    def load_tp_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
+        values = {}
+        for state in self.states:
+            value = state.run_addon(
+                "tapas",
+                self.model.start_values[state.name],
+                self.model.end_values[state.name],
+                reversed,
+                True if state.name in self.tapas_tp_labels else False,
+            )
+            if value is not None:
+                values[state.name] = value
+        return values
+
+    @cached_property
+    def overrides_dict(self):
         # NOTE: Its a copy of initialize_task_parameters but only override states get loaded and also in reverse
         # So basically normal since reversed is True
-        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
-        for state in states:
+        temp: dict[str, np.ndarray] = {}
+        for state in self.states:
             if state.name in self.overrides:
                 value = state.run_addon(
                     "tapas",
-                    tpgmm.start_values[state.name],
-                    tpgmm.end_values[state.name],
+                    self.model.start_values[state.name],
+                    self.model.end_values[state.name],
                     not self.reversed,  # NOTE: We want the opposite of the reverse trajectory
                     True,  # NOTE: All States are True here
                 )
@@ -190,7 +200,8 @@ class TapasSkill(Skill):
                     raise ValueError(
                         f"Failed to create override for state {state.name}. This should not happen."
                     )
-                self.overrides_dict[state.name] = value.numpy()
+                temp[state.name] = value.numpy()
+        return temp
 
     def reset(self, goal: StateValueDict, env):
         self.policy.reset_episode(env)
@@ -202,7 +213,6 @@ class TapasSkill(Skill):
     def predict(
         self,
         current: CalvinEnvObservation,
-        states: list[State] | None = None,
     ) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
         assert isinstance(
@@ -213,7 +223,7 @@ class TapasSkill(Skill):
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
                     self.predictions, _ = self.policy.predict(  # type: ignore
-                        self._to_skill_format(current, self.goal, states=states)
+                        self._to_skill_format(current, self.goal)
                     )
                 except FloatingPointError as e:
                     logger.error(f"Numerical error in GMM prediction: {e}")
@@ -229,7 +239,7 @@ class TapasSkill(Skill):
         else:
             try:
                 self.prediction, _ = self.policy.predict(  # type: ignore
-                    self._to_skill_format(current, self.goal, states=states)
+                    self._to_skill_format(current, self.goal)
                 )
             except FloatingPointError as e:
                 logger.error(f"Numerical error in GMM prediction: {e}")
@@ -256,7 +266,6 @@ class TapasSkill(Skill):
         self,
         obs: CalvinEnvObservation,
         goal: StateValueDict | None = None,
-        states: list[State] | None = None,
     ) -> SceneObservation:  # type: ignore
         """
         Convert the observation from the environment to a SceneObservation. This format is used for TAPAS.
@@ -301,7 +310,9 @@ class TapasSkill(Skill):
         object_poses_dict = obs.object_poses
         object_states_dict = obs.object_states
         if goal is not None and self.reversed:
-            states_dict = {state.name: state for state in states} if states else {}
+            states_dict = (
+                {state.name: state for state in self.states} if self.states else {}
+            )
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
             # logger.debug(f"Overriding Tapas Task {task.name}")

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from functools import cached_property
 import torch
 import numpy as np
 from src.observation.observation import StateValueDict
@@ -11,10 +12,8 @@ class Skill(ABC):
         name: str,
         id: int,
     ):
-        self._name: str = name
-        self._id: int = id
-        self._precons: dict[str, torch.Tensor] = {}
-        self._postcons: dict[str, torch.Tensor] = {}
+        self.name = name
+        self.id = id
 
     @abstractmethod
     def _load_demo_precons(self) -> list[dict[str, torch.Tensor]]:
@@ -24,27 +23,39 @@ class Skill(ABC):
     def _load_demo_postcons(self) -> list[dict[str, torch.Tensor]]:
         raise NotImplementedError("")
 
-    @property
-    def name(self) -> str:
-        return self._name
+    @abstractmethod
+    def _load_precons(self) -> dict[str, torch.Tensor]:
+        raise NotImplementedError("")
 
-    @property
-    def id(self) -> int:
-        return self._id
+    @abstractmethod
+    def _load_postcons(self) -> dict[str, torch.Tensor]:
+        raise NotImplementedError("")
 
-    @property
+    @abstractmethod
+    def reset(self, *args, **kwargs):
+        """Prepare the skill for execution. Before each use."""
+        raise NotImplementedError("Subclasses must implement method.")
+
+    @abstractmethod
+    def predict(self, *args, **kwargs) -> np.ndarray | None:
+        """
+        Get the next action for the skill.
+        """
+        raise NotImplementedError("Subclasses must implement method.")
+
+    @cached_property
     def precons(self) -> dict[str, torch.Tensor]:
-        return self._precons
+        return self._load_precons()
 
-    @property
+    @cached_property
     def postcons(self) -> dict[str, torch.Tensor]:
-        return self._postcons
+        return self._load_postcons()
 
-    @property
+    @cached_property
     def demo_precons(self) -> list[dict[str, torch.Tensor]]:
         return self._load_demo_precons()
 
-    @property
+    @cached_property
     def demo_postcons(self) -> list[dict[str, torch.Tensor]]:
         return self._load_demo_postcons()
 
@@ -70,15 +81,3 @@ class Skill(ABC):
                 # 1.0 pad for non-task parameters
             task_features.append(value)
         return torch.stack(task_features, dim=0)
-
-    @abstractmethod
-    def reset(self, *args, **kwargs):
-        """Prepare the skill for execution. Before each use."""
-        raise NotImplementedError("Subclasses must implement method.")
-
-    @abstractmethod
-    def predict(self, *args, **kwargs) -> np.ndarray | None:
-        """
-        Get the next action for the skill.
-        """
-        raise NotImplementedError("Subclasses must implement method.")

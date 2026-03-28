@@ -47,10 +47,6 @@ class Storage:
         print(
             f"Loaded skills for tag {self.config.used_skills}: {[s.name for s in self.skills]}"
         )
-        for skill in self.skills:
-            if isinstance(skill, TapasSkill):
-                skill.initialize_conditions(self.states)
-                skill.initialize_overrides(self.states)
 
     def create_directory(self, path: str):
         if not os.path.exists(path):
