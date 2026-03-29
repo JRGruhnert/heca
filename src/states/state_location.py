@@ -13,9 +13,8 @@ from src.states.state import StateConfig
 
 @dataclass
 class LocationStateConfig(StateConfig):
-    label = "EulerPrecise"
     size = 3
-    ignore = False
+    type_str = "EulerPrecise"
     distance_cnd_goal = EuclideanDistanceConditionConfig()
     distance_cnd_skill = EuclideanDistanceConditionConfig()
     eval_cnd = ThresholdEvalConditionConfig(
@@ -28,3 +27,6 @@ class LocationStateConfig(StateConfig):
         ),
     )
     value_cnd_eval: ValueCondition | None = None
+    addons = {
+        "tapas": EulerTapasAddonConfig(),
+    }

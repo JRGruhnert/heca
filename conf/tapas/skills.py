@@ -1,4 +1,6 @@
-from src.skills.tapas import TapasSkill
+from dataclasses import asdict, dataclass
+
+from src.skills.tapas import TapasSkill, TapasSkillConfig
 from src.variables import (
     SET_SLIDE,
     SET_BLUE,
@@ -10,8 +12,24 @@ from src.variables import (
     SET_SRPB,
 )
 
+states = MasterStateSet.todict().values()
+
+@dataclass
+class MasterSkillSet:
+    close_drawer = TapasSkillConfig(
+        label="CloseDrawer",
+        id=0,
+        reversed=False,
+        predict_as_batch=True,
+        overrides=[],
+        states=states
+    )
+
+
+my_dict = asdict(MasterSkillSet())
 predict_as_batch = True
 
+_S2 = {"Close"}
 _S = {
     "CloseDrawer": TapasSkill(
         name="CloseDrawer",

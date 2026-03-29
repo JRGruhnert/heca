@@ -16,7 +16,7 @@ class AreaStateConfig(StateConfig):
     distance_cnd_skill: EuclideanDistanceConditionConfig
     distance_cnd_goal: EuclideanDistanceConditionConfig
     eval_cnd: EvalConditionConfig
-    label: str = "AreaEuler"
+    type_str: str = "AreaEuler"
     size: int = 6
     value_cnd_eval: ValueConditionConfig | None = None
     addons = {

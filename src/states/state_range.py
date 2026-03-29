@@ -12,8 +12,8 @@ from src.states.state import StateConfig
 
 @dataclass
 class RangeStateConfig(StateConfig):
-    lower_bound: float
-    upper_bound: float
+    low: float
+    high: float
     label: str = "Range"
     size: int = 1
     eval_cnd = ThresholdEvalConditionConfig(

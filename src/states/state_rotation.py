@@ -13,10 +13,9 @@ from src.states.state import StateConfig
 
 
 @dataclass
-class QuatStateConfig(StateConfig):
-    label: str = "Quat"
+class RotationStateConfig(StateConfig):
     size: int = 4
-    ignore: bool = False
+    type_str: str = "Quat"
     value_cnd = QuaternionValueConditionConfig()
     distance_cnd_skill = QuaternionDistanceConditionConfig()
     distance_cnd_goal = QuaternionDistanceConditionConfig()

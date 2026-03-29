@@ -26,6 +26,7 @@ class StateConfig:
     value_cnd: ValueConditionConfig
     value_cnd_eval: ValueConditionConfig | None
     addons: dict[str, AddonConfig] | None
+    ignore: bool = False
 
 
 class State:

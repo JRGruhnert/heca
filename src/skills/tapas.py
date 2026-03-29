@@ -8,7 +8,7 @@ from loguru import logger
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from src.observation.observation import StateValueDict
 from src.states.logic.area.area_eval_cnd import AreaEvalCondition
-from src.states.state import State, StateConfig
+from src.states.state import StateConfig
 from src.skills.skill import Skill, SkillConfig
 from src.hardware import device
 
@@ -71,12 +71,10 @@ class TapasSkillConfig(SkillConfig):
         topp_in_t_models=False,
         force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
         time_scale=1.0,
-        # ---- Changing often ----
         postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
     )
 
     def __post_init__(self):
-        # Only set the fields you want, rest are defaults
         self.policy.return_full_batch = self.predict_as_batch
         self.policy.batch_predict_in_t_models = self.predict_as_batch
         self.policy.invert_prediction_batch = self.reversed
