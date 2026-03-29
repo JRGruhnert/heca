@@ -20,7 +20,8 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
     CalvinEnvironmentConfig,
 )
-from src.skills.skill import Skill, SkillConfig
+
+from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.states.logic.addons.addon_flip import (
     FlipStatePreprocessor,
     FlipStatePreprocessorConfig,
@@ -73,9 +74,9 @@ def select_states(configs: Sequence[StateConfig]) -> list[State]:
     return [State(config) for config in configs]
 
 
-def select_skills(configs: Sequence[SkillConfig]) -> list[Skill]:
+def select_skills(configs: Sequence[LeafConfig]) -> list[Leaf]:
     """Create skills from configs - simple factory function"""
-    return [Skill(config) for config in configs]
+    return [Leaf(config) for config in configs]
 
 
 def select_value_condition(config: ValueConditionConfig) -> ValueCondition:

@@ -7,8 +7,8 @@ from src.modules.buffer import Buffer
 from src.modules.evaluators.tree import TreeEvaluator, TreeEvaluatorConfig
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
-from src.skills.empty import EmptySkill
+from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.leafs.leaf_ignore import IgnoreLeaf
 from loguru import logger
 from heapq import heapify, heappop, heappush
 
@@ -80,7 +80,7 @@ class SearchTreeAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Skill:
+    ) -> Leaf:
         # Initialize root if first observation
         if self.config.replan_every_step or self.solution is None:
             self.goal = goal
@@ -92,7 +92,7 @@ class SearchTreeAgent(Agent):
 
         if not self.solution or self.index >= len(self.solution.path):
             # print("Empty Skill taken cause of index too high.")
-            skill = EmptySkill()
+            skill = IgnoreLeaf()
         else:
 
             skill = self.storage.skills[
@@ -110,12 +110,12 @@ class SearchTreeAgent(Agent):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: Skill,
+        leaf: Leaf,
     ) -> str:
         raise NotImplementedError("")
 
     def best_first_search(self) -> Optional[TreeNode]:
-        """Expand tree by applying skill postconditions"""
+        """Expand tree by applying leaf postconditions"""
         nodes_expanded = 0
 
         while self.heap and nodes_expanded < self.config.max_nodes:
@@ -127,18 +127,18 @@ class SearchTreeAgent(Agent):
                 logger.debug(f"Goal reached. Stopping search.")
                 return current
 
-            # Try applying each available skill
-            for idx, skill in enumerate(self.storage.skills):
+            # Try applying each available leaf
+            for idx, leaf in enumerate(self.storage.skills):
                 if self.config.allow_skill_reuse or idx not in current.path:
-                    skill_distance = self.evaluator.distance_to_skill(
+                    leaf_distance = self.evaluator.distance_to_leaf(
                         current.obs,
-                        skill,
+                        leaf,
                     )
-                    if skill_distance < self.config.distance_threshold:
-                        # Simulate applying the skill by using its postcondition
-                        simulated_obs = self._apply_skill_postcondition(
+                    if leaf_distance < self.config.distance_threshold:
+                        # Simulate applying the leaf by using its postcondition
+                        simulated_obs = self._apply_leaf_postcondition(
                             current.obs,
-                            skill,
+                            leaf,
                         )
                         goal_distance = self.evaluator.distance_to_goal(
                             simulated_obs,

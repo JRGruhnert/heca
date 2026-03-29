@@ -4,10 +4,11 @@ import loguru
 import torch
 from src.modules.evaluators.skill import SkillEvaluator, SkillEvaluatorConfig
 from src.modules.storage import Storage
-from src.skills.skill import Skill
+
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -30,45 +31,45 @@ class SkillCheckExperiment(Experiment):
         self.pre_skill = None
         self.evaluator = SkillEvaluator(config.evaluator, storage)
 
-    def sample_task(self, skill: Skill) -> bool:
-        """Samples a new task from the environment that is suitable for the given skill."""
-        pre_skill = self._get_prerequisite_skill(skill)
+    def sample_task(self, leaf: Leaf) -> bool:
+        """Samples a new task from the environment that is suitable for the given leaf."""
+        pre_leaf = self._get_prerequisite_skill(leaf)
         attempts = 0
         while attempts < self.config.max_sample_attempts:
             logger.debug(
-                f"Sampling task for skill: {skill.config.label}, attempt {attempts + 1}"
+                f"Sampling task for skill: {leaf.config.label}, attempt {attempts + 1}"
             )
             current, goal = self.env.sample_task()
             logger.debug(
-                f"Sampled task for skill: {skill.config.label}, attempt {attempts + 1}"
+                f"Sampled task for skill: {leaf.config.label}, attempt {attempts + 1}"
             )
-            if pre_skill:
+            if pre_leaf:
                 # If the skill has prerequisite (can only be evaluated by executing prerequisite first)
                 pre_precons = self._to_custom_observation(
-                    pre_skill.precons,
+                    pre_leaf.precons,
                     current,
-                    skill.config.label,
+                    leaf.config.label,
                 )
                 if not self.evaluator.is_equal(pre_precons, current):
                     continue  # Prerequisite not met, resample
-                current = self.env.step(pre_skill)[0]  # Execute prerequisite skill
+                current = self.env.step(pre_leaf)[0]  # Execute prerequisite skill
 
             if self.config.sample_with_precons:
                 main_precons = self._to_custom_observation(
-                    skill.precons,
+                    leaf.precons,
                     current,
-                    skill.config.label,
+                    leaf.config.label,
                 )
                 # print(f"{current['ee_position']}")
-                logger.debug(f"Skill precons: {skill.precons}")
+                logger.debug(f"Skill precons: {leaf.precons}")
                 equal = self.evaluator.is_equal(main_precons, current)
-            logger.debug(f"Skill: {skill.config.label}, equal={equal}")
+            logger.debug(f"Skill: {leaf.config.label}, equal={equal}")
             main_postcons = self._to_custom_observation(
-                skill.postcons,
+                leaf.postcons,
                 goal,
-                skill.config.label,
+                leaf.config.label,
             )
-            logger.debug(f"Skill after: {skill.config.label}, equal={equal}")
+            logger.debug(f"Skill after: {leaf.config.label}, equal={equal}")
             same_areas = self.evaluator.same_areas(main_postcons, goal)
             logger.debug(f"Sampling attempt: equal={equal}, same_areas={same_areas}")
             if equal and same_areas:
@@ -76,7 +77,7 @@ class SkillCheckExperiment(Experiment):
             attempts += 1
         return False  # Failed to find suitable task
 
-    def step(self, skill: Skill) -> bool:
+    def step(self, skill: Leaf) -> bool:
         """Take a step in the environment using the provided skill. Returns True if skill postconditions are met."""
         current = self.env.step(skill)[0]
         return self.evaluator.step(

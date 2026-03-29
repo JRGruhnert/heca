@@ -22,6 +22,4 @@ class BoundaryThreshold:
     @cached_property
     def relative(self) -> torch.Tensor:
         """Returns the relative threshold for the state."""
-        return self.config.threshold * (
-            self.boundary.max_limit - self.boundary.lower_limit
-        )
+        return self.config.threshold * (self.boundary.lower - self.boundary.upper)

@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from src.environments.environment import Environment
 from src.modules.storage import Storage
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 from src.observation.observation import StateValueDict
 
 
@@ -21,8 +21,8 @@ class Experiment(ABC):
         self.storage = storage
 
     @abstractmethod
-    def step(self, skill: Skill) -> tuple[StateValueDict, float, bool, bool]:
-        """Take a step in the environment using the provided skill.
+    def step(self, leaf: Leaf) -> tuple[StateValueDict, float, bool, bool]:
+        """Take a step in the environment using the provided leaf.
         Returns the new observation, reward, done flag, and terminal flag."""
         raise NotImplementedError("Step method not implemented yet.")
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from src.modules.evaluators.dense3 import Dense3EvaluatorConfig, Dense3Evaluator
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -21,12 +21,12 @@ class TreeEvaluator(Dense3Evaluator):
     def distance_to_skill(
         self,
         current: StateValueDict,
-        skill: Skill,
+        skill: Leaf,
     ) -> float:
         """Returns a distance metric indicating how far the current observation is from satisfying the skill's preconditions."""
         total_distance = 0.0
-        for state in self.storage.eval_states:
-            if state.name in skill.precons:
+        for state in self.storage.states_eval:
+            if state.config.label in skill.precons:
                 distance = state.distance_to_skill(
                     current[state.name],
                     skill.precons[state.name],

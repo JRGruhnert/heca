@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from src.networks.layers.encoder import StateEncoder
 from src.observation.observation import StateValueDict
 from src.states.state import State
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 from loguru import logger
 
 
@@ -67,12 +67,14 @@ class Network(nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement the forward method.")
 
     @abstractmethod
-    def explain(self, batch, skill: Skill) -> Any:
+    def explain(self, batch, skill: Leaf) -> Any:
         raise NotImplementedError("This network does not support explanations.")
 
     def _encode_states(self, x: StateValueDict, states: list[State]) -> torch.Tensor:
         encoded_x = [
-            self.encoders[state.type](state.make_input(x[state.name]))
+            self.encoders[state.config.type_str](
+                state.make_input(x[state.config.label])
+            )
             for state in states
         ]
         return torch.stack(encoded_x, dim=0)
@@ -106,7 +108,7 @@ class Network(nn.Module, ABC):
     ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 
-    def load(self, skills: list[Skill], states: list[State]):
+    def load(self, skills: list[Leaf], states: list[State]):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint, skills, states)
@@ -119,7 +121,7 @@ class Network(nn.Module, ABC):
             )
 
     @abstractmethod
-    def _load(self, checkpoint: Any, skills: list[Skill], states: list[State]):
+    def _load(self, checkpoint: Any, skills: list[Leaf], states: list[State]):
         raise NotImplementedError("Subclasses must implement the _load method.")
 
     def _load_checkpoint(self, checkpoint_path: str) -> Any:

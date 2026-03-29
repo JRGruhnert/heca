@@ -1,14 +1,14 @@
 from dataclasses import dataclass
+from external.tapas_gmm_modified.tapas_gmm.env.calvin import Calvin, CalvinConfig
 from src.modules.evaluators.evaluator import Evaluator
 from src.modules.storage import Storage
 from src.environments.environment import Environment, EnvironmentConfig
 from src.observation.observation import StateValueDict
-from src.skills.empty import EmptySkill
-from src.skills.skill import Skill
 
 from src.observation.calvin import CalvinObservation
-from src.skills.tapas import TapasSkill
-from tapas.tapas_gmm.env.calvin import Calvin, CalvinConfig
+from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.leafs.leaf_ignore import IgnoreLeaf
+from src.skills.tree.leafs.tapas import TapasLeaf
 
 
 @dataclass
@@ -59,13 +59,13 @@ class CalvinEnvironment(Environment):
 
     def step(
         self,
-        skill: Skill,
+        skill: Leaf,
     ) -> tuple[StateValueDict, float, bool]:
         assert isinstance(
             skill,
-            TapasSkill,
+            TapasLeaf,
         ) or isinstance(
-            skill, EmptySkill
+            skill, IgnoreLeaf
         ), "CalvinEnvironment only supports TapasSkill at this time."
         skill.reset(self.goal, self.env)
         while (action := skill.predict(self.calvin_obs)) is not None:

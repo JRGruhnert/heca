@@ -1,14 +1,14 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from src.factory import select_skills, select_states
-from src.skills.skill import Skill, SkillConfig
+from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.states.state import State, StateConfig
 import os
 
 
 @dataclass
 class StorageConfig:
-    skills: Sequence[SkillConfig]
+    skills: Sequence[LeafConfig]
     states_network: Sequence[StateConfig]
     states_eval: Sequence[StateConfig]
     tag: str = "untagged_run"
@@ -65,7 +65,7 @@ class Storage:
         )
         return self.create_directory(directory_path)
 
-    def get_skill_by_name(self, name: str) -> Skill:
+    def get_skill_by_name(self, name: str) -> Leaf:
         skill = self.skills_dict.get(name)
         if skill is None:
             raise ValueError(f"Skill with name {name} not found in storage.")
@@ -77,5 +77,5 @@ class Storage:
             raise ValueError(f"State with name {name} not found in storage.")
         return state
 
-    def skill_by_index(self, idx: int) -> Skill:
+    def skill_by_index(self, idx: int) -> Leaf:
         return self.skills[idx]

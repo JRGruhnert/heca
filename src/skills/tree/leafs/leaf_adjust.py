@@ -1,12 +1,23 @@
+from dataclasses import dataclass
+
 import numpy as np
-import torch
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf, LeafConfig
+from src.states.logic.condition import ConditionConfig
 
 
-class AdjustSkill(Skill):
+@dataclass
+class AdjustLeafConfig(LeafConfig):
+    label: str = "AdjustSkill"
+    id: int = -1
+    precons: dict[str, ConditionConfig] | None = None
+    postcons: dict[str, ConditionConfig] | None = None
+
+
+class AdjustLeaf(Leaf):
     def __init__(self, step_size: float = 0.05):
-        super().__init__(name="AdjustSkill", id=-1)
+        super().__init__(AdjustLeafConfig())
+
         self.step_size = step_size
 
     def reset(self):

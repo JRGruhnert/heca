@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -16,7 +16,7 @@ class Environment(ABC):
         raise NotImplementedError("Reset method not implemented yet.")
 
     @abstractmethod
-    def step(self, skill: Skill) -> tuple[StateValueDict, float, bool]:
+    def step(self, skill: Leaf) -> tuple[StateValueDict, float, bool]:
         """Applies the given skill to the environment. Returns the new observation, reward, and done flag."""
         raise NotImplementedError("Step method not implemented yet.")
 

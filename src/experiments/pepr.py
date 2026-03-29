@@ -4,27 +4,18 @@ import random
 
 from loguru import logger
 from src.modules.storage import Storage
-from src.skills.skill import Skill
-from src.skills.empty import EmptySkill, EmptySkillConfig
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
-from src.variables import (
-    SET_SLIDE,
-    SET_BLUE,
-    SET_RED,
-    SET_PINK,
-    SET_SR,
-    SET_SRP,
-    SET_SRPB,
-    SET_SRPB,
-)
+from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.leafs.leaf_ignore import IgnoreLeaf
 
 
 @dataclass
 class PePrConfig(ExperimentConfig):
     p_empty: float
     p_rand: float
+    min_steps: int
 
 
 class PePrExperiment(Experiment):
@@ -34,32 +25,19 @@ class PePrExperiment(Experiment):
         # We sort based on Id for the baseline network to be consistent
         super().__init__(config, env, storage)
         self.config = config
-        if storage.config.used_skills == SET_SLIDE:
-            num_skills = 6
-        elif (
-            storage.config.used_skills == SET_RED
-            or storage.config.used_skills == SET_BLUE
-            or storage.config.used_skills == SET_PINK
-        ):
-            num_skills = 8
-        elif storage.config.used_skills == SET_SR:
-            num_skills = 10
-        elif storage.config.used_skills == SET_SRP:
-            num_skills = 12
-        elif storage.config.used_skills == SET_SRPB:
-            num_skills = 14
-        print(storage.config.used_skills)
+
+        print(storage.config.skills)
         # NOTE: This is for my skills setup
         self.max_episode_length = math.ceil(
-            num_skills
-            + num_skills * self.config.p_empty
-            + num_skills * self.config.p_rand
+            self.config.min_steps
+            + self.config.min_steps * self.config.p_empty
+            + self.config.min_steps * self.config.p_rand
         )
 
         self.current_step = 0
         self.current: StateValueDict | None = None
         logger.info(
-            f"Number of skills: {num_skills}, max episode length: {self.max_episode_length}"
+            f"Number of skills: {self.config.min_steps}, max episode length: {self.max_episode_length}"
         )
 
     def sample_task(self) -> tuple[StateValueDict, StateValueDict]:
@@ -67,12 +45,12 @@ class PePrExperiment(Experiment):
         self.current, goal = self.env.sample_task()
         return self.current, goal
 
-    def step(self, skill: Skill) -> tuple[StateValueDict, float, bool, bool]:
+    def step(self, skill: Leaf) -> tuple[StateValueDict, float, bool, bool]:
         self.current_step += 1
         sample = random.random()
         if sample < self.config.p_empty:
             logger.info("Taking Empty Step")
-            overwrite_skill = EmptySkill()
+            overwrite_skill = IgnoreLeaf()
         elif sample < self.config.p_empty + self.config.p_rand:
             logger.info("Taking Random Step")
             overwrite_skill = random.choice(self.storage.skills)

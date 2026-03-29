@@ -13,9 +13,10 @@ from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from src.networks.gnn import GraphNetwork, GraphNetworkConfig
 from src.observation.observation import StateValueDict
 from src.networks.network import Network, NetworkConfig
-from src.skills.skill import Skill
 from loguru import logger
 from thop import profile
+
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -96,7 +97,7 @@ class PPOAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Skill:
+    ) -> Leaf:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(
                 obs, goal, self.storage.states_network
@@ -123,7 +124,7 @@ class PPOAgent(Agent):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: Skill,
+        skill: Leaf,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(

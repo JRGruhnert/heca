@@ -3,7 +3,7 @@ from src.agents.agent import Agent, AgentConfig
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -28,10 +28,10 @@ class HumanAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Skill | None:
+    ) -> Leaf | None:
         """Select an action given the current observation and goal observation."""
         for i, skill in enumerate(self.storage.skills):
-            print(f"{i}: {skill.name}")
+            print(f"{i}: {skill.config.label}")
         print(f"{len(self.storage.skills)}: Reset")
         choice = int(input("Enter the Task id: "))
         if choice == len(self.storage.skills):
@@ -40,7 +40,7 @@ class HumanAgent(Agent):
         return self.storage.skills[choice]
 
     def explain(
-        self, current: StateValueDict, goal: StateValueDict, skill: Skill
+        self, current: StateValueDict, goal: StateValueDict, skill: Leaf
     ) -> str:
         raise NotImplementedError("")
 

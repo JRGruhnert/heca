@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from conf.calvin.area import CalvinAreaStateConfig
+from conf.custom.states.area import CalvinAreaStateConfig
 from src.states.state_bool import BoolStateConfig
 from src.states.state_location import LocationStateConfig
 from src.states.state_range import RangeStateConfig

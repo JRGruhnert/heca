@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distance_cnd import Distance, DistanceConfig
+from src.states.logic.distance import Distance, DistanceConfig
 
 
 @dataclass

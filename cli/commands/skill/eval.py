@@ -9,7 +9,7 @@ from src.modules.logger import Logger, LoggerConfig
 from src.modules.storage import Storage, StorageConfig
 from src.environments.environment import EnvironmentConfig
 from src.experiments.skill_check import SkillCheckExperiment, SkillCheckExperimentConfig
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -33,12 +33,12 @@ class SkillEvaluator:
         self.experiment = SkillCheckExperiment(config.experiment, env, self.storage)
         self.results: dict[str, dict[str, int]] = {}
 
-    def evaluate_skill(self, skill: Skill) -> tuple[int, int]:
+    def evaluate_skill(self, skill: Leaf) -> tuple[int, int]:
         success_count = 0
         failed_to_sample_count = 0
         for _ in range(self.config.iterations):
             if self.experiment.sample_task(skill):
-                loguru.logger.info(f"Evaluating skill: {skill.name}")
+                loguru.logger.info(f"Evaluating skill: {skill.config.label}")
                 if self.experiment.step(skill):
                     success_count += 1
             else:
@@ -51,14 +51,14 @@ class SkillEvaluator:
         # Evaluate all skills
         for index, skill in enumerate(self.storage.skills):
             successes, failed_to_sample = self.evaluate_skill(skill)
-            self.results[skill.name] = {
+            self.results[skill.config.label] = {
                 "successes": successes,
                 "failed_to_sample": failed_to_sample,
                 "failures": self.config.iterations - successes - failed_to_sample,
                 "total_attempts": self.config.iterations,
             }
             metrics = {
-                "skill_name": skill.name,
+                "skill_name": skill.config.label,
                 "successes": successes,
                 "failed_to_sample": failed_to_sample,
                 "failures": self.config.iterations - successes - failed_to_sample,

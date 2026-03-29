@@ -8,9 +8,9 @@ from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
 from src.modules.explainer import HoopgnExplainer
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
+from src.skills.tree.leafs.leaf import Leaf
 from src.states.state import State
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (
@@ -207,7 +207,7 @@ class GraphNetwork(Network):
         edge_list = []
         for task_idx, skill in enumerate(self.skills):
             for state_idx, state in enumerate(self.states):
-                if state.name in skill.precons.keys():
+                if state.config.label in skill.precons.keys():
                     edge_list.append((state_idx, task_idx))
         return torch.tensor(edge_list, dtype=torch.long).t()
 
@@ -258,7 +258,7 @@ class GraphNetwork(Network):
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
     def explain(
-        self, batch: Batch, skill: Skill
+        self, batch: Batch, skill: Leaf
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
         d: HeteroData = batch.get_example(0)  # type: ignore
         # print(batch)
@@ -313,7 +313,7 @@ class GraphNetwork(Network):
     ) -> torch.Tensor:
         features: list[torch.Tensor] = []
         for skill in self.skills:
-            distances = skill.distances(obs, self.states, pad, sparse)
+            distances = skill.distances(obs, pad, sparse)
             features.append(distances)
         return torch.stack(features, dim=0).float()
 
@@ -347,7 +347,7 @@ class GraphNetwork(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any, skills: list[Skill], states: list[State]):
+    def _load(self, checkpoint: Any, skills: list[Leaf], states: list[State]):
         self.skills = skills
         self.states = states
         self.load_state_dict(checkpoint["model_state"], strict=False)

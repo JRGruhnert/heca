@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Any
 from src.observation.observation import StateValueDict
-from src.skills.skill import Skill
 from dataclasses import dataclass
+
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -17,7 +18,7 @@ class Agent(ABC):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Skill:
+    ) -> Leaf:
         """Select an action given the current observation and goal observation."""
         raise NotImplementedError("Act method not implemented yet.")
 
@@ -26,7 +27,7 @@ class Agent(ABC):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: Skill,
+        skill: Leaf,
     ) -> Any:
         """Return explanations for the actor and critic's decisions. By default, returns None."""
         raise NotImplementedError("Explain method not implemented yet.")

@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from functools import cached_property
-import pathlib
 import numpy as np
 import torch
 import re
@@ -8,7 +7,7 @@ from loguru import logger
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from src.observation.observation import StateValueDict
 from src.states.logic.area.area_eval_cnd import AreaEvalCondition
-from src.skills.skill import Skill, SkillConfig
+from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.hardware import device
 
 from tapas_gmm.policy import import_policy
@@ -28,13 +27,17 @@ from tapas_gmm.utils.observation import (
     empty_batchsize,
 )
 
+from src.states.logic.condition import Condition, ConditionConfig
+
 
 @dataclass
-class TapasSkillConfig(SkillConfig):
+class TapasLeafConfig(LeafConfig):
     reversed: bool
     overrides: list[str]
     predict_as_batch: bool
-    control_duration: int = -1  # Only relevant if not predict_as_batch
+    precons: dict[str, ConditionConfig] | None = None
+    postcons: dict[str, ConditionConfig] | None = None
+    control_duration: int = -1
     policy: GMMPolicyConfig = GMMPolicyConfig(
         suffix="release",
         model=AutoTPGMMConfig(
@@ -78,36 +81,29 @@ class TapasSkillConfig(SkillConfig):
         self.policy.invert_prediction_batch = self.reversed
 
 
-class TapasSkill(Skill):
+class TapasLeaf(Leaf):
 
     def __init__(
         self,
-        config: TapasSkillConfig,
+        config: TapasLeafConfig,
     ):
         super().__init__(config)
         self.config = config
+
         self.first_prediction = True
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
-        self.goal: StateValueDict | None = None
-
-    def _policy_checkpoint_name(self) -> pathlib.Path:
-        return (
-            pathlib.Path("data")
-            / "skills"
-            / "tapas"
-            / self.config.label
-            / ("demos" + "_" + "gmm" + "_policy" + "-release")
-        ).with_suffix(".pt")
 
     @cached_property
     def policy(self) -> GMMPolicy:
         PolicyClass = import_policy("gmm")
         temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
 
-        file_name = self._policy_checkpoint_name()  # type: ignore
+        file_name = (
+            "data/skills/tapas/" + self.config.label + "/demos_gmm_policy-release.pt"
+        )
         logger.info("Loading policy checkpoint from {}", file_name)
-        temp.from_disk(file_name)  # type: ignore
+        temp.from_disk(file_name)
         temp.eval()
         return temp
 
@@ -130,54 +126,46 @@ class TapasSkill(Skill):
                 temp.add(rot_str)
         return temp
 
-    @cached_property
-    def tp_labels(self) -> set[str]:
-        values = set()
-        for state in self.states:
-            value = state.run_addon(
-                "tapas",
-                self.model.start_values[state.config.label],
-                self.model.end_values[state.config.label],
-                reversed,
-                True if state.config.label in self.tapas_tp_labels else False,
-            )
-            if value is not None:
-                values.add(state.config.label)
-        return values
+    @property
+    def demo_labels(self) -> set[str]:
+        return set(self.precons_demo.keys()) | set(self.postcons_demo.keys())
 
-    def _load_demo_precons(self) -> dict[str, torch.Tensor]:
+    @property
+    def tp_labels(self) -> set[str]:
+        return set(self.precons.keys()) | set(self.postcons.keys())
+
+    @cached_property
+    def precons_demo(self) -> dict[str, torch.Tensor]:
         return self.load_demo_cons(self.config.reversed)
 
-    def _load_demo_postcons(self) -> dict[str, torch.Tensor]:
+    @cached_property
+    def postcons_demo(self) -> dict[str, torch.Tensor]:
         return self.load_demo_cons(not self.config.reversed)
 
     def load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
+        if reversed:
+            return self.model.end_values
+        else:
+            return self.model.start_values
+
+    def _load_tp_precons(self):
+        self.precons = self.load_tp_cons(self.config.reversed)
+
+    def _load_tp_postcons(self):
+        self.postcons = self.load_tp_cons(not self.config.reversed)
+
+    def load_tp_cons(self, reversed: bool) -> dict[str, Condition]:
         values = {}
-        for state in self.states:
-            if reversed:
-                values[state.config.label] = self.model.start_values[state.config.label]
-            else:
-                values[state.config.label] = self.model.end_values[state.config.label]
-        return values
-
-    def _load_tp_precons(self) -> dict[str, torch.Tensor]:
-        return self.load_tp_cons(self.config.reversed)
-
-    def _load_tp_postcons(self) -> dict[str, torch.Tensor]:
-        return self.load_tp_cons(not self.config.reversed)
-
-    def load_tp_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
-        values = {}
-        for state in self.states:
+        for label in self.demo_labels:
             value = state.run_addon(
                 "tapas",
-                self.model.start_values[state.config.label],
-                self.model.end_values[state.config.label],
+                self.precons_demo[label],
+                self.postcons_demo[label],
                 reversed,
-                True if state.config.label in self.tapas_tp_labels else False,
+                self.tapas_tp_labels.issubset(label),
             )
             if value is not None:
-                values[state.config.label] = value
+                values[label] = value
         return values
 
     @cached_property
@@ -185,20 +173,20 @@ class TapasSkill(Skill):
         # NOTE: Its a copy of initialize_task_parameters but only override states get loaded and also in reverse
         # So basically normal since reversed is True
         temp: dict[str, np.ndarray] = {}
-        for state in self.states:
-            if state.config.label in self.config.overrides:
+        for label in self.demo_labels:
+            if label in self.config.overrides:
                 value = state.run_addon(
                     "tapas",
-                    self.model.start_values[state.config.label],
-                    self.model.end_values[state.config.label],
+                    self.model.start_values[label],
+                    self.model.end_values[label],
                     not self.config.reversed,  # NOTE: We want the opposite of the reverse trajectory
-                    True,  # NOTE: All States are True here
+                    True,
                 )
                 if value is None:
                     raise ValueError(
-                        f"Failed to create override for state {state.config.label}. This should not happen."
+                        f"Failed to create override for state {label}. This should not happen."
                     )
-                temp[state.config.label] = value.numpy()
+                temp[label] = value.numpy()
         return temp
 
     def reset(self, goal: StateValueDict, env):

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from src.modules.storage import Storage, StorageConfig
 from src.plotting.object_point import ObjectLocationPoint
 from src.plotting.plots.skill.tp import ObjectConditionsPlot
-from src.skills.skill import Skill
+from src.skills.tree.leafs.leaf import Leaf
 
 
 @dataclass
@@ -30,7 +30,7 @@ class SkillExplainScript:
             state=int(con[f"{label}_state"].item()),
         )
 
-    def make_explanation(self, skill: Skill):
+    def make_explanation(self, skill: Leaf):
         """Returns an explanation for the given observation, goal and skill."""
         pre = skill.demo_precons
         post = skill.demo_postcons
