@@ -3,13 +3,12 @@ from dataclasses import dataclass
 import torch
 
 from src.factory import (
-    select_addon,
     select_distance_condition,
     select_eval_condition,
     select_value_condition,
 )
-from src.states.logic.addon import Addon, AddonConfig
-from src.states.logic.distance_cnd import DistanceConditionConfig
+
+from src.states.logic.distance import DistanceConfig
 from src.states.logic.eval_cnd import EvalConditionConfig
 from src.states.logic.value_cnd import ValueConditionConfig
 
@@ -20,13 +19,11 @@ class StateConfig:
     id: int
     type_str: str
     size: int
-    distance_cnd_skill: DistanceConditionConfig
-    distance_cnd_goal: DistanceConditionConfig
+    distance_cnd_skill: DistanceConfig
+    distance_cnd_goal: DistanceConfig
     eval_cnd: EvalConditionConfig
     value_cnd: ValueConditionConfig
     value_cnd_eval: ValueConditionConfig | None
-    addons: dict[str, AddonConfig] | None
-    ignore: bool = False
 
 
 class State:
@@ -44,10 +41,6 @@ class State:
             if config.value_cnd_eval is not None
             else self.value_cnd
         )
-        self.addons: dict[str, Addon] = {}
-        if config.addons:
-            for name, addon_config in config.addons.items():
-                self.addons[name] = select_addon(addon_config)
 
     def make_input(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the value of the state as a tensor."""
@@ -98,15 +91,3 @@ class State:
         current_norm = self.value_cnd_eval.value(current)
         goal_norm = self.value_cnd_eval.value(goal)
         return self.eval_cnd.evaluate(current_norm, goal_norm)
-
-    def run_addon(
-        self,
-        name: str,
-        *args,
-        **kwargs,
-    ) -> torch.Tensor | None:
-        """Returns the mean of the given tensor values."""
-        addon = self.addons.get(name)
-        if addon:
-            return addon.run(*args, **kwargs)
-        return None

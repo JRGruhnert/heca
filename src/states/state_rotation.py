@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-from src.states.logic.addons.addon_quaternion import QuatTapasAddonConfig
-
 from src.states.logic.rotation.quaternion_distance_cnd import (
     QuaternionDistanceConditionConfig,
 )
@@ -9,6 +7,7 @@ from src.states.logic.rotation.quaternion_value_cnd import (
     QuaternionValueConditionConfig,
 )
 from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
+from src.states.logic.value_cnd import ValueCondition
 from src.states.state import StateConfig
 
 
@@ -16,15 +15,14 @@ from src.states.state import StateConfig
 class RotationStateConfig(StateConfig):
     size: int = 4
     type_str: str = "Quat"
-    value_cnd = QuaternionValueConditionConfig()
-    distance_cnd_skill = QuaternionDistanceConditionConfig()
-    distance_cnd_goal = QuaternionDistanceConditionConfig()
-    eval_cnd = ThresholdEvalConditionConfig(
+    value_cnd: QuaternionValueConditionConfig = QuaternionValueConditionConfig()
+    distance_cnd_skill: QuaternionDistanceConditionConfig = (
+        QuaternionDistanceConditionConfig()
+    )
+    distance_cnd_goal: QuaternionDistanceConditionConfig = (
+        QuaternionDistanceConditionConfig()
+    )
+    eval_cnd: ThresholdEvalConditionConfig = ThresholdEvalConditionConfig(
         distance=QuaternionDistanceConditionConfig(),
     )
-    addons = {
-        "tapas": QuatTapasAddonConfig(),
-    }
-
-    def __post_init__(self):
-        pass
+    value_cnd_eval: ValueCondition | None = None

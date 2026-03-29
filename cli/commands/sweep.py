@@ -43,7 +43,7 @@ def entry_point():
         storage=StorageConfig(
             used_skills=wandb.config["storage.used_skills"],
             used_states=wandb.config["storage.used_states"],
-            eval_states=wandb.config["storage.eval_states"],
+            states_eval=wandb.config["storage.eval_states"],
             network=wandb.config["storage.network"],
         ),
         experiment=PePrConfig(

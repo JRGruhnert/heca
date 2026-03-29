@@ -1,25 +1,22 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
-from functools import cached_property
+from src.factory import select_skills, select_states
+from src.skills.skill import Skill, SkillConfig
+from src.states.state import State, StateConfig
 import os
-
-from src.skills.skill import Skill
-from conf.tapas.skills import SKILLS_BY_TAG
-from src.skills.tapas import TapasSkill
-from src.states.state import State
-from conf.calvin.states import STATES_BY_TAG
 
 
 @dataclass
 class StorageConfig:
-    used_skills: str
-    used_states: str
+    skills: Sequence[SkillConfig]
+    states_network: Sequence[StateConfig]
+    states_eval: Sequence[StateConfig]
     tag: str = "untagged_run"
     storage_path: str = "data"
     results_path: str = "results"
     buffer_path: str = "logs"
     plots_path: str = "plots"
     checkpoint_path: str | None = None
-    eval_states: str | None = None
 
 
 class Storage:
@@ -28,25 +25,22 @@ class Storage:
         config: StorageConfig,
     ):
         self.config = config
-        self._states: list[State] = sorted(
-            STATES_BY_TAG.get(self.config.used_states, []), key=lambda s: s.config.id
+
+        self.states_network = sorted(
+            select_states(config.states_network), key=lambda s: s.config.id
         )
 
-        # Evaluation states can be different from training states
-        # Just means that the relevant states for sampling and evaluation are different
-        if self.config.eval_states is not None:
-            self._eval_states = sorted(
-                STATES_BY_TAG.get(self.config.eval_states, []), key=lambda s: s.id
-            )
-        else:
-            self._eval_states = self.states
-        # We sort based on Id for the baseline network to be consistent
-        self._skills: list[Skill] = sorted(
-            SKILLS_BY_TAG.get(self.config.used_skills, []), key=lambda s: s.config.id
+        self.states_eval = sorted(
+            select_states(self.config.states_eval), key=lambda s: s.config.id
         )
-        print(
-            f"Loaded skills for tag {self.config.used_skills}: {[s.config.label for s in self.skills]}"
+
+        self.skills = sorted(
+            select_skills(self.config.skills), key=lambda s: s.config.id
         )
+
+        self.states_network_dict = {s.config.label: s for s in self.states_network}
+        self.states_eval_dict = {s.config.label: s for s in self.states_eval}
+        self.skills_dict = {s.config.label: s for s in self.skills}
 
     def create_directory(self, path: str):
         if not os.path.exists(path):
@@ -72,28 +66,16 @@ class Storage:
         return self.create_directory(directory_path)
 
     def get_skill_by_name(self, name: str) -> Skill:
-        for skill in self.skills:
-            if skill.config.label == name:
-                return skill
-        raise ValueError(f"Skill with name {name} not found in storage.")
+        skill = self.skills_dict.get(name)
+        if skill is None:
+            raise ValueError(f"Skill with name {name} not found in storage.")
+        return skill
 
     def get_state_by_name(self, name: str) -> State:
-        for state in self.states:
-            if state.config.label == name:
-                return state
-        raise ValueError(f"State with name {name} not found in storage.")
-
-    @property
-    def states(self) -> list[State]:
-        return self._states
-
-    @property
-    def eval_states(self) -> list[State]:
-        return self._eval_states
-
-    @property
-    def skills(self) -> list[Skill]:
-        return self._skills
+        state = self.states_network_dict.get(name) or self.states_eval_dict.get(name)
+        if state is None:
+            raise ValueError(f"State with name {name} not found in storage.")
+        return state
 
     def skill_by_index(self, idx: int) -> Skill:
         return self.skills[idx]

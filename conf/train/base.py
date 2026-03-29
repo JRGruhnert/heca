@@ -29,7 +29,7 @@ logger = LoggerConfig(
 storage = StorageConfig(
     used_skills=skills_eval_states,
     used_states=used_states,
-    eval_states=skills_eval_states,
+    states_eval=skills_eval_states,
     tag=tag,
     network=network,
 )

@@ -2,15 +2,15 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
+from src.states.logic.distance_cnd import Distance, DistanceConfig
 
 
 @dataclass
-class SwitchDistanceConditionConfig(DistanceConditionConfig):
+class SwitchDistanceConditionConfig(DistanceConfig):
     pass
 
 
-class SwitchDistanceCondition(DistanceCondition):
+class SwitchDistanceCondition(Distance):
     def __init__(self, config: SwitchDistanceConditionConfig):
         super().__init__(config)
         self.config = config

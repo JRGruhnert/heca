@@ -1,5 +1,5 @@
-from attr import dataclass
-from src.states.logic.addons.addon_scalar import ScalarTapasAddonConfig
+from dataclasses import dataclass, field
+from src.states.logic.addons.addon_scalar import ScalarStatePreprocessorConfig
 from src.states.logic.boundary import BoundaryConfig
 from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
@@ -12,27 +12,34 @@ from src.states.state import StateConfig
 
 @dataclass
 class RangeStateConfig(StateConfig):
-    low: float
-    high: float
-    label: str = "Range"
+    low: float = 0.0
+    high: float = 1.0
+    type_str: str = "Range"
     size: int = 1
-    eval_cnd = ThresholdEvalConditionConfig(
-        distance=RangeDistanceConditionConfig(),
-    )
-    value_cnd = LinearValueNormalizerConfig(
-        boundary=BoundaryConfig(
-            lower_bound=[0.0],
-            upper_bound=[1.0],
-        ),
-    )
+    distance_cnd_skill: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
+    distance_cnd_goal: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
     value_cnd_eval: ValueConditionConfig | None = None
-    addons = {
-        "tapas": ScalarTapasAddonConfig(
-            threshold=BoundaryThresholdConfig(
-                boundary=BoundaryConfig(
-                    lower_bound=[0.0],
-                    upper_bound=[1.0],
+    eval_cnd: ThresholdEvalConditionConfig = field(init=False)
+    value_cnd: LinearValueNormalizerConfig = field(init=False)
+    addons: dict[str, ScalarStatePreprocessorConfig] = field(init=False)
+
+    def __post_init__(self):
+        self.eval_cnd = ThresholdEvalConditionConfig(
+            distance=RangeDistanceConditionConfig(),
+        )
+        self.value_cnd = LinearValueNormalizerConfig(
+            boundary=BoundaryConfig(
+                lower=[self.low],
+                upper=[self.high],
+            ),
+        )
+        self.addons = {
+            "tapas": ScalarStatePreprocessorConfig(
+                threshold=BoundaryThresholdConfig(
+                    boundary=BoundaryConfig(
+                        lower=[self.low],
+                        upper=[self.high],
+                    )
                 )
-            )
-        ),
-    }
+            ),
+        }

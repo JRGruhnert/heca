@@ -1,26 +1,35 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import torch
 
 
 @dataclass
 class BoundaryConfig:
-    lower_bound: list[float]
-    upper_bound: list[float]
+    lower: list[float]
+    upper: list[float]
+
+
+@dataclass
+class AreaBoundaryConfig(BoundaryConfig):
+    lower: list[float] = field(default_factory=lambda: [-1.0, -1.0, -1.0])
+    upper: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
+
+
+@dataclass
+class SwitchBoundaryConfig(BoundaryConfig):
+    lower: list[float] = field(default_factory=lambda: [0.0])
+    upper: list[float] = field(default_factory=lambda: [1.0])
 
 
 class Boundary:
-    """Mixin for success conditions that need bounds"""
-
     def __init__(
         self,
         config: BoundaryConfig,
     ):
         self.config = config
-        self.lower_limit = torch.tensor(config.lower_bound, dtype=torch.float32)
-        self.max_limit = torch.tensor(config.upper_bound, dtype=torch.float32)
+        self.lower = torch.tensor(config.lower, dtype=torch.float32)
+        self.upper = torch.tensor(config.upper, dtype=torch.float32)
 
     def normalize(self, x: torch.Tensor) -> torch.Tensor:
-        """Normalize a value x to the range [0, 1] based on bounds."""
-        cx = torch.clamp(x, self.lower_limit, self.max_limit)
-        return (cx - self.lower_limit) / (self.max_limit - self.lower_limit)
+        cx = torch.clamp(x, self.lower, self.upper)
+        return (cx - self.lower) / (self.upper - self.lower)

@@ -98,7 +98,9 @@ class PPOAgent(Agent):
         goal: StateValueDict,
     ) -> Skill:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(obs, goal, self.storage.states)
+            batch = self.policy_old.to_encoded_batch(
+                obs, goal, self.storage.states_network
+            )
             logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             1,
@@ -124,7 +126,9 @@ class PPOAgent(Agent):
         skill: Skill,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
-            batch = self.policy_old.to_encoded_batch(current, goal, self.storage.states)
+            batch = self.policy_old.to_encoded_batch(
+                current, goal, self.storage.states_network
+            )
             actor_explanation, critic_explanation = self.policy_old.explain(
                 batch, skill
             )
@@ -137,7 +141,7 @@ class PPOAgent(Agent):
         action: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
         assert len(obs) == len(goal), "Observation and Goal lists have different sizes."
-        batch = self.policy_old.to_encoded_batch(obs, goal, self.storage.states)
+        batch = self.policy_old.to_encoded_batch(obs, goal, self.storage.states_network)
         logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             len(obs),
@@ -469,5 +473,5 @@ class PPOAgent(Agent):
             return int(result[0]), int(result[1])
 
     def load(self):
-        self.policy_new.load(self.storage.skills, self.storage.states)
-        self.policy_old.load(self.storage.skills, self.storage.states)
+        self.policy_new.load(self.storage.skills, self.storage.states_network)
+        self.policy_old.load(self.storage.skills, self.storage.states_network)

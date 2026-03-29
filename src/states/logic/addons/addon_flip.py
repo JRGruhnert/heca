@@ -2,16 +2,19 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
+from src.states.logic.state_preprocessor import (
+    StatePreprocessor,
+    StatePreprocessorConfig,
+)
 
 
 @dataclass
-class FlipTapasAddonConfig(TapasAddonConfig):
+class FlipStatePreprocessorConfig(StatePreprocessorConfig):
     pass
 
 
-class FlipTapasAddon(TapasAddon):
-    def __init__(self, config: FlipTapasAddonConfig):
+class FlipStatePreprocessor(StatePreprocessor):
+    def __init__(self, config: FlipStatePreprocessorConfig):
         super().__init__(config)
         self.config = config
 
@@ -28,3 +31,6 @@ class FlipTapasAddon(TapasAddon):
         if (end == (1 - start)).all(dim=0).all():
             return torch.tensor([1.0])  # Flip state
         return None
+
+    def process(self, x: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError

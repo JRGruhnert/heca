@@ -54,7 +54,7 @@ class Evaluator(ABC):
     ) -> bool:
         """Special method to check wether the sampled states are buggy or not."""
         # print(f"Checking states dense reward module...")
-        for state in self.storage.states:
+        for state in self.storage.states_network:
             if isinstance(state, AreaEulerState) and state.name in goal.keys():
                 if not state.is_in_an_existing_area(goal[state.name]):
                     # print(f"Bad sample: goal {goal[state.name]} not in an area.")

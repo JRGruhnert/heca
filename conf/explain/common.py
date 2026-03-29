@@ -4,6 +4,7 @@ from conf.common import (
     environment_config,
     experiment_config,
     logger_config,
+    skill_configs,
     storage_config,
     network_config,
     evaluator_config,
@@ -14,21 +15,26 @@ from src.modules.storage import Storage
 
 
 def get_explain_config(
-    skill_count: int,
-    state_count: int,
     skill_set_tag: str,
     state_set_tag: str,
     checkpoint_name: str,
     is_gnn: bool = True,
     prefix_tag: str = "",
 ) -> ExplainManagerConfig:
+    states = skill_configs(skill_set_tag, state_set_tag)
+    skills = skill_configs(skill_set_tag, state_set_tag)
+    storage = storage_config(
+        prefix_tag,
+        state_set_tag,
+        skill_set_tag,
+    )
 
     network = network_config(
         is_gnn,
         checkpoint_name,
         explain_mode=True,
-        skill_count=skill_count,
-        state_count=state_count,
+        skill_count=len(skills),
+        state_count=len(states),
     )
     return ExplainManagerConfig(
         agent=agent_config(
@@ -43,11 +49,7 @@ def get_explain_config(
             state_set_tag,
             skill_set_tag,
         ),
-        storage=storage_config(
-            prefix_tag,
-            state_set_tag,
-            skill_set_tag,
-        ),
+        storage=storage,
         experiment=experiment_config(
             0.0,
             0.0,

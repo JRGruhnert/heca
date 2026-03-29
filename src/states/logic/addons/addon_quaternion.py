@@ -2,19 +2,22 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
 from src.states.logic.rotation.quaternion import Quaternion, QuaternionConfig
+from src.states.logic.state_preprocessor import (
+    StatePreprocessor,
+    StatePreprocessorConfig,
+)
 
 
 @dataclass
-class QuatTapasAddonConfig(TapasAddonConfig):
+class QuatStatePreprocessorConfig(StatePreprocessorConfig):
     quaternion: QuaternionConfig = QuaternionConfig()
 
 
-class QuatTapasAddon(TapasAddon):
+class QuatStatePreprocessor(StatePreprocessor):
     def __init__(
         self,
-        config: QuatTapasAddonConfig,
+        config: QuatStatePreprocessorConfig,
     ):
         super().__init__(config)
         self.config = config

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from src.states.logic.boundary import BoundaryConfig
+from src.states.logic.addons.addon_euler import EulerTapasAddonConfig
+from src.states.logic.boundary import AreaBoundaryConfig, BoundaryConfig
 from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
 from src.states.logic.location.euclidean_distance_cnd import (
     EuclideanDistanceConditionConfig,
@@ -13,20 +14,21 @@ from src.states.state import StateConfig
 
 @dataclass
 class LocationStateConfig(StateConfig):
-    size = 3
-    type_str = "EulerPrecise"
-    distance_cnd_goal = EuclideanDistanceConditionConfig()
-    distance_cnd_skill = EuclideanDistanceConditionConfig()
-    eval_cnd = ThresholdEvalConditionConfig(
+    size: int = 3
+    type_str: str = "EulerPrecise"
+    distance_cnd_goal: EuclideanDistanceConditionConfig = (
+        EuclideanDistanceConditionConfig()
+    )
+    distance_cnd_skill: EuclideanDistanceConditionConfig = (
+        EuclideanDistanceConditionConfig()
+    )
+    eval_cnd: ThresholdEvalConditionConfig = ThresholdEvalConditionConfig(
         distance=EuclideanDistanceConditionConfig(),
     )
-    value_cnd = LinearValueNormalizerConfig(
-        boundary=BoundaryConfig(
-            lower_bound=[-1.0, -1.0, -1.0],
-            upper_bound=[1.0, 1.0, 1.0],
-        ),
+    value_cnd: LinearValueNormalizerConfig = LinearValueNormalizerConfig(
+        boundary=AreaBoundaryConfig(),
     )
     value_cnd_eval: ValueCondition | None = None
-    addons = {
+    addons: dict[str, EulerTapasAddonConfig] = {
         "tapas": EulerTapasAddonConfig(),
     }

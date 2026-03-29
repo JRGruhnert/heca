@@ -1,4 +1,7 @@
-from conf.calvin.states import CalvinStateSet
+from collections.abc import Sequence
+
+from conf.calvin.sets import STATES_SETS, StateSet
+from conf.tapas.sets import SKILL_SETS, SkillSet
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.environments.environment import EnvironmentConfig
@@ -11,16 +14,6 @@ from src.networks.gnn import GraphNetworkConfig
 from src.networks.network import NetworkConfig
 from src.skills.skill import SkillConfig
 from src.states.state import StateConfig
-from src.variables import (
-    SET_SLIDE,
-    SET_BLUE,
-    SET_RED,
-    SET_PINK,
-    SET_SR,
-    SET_SRP,
-    SET_SRPB,
-    SET_SRPB,
-)
 
 evaluator = Dense3EvaluatorConfig(
     success_reward=25.0,
@@ -39,14 +32,14 @@ def experiment_config(p_empty: float, p_rand: float) -> PePrConfig:
 
 def storage_config(
     prefix_tag: str,
-    state_set_tag: str,
-    skill_set_tag: str,
+    state_set: StateSet,
+    skill_set: SkillSet,
 ) -> StorageConfig:
     return StorageConfig(
-        used_skills=skill_set_tag,
-        used_states=state_set_tag,
-        eval_states=skill_set_tag,
-        tag=f"{prefix_tag}_{state_set_tag}_{skill_set_tag}",
+        skills=skill_configs(skill_set),
+        states_network=state_configs(state_set),
+        states_eval=state_configs(state_set),
+        tag=f"{prefix_tag}_{state_set.value}_{skill_set.value}",
     )
 
 
@@ -65,12 +58,12 @@ def logger_config(
     mode: LogMode,
     network_tag: str,
     prefix_tag: str,
-    state_set_tag: str,
-    skill_set_tag: str,
+    state_set: StateSet,
+    skill_set: SkillSet,
 ) -> LoggerConfig:
     return LoggerConfig(
         mode=mode,
-        wandb_tag=f"{network_tag}_{prefix_tag}_{state_set_tag}_{skill_set_tag}",
+        wandb_tag=f"{network_tag}_{prefix_tag}_{state_set.value}_{skill_set.value}",
     )
 
 
@@ -124,235 +117,9 @@ def evaluator_config(evaluator_tag: str = "dense3") -> Dense3EvaluatorConfig:
         raise ValueError(f"Unknown evaluator tag: {evaluator_tag}")
 
 
-def skill_configs(tag: str) -> list[SkillConfig]:
-    if tag == SET_SLIDE:
-        return []
-    else:
-        raise ValueError("")
+def skill_configs(skill_set: SkillSet) -> Sequence[SkillConfig]:
+    return SKILL_SETS[skill_set]
 
 
-def state_configs(tag: str) -> list[StateConfig]:
-    if tag == SET_SLIDE:
-        return [
-            CalvinStateSet.ee_position,
-            CalvinStateSet.slide_position,
-            CalvinStateSet.drawer_position,
-            CalvinStateSet.button_position,
-            CalvinStateSet.led_position,
-            CalvinStateSet.ee_rotation,
-            CalvinStateSet.slide_rotation,
-            CalvinStateSet.drawer_rotation,
-            CalvinStateSet.button_rotation,
-            CalvinStateSet.led_rotation,
-            CalvinStateSet.ee_scalar,
-            CalvinStateSet.slide_scalar,
-            CalvinStateSet.drawer_scalar,
-            CalvinStateSet.button_scalar,
-            CalvinStateSet.led_rotation,
-        ]
-    elif tag == SET_BLUE:
-        return []
-    else:
-        raise ValueError("")
-
-
-def get_number_of_states_by_tag(tag: str) -> int:
-    return len(STATES_BY_TAG.get(tag, []))
-
-
-_S = {}
-STATES_BY_TAG = {
-    "Debug": [
-        _S["ee_position"],
-        _S["base__slide_position"],
-        _S["base__drawer_position"],
-        _S["base__button_position"],
-        _S["led_position"],
-        _S["block_red_position"],
-        _S["block_blue_position"],
-        _S["block_pink_position"],
-        _S["ee_rotation"],
-        _S["base__slide_rotation"],
-        _S["base__drawer_rotation"],
-        _S["base__button_rotation"],
-        _S["led_rotation"],
-        _S["block_red_rotation"],
-        _S["block_blue_rotation"],
-        _S["block_pink_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_scalar"],
-        _S["base__button_scalar"],
-        _S["block_red_scalar"],
-        _S["block_blue_scalar"],
-        _S["block_pink_scalar"],
-    ],
-    SET_SLIDE: [
-        _S["ee_position"],
-        _S["base__slide_position"],
-        _S["base__drawer_position"],
-        _S["base__button_position"],
-        _S["led_position"],
-        _S["ee_rotation"],
-        _S["base__slide_rotation"],
-        _S["base__drawer_rotation"],
-        _S["base__button_rotation"],
-        _S["led_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_scalar"],
-        _S["base__button_scalar"],
-    ],
-    SET_RED: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_red_position"],
-        _S["block_red_rotation"],
-        _S["block_red_scalar"],
-    ],
-    SET_BLUE: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_blue_position"],
-        _S["block_blue_rotation"],
-        _S["block_blue_scalar"],
-    ],
-    SET_PINK: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_pink_position"],
-        _S["block_pink_rotation"],
-        _S["block_pink_scalar"],
-    ],
-    SET_SR: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_position"],
-        _S["base__slide_rotation"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_red_position"],
-        _S["block_red_rotation"],
-        _S["block_red_scalar"],
-    ],
-    SET_SRP: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_position"],
-        _S["base__slide_rotation"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_red_position"],
-        _S["block_red_rotation"],
-        _S["block_red_scalar"],
-        _S["block_pink_position"],
-        _S["block_pink_rotation"],
-        _S["block_pink_scalar"],
-    ],
-    SET_SRPB: [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_position"],
-        _S["base__slide_rotation"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_red_position"],
-        _S["block_red_rotation"],
-        _S["block_red_scalar"],
-        _S["block_pink_position"],
-        _S["block_pink_rotation"],
-        _S["block_pink_scalar"],
-        _S["block_blue_position"],
-        _S["block_blue_rotation"],
-        _S["block_blue_scalar"],
-    ],
-    "bp": [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_position"],
-        _S["base__slide_rotation"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_pink_position"],
-        _S["block_pink_rotation"],
-        _S["block_pink_scalar"],
-    ],
-    "bb": [
-        _S["ee_position"],
-        _S["ee_rotation"],
-        _S["ee_scalar"],
-        _S["base__slide_position"],
-        _S["base__slide_rotation"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_position"],
-        _S["base__drawer_rotation"],
-        _S["base__drawer_scalar"],
-        _S["base__button_position"],
-        _S["base__button_rotation"],
-        _S["base__button_scalar"],
-        _S["led_position"],
-        _S["led_rotation"],
-        _S["block_blue_position"],
-        _S["block_blue_rotation"],
-        _S["block_blue_scalar"],
-    ],
-}
+def state_configs(state_set: StateSet) -> Sequence[StateConfig]:
+    return STATES_SETS[state_set]

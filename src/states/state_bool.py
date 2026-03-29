@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
-from src.states.logic.addons.addon_scalar import ScalarTapasAddonConfig
-from src.states.logic.boundary import BoundaryConfig
+from src.states.logic.addons.addon_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.boundary import BoundaryConfig, SwitchBoundaryConfig
 from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
@@ -12,23 +12,20 @@ from src.states.state import StateConfig
 
 @dataclass
 class BoolStateConfig(StateConfig):
-    label = "Bool"
-    size = 1
-    value_cnd = IdentityValueConfig()
-    distance_cnd_skill = RangeDistanceConditionConfig()
-    distance_cnd_goal = RangeDistanceConditionConfig()
-    eval_cnd = ThresholdEvalConditionConfig(
+    type_str: str = "Bool"
+    size: int = 1
+    value_cnd: IdentityValueConfig = IdentityValueConfig()
+    distance_cnd_skill: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
+    distance_cnd_goal: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
+    eval_cnd: ThresholdEvalConditionConfig = ThresholdEvalConditionConfig(
         distance=RangeDistanceConditionConfig(),
     )
     value_cnd_eval: ValueConditionConfig | None = None
 
-    addons = {
-        "tapas": ScalarTapasAddonConfig(
+    addons: dict[str, ScalarStatePreprocessorConfig] = {
+        "tapas": ScalarStatePreprocessorConfig(
             threshold=BoundaryThresholdConfig(
-                boundary=BoundaryConfig(
-                    lower_bound=[0.0],
-                    upper_bound=[1.0],
-                )
+                boundary=SwitchBoundaryConfig(),
             )
         ),
     }

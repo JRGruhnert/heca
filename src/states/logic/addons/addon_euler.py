@@ -2,16 +2,20 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
+from src.states.logic.state_preprocessor import (
+    StatePreprocessor,
+    StatePreprocessorConfig,
+)
 
 
 @dataclass
-class EulerTapasAddonConfig(TapasAddonConfig):
+class EulerTapasAddonConfig(StatePreprocessorConfig):
     pass
 
 
-class EulerTapasAddon(TapasAddon):
-    def __init__(self, config: EulerTapasAddonConfig):
+class EulerStatePreprocessor(StatePreprocessor):
+
+    def __init__(self, config: StatePreprocessorConfig):
         super().__init__(config)
         self.config = config
 

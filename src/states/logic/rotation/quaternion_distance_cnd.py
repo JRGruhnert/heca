@@ -3,15 +3,15 @@ import math
 
 import torch
 
-from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
+from src.states.logic.distance import Distance, DistanceConfig
 
 
 @dataclass
-class QuaternionDistanceConditionConfig(DistanceConditionConfig):
+class QuaternionDistanceConditionConfig(DistanceConfig):
     pass
 
 
-class QuaternionDistanceCondition(DistanceCondition):
+class QuaternionDistanceCondition(Distance):
     def distance(
         self,
         current: torch.Tensor,

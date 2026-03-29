@@ -3,15 +3,15 @@ import math
 
 import torch
 
-from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
+from src.states.logic.distance import Distance, DistanceConfig
 
 
 @dataclass
-class EuclideanDistanceConditionConfig(DistanceConditionConfig):
+class EuclideanDistanceConditionConfig(DistanceConfig):
     pass
 
 
-class EuclideanDistanceCondition(DistanceCondition):
+class EuclideanDistanceCondition(Distance):
     def __init__(self, config: EuclideanDistanceConditionConfig):
         super().__init__(config)
         self.config = config

@@ -1,118 +1,93 @@
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
+from enum import Enum
 
-from src.skills.tapas import TapasSkill, TapasSkillConfig
-from src.variables import (
-    SET_SLIDE,
-    SET_BLUE,
-    SET_RED,
-    SET_PINK,
-    SET_SR,
-    SET_SRP,
-    SET_SRPB,
-    SET_SRPB,
-)
+from src.skills.tapas import TapasSkillConfig
 
-states = MasterStateSet.todict().values()
 
 @dataclass
-class MasterSkillSet:
+class TapasSkillSet:
     close_drawer = TapasSkillConfig(
         label="CloseDrawer",
         id=0,
         reversed=False,
         predict_as_batch=True,
         overrides=[],
-        states=states
     )
-
-
-my_dict = asdict(MasterSkillSet())
-predict_as_batch = True
-
-_S2 = {"Close"}
-_S = {
-    "CloseDrawer": TapasSkill(
-        name="CloseDrawer",
-        id=0,
-        reversed=False,
-        predict_as_batch=predict_as_batch,
-        overrides=[],
-    ),
-    "CloseDrawerBack": TapasSkill(
-        name="CloseDrawerBack",
+    close_drawer_back = TapasSkillConfig(
+        label="CloseDrawerBack",
         id=1,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=["ee_scalar", "ee_rotation", "ee_position"],
-    ),
-    "OpenDrawer": TapasSkill(
-        name="OpenDrawer",
+    )
+    open_drawer = TapasSkillConfig(
+        label="OpenDrawer",
         id=2,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "OpenDrawerBack": TapasSkill(
-        name="OpenDrawerBack",
+    )
+    open_drawer_back = TapasSkillConfig(
+        label="OpenDrawerBack",
         id=3,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=["ee_scalar", "ee_rotation", "ee_position"],
-    ),
-    "PressButton": TapasSkill(
-        name="PressButton",
+    )
+    press_button = TapasSkillConfig(
+        label="PressButton",
         id=4,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PressButtonBack": TapasSkill(
-        name="PressButtonBack",
+    )
+    press_button_back = TapasSkillConfig(
+        label="PressButtonBack",
         id=5,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=["ee_scalar", "ee_rotation", "ee_position"],
-    ),
-    "OpenSlide": TapasSkill(
-        name="OpenSlide",
+    )
+    open_slide = TapasSkillConfig(
+        label="OpenSlide",
         id=6,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "CloseSlide": TapasSkill(
-        name="CloseSlide",
+    )
+    close_slide = TapasSkillConfig(
+        label="CloseSlide",
         id=7,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "OpenSlideBack": TapasSkill(
-        name="OpenSlideBack",
+    )
+    open_slide_back = TapasSkillConfig(
+        label="OpenSlideBack",
         id=8,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=["ee_scalar", "ee_rotation", "ee_position"],
-    ),
-    "CloseSlideBack": TapasSkill(
-        name="CloseSlideBack",
+    )
+    close_slide_back = TapasSkillConfig(
+        label="CloseSlideBack",
         id=9,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=["ee_scalar", "ee_rotation", "ee_position"],
-    ),
-    "GrabRedTable": TapasSkill(
-        name="GrabRedTable",
+    )
+    pick_red_table = TapasSkillConfig(
+        label="GrabRedTable",
         id=10,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PlaceRedTable": TapasSkill(
-        name="PlaceRedTable",
+    )
+    place_red_table = TapasSkillConfig(
+        label="PlaceRedTable",
         id=11,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -121,19 +96,19 @@ _S = {
             "block_red_rotation",
             "block_red_scalar",
         ],
-    ),
-    "GrabRedDrawer": TapasSkill(
-        name="GrabRedDrawer",
+    )
+    pick_red_drawer = TapasSkillConfig(
+        label="GrabRedDrawer",
         id=12,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PlaceRedDrawer": TapasSkill(
-        name="PlaceRedDrawer",
+    )
+    place_red_drawer = TapasSkillConfig(
+        label="PlaceRedDrawer",
         id=13,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -142,19 +117,19 @@ _S = {
             "block_red_rotation",
             "block_red_scalar",
         ],
-    ),
-    "GrabPinkTable": TapasSkill(
-        name="GrabPinkTable",
+    )
+    pick_pink_table = TapasSkillConfig(
+        label="GrabPinkTable",
         id=14,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PlacePinkTable": TapasSkill(
-        name="PlacePinkTable",
+    )
+    place_pink_table = TapasSkillConfig(
+        label="PlacePinkTable",
         id=15,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -163,19 +138,19 @@ _S = {
             "block_pink_rotation",
             "block_pink_scalar",
         ],
-    ),
-    "GrabPinkDrawer": TapasSkill(
-        name="GrabPinkDrawer",
+    )
+    pick_pink_drawer = TapasSkillConfig(
+        label="GrabPinkDrawer",
         id=16,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PlacePinkDrawer": TapasSkill(
-        name="PlacePinkDrawer",
+    )
+    place_pink_drawer = TapasSkillConfig(
+        label="PlacePinkDrawer",
         id=17,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -184,26 +159,26 @@ _S = {
             "block_pink_rotation",
             "block_pink_scalar",
         ],
-    ),
-    "GrabBlueTable": TapasSkill(
-        name="GrabBlueTable",
+    )
+    pick_blue_table = TapasSkillConfig(
+        label="GrabBlueTable",
         id=18,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "GrabBlueDrawer": TapasSkill(
-        name="GrabBlueDrawer",
+    )
+    pick_blue_drawer = TapasSkillConfig(
+        label="GrabBlueDrawer",
         id=19,
         reversed=False,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[],
-    ),
-    "PlaceBlueTable": TapasSkill(
-        name="PlaceBlueTable",
+    )
+    place_blue_table = TapasSkillConfig(
+        label="PlaceBlueTable",
         id=20,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -212,12 +187,12 @@ _S = {
             "block_blue_rotation",
             "block_blue_scalar",
         ],
-    ),
-    "PlaceBlueDrawer": TapasSkill(
-        name="PlaceBlueDrawer",
+    )
+    place_blue_drawer = TapasSkillConfig(
+        label="PlaceBlueDrawer",
         id=21,
         reversed=True,
-        predict_as_batch=predict_as_batch,
+        predict_as_batch=True,
         overrides=[
             "ee_scalar",
             "ee_rotation",
@@ -226,211 +201,4 @@ _S = {
             "block_blue_rotation",
             "block_blue_scalar",
         ],
-    ),
-}
-
-
-def get_number_of_skills_by_tag(tag: str) -> int:
-    return len(SKILLS_BY_TAG.get(tag, []))
-
-
-SKILLS_BY_TAG = {
-    # "Drawer": [
-    #    _S["CloseDrawer"],
-    #    _S["CloseDrawerBack"],
-    #    _S["OpenDrawer"],
-    #    _S["OpenDrawerBack"],
-    # ],
-    # "Slide": [
-    #    _S["OpenSlide"],
-    #    _S["OpenSlideBack"],
-    #    _S["CloseSlide"],
-    #    _S["CloseSlideBack"],
-    # ],
-    # "Button": [
-    #    _S["PressButton"],
-    #    _S["PressButtonBack"],
-    # ],
-    # "Red": [
-    #    _S["GrabRedTable"],
-    #    _S["PlaceRedTable"],
-    #    _S["GrabRedDrawer"],
-    #    _S["PlaceRedDrawer"],
-    # ],
-    # "Pink": [
-    #    _S["GrabPinkTable"],
-    #    _S["PlacePinkTable"],
-    #    _S["GrabPinkDrawer"],
-    #    _S["PlacePinkDrawer"],
-    # ],
-    # "Blue": [
-    #    _S["GrabBlueTable"],
-    #    _S["PlaceBlueTable"],
-    #    _S["GrabBlueDrawer"],
-    #    _S["PlaceBlueDrawer"],
-    # ],
-    SET_SLIDE: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["OpenSlide"],
-        _S["CloseSlide"],
-        _S["OpenSlideBack"],
-        _S["CloseSlideBack"],
-    ],
-    SET_RED: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["GrabRedTable"],
-        _S["PlaceRedTable"],
-        _S["GrabRedDrawer"],
-        _S["PlaceRedDrawer"],
-    ],
-    SET_BLUE: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["GrabBlueTable"],
-        _S["PlaceBlueTable"],
-        _S["GrabBlueDrawer"],
-        _S["PlaceBlueDrawer"],
-    ],
-    SET_PINK: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["GrabPinkTable"],
-        _S["PlacePinkTable"],
-        _S["GrabPinkDrawer"],
-        _S["PlacePinkDrawer"],
-    ],
-    SET_SR: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["OpenSlide"],
-        _S["CloseSlide"],
-        _S["OpenSlideBack"],
-        _S["CloseSlideBack"],
-        _S["GrabRedTable"],
-        _S["PlaceRedTable"],
-        _S["GrabRedDrawer"],
-        _S["PlaceRedDrawer"],
-    ],
-    # "bp": [
-    #    _S["CloseDrawer"],
-    #    _S["CloseDrawerBack"],
-    #    _S["OpenDrawer"],
-    #    _S["OpenDrawerBack"],
-    #    _S["PressButton"],
-    #    _S["PressButtonBack"],
-    #    _S["OpenSlide"],
-    #    _S["CloseSlide"],
-    #    _S["OpenSlideBack"],
-    #    _S["CloseSlideBack"],
-    #    _S["GrabPinkTable"],
-    #    _S["PlacePinkTable"],
-    #    _S["GrabPinkDrawer"],
-    #    _S["PlacePinkDrawer"],
-    # ],
-    # "bb": [
-    #    _S["CloseDrawer"],
-    #    _S["CloseDrawerBack"],
-    #    _S["OpenDrawer"],
-    #    _S["OpenDrawerBack"],
-    #    _S["PressButton"],
-    #    _S["PressButtonBack"],
-    #    _S["OpenSlide"],
-    #    _S["CloseSlide"],
-    #    _S["OpenSlideBack"],
-    #    _S["CloseSlideBack"],
-    #    _S["GrabBlueTable"],
-    #    _S["PlaceBlueTable"],
-    #    _S["GrabBlueDrawer"],
-    #    _S["PlaceBlueDrawer"],
-    # ],
-    SET_SRP: [
-        _S["CloseDrawer"],
-        _S["CloseDrawerBack"],
-        _S["OpenDrawer"],
-        _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["OpenSlide"],
-        _S["CloseSlide"],
-        _S["OpenSlideBack"],
-        _S["CloseSlideBack"],
-        _S["GrabRedTable"],
-        _S["PlaceRedTable"],
-        _S["GrabRedDrawer"],
-        _S["PlaceRedDrawer"],
-        _S["GrabPinkTable"],
-        _S["PlacePinkTable"],
-        _S["GrabPinkDrawer"],
-        _S["PlacePinkDrawer"],
-    ],
-    SET_SRPB: [
-        # _S["CloseDrawer"],
-        # _S["CloseDrawerBack"],
-        # _S["OpenDrawer"],
-        # _S["OpenDrawerBack"],
-        _S["PressButton"],
-        _S["PressButtonBack"],
-        _S["OpenSlide"],
-        _S["CloseSlide"],
-        _S["OpenSlideBack"],
-        _S["CloseSlideBack"],
-        _S["GrabRedTable"],
-        _S["PlaceRedTable"],
-        _S["GrabRedDrawer"],
-        _S["PlaceRedDrawer"],
-        _S["GrabPinkTable"],
-        _S["PlacePinkTable"],
-        _S["GrabPinkDrawer"],
-        _S["PlacePinkDrawer"],
-        _S["GrabBlueTable"],
-        _S["PlaceBlueTable"],
-        _S["GrabBlueDrawer"],
-        _S["PlaceBlueDrawer"],
-    ],
-    # "Debug": [
-    #    _S["CloseDrawer"],
-    #    _S["CloseDrawerBack"],
-    #    _S["OpenDrawer"],
-    #    _S["OpenDrawerBack"],
-    #    _S["PressButton"],
-    #    _S["PressButtonBack"],
-    #    _S["OpenSlide"],
-    #    _S["CloseSlide"],
-    #    _S["OpenSlideBack"],
-    #    _S["CloseSlideBack"],
-    #    _S["GrabRedTable"],
-    #    _S["GrabPinkTable"],
-    #    _S["GrabBlueTable"],
-    #    _S["GrabRedDrawer"],
-    #    _S["GrabPinkDrawer"],
-    #    _S["GrabBlueDrawer"],
-    #    _S["PlaceRedTable"],
-    #    _S["PlacePinkTable"],
-    #    _S["PlaceBlueTable"],
-    #    _S["PlaceRedDrawer"],
-    #    _S["PlacePinkDrawer"],
-    #    _S["PlaceBlueDrawer"],
-    # ],
-}
+    )

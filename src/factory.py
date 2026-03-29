@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+
 from src.agents.agent import Agent, AgentConfig
 from src.agents.human import HumanAgent, HumanAgentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
@@ -18,13 +20,17 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
     CalvinEnvironmentConfig,
 )
-from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
+from src.skills.skill import Skill, SkillConfig
+from src.states.logic.addons.addon_flip import (
+    FlipStatePreprocessor,
+    FlipStatePreprocessorConfig,
+)
+from src.states.logic.condition import Condition, ConditionConfig
 from src.states.logic.rotation.quaternion_value_cnd import (
     QuaternionValueCondition,
     QuaternionValueConditionConfig,
 )
-from src.states.logic.addon import Addon, AddonConfig
-from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
+from src.states.logic.distance import Distance, DistanceConfig
 from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
 from src.states.logic.scalars.switch_distance_cnd import (
     SwitchDistanceCondition,
@@ -42,6 +48,10 @@ from src.states.logic.location.euclidean_distance_cnd import (
     EuclideanDistanceCondition,
     EuclideanDistanceConditionConfig,
 )
+from src.states.logic.state_preprocessor import (
+    StatePreprocessor,
+    StatePreprocessorConfig,
+)
 from src.states.logic.thresholds.threshold_eval_cnd import (
     ThresholdEvalCondition,
     ThresholdEvalConditionConfig,
@@ -58,9 +68,14 @@ from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
 from src.states.state import StateConfig, State
 
 
-def select_states(configs: list[StateConfig]) -> list[State]:
+def select_states(configs: Sequence[StateConfig]) -> list[State]:
     """Create states from configs - simple factory function"""
     return [State(config) for config in configs]
+
+
+def select_skills(configs: Sequence[SkillConfig]) -> list[Skill]:
+    """Create skills from configs - simple factory function"""
+    return [Skill(config) for config in configs]
 
 
 def select_value_condition(config: ValueConditionConfig) -> ValueCondition:
@@ -75,7 +90,7 @@ def select_value_condition(config: ValueConditionConfig) -> ValueCondition:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance_condition(config: DistanceConditionConfig) -> DistanceCondition:
+def select_distance_condition(config: DistanceConfig) -> Distance:
     """Create distance condition from config - simple factory function"""
     if isinstance(config, RangeDistanceConditionConfig):
         return RangeDistanceCondition(config)
@@ -89,6 +104,26 @@ def select_distance_condition(config: DistanceConditionConfig) -> DistanceCondit
         raise ValueError(f"Unknown config.")
 
 
+def select_state_preprocessor(config: StatePreprocessorConfig) -> StatePreprocessor:
+    """Create state preprocessor from config - simple factory function"""
+    # if isinstance(config, SomeStatePreprocessorConfig):
+    #     return SomeStatePreprocessor(config)
+    raise NotImplementedError(f"Unknown config.")
+
+
+def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
+    """Create condition from config - simple factory function"""
+    conditions = {}
+    for key, config in cons.items():
+        if isinstance(config, DistanceConfig):
+            conditions[key] = select_distance_condition(config)
+        elif isinstance(config, ValueConditionConfig):
+            conditions[key] = select_value_condition(config)
+        else:
+            raise NotImplementedError(f"Unknown config.")
+    return conditions
+
+
 def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:
     """Create eval condition from config - simple factory function"""
     if isinstance(config, ThresholdEvalConditionConfig):
@@ -97,10 +132,10 @@ def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_addon(config: AddonConfig) -> Addon:
+def select_addon(config: StatePreprocessorConfig) -> StatePreprocessor:
     """Create addon from config - simple factory function"""
-    if isinstance(config, TapasAddonConfig):
-        return TapasAddon(config)
+    if isinstance(config, FlipStatePreprocessorConfig):
+        return FlipStatePreprocessor(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 

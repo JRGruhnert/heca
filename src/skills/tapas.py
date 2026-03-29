@@ -8,7 +8,6 @@ from loguru import logger
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from src.observation.observation import StateValueDict
 from src.states.logic.area.area_eval_cnd import AreaEvalCondition
-from src.states.state import StateConfig
 from src.skills.skill import Skill, SkillConfig
 from src.hardware import device
 
@@ -32,7 +31,6 @@ from tapas_gmm.utils.observation import (
 
 @dataclass
 class TapasSkillConfig(SkillConfig):
-    states: list[StateConfig]
     reversed: bool
     overrides: list[str]
     predict_as_batch: bool
