@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.states.state_area import AreaStateConfig
+from conf.calvin.area import CalvinAreaStateConfig
 from src.states.state_bool import BoolStateConfig
 from src.states.state_location import LocationStateConfig
 from src.states.state_range import RangeStateConfig
@@ -24,21 +24,21 @@ class CalvinStateSet:
     button_scalar = SwitchStateConfig(label="button_scalar", id=11)  # type: ignore
     led_position = LocationStateConfig(label="led_position", id=12)  # type: ignore
     led_rotation = RotationStateConfig(label="led_rotation", id=13)  # type: ignore
-    block_red_position = AreaStateConfig(
+    block_red_position = CalvinAreaStateConfig(
         label="block_red_position", id=14
     )  # type: ignore
     block_red_rotation = RotationStateConfig(
         label="block_red_rotation", id=15, ignore=True
     )  # type: ignore
     block_red_scalar = BoolStateConfig(label="block_red_scalar", id=16)  # type: ignore
-    block_blue_position = AreaStateConfig(
+    block_blue_position = CalvinAreaStateConfig(
         label="block_blue_position", id=17
     )  # type: ignore
     block_blue_rotation = RotationStateConfig(
         label="block_blue_rotation", id=18, ignore=True
     )  # type: ignore
     block_blue_scalar = BoolStateConfig(label="block_blue_scalar", id=19)  # type: ignore
-    block_pink_position = AreaStateConfig(
+    block_pink_position = CalvinAreaStateConfig(
         label="block_pink_position", id=20
     )  # type: ignore
     block_pink_rotation = RotationStateConfig(
