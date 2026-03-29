@@ -8,13 +8,13 @@ from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
 
 
 @dataclass
-class PreciseEvalConditionConfig(EvalConditionConfig):
+class ThresholdEvalConditionConfig(EvalConditionConfig):
     distance: DistanceConditionConfig
     threshold: float = 0.05
 
 
-class PreciseEvalCondition(EvalCondition):
-    def __init__(self, config: PreciseEvalConditionConfig):
+class ThresholdEvalCondition(EvalCondition):
+    def __init__(self, config: ThresholdEvalConditionConfig):
         self.config = config
         self.condition = select_distance_condition(config.distance)
 

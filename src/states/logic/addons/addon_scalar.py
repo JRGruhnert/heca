@@ -3,19 +3,22 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
-from src.states.logic.threshold import RelativeThreshold, RelativeThresholdConfig
+from src.states.logic.thresholds.threshold_boundary import (
+    BoundaryThresholdConfig,
+    BoundaryThreshold,
+)
 
 
 @dataclass
 class ScalarTapasAddonConfig(TapasAddonConfig):
-    threshold: RelativeThresholdConfig
+    threshold: BoundaryThresholdConfig
 
 
 class ScalarTapasAddon(TapasAddon):
     def __init__(self, config: ScalarTapasAddonConfig):
         super().__init__(config)
         self.config = config
-        self.threshold = RelativeThreshold(config.threshold)
+        self.threshold = BoundaryThreshold(config.threshold)
 
     def run(
         self,

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from tapas_gmm.env.calvin import Calvin, CalvinConfig
 from src.modules.evaluators.evaluator import Evaluator
 from src.modules.storage import Storage
 from src.environments.environment import Environment, EnvironmentConfig
@@ -9,6 +8,7 @@ from src.skills.skill import Skill
 
 from src.observation.calvin import CalvinObservation
 from src.skills.tapas import TapasSkill
+from tapas.tapas_gmm.env.calvin import Calvin, CalvinConfig
 
 
 @dataclass
@@ -68,9 +68,7 @@ class CalvinEnvironment(Environment):
             skill, EmptySkill
         ), "CalvinEnvironment only supports TapasSkill at this time."
         skill.reset(self.goal, self.env)
-        while (
-            action := skill.predict(self.calvin_obs, states=self.storage.states)
-        ) is not None:
+        while (action := skill.predict(self.calvin_obs)) is not None:
             self.calvin_obs = self.env.step(action, self.config.render, self.info)[0]
             self.current = CalvinObservation.from_internal(self.calvin_obs)
 

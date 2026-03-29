@@ -35,15 +35,19 @@ class SkillCheckExperiment(Experiment):
         pre_skill = self._get_prerequisite_skill(skill)
         attempts = 0
         while attempts < self.config.max_sample_attempts:
-            logger.debug(f"Sampling task for skill: {skill.name}, attempt {attempts + 1}")
+            logger.debug(
+                f"Sampling task for skill: {skill.config.label}, attempt {attempts + 1}"
+            )
             current, goal = self.env.sample_task()
-            logger.debug(f"Sampled task for skill: {skill.name}, attempt {attempts + 1}")
+            logger.debug(
+                f"Sampled task for skill: {skill.config.label}, attempt {attempts + 1}"
+            )
             if pre_skill:
                 # If the skill has prerequisite (can only be evaluated by executing prerequisite first)
                 pre_precons = self._to_custom_observation(
                     pre_skill.precons,
                     current,
-                    skill.name,
+                    skill.config.label,
                 )
                 if not self.evaluator.is_equal(pre_precons, current):
                     continue  # Prerequisite not met, resample
@@ -53,18 +57,18 @@ class SkillCheckExperiment(Experiment):
                 main_precons = self._to_custom_observation(
                     skill.precons,
                     current,
-                    skill.name,
+                    skill.config.label,
                 )
                 # print(f"{current['ee_position']}")
                 logger.debug(f"Skill precons: {skill.precons}")
                 equal = self.evaluator.is_equal(main_precons, current)
-            logger.debug(f"Skill: {skill.name}, equal={equal}")
+            logger.debug(f"Skill: {skill.config.label}, equal={equal}")
             main_postcons = self._to_custom_observation(
                 skill.postcons,
                 goal,
-                skill.name,
+                skill.config.label,
             )
-            logger.debug(f"Skill after: {skill.name}, equal={equal}")
+            logger.debug(f"Skill after: {skill.config.label}, equal={equal}")
             same_areas = self.evaluator.same_areas(main_postcons, goal)
             logger.debug(f"Sampling attempt: equal={equal}, same_areas={same_areas}")
             if equal and same_areas:
@@ -79,7 +83,7 @@ class SkillCheckExperiment(Experiment):
             self._to_custom_observation(
                 skill.postcons,
                 current,
-                skill.name,
+                skill.config.label,
             ),
             current,
         )[1]
@@ -116,8 +120,10 @@ class SkillCheckExperiment(Experiment):
 
     def _get_prerequisite_skill(self, skill: Skill) -> Skill | None:
         """Get the prerequisite skill for a given skill name."""
-        loguru.logger.debug(f"Checking for prerequisite skill for: {skill.name}")
-        skill_name = skill.name
+        loguru.logger.debug(
+            f"Checking for prerequisite skill for: {skill.config.label}"
+        )
+        skill_name = skill.config.label
         if skill_name.endswith("Back"):
             pre_skill_name = skill_name.removesuffix("Back")
             return self.storage.get_skill_by_name(pre_skill_name)

@@ -5,7 +5,7 @@ import random
 from loguru import logger
 from src.modules.storage import Storage
 from src.skills.skill import Skill
-from src.skills.empty import EmptySkill
+from src.skills.empty import EmptySkill, EmptySkillConfig
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
@@ -70,10 +70,10 @@ class PePrExperiment(Experiment):
     def step(self, skill: Skill) -> tuple[StateValueDict, float, bool, bool]:
         self.current_step += 1
         sample = random.random()
-        if sample < self.config.p_empty:  # 0-p_empty>
+        if sample < self.config.p_empty:
             logger.info("Taking Empty Step")
             overwrite_skill = EmptySkill()
-        elif sample < self.config.p_empty + self.config.p_rand:  # 0-p_empty + p_rand>
+        elif sample < self.config.p_empty + self.config.p_rand:
             logger.info("Taking Random Step")
             overwrite_skill = random.choice(self.storage.skills)
         else:  # The rest

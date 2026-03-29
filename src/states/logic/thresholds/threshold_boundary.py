@@ -4,15 +4,15 @@ import torch
 from src.states.logic.boundary import Boundary, BoundaryConfig
 
 
-class RelativeThresholdConfig:
+class BoundaryThresholdConfig:
     boundary: BoundaryConfig
     threshold: float = 0.05
 
 
-class RelativeThreshold:
+class BoundaryThreshold:
     def __init__(
         self,
-        config: RelativeThresholdConfig,
+        config: BoundaryThresholdConfig,
     ):
         self.config = config
         self.boundary = Boundary(config.boundary)

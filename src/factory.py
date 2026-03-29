@@ -1,4 +1,3 @@
-from src.skills.addons.addon_tapas import TapasAddon, TapasAddonConfig
 from src.agents.agent import Agent, AgentConfig
 from src.agents.human import HumanAgent, HumanAgentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
@@ -19,6 +18,7 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
     CalvinEnvironmentConfig,
 )
+from src.states.logic.addons.addon_tapas import TapasAddon, TapasAddonConfig
 from src.states.logic.rotation.quaternion_value_cnd import (
     QuaternionValueCondition,
     QuaternionValueConditionConfig,
@@ -26,9 +26,9 @@ from src.states.logic.rotation.quaternion_value_cnd import (
 from src.states.logic.addon import Addon, AddonConfig
 from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
 from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
-from src.states.logic.flip.flip_distance_cnd import (
-    FlipDistanceCondition,
-    FlipDistanceConditionConfig,
+from src.states.logic.scalars.switch_distance_cnd import (
+    SwitchDistanceCondition,
+    SwitchDistanceConditionConfig,
 )
 from src.states.logic.identity.identity_value_cnd import (
     IdentityValue,
@@ -42,11 +42,11 @@ from src.states.logic.location.euclidean_distance_cnd import (
     EuclideanDistanceCondition,
     EuclideanDistanceConditionConfig,
 )
-from src.states.logic.precise.precise_eval_cnd import (
-    PreciseEvalCondition,
-    PreciseEvalConditionConfig,
+from src.states.logic.thresholds.threshold_eval_cnd import (
+    ThresholdEvalCondition,
+    ThresholdEvalConditionConfig,
 )
-from src.states.logic.range.range_distance_cnd import (
+from src.states.logic.scalars.range_distance_cnd import (
     RangeDistanceCondition,
     RangeDistanceConditionConfig,
 )
@@ -81,8 +81,8 @@ def select_distance_condition(config: DistanceConditionConfig) -> DistanceCondit
         return RangeDistanceCondition(config)
     elif isinstance(config, EuclideanDistanceConditionConfig):
         return EuclideanDistanceCondition(config)
-    elif isinstance(config, FlipDistanceConditionConfig):
-        return FlipDistanceCondition(config)
+    elif isinstance(config, SwitchDistanceConditionConfig):
+        return SwitchDistanceCondition(config)
     elif isinstance(config, QuaternionDistanceConditionConfig):
         return QuaternionDistanceCondition(config)
     else:
@@ -91,8 +91,8 @@ def select_distance_condition(config: DistanceConditionConfig) -> DistanceCondit
 
 def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:
     """Create eval condition from config - simple factory function"""
-    if isinstance(config, PreciseEvalConditionConfig):
-        return PreciseEvalCondition(config)
+    if isinstance(config, ThresholdEvalConditionConfig):
+        return ThresholdEvalCondition(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 

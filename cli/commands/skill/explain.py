@@ -41,10 +41,10 @@ class SkillExplainScript:
             self.plot.set_postcon(post_con)
 
         self.plot.create(
-            title=f"{skill.name} - Taskparameters.",
+            title=f"{skill.config.label} - Taskparameters.",
             show=True,
             save=False,
-            path=f"plots/{skill.name}_tps.png",
+            path=f"plots/{skill.config.label}_tps.png",
         )
 
 

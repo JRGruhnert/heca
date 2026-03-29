@@ -8,17 +8,17 @@ from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
 
 
 @dataclass
-class AreaValueNormalizerConfig(ValueConditionConfig):
+class AreaValueConditionConfig(ValueConditionConfig):
     area: AreaConfig
     boundary: BoundaryConfig = BoundaryConfig(
         lower_bound=[-1.0, -1.0, -1.0], upper_bound=[1.0, 1.0, 1.0]
     )
 
 
-class AreaValueNormalizer(ValueCondition):
+class AreaValueCondition(ValueCondition):
     def __init__(
         self,
-        config: AreaValueNormalizerConfig,
+        config: AreaValueConditionConfig,
     ):
         self.boundary = Boundary(config.boundary)
         self.area = Area(config.area)

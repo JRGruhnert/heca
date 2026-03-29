@@ -1,20 +1,30 @@
 from dataclasses import dataclass
 
-from src.states.logic.flip.flip_distance_cnd import FlipDistanceConditionConfig
+from src.states.logic.addons.addon_scalar import ScalarTapasAddonConfig
+from src.states.logic.boundary import BoundaryConfig
+from src.states.logic.scalars.switch_distance_cnd import SwitchDistanceConditionConfig
 from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
-from src.states.logic.precise.precise_eval_cnd import PreciseEvalConditionConfig
-from src.states.logic.range.range_distance_cnd import RangeDistanceConditionConfig
+from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
+from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
+from src.states.logic.scalars.range_distance_cnd import RangeDistanceConditionConfig
 from src.states.state import StateConfig
 
 
 @dataclass
 class SwitchStateConfig(StateConfig):
-    type_str = "Flip"
+    label = "Flip"
     size = 1
     value_cnd = IdentityValueConfig()
-    distance_cnd_skill = FlipDistanceConditionConfig()
+    distance_cnd_skill = SwitchDistanceConditionConfig()
     distance_cnd_goal = RangeDistanceConditionConfig()
-    eval_cnd = PreciseEvalConditionConfig(
+    eval_cnd = ThresholdEvalConditionConfig(
         distance=RangeDistanceConditionConfig(),
     )
-    addon = SwitchTapasAddonConfig()
+    addon = ScalarTapasAddonConfig(
+        threshold=BoundaryThresholdConfig(
+            boundary=BoundaryConfig(
+                lower_bound=[0.0],
+                upper_bound=[1.0],
+            ),
+        ),
+    )
