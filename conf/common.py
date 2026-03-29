@@ -1,4 +1,4 @@
-from conf.calvin.states import MasterStateSet
+from conf.calvin.states import CalvinStateSet
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.environments.environment import EnvironmentConfig
@@ -134,21 +134,21 @@ def skill_configs(tag: str) -> list[SkillConfig]:
 def state_configs(tag: str) -> list[StateConfig]:
     if tag == SET_SLIDE:
         return [
-            MasterStateSet.ee_position,
-            MasterStateSet.slide_position,
-            MasterStateSet.drawer_position,
-            MasterStateSet.button_position,
-            MasterStateSet.led_position,
-            MasterStateSet.ee_rotation,
-            MasterStateSet.slide_rotation,
-            MasterStateSet.drawer_rotation,
-            MasterStateSet.button_rotation,
-            MasterStateSet.led_rotation,
-            MasterStateSet.ee_scalar,
-            MasterStateSet.slide_scalar,
-            MasterStateSet.drawer_scalar,
-            MasterStateSet.button_scalar,
-            MasterStateSet.led_rotation,
+            CalvinStateSet.ee_position,
+            CalvinStateSet.slide_position,
+            CalvinStateSet.drawer_position,
+            CalvinStateSet.button_position,
+            CalvinStateSet.led_position,
+            CalvinStateSet.ee_rotation,
+            CalvinStateSet.slide_rotation,
+            CalvinStateSet.drawer_rotation,
+            CalvinStateSet.button_rotation,
+            CalvinStateSet.led_rotation,
+            CalvinStateSet.ee_scalar,
+            CalvinStateSet.slide_scalar,
+            CalvinStateSet.drawer_scalar,
+            CalvinStateSet.button_scalar,
+            CalvinStateSet.led_rotation,
         ]
     elif tag == SET_BLUE:
         return []

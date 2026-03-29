@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-
-from src.states.state import StateConfig
 from src.states.state_area import AreaStateConfig
 from src.states.state_bool import BoolStateConfig
 from src.states.state_location import LocationStateConfig
@@ -11,7 +9,7 @@ from src.states.state_switch import SwitchStateConfig
 
 
 @dataclass
-class MasterStateSet:
+class CalvinStateSet:
     ee_position = LocationStateConfig(label="ee_position", id=0)  # type: ignore
     ee_rotation = RotationStateConfig(label="ee_rotation", id=1)  # type: ignore
     ee_scalar = BoolStateConfig(label="ee_scalar", id=2)  # type: ignore
