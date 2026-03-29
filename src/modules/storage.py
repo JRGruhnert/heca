@@ -3,10 +3,10 @@ from functools import cached_property
 import os
 
 from src.skills.skill import Skill
-from src.skills.skills import SKILLS_BY_TAG
+from conf.tapas.skills import SKILLS_BY_TAG
 from src.skills.tapas import TapasSkill
 from src.states.state import State
-from src.states.states import STATES_BY_TAG
+from conf.calvin.states import STATES_BY_TAG
 
 
 @dataclass
@@ -29,7 +29,7 @@ class Storage:
     ):
         self.config = config
         self._states: list[State] = sorted(
-            STATES_BY_TAG.get(self.config.used_states, []), key=lambda s: s.id
+            STATES_BY_TAG.get(self.config.used_states, []), key=lambda s: s.config.id
         )
 
         # Evaluation states can be different from training states
@@ -42,10 +42,10 @@ class Storage:
             self._eval_states = self.states
         # We sort based on Id for the baseline network to be consistent
         self._skills: list[Skill] = sorted(
-            SKILLS_BY_TAG.get(self.config.used_skills, []), key=lambda s: s.id
+            SKILLS_BY_TAG.get(self.config.used_skills, []), key=lambda s: s.config.id
         )
         print(
-            f"Loaded skills for tag {self.config.used_skills}: {[s.name for s in self.skills]}"
+            f"Loaded skills for tag {self.config.used_skills}: {[s.config.label for s in self.skills]}"
         )
 
     def create_directory(self, path: str):
@@ -73,13 +73,13 @@ class Storage:
 
     def get_skill_by_name(self, name: str) -> Skill:
         for skill in self.skills:
-            if skill.name == name:
+            if skill.config.label == name:
                 return skill
         raise ValueError(f"Skill with name {name} not found in storage.")
 
     def get_state_by_name(self, name: str) -> State:
         for state in self.states:
-            if state.name == name:
+            if state.config.label == name:
                 return state
         raise ValueError(f"State with name {name} not found in storage.")
 

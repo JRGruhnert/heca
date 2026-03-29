@@ -4,7 +4,7 @@ import torch
 import numpy as np
 
 from src.variables import SET_SRPB
-from src.states.states import STATES_BY_TAG
+from conf.calvin.states import STATES_BY_TAG
 
 
 class RunData:
@@ -90,9 +90,11 @@ class RunData:
         # Count -1s separately, then bincount the rest
         negative_count = np.sum(action_indices == -1)
         positive_actions = action_indices[action_indices >= 0]
-        #print(f"Batch size: {batch_size}, Negative actions: {negative_count}, Positive actions: {len(positive_actions)}")
+        # print(f"Batch size: {batch_size}, Negative actions: {negative_count}, Positive actions: {len(positive_actions)}")
         if len(positive_actions) > 0:
-            action_distribution = np.bincount(positive_actions, minlength=len(STATES_BY_TAG.get(SET_SRPB, []))).tolist()
+            action_distribution = np.bincount(
+                positive_actions, minlength=len(STATES_BY_TAG.get(SET_SRPB, []))
+            ).tolist()
         else:
             action_distribution = [0] * len(STATES_BY_TAG.get(SET_SRPB, []))
 
@@ -113,11 +115,13 @@ class RunData:
 
         # Separate lengths for successful and failed episodes
         success_lengths = [l for l, s in zip(episode_lengths, episode_successes) if s]
-        failure_lengths = [l for l, s in zip(episode_lengths, episode_successes) if not s]
+        failure_lengths = [
+            l for l, s in zip(episode_lengths, episode_successes) if not s
+        ]
 
         mean_success_length = sum(success_lengths) / max(1, len(success_lengths))
         mean_failure_length = sum(failure_lengths) / max(1, len(failure_lengths))
-        
+
         return {
             "batch_size": batch_size,
             "total_episodes": max(1, terminals.count(True)),

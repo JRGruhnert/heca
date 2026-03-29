@@ -1,48 +1,57 @@
+from dataclasses import dataclass
+
 import torch
 
-from src.logic.addon import BaseAddon
-from src.logic.distance_condition import (
-    DistanceCondition,
+from src.factory import (
+    select_addon,
+    select_distance_condition,
+    select_eval_condition,
+    select_value_condition,
 )
-from src.logic.value_condition import (
-    ValueCondition,
-)
-from src.logic.eval_condition import (
-    EvalCondition,
-)
+from src.states.logic.addon import Addon, AddonConfig
+from src.states.logic.distance_cnd import DistanceConditionConfig
+from src.states.logic.eval_cnd import EvalConditionConfig
+from src.states.logic.value_cnd import ValueConditionConfig
+
+
+@dataclass
+class StateConfig:
+    label: str
+    id: int
+    type_str: str
+    size: int
+    distance_cnd_skill: DistanceConditionConfig
+    distance_cnd_goal: DistanceConditionConfig
+    eval_cnd: EvalConditionConfig
+    value_cnd: ValueConditionConfig
+    value_cnd_eval: ValueConditionConfig | None
+    addons: dict[str, AddonConfig] | None
 
 
 class State:
     def __init__(
         self,
-        name: str,
-        id: int,
-        type_str: str,
-        size: int,
-        normalizer: ValueCondition,
-        skill_condition: DistanceCondition,
-        goal_condition: DistanceCondition,
-        eval_condition: EvalCondition,
-        addons: dict[str, BaseAddon],
-        eval_normalizer: ValueCondition | None = None,
+        config: StateConfig,
     ):
-        self.name = name
-        self.id = id
-        self.type = type_str
-        self.size = size
-        self._normalizer = normalizer
-        self._eval_normalizer = (
-            eval_normalizer if eval_normalizer is not None else normalizer
+        self.config = config
+        self.distance_cnd_skill = select_distance_condition(config.distance_cnd_skill)
+        self.distance_cnd_goal = select_distance_condition(config.distance_cnd_goal)
+        self.eval_cnd = select_eval_condition(config.eval_cnd)
+        self.value_cnd = select_value_condition(config.value_cnd)
+        self.value_cnd_eval = (
+            select_value_condition(config.value_cnd_eval)
+            if config.value_cnd_eval is not None
+            else self.value_cnd
         )
-        self._skill_condition = skill_condition
-        self._goal_condition = goal_condition
-        self._eval_condition = eval_condition
-        self._addons = addons
+        self.addons: dict[str, Addon] = {}
+        if config.addons:
+            for name, addon_config in config.addons.items():
+                self.addons[name] = select_addon(addon_config)
 
     def make_input(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the value of the state as a tensor."""
         assert isinstance(x, torch.Tensor), "Input must be torch.Tensor"
-        return self._normalizer.make_input(x)
+        return self.value_cnd.make_input(x)
 
     def distance_to_skill(
         self,
@@ -53,9 +62,9 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             precon, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self._normalizer.value(current)
-        precon_norm = self._normalizer.value(precon)
-        value = self._skill_condition.distance(current_norm, precon_norm)
+        current_norm = self.value_cnd.value(current)
+        precon_norm = self.value_cnd.value(precon)
+        value = self.distance_cnd_skill.distance(current_norm, precon_norm)
         assert isinstance(value, float), "Distance must be a float"
         assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
         return value
@@ -69,9 +78,9 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             goal, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self._normalizer.value(current)
-        goal_norm = self._normalizer.value(goal)
-        value = self._goal_condition.distance(current_norm, goal_norm)
+        current_norm = self.value_cnd.value(current)
+        goal_norm = self.value_cnd.value(goal)
+        value = self.distance_cnd_goal.distance(current_norm, goal_norm)
         assert isinstance(value, float), "Distance must be a float"
         assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
         return value
@@ -85,9 +94,9 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             goal, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self._eval_normalizer.value(current)
-        goal_norm = self._eval_normalizer.value(goal)
-        return self._eval_condition.evaluate(current_norm, goal_norm)
+        current_norm = self.value_cnd_eval.value(current)
+        goal_norm = self.value_cnd_eval.value(goal)
+        return self.eval_cnd.evaluate(current_norm, goal_norm)
 
     def run_addon(
         self,
@@ -96,7 +105,7 @@ class State:
         **kwargs,
     ) -> torch.Tensor | None:
         """Returns the mean of the given tensor values."""
-        addon = self._addons.get(name)
+        addon = self.addons.get(name)
         if addon:
             return addon.run(*args, **kwargs)
         return None

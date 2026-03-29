@@ -1,6 +1,6 @@
 from conf.explain.common import get_explain_config
-from src.states.states import get_number_of_states_by_tag
-from src.skills.skills import get_number_of_skills_by_tag
+from conf.calvin.states import get_number_of_states_by_tag
+from conf.tapas.skills import get_number_of_skills_by_tag
 from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
 
 trained_skill_tag = SET_SLIDE

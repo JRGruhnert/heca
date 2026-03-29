@@ -1,4 +1,4 @@
-from src.skills.skill import Skill
+from src.skills.addons.addon_tapas import TapasAddon, TapasAddonConfig
 from src.agents.agent import Agent, AgentConfig
 from src.agents.human import HumanAgent, HumanAgentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
@@ -19,10 +19,90 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
     CalvinEnvironmentConfig,
 )
-from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
-from src.networks.gnn import GraphNetwork, GraphNetworkConfig
-from src.networks.network import Network, NetworkConfig
-from src.states.state import State
+from src.states.logic.rotation.quaternion_value_cnd import (
+    QuaternionValueCondition,
+    QuaternionValueConditionConfig,
+)
+from src.states.logic.addon import Addon, AddonConfig
+from src.states.logic.distance_cnd import DistanceCondition, DistanceConditionConfig
+from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
+from src.states.logic.flip.flip_distance_cnd import (
+    FlipDistanceCondition,
+    FlipDistanceConditionConfig,
+)
+from src.states.logic.identity.identity_value_cnd import (
+    IdentityValue,
+    IdentityValueConfig,
+)
+from src.states.logic.linear.linear_value_cnd import (
+    LinearValueNormalizer,
+    LinearValueNormalizerConfig,
+)
+from src.states.logic.location.euclidean_distance_cnd import (
+    EuclideanDistanceCondition,
+    EuclideanDistanceConditionConfig,
+)
+from src.states.logic.precise.precise_eval_cnd import (
+    PreciseEvalCondition,
+    PreciseEvalConditionConfig,
+)
+from src.states.logic.range.range_distance_cnd import (
+    RangeDistanceCondition,
+    RangeDistanceConditionConfig,
+)
+from src.states.logic.rotation.quaternion_distance_cnd import (
+    QuaternionDistanceCondition,
+    QuaternionDistanceConditionConfig,
+)
+from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
+from src.states.state import StateConfig, State
+
+
+def select_states(configs: list[StateConfig]) -> list[State]:
+    """Create states from configs - simple factory function"""
+    return [State(config) for config in configs]
+
+
+def select_value_condition(config: ValueConditionConfig) -> ValueCondition:
+    """Create normalizer from config - simple factory function"""
+    if isinstance(config, LinearValueNormalizerConfig):
+        return LinearValueNormalizer(config)
+    elif isinstance(config, IdentityValueConfig):
+        return IdentityValue(config)
+    elif isinstance(config, QuaternionValueConditionConfig):
+        return QuaternionValueCondition(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
+def select_distance_condition(config: DistanceConditionConfig) -> DistanceCondition:
+    """Create distance condition from config - simple factory function"""
+    if isinstance(config, RangeDistanceConditionConfig):
+        return RangeDistanceCondition(config)
+    elif isinstance(config, EuclideanDistanceConditionConfig):
+        return EuclideanDistanceCondition(config)
+    elif isinstance(config, FlipDistanceConditionConfig):
+        return FlipDistanceCondition(config)
+    elif isinstance(config, QuaternionDistanceConditionConfig):
+        return QuaternionDistanceCondition(config)
+    else:
+        raise ValueError(f"Unknown config.")
+
+
+def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:
+    """Create eval condition from config - simple factory function"""
+    if isinstance(config, PreciseEvalConditionConfig):
+        return PreciseEvalCondition(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
+def select_addon(config: AddonConfig) -> Addon:
+    """Create addon from config - simple factory function"""
+    if isinstance(config, TapasAddonConfig):
+        return TapasAddon(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
 
 
 def select_experiment(

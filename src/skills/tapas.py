@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from functools import cached_property
 import pathlib
 import numpy as np
@@ -5,10 +6,10 @@ import torch
 import re
 from loguru import logger
 from calvin_env_modified.envs.observation import CalvinEnvObservation
-from src.logic.eval_condition import AreaEvalCondition
 from src.observation.observation import StateValueDict
-from src.states.state import State
-from src.skills.skill import Skill
+from src.states.logic.area.area_eval_cnd import AreaEvalCondition
+from src.states.state import State, StateConfig
+from src.skills.skill import Skill, SkillConfig
 from src.hardware import device
 
 from tapas_gmm.policy import import_policy
@@ -29,24 +30,66 @@ from tapas_gmm.utils.observation import (
 )
 
 
+@dataclass
+class TapasSkillConfig(SkillConfig):
+    states: list[StateConfig]
+    reversed: bool
+    overrides: list[str]
+    predict_as_batch: bool
+    control_duration: int = -1  # Only relevant if not predict_as_batch
+    policy: GMMPolicyConfig = GMMPolicyConfig(
+        suffix="release",
+        model=AutoTPGMMConfig(
+            tpgmm=TPGMMConfig(
+                n_components=20,
+                model_type=ModelType.HMM,
+                use_riemann=True,
+                add_time_component=True,
+                add_action_component=False,
+                position_only=False,
+                add_gripper_action=True,
+                reg_shrink=1e-2,
+                reg_diag=2e-4,
+                reg_diag_gripper=2e-2,
+                reg_em_finish_shrink=1e-2,
+                reg_em_finish_diag=2e-4,
+                reg_em_finish_diag_gripper=2e-2,
+                trans_cov_mask_t_pos_corr=False,
+                em_steps=1,
+                fix_first_component=True,
+                fix_last_component=True,
+                reg_init_diag=5e-4,  # 5
+                heal_time_variance=False,
+            ),
+        ),
+        time_based=True,
+        predict_dx_in_xdx_models=False,
+        binary_gripper_action=True,
+        binary_gripper_closed_threshold=0.95,
+        dbg_prediction=False,
+        # the kinematics model in RLBench is just to unreliable -> leads to mistakes
+        topp_in_t_models=False,
+        force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
+        time_scale=1.0,
+        # ---- Changing often ----
+        postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
+    )
+
+    def __post_init__(self):
+        # Only set the fields you want, rest are defaults
+        self.policy.return_full_batch = self.predict_as_batch
+        self.policy.batch_predict_in_t_models = self.predict_as_batch
+        self.policy.invert_prediction_batch = self.reversed
+
+
 class TapasSkill(Skill):
 
     def __init__(
         self,
-        name: str,
-        id: int,
-        states: list[State],
-        reversed: bool,
-        overrides: list[str],
-        predict_as_batch: bool,
-        control_duration: int = -1,  # Only relevant if not predict_as_batch
+        config: TapasSkillConfig,
     ):
-        super().__init__(name, id)
-        self.states = states
-        self.reversed = reversed
-        self.overrides = overrides
-        self.predict_as_batch = predict_as_batch
-        self.control_duration = control_duration
+        super().__init__(config)
+        self.config = config
         self.first_prediction = True
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
@@ -57,60 +100,14 @@ class TapasSkill(Skill):
             pathlib.Path("data")
             / "skills"
             / "tapas"
-            / self.name
+            / self.config.label
             / ("demos" + "_" + "gmm" + "_policy" + "-release")
         ).with_suffix(".pt")
 
     @cached_property
-    def config(self) -> GMMPolicyConfig:
-        """
-        Get the configuration for the OpenDrawer policy.
-        """
-        return GMMPolicyConfig(
-            suffix="release",
-            model=AutoTPGMMConfig(
-                tpgmm=TPGMMConfig(
-                    n_components=20,
-                    model_type=ModelType.HMM,
-                    use_riemann=True,
-                    add_time_component=True,
-                    add_action_component=False,
-                    position_only=False,
-                    add_gripper_action=True,
-                    reg_shrink=1e-2,
-                    reg_diag=2e-4,
-                    reg_diag_gripper=2e-2,
-                    reg_em_finish_shrink=1e-2,
-                    reg_em_finish_diag=2e-4,
-                    reg_em_finish_diag_gripper=2e-2,
-                    trans_cov_mask_t_pos_corr=False,
-                    em_steps=1,
-                    fix_first_component=True,
-                    fix_last_component=True,
-                    reg_init_diag=5e-4,  # 5
-                    heal_time_variance=False,
-                ),
-            ),
-            time_based=True,
-            predict_dx_in_xdx_models=False,
-            binary_gripper_action=True,
-            binary_gripper_closed_threshold=0.95,
-            dbg_prediction=False,
-            # the kinematics model in RLBench is just to unreliable -> leads to mistakes
-            topp_in_t_models=False,
-            force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
-            time_scale=1.0,
-            # ---- Changing often ----
-            postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
-            return_full_batch=self.predict_as_batch,
-            batch_predict_in_t_models=self.predict_as_batch,  # Change if visualization is needed
-            invert_prediction_batch=self.reversed,
-        )
-
-    @cached_property
     def policy(self) -> GMMPolicy:
         PolicyClass = import_policy("gmm")
-        temp: GMMPolicy = PolicyClass(self.config).to(device)
+        temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
 
         file_name = self._policy_checkpoint_name()  # type: ignore
         logger.info("Loading policy checkpoint from {}", file_name)
@@ -120,7 +117,12 @@ class TapasSkill(Skill):
 
     @cached_property
     def model(self) -> AutoTPGMM:
-        return self.policy.model
+        temp = self.policy.model
+        if not isinstance(temp, AutoTPGMM):
+            raise ValueError(
+                f"Expected model to be AutoTPGMM, but got {type(temp)}. This should not happen."
+            )
+        return temp
 
     @cached_property
     def tapas_tp_labels(self) -> set[str]:
@@ -138,48 +140,48 @@ class TapasSkill(Skill):
         for state in self.states:
             value = state.run_addon(
                 "tapas",
-                self.model.start_values[state.name],
-                self.model.end_values[state.name],
+                self.model.start_values[state.config.label],
+                self.model.end_values[state.config.label],
                 reversed,
-                True if state.name in self.tapas_tp_labels else False,
+                True if state.config.label in self.tapas_tp_labels else False,
             )
             if value is not None:
-                values.add(state.name)
+                values.add(state.config.label)
         return values
 
     def _load_demo_precons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_cons(self.reversed)
+        return self.load_demo_cons(self.config.reversed)
 
     def _load_demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_cons(not self.reversed)
+        return self.load_demo_cons(not self.config.reversed)
 
     def load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
         values = {}
         for state in self.states:
             if reversed:
-                values[state.name] = self.model.start_values[state.name]
+                values[state.config.label] = self.model.start_values[state.config.label]
             else:
-                values[state.name] = self.model.end_values[state.name]
+                values[state.config.label] = self.model.end_values[state.config.label]
         return values
 
     def _load_tp_precons(self) -> dict[str, torch.Tensor]:
-        return self.load_tp_cons(self.reversed)
+        return self.load_tp_cons(self.config.reversed)
 
     def _load_tp_postcons(self) -> dict[str, torch.Tensor]:
-        return self.load_tp_cons(not self.reversed)
+        return self.load_tp_cons(not self.config.reversed)
 
     def load_tp_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
         values = {}
         for state in self.states:
             value = state.run_addon(
                 "tapas",
-                self.model.start_values[state.name],
-                self.model.end_values[state.name],
+                self.model.start_values[state.config.label],
+                self.model.end_values[state.config.label],
                 reversed,
-                True if state.name in self.tapas_tp_labels else False,
+                True if state.config.label in self.tapas_tp_labels else False,
             )
             if value is not None:
-                values[state.name] = value
+                values[state.config.label] = value
         return values
 
     @cached_property
@@ -188,19 +190,19 @@ class TapasSkill(Skill):
         # So basically normal since reversed is True
         temp: dict[str, np.ndarray] = {}
         for state in self.states:
-            if state.name in self.overrides:
+            if state.config.label in self.config.overrides:
                 value = state.run_addon(
                     "tapas",
-                    self.model.start_values[state.name],
-                    self.model.end_values[state.name],
-                    not self.reversed,  # NOTE: We want the opposite of the reverse trajectory
+                    self.model.start_values[state.config.label],
+                    self.model.end_values[state.config.label],
+                    not self.config.reversed,  # NOTE: We want the opposite of the reverse trajectory
                     True,  # NOTE: All States are True here
                 )
                 if value is None:
                     raise ValueError(
-                        f"Failed to create override for state {state.name}. This should not happen."
+                        f"Failed to create override for state {state.config.label}. This should not happen."
                     )
-                temp[state.name] = value.numpy()
+                temp[state.config.label] = value.numpy()
         return temp
 
     def reset(self, goal: StateValueDict, env):
@@ -218,7 +220,7 @@ class TapasSkill(Skill):
         assert isinstance(
             current, CalvinEnvObservation
         ), "Only supports CalvinEnvObservation."
-        if self.predict_as_batch:
+        if self.config.predict_as_batch:
             if self.first_prediction:
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
@@ -309,9 +311,11 @@ class TapasSkill(Skill):
         )
         object_poses_dict = obs.object_poses
         object_states_dict = obs.object_states
-        if goal is not None and self.reversed:
+        if goal is not None and self.config.reversed:
             states_dict = (
-                {state.name: state for state in self.states} if self.states else {}
+                {state.config.label: state for state in self.states}
+                if self.states
+                else {}
             )
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
@@ -342,10 +346,15 @@ class TapasSkill(Skill):
                     position_state_name = f"{match_position.group(1)}_position"
                     if position_state_name in states_dict:
                         temp_state = states_dict[position_state_name]
-                        if isinstance(temp_state._eval_condition, AreaEvalCondition):
-                            temp_pos = temp_state._eval_condition.area_tapas_override(
-                                goal[position_state_name],
+                        if isinstance(temp_state.eval_cnd, AreaEvalCondition):
+                            area = temp_state.eval_cnd.area.check_eval_area(
+                                goal[position_state_name]
                             )
+                            temp_pos = goal[position_state_name].clone()
+                            if (
+                                area == "drawer_closed"
+                            ):  # NOTE: This is a hardcoded fix for the drawer, since the position of the drawer in the reversed trajectory is in the closed position but the model expects it to be in the open position. This is because the model was trained with the open position as precondition and the closed position as postcondition, so when we reverse it, we need to also reverse the positions.
+                                temp_pos[1] -= 0.17  # Drawer Offset
                         else:
                             temp_pos = goal[position_state_name]
                         object_poses_dict[match_position.group(1)] = np.concatenate(
