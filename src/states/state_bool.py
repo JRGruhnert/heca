@@ -12,7 +12,7 @@ from src.states.state import StateConfig
 
 @dataclass
 class BoolStateConfig(StateConfig):
-    type_str = "Bool"
+    label = "Bool"
     size = 1
     value_cnd = IdentityValueConfig()
     distance_cnd_skill = RangeDistanceConditionConfig()

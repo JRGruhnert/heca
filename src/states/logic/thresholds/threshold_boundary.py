@@ -1,9 +1,11 @@
+from dataclasses import dataclass
 from functools import cached_property
 import torch
 
 from src.states.logic.boundary import Boundary, BoundaryConfig
 
 
+@dataclass
 class BoundaryThresholdConfig:
     boundary: BoundaryConfig
     threshold: float = 0.05
@@ -23,8 +25,3 @@ class BoundaryThreshold:
         return self.config.threshold * (
             self.boundary.max_limit - self.boundary.lower_limit
         )
-
-    @cached_property
-    def absolute(self) -> torch.Tensor:
-        """Returns the absolute threshold for the state."""
-        return self.relative
