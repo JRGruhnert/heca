@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.skills.tree.leafs.operators.operator import Operator, OperatorConfig
+from src.operators.operator import Operator, OperatorConfig
 from src.states.logic.condition import Condition, ConditionConfig
 
 

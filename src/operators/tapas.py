@@ -32,6 +32,7 @@ from src.skills.tree.leafs.loader import OperatorLoaderConfig
 from src.operators.operator import Operator, OperatorConfig
 from src.states.logic.area.area_eval_cnd import AreaEvalCondition
 from src.states.logic.condition import Condition
+from src.states.state import State
 
 
 @dataclass
@@ -104,52 +105,10 @@ class TapasOperator(Operator):
         self.prediction = None
         self.goal = goal
 
-    def act(self, current: StateValueDict) -> torch.Tensor:
-        """Get the next action for the operator."""
-        raise NotImplementedError("Subclasses must implement method.")
-
-    def load_demo_precons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(self.config.reversed)
-
-    def load_demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(not self.config.reversed)
-
-    def _load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
-        if reversed:
-            return self.model.end_values
-        else:
-            return self.model.start_values
-
-    def load_parameter_precons(self) -> dict[str, Condition]:
-        return self._load_tp_cons(self.config.reversed)
-
-    def load_parameter_postcons(self) -> dict[str, Condition]:
-        return self._load_tp_cons(not self.config.reversed)
-
-    def _load_tp_cons(self, reversed: bool) -> dict[str, Condition]:
-        values = {}
-        for label in self.demo_labels:
-            value = state.run_addon(
-                "tapas",
-                self.demo_precons[label],
-                self.demo_postcons[label],
-                reversed,
-                self.tapas_tp_labels.issubset(label),
-            )
-            if value is not None:
-                values[label] = value
-        return values
-
-        # TODO: How to get postocons just from state label?
-        for key, cfg in self.config.precons.items():
-            self.precons[key] = Condition(config=cfg)
-        if self.config.postcons:
-            for key, cfg in self.config.postcons.items():
-                self.postcons[key] = Condition(config=cfg)
-
     def predict(
         self,
         current: CalvinEnvObservation,
+        states: list[State],
     ) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
         assert isinstance(
@@ -160,7 +119,7 @@ class TapasOperator(Operator):
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
                     self.predictions, _ = self.policy.predict(  # type: ignore
-                        self._to_skill_format(current, self.goal)
+                        self._to_skill_format(current, self.goal, states)
                     )
                 except FloatingPointError as e:
                     logger.error(f"Numerical error in GMM prediction: {e}")
@@ -203,6 +162,7 @@ class TapasOperator(Operator):
         self,
         obs: CalvinEnvObservation,
         goal: StateValueDict | None = None,
+        states: list[State] | None = None,
     ) -> SceneObservation:  # type: ignore
         """
         Convert the observation from the environment to a SceneObservation. This format is used for TAPAS.
@@ -247,11 +207,7 @@ class TapasOperator(Operator):
         object_poses_dict = obs.object_poses
         object_states_dict = obs.object_states
         if goal is not None and self.config.reversed:
-            states_dict = (
-                {state.config.label: state for state in self.states}
-                if self.states
-                else {}
-            )
+            states_dict = {s.config.label: s for s in states} if states else {}
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
             # logger.debug(f"Overriding Tapas Task {task.name}")
@@ -340,6 +296,45 @@ class TapasOperator(Operator):
             batch_size=empty_batchsize,
         )
 
+    def load_demo_precons(self) -> dict[str, torch.Tensor]:
+        return self._load_demo_cons(self.config.reversed)
+
+    def load_demo_postcons(self) -> dict[str, torch.Tensor]:
+        return self._load_demo_cons(not self.config.reversed)
+
+    def _load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
+        if reversed:
+            return self.model.end_values
+        else:
+            return self.model.start_values
+
+    def load_parameter_precons(self) -> dict[str, Condition]:
+        return self._load_tp_cons(self.config.reversed)
+
+    def load_parameter_postcons(self) -> dict[str, Condition]:
+        return self._load_tp_cons(not self.config.reversed)
+
+    def _load_tp_cons(self, reversed: bool) -> dict[str, Condition]:
+        values = {}
+        for label in self.demo_labels:
+            value = state.run_addon(
+                "tapas",
+                self.demo_precons[label],
+                self.demo_postcons[label],
+                reversed,
+                self.tapas_tp_labels.issubset(label),
+            )
+            if value is not None:
+                values[label] = value
+        return values
+
+        # TODO: How to get postocons just from state label?
+        for key, cfg in self.config.precons.items():
+            self.precons[key] = Condition(config=cfg)
+        if self.config.postcons:
+            for key, cfg in self.config.postcons.items():
+                self.postcons[key] = Condition(config=cfg)
+
     @cached_property
     def policy(self) -> GMMPolicy:
         PolicyClass = import_policy("gmm")
@@ -371,11 +366,9 @@ class TapasOperator(Operator):
 
     @cached_property
     def overrides(self) -> dict[str, np.ndarray]:
-        # NOTE: Its a copy of initialize_task_parameters but only override states get loaded and also in reverse
-        # So basically normal since reversed is True
         temp: dict[str, np.ndarray] = {}
         for label in self.config.overrides:
-            value = state.run_addon(
+            value = self.loader.state.run_addon(
                 "tapas",
                 self.model.start_values[label],
                 self.model.end_values[label],

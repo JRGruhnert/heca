@@ -63,8 +63,8 @@ class BaselineNetwork(Network):
         """Group state values by their type strings."""
         grouped = defaultdict(list)
         for state in states:
-            value = state.make_input(x[state.name])
-            grouped[state.type].append(value)
+            value = state.make_input(x[state.config.label])
+            grouped[state.config.type_str].append(value)
         return {k: torch.stack(v).float() for k, v in grouped.items()}
 
     def _to_batch(

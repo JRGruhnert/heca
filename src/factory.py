@@ -21,9 +21,9 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
 )
 
+from src.operators.operator import Operator, OperatorConfig
+from src.operators.tapas import TapasOperator, TapasOperatorConfig
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
-from src.skills.tree.leafs.operators.operator import Operator, OperatorConfig
-from src.skills.tree.leafs.operators.tapas import TapasOperator, TapasOperatorConfig
 from src.states.logic.addons.prepro_flip import (
     FlipStatePreprocessor,
     FlipStatePreprocessorConfig,
@@ -37,7 +37,7 @@ from src.states.logic.distance import Distance, DistanceConfig
 from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
 from src.states.logic.scalars.switch_distance_cnd import (
     SwitchDistanceCondition,
-    SwitchDistanceConditionConfig,
+    FlipDistanceConditionConfig,
 )
 from src.states.logic.identity.identity_value_cnd import (
     IdentityValue,
@@ -99,7 +99,7 @@ def select_distance_condition(config: DistanceConfig) -> Distance:
         return RangeDistanceCondition(config)
     elif isinstance(config, EuclideanDistanceConditionConfig):
         return EuclideanDistanceCondition(config)
-    elif isinstance(config, SwitchDistanceConditionConfig):
+    elif isinstance(config, FlipDistanceConditionConfig):
         return SwitchDistanceCondition(config)
     elif isinstance(config, QuaternionDistanceConditionConfig):
         return QuaternionDistanceCondition(config)

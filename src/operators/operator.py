@@ -1,9 +1,14 @@
 from dataclasses import dataclass
+import numpy as np
 import torch
 
+from calvin_env_modified.envs.observation import (
+    CalvinEnvObservation,
+)
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.loader import OperatorLoader, OperatorLoaderConfig
 from src.states.logic.condition import Condition
+from src.states.state import State
 
 
 @dataclass
@@ -20,8 +25,12 @@ class Operator:
         """Prepare the operator for execution. Before each use."""
         raise NotImplementedError("Subclasses must implement method.")
 
-    def act(self, current: StateValueDict) -> torch.Tensor:
-        """Get the next action for the operator."""
+    def predict(
+        self,
+        current: CalvinEnvObservation,
+        states: list[State],
+    ) -> np.ndarray | None:
+        """Predict the next action given the current observation."""
         raise NotImplementedError("Subclasses must implement method.")
 
     def load_demo_precons(self) -> dict[str, torch.Tensor]:

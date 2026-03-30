@@ -16,7 +16,7 @@ class AreaBoundaryConfig(BoundaryConfig):
 
 
 @dataclass
-class SwitchBoundaryConfig(BoundaryConfig):
+class FlipBoundaryConfig(BoundaryConfig):
     lower: list[float] = field(default_factory=lambda: [0.0])
     upper: list[float] = field(default_factory=lambda: [1.0])
 

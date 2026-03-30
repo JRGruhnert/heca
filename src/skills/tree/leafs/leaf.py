@@ -1,10 +1,14 @@
 from dataclasses import dataclass
 from functools import cached_property
-import torch
+import numpy as np
+from calvin_env_modified.envs.observation import (
+    CalvinEnvObservation,
+)
 from src.factory import select_operator
 from src.observation.observation import StateValueDict
 from src.operators.operator import OperatorConfig
 from src.states.logic.condition import Condition
+from src.states.state import State
 
 
 @dataclass
@@ -25,8 +29,10 @@ class Leaf:
     def prepare(self, goal: StateValueDict):
         self.operator.reset(goal)
 
-    def act(self, current: StateValueDict) -> torch.Tensor:
-        return self.operator.act(current)
+    def predict(
+        self, current: CalvinEnvObservation, states: list[State]
+    ) -> np.ndarray | None:
+        return self.operator.predict(current, states)
 
     @cached_property
     def parameter(self) -> set[str]:

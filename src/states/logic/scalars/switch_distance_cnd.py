@@ -6,12 +6,12 @@ from src.states.logic.distance import Distance, DistanceConfig
 
 
 @dataclass
-class SwitchDistanceConditionConfig(DistanceConfig):
+class FlipDistanceConditionConfig(DistanceConfig):
     pass
 
 
 class SwitchDistanceCondition(Distance):
-    def __init__(self, config: SwitchDistanceConditionConfig):
+    def __init__(self, config: FlipDistanceConditionConfig):
         super().__init__(config)
         self.config = config
 

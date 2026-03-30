@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from src.skills.tree.leafs.loader import OperatorLoaderConfig
-from src.skills.tree.leafs.operators.operator import OperatorConfig
+from src.operators.operator import OperatorConfig
 from src.skills.tree.leafs.leaf import LeafConfig
-from src.skills.tree.leafs.operators.tapas import TapasOperatorConfig
+from src.operators.tapas import TapasOperatorConfig
 from src.states.logic.distance import DistanceConfig
 
 

@@ -5,7 +5,7 @@ from src.states.state_bool import BoolStateConfig
 from src.states.state_location import LocationStateConfig
 from src.states.state_range import RangeStateConfig
 from src.states.state_rotation import RotationStateConfig
-from src.states.state_switch import SwitchStateConfig
+from src.states.state_switch import FlipStateConfig
 
 
 @dataclass
@@ -58,7 +58,7 @@ class CalvinStateSet:
         label="button_rotation",
         id=10,
     )
-    button_scalar: SwitchStateConfig = SwitchStateConfig(
+    button_scalar: FlipStateConfig = FlipStateConfig(
         label="button_scalar",
         id=11,
     )
