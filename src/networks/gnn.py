@@ -11,6 +11,7 @@ from src.observation.observation import StateValueDict
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
 from src.skills.tree.leafs.leaf import Leaf
+from src.states.logic.condition import Condition
 from src.states.state import State
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (
@@ -313,9 +314,30 @@ class GraphNetwork(Network):
     ) -> torch.Tensor:
         features: list[torch.Tensor] = []
         for skill in self.skills:
-            distances = skill.distances(obs, pad, sparse)
+            distances = self.distances(
+                obs, precons=skill.precons, pad=pad, sparse=sparse
+            )
             features.append(distances)
         return torch.stack(features, dim=0).float()
+
+    def distances(
+        self,
+        obs: StateValueDict,
+        precons: dict[str, Condition],
+        pad: bool = False,
+        sparse: bool = False,
+    ) -> torch.Tensor:
+        task_features: list[torch.Tensor] = []
+        for state in obs.keys():  # type: ignore
+            cnd = precons.get(str(state), None)
+            if cnd:
+                value = cnd(obs[state])
+                value = torch.tensor([value, 0.0]) if pad else torch.tensor([value])
+            else:
+                nv = -1.0 if sparse else 0.0  # For Identification in filtering
+                value = torch.tensor([nv, 1.0]) if pad else torch.tensor([nv])
+            task_features.append(value)
+        return torch.stack(task_features, dim=0)
 
     def s_s_attr(
         self,

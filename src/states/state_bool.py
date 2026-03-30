@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.states.logic.addons.addon_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
 from src.states.logic.boundary import BoundaryConfig, SwitchBoundaryConfig
 from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig

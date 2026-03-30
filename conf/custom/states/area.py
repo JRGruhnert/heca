@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from src.states.logic.addons.addon_euler import EulerTapasAddonConfig
+from src.states.logic.addons.prepro_euler import EulerTapasAddonConfig
 from src.states.logic.area.area import AreaConfig
 from src.states.logic.area.area_value_cnd import AreaValueConditionConfig
 from src.states.logic.boundary import AreaBoundaryConfig

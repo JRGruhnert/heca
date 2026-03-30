@@ -22,7 +22,9 @@ from src.environments.calvin import (
 )
 
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
-from src.states.logic.addons.addon_flip import (
+from src.skills.tree.leafs.operators.operator import Operator, OperatorConfig
+from src.skills.tree.leafs.operators.tapas import TapasOperator, TapasOperatorConfig
+from src.states.logic.addons.prepro_flip import (
     FlipStatePreprocessor,
     FlipStatePreprocessorConfig,
 )
@@ -123,6 +125,14 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
         else:
             raise NotImplementedError(f"Unknown config.")
     return conditions
+
+
+def select_operator(config: OperatorConfig) -> Operator:
+    """Create operator from config - simple factory function"""
+    if isinstance(config, TapasOperatorConfig):
+        return TapasOperator(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
 
 
 def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:

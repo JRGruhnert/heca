@@ -24,7 +24,7 @@ class IgnoreLeaf(Leaf):
         super().__init__(config)
         self.config = config
 
-    def reset(self, goal: StateValueDict, env: object):
+    def prepare(self, goal: StateValueDict, env: object):
         pass
 
     def predict(

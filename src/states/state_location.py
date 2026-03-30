@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.states.logic.addons.addon_euler import EulerTapasAddonConfig
+from src.states.logic.addons.prepro_euler import EulerTapasAddonConfig
 from src.states.logic.boundary import AreaBoundaryConfig, BoundaryConfig
 from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
 from src.states.logic.location.euclidean_distance_cnd import (

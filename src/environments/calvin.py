@@ -67,7 +67,7 @@ class CalvinEnvironment(Environment):
         ) or isinstance(
             skill, IgnoreLeaf
         ), "CalvinEnvironment only supports TapasSkill at this time."
-        skill.reset(self.goal, self.env)
+        skill.prepare(self.goal, self.env)
         while (action := skill.predict(self.calvin_obs)) is not None:
             self.calvin_obs = self.env.step(action, self.config.render, self.info)[0]
             self.current = CalvinObservation.from_internal(self.calvin_obs)

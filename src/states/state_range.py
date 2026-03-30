@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from src.states.logic.addons.addon_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
 from src.states.logic.boundary import BoundaryConfig
 from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
