@@ -3,7 +3,7 @@ from src.agents.agent import Agent, AgentConfig
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -28,7 +28,7 @@ class HumanAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Leaf | None:
+    ) -> TreeNode | None:
         """Select an action given the current observation and goal observation."""
         for i, skill in enumerate(self.storage.skills):
             print(f"{i}: {skill.config.label}")
@@ -40,7 +40,7 @@ class HumanAgent(Agent):
         return self.storage.skills[choice]
 
     def explain(
-        self, current: StateValueDict, goal: StateValueDict, skill: Leaf
+        self, current: StateValueDict, goal: StateValueDict, skill: TreeNode
     ) -> str:
         raise NotImplementedError("")
 

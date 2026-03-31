@@ -16,7 +16,7 @@ from src.networks.network import Network, NetworkConfig
 from loguru import logger
 from thop import profile
 
-from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -97,7 +97,7 @@ class PPOAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Leaf:
+    ) -> TreeNode:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(
                 obs, goal, self.storage.states_network
@@ -124,7 +124,7 @@ class PPOAgent(Agent):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: Leaf,
+        skill: TreeNode,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(

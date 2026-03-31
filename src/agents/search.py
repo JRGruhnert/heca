@@ -7,13 +7,15 @@ from src.modules.buffer import Buffer
 from src.modules.evaluators.tree import TreeEvaluator, TreeEvaluatorConfig
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.leaf import Leaf
+
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
 from loguru import logger
 from heapq import heapify, heappop, heappush
 
+from src.skills.tree.node import TreeNode
 
-class TreeNode:
+
+class SRNode:
     def __init__(
         self,
         obs: StateValueDict,
@@ -28,7 +30,7 @@ class TreeNode:
         self.distance_to_goal = distance_to_goal
         self.distance_to_skill = distance_to_skill
 
-    def __lt__(self, other: "TreeNode") -> bool:
+    def __lt__(self, other: "SRNode") -> bool:
         # Compare based on distance to goal, then distance to obs, then distance to skill
         return (
             self.distance_to_skill,
@@ -71,7 +73,7 @@ class SearchTreeAgent(Agent):
         self.buffer = buffer
         self.evaluator = TreeEvaluator(self.config.evaluator_config, self.storage)
 
-        self.heap: list[TreeNode] = []
+        self.heap: list[SRNode] = []
         self.solution = None
         self.index: int = 0
         self.current_epoch = 0
@@ -80,12 +82,12 @@ class SearchTreeAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Leaf:
+    ) -> TreeNode:
         # Initialize root if first observation
         if self.config.replan_every_step or self.solution is None:
             self.goal = goal
             self.index = 0
-            self.heap: list[TreeNode] = [TreeNode(obs=obs)]
+            self.heap: list[SRNode] = [SRNode(obs=obs)]
             heapify(self.heap)
             self.solution = self.best_first_search()
             # print(f"New Solution Found: {self.solution}")
@@ -110,11 +112,11 @@ class SearchTreeAgent(Agent):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        leaf: Leaf,
+        leaf: TreeNode,
     ) -> str:
         raise NotImplementedError("")
 
-    def best_first_search(self) -> Optional[TreeNode]:
+    def best_first_search(self) -> Optional[SRNode]:
         """Expand tree by applying leaf postconditions"""
         nodes_expanded = 0
 
@@ -150,7 +152,7 @@ class SearchTreeAgent(Agent):
                         ):  # Only push if max depth not reached
                             heappush(
                                 self.heap,
-                                TreeNode(
+                                SRNode(
                                     obs=simulated_obs,
                                     path=current.path + [idx],
                                     distance_to_obs=current.distance_to_obs

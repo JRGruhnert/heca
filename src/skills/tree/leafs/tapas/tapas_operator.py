@@ -344,19 +344,21 @@ class TapasLeafOperator(NodeOperator):
         reversed: bool,
         labels: set[str] | None = None,
     ) -> dict[str, Condition]:
-        return {
-            l: Condition.from_demos(
-                (
-                    self.demo_precons[l],
-                    self.demo_postcons[l],
-                    reversed,
-                    l in self.tapas_labels,
-                ),
-                c,
-            )
-            for l, c in self.config.conditions.items()
-            if labels is None or l in labels
-        }
+        result = {}
+        for l, c in self.config.conditions.items():
+            if labels is None or l in labels:
+                cond = Condition.from_demos(
+                    (
+                        self.demo_precons[l],
+                        self.demo_postcons[l],
+                        reversed,
+                        l in self.tapas_labels,
+                    ),
+                    c,
+                )
+                if cond is not None:
+                    result[l] = cond
+        return result
 
     @cached_property
     def policy(self) -> GMMPolicy:

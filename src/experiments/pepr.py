@@ -7,8 +7,8 @@ from src.modules.storage import Storage
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.leaf import Leaf
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -45,7 +45,7 @@ class PePrExperiment(Experiment):
         self.current, goal = self.env.sample_task()
         return self.current, goal
 
-    def step(self, skill: Leaf) -> tuple[StateValueDict, float, bool, bool]:
+    def step(self, skill: TreeNode) -> tuple[StateValueDict, float, bool, bool]:
         self.current_step += 1
         sample = random.random()
         if sample < self.config.p_empty:

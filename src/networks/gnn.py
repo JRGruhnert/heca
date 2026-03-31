@@ -10,7 +10,7 @@ from src.modules.explainer import HoopgnExplainer
 from src.observation.observation import StateValueDict
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
-from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.node import TreeNode
 from src.states.logic.condition import Condition
 from src.states.state import State
 from torch_geometric.data import HeteroData
@@ -259,7 +259,7 @@ class GraphNetwork(Network):
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
     def explain(
-        self, batch: Batch, skill: Leaf
+        self, batch: Batch, skill: TreeNode
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
         d: HeteroData = batch.get_example(0)  # type: ignore
         # print(batch)
@@ -369,7 +369,7 @@ class GraphNetwork(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any, skills: list[Leaf], states: list[State]):
+    def _load(self, checkpoint: Any, skills: list[TreeNode], states: list[State]):
         self.skills = skills
         self.states = states
         self.load_state_dict(checkpoint["model_state"], strict=False)

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from src.factory import select_distance_condition
+from src.factory import select_distance
 from src.states.logic.distance import DistanceConfig
 from src.states.logic.eval_cnd import EvalCondition, EvaluationConfig
 
@@ -16,7 +16,7 @@ class ThresholdEvalConditionConfig(EvaluationConfig):
 class ThresholdEvalCondition(EvalCondition):
     def __init__(self, config: ThresholdEvalConditionConfig):
         self.config = config
-        self.condition = select_distance_condition(config.distance)
+        self.condition = select_distance(config.distance)
 
     def evaluate(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
         """Evaluate success condition based on Euclidean distance."""

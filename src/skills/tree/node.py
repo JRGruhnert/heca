@@ -32,11 +32,16 @@ class TreeNode:
         self.network_handler = select_networker(config.networker)
         self.stamp = select_parameter(config.parameter)
 
+    def reset(self, goal):
+        self.operator.reset(goal)
+        self.network_handler.reset(goal)
+        # self.stamp.reset(goal)
+
     def build_network(self, x: StateValueDict, y: StateValueDict) -> Batch:
         return self.network_handler(x, y)
 
-    def predict(self, x: StateValueDict, y: StateValueDict) -> np.ndarray | None:
-        return self.operator(x, y)
+    def predict(self, *args, **kwargs) -> np.ndarray | None:
+        return self.operator(*args, **kwargs)
 
     def predict_old(
         self, current: CalvinEnvObservation, states: list[State]

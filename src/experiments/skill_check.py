@@ -8,7 +8,7 @@ from src.modules.storage import Storage
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -31,7 +31,7 @@ class SkillCheckExperiment(Experiment):
         self.pre_skill = None
         self.evaluator = SkillEvaluator(config.evaluator, storage)
 
-    def sample_task(self, leaf: Leaf) -> bool:
+    def sample_task(self, leaf: TreeNode) -> bool:
         """Samples a new task from the environment that is suitable for the given leaf."""
         pre_leaf = self._get_prerequisite_skill(leaf)
         attempts = 0

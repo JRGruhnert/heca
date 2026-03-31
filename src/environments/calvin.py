@@ -6,8 +6,8 @@ from src.environments.environment import Environment, EnvironmentConfig
 from src.observation.observation import StateValueDict
 
 from src.observation.calvin import CalvinObservation
-from src.skills.tree.leafs.leaf import Leaf
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -58,9 +58,9 @@ class CalvinEnvironment(Environment):
 
     def step(
         self,
-        skill: Leaf,
+        skill: TreeNode,
     ) -> tuple[StateValueDict, float, bool]:
-        assert isinstance(skill, Leaf) or isinstance(
+        assert isinstance(skill, TreeNode) or isinstance(
             skill, IgnoreLeaf
         ), "CalvinEnvironment only supports TapasSkill at this time."
         skill.reset(self.goal)

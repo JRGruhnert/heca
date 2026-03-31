@@ -106,7 +106,7 @@ def select_value_condition(config: ValueConfig) -> ValueCondition:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance_condition(config: DistanceConfig) -> Distance:
+def select_distance(config: DistanceConfig) -> Distance:
     """Create distance condition from config - simple factory function"""
     if isinstance(config, RangeDistanceConditionConfig):
         return RangeDistanceCondition(config)
@@ -132,7 +132,7 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
     conditions = {}
     for key, config in cons.items():
         if isinstance(config, DistanceConfig):
-            conditions[key] = select_distance_condition(config)
+            conditions[key] = select_distance(config)
         elif isinstance(config, ValueConfig):
             conditions[key] = select_value_condition(config)
         else:

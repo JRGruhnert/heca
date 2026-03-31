@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from src.factory import (
-    select_distance_condition,
+    select_distance,
     select_eval_condition,
     select_value_condition,
 )
@@ -34,8 +34,8 @@ class State:
         config: StateConfig,
     ):
         self.config = config
-        self.distance_cnd_skill = select_distance_condition(config.distance_cnd_skill)
-        self.distance_cnd_goal = select_distance_condition(config.distance_cnd_goal)
+        self.distance_cnd_skill = select_distance(config.distance_cnd_skill)
+        self.distance_cnd_goal = select_distance(config.distance_cnd_goal)
         self.eval_cnd = select_eval_condition(config.eval_cnd)
         self.value_cnd = select_value_condition(config.value_cnd)
         self.value_cnd_eval = (

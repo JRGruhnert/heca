@@ -23,7 +23,7 @@ class RotationStatePreprocessor(StatePreprocessor):
         self.config = config
         self.rotation = Quaternion(config.rotation)
 
-    def run(
+    def tapas(
         self,
         start: torch.Tensor,
         end: torch.Tensor,

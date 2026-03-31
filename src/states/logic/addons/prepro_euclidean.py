@@ -19,7 +19,7 @@ class EuclideanStatePreprocessor(StatePreprocessor):
         super().__init__(config)
         self.config = config
 
-    def run(
+    def tapas(
         self,
         start: torch.Tensor,
         end: torch.Tensor,

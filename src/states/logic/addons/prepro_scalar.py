@@ -23,7 +23,7 @@ class ScalarStatePreprocessor(StatePreprocessor):
         self.config = config
         self.threshold = BoundaryThreshold(config.threshold)
 
-    def run(
+    def tapas(
         self,
         start: torch.Tensor,
         end: torch.Tensor,

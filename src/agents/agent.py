@@ -3,7 +3,7 @@ from typing import Any
 from src.observation.observation import StateValueDict
 from dataclasses import dataclass
 
-from src.skills.tree.leafs.leaf import Leaf
+from src.skills.tree.node import TreeNode
 
 
 @dataclass
@@ -18,7 +18,7 @@ class Agent(ABC):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> Leaf:
+    ) -> TreeNode:
         """Select an action given the current observation and goal observation."""
         raise NotImplementedError("Act method not implemented yet.")
 
@@ -27,7 +27,7 @@ class Agent(ABC):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: Leaf,
+        skill: TreeNode,
     ) -> Any:
         """Return explanations for the actor and critic's decisions. By default, returns None."""
         raise NotImplementedError("Explain method not implemented yet.")
