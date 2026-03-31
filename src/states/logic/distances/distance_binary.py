@@ -2,15 +2,15 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distance import Distance, DistanceConfig
+from src.states.logic.distances.distance import Distance, DistanceConfig
 
 
 @dataclass
-class RangeDistanceConditionConfig(DistanceConfig):
+class ScalarDistanceConfig(DistanceConfig):
     pass
 
 
-class RangeDistanceCondition(Distance):
+class ScalarDistance(Distance):
     def distance(
         self,
         current: torch.Tensor,

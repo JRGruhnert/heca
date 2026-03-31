@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from src.factory import select_distance, select_state_preprocessor
-from src.states.logic.distance import DistanceConfig
+from src.states.logic.distances.distance import DistanceConfig
 from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 
 

@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 
 from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
 from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
-from src.states.logic.area.area import AreaConfig
-from src.states.logic.area.area_value_cnd import AreaValueConditionConfig
+from src.states.logic.area import AreaConfig
+from src.states.logic.values.value_area import AreaValueConfig
 from src.states.logic.boundary import AreaBoundaryConfig
-from src.states.logic.eval_cnd import EvaluationConfig
-from src.states.logic.location.euclidean_distance_cnd import (
-    EuclideanDistanceConditionConfig,
+from src.states.logic.evaluations.evaluation import EvaluationConfig
+from src.states.logic.distances.distance_euclidean import (
+    EuclideanDistanceConfig,
 )
-from src.states.logic.value_cnd import ValueConfig
+from src.states.logic.values.value import ValueConfig
 from src.states.state import StateConfig
 
 
@@ -45,16 +45,12 @@ class CalvinAreaConfig(AreaConfig):
 class CalvinAreaStateConfig(StateConfig):
     type_str: str = "AreaEuler"
     size: int = 6
-    value_cnd: AreaValueConditionConfig = AreaValueConditionConfig(
+    value_cnd: AreaValueConfig = AreaValueConfig(
         area=CalvinAreaConfig(),
         boundary=AreaBoundaryConfig(),
     )
-    distance_cnd_skill: EuclideanDistanceConditionConfig = (
-        EuclideanDistanceConditionConfig()
-    )
-    distance_cnd_goal: EuclideanDistanceConditionConfig = (
-        EuclideanDistanceConditionConfig()
-    )
+    distance_cnd_skill: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    distance_cnd_goal: EuclideanDistanceConfig = EuclideanDistanceConfig()
     eval_cnd: EvaluationConfig = EvaluationConfig()
     value_cnd_eval: ValueConfig | None = None
     preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()

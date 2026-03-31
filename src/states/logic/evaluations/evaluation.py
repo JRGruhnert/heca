@@ -8,10 +8,10 @@ class EvaluationConfig:
     pass
 
 
-class EvalCondition(ABC):
+class Evaluation(ABC):
     """Abstract base class for success evaluation strategies."""
 
     @abstractmethod
-    def evaluate(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
+    def __call__(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
         """Evaluate success condition for the given state."""
-        raise NotImplementedError("Subclasses must implement the evaluate method.")
+        raise NotImplementedError("Subclasses must implement the __call__ method.")

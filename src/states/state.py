@@ -9,9 +9,9 @@ from src.factory import (
 )
 
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.distance import DistanceConfig
-from src.states.logic.eval_cnd import EvaluationConfig
-from src.states.logic.value_cnd import ValueConfig
+from src.states.logic.distances.distance import DistanceConfig
+from src.states.logic.evaluations.evaluation import EvaluationConfig
+from src.states.logic.values.value import ValueConfig
 
 
 @dataclass
@@ -58,8 +58,8 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             precon, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd.value(current)
-        precon_norm = self.value_cnd.value(precon)
+        current_norm = self.value_cnd(current)
+        precon_norm = self.value_cnd(precon)
         value = self.distance_cnd_skill.distance(current_norm, precon_norm)
         assert isinstance(value, float), "Distance must be a float"
         assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
@@ -74,8 +74,8 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             goal, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd.value(current)
-        goal_norm = self.value_cnd.value(goal)
+        current_norm = self.value_cnd(current)
+        goal_norm = self.value_cnd(goal)
         value = self.distance_cnd_goal.distance(current_norm, goal_norm)
         assert isinstance(value, float), "Distance must be a float"
         assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
@@ -90,6 +90,6 @@ class State:
         assert isinstance(current, torch.Tensor) and isinstance(
             goal, torch.Tensor
         ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd_eval.value(current)
-        goal_norm = self.value_cnd_eval.value(goal)
-        return self.eval_cnd.evaluate(current_norm, goal_norm)
+        current_norm = self.value_cnd_eval(current)
+        goal_norm = self.value_cnd_eval(goal)
+        return self.eval_cnd(current_norm, goal_norm)

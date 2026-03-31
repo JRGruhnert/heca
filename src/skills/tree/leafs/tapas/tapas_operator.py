@@ -29,7 +29,7 @@ from tapas_gmm.utils.robot_trajectory import (
 )
 from src.observation.observation import StateValueDict
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
-from src.states.logic.area.area_eval_cnd import AreaEvalCondition
+from src.states.logic.evaluations.evaluation_area import AreaEvalCondition
 from src.states.logic.condition import Condition
 from src.states.state import State
 

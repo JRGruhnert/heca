@@ -7,7 +7,7 @@ from src.skills.tree.leafs.tapas.tapas_networker import (
 from src.skills.tree.leafs.tapas.tapas_operator import TapasOperatorConfig
 from src.skills.tree.networker import NodeNetworkerConfig
 from src.skills.tree.node import TreeNodeConfig
-from src.states.logic.distance import DistanceConfig
+from src.states.logic.distances.distance import DistanceConfig
 from src.states.state import StateConfig
 
 

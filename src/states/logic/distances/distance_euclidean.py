@@ -3,16 +3,16 @@ import math
 
 import torch
 
-from src.states.logic.distance import Distance, DistanceConfig
+from src.states.logic.distances.distance import Distance, DistanceConfig
 
 
 @dataclass
-class EuclideanDistanceConditionConfig(DistanceConfig):
+class EuclideanDistanceConfig(DistanceConfig):
     pass
 
 
-class EuclideanDistanceCondition(Distance):
-    def __init__(self, config: EuclideanDistanceConditionConfig):
+class EuclideanDistance(Distance):
+    def __init__(self, config: EuclideanDistanceConfig):
         super().__init__(config)
         self.config = config
         self.max_dist = math.sqrt(3)

@@ -8,7 +8,7 @@ class ValueConfig:
     pass
 
 
-class ValueCondition(ABC):
+class Value(ABC):
     def __init__(
         self,
         config: ValueConfig,
@@ -16,7 +16,7 @@ class ValueCondition(ABC):
         self.config = config
 
     @abstractmethod
-    def value(self, x: torch.Tensor) -> torch.Tensor:
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
         """Returns the processed value of the state as a tensor."""
         raise NotImplementedError("Subclasses must implement the value method.")
 

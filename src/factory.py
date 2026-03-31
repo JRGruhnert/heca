@@ -42,45 +42,45 @@ from src.states.logic.addons.prepro_flip import (
     FlipStatePreprocessorConfig,
 )
 from src.states.logic.condition import Condition, ConditionConfig
-from src.states.logic.rotation.quaternion_value_cnd import (
-    QuaternionValueCondition,
-    QuaternionValueConditionConfig,
+from src.states.logic.values.value_quaternion import (
+    QuaternionValue,
+    QuaternionValueConfig,
 )
-from src.states.logic.distance import Distance, DistanceConfig
-from src.states.logic.eval_cnd import EvalCondition, EvaluationConfig
-from src.states.logic.scalars.switch_distance_cnd import (
-    SwitchDistanceCondition,
-    FlipDistanceConditionConfig,
+from src.states.logic.distances.distance import Distance, DistanceConfig
+from src.states.logic.evaluations.evaluation import Evaluation, EvaluationConfig
+from src.states.logic.distances.distance_flip_special import (
+    FlipDistance,
+    FlipDistanceConfig,
 )
-from src.states.logic.identity.identity_value_cnd import (
+from src.states.logic.values.value_identity import (
     IdentityValue,
     IdentityValueConfig,
 )
-from src.states.logic.linear.linear_value_cnd import (
-    LinearValueNormalizer,
-    LinearValueNormalizerConfig,
+from src.states.logic.values.value_linear import (
+    LinearValue,
+    LinearValueConfig,
 )
-from src.states.logic.location.euclidean_distance_cnd import (
-    EuclideanDistanceCondition,
-    EuclideanDistanceConditionConfig,
+from src.states.logic.distances.distance_euclidean import (
+    EuclideanDistance,
+    EuclideanDistanceConfig,
 )
 from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
-from src.states.logic.thresholds.threshold_eval_cnd import (
-    ThresholdEvalCondition,
-    ThresholdEvalConditionConfig,
+from src.states.logic.evaluations.evaluation_threshold import (
+    ThresholdEvaluation,
+    ThresholdEvaluationConfig,
 )
-from src.states.logic.scalars.range_distance_cnd import (
-    RangeDistanceCondition,
-    RangeDistanceConditionConfig,
+from src.states.logic.distances.distance_binary import (
+    ScalarDistanceConfig,
+    ScalarDistance,
 )
-from src.states.logic.rotation.quaternion_distance_cnd import (
-    QuaternionDistanceCondition,
-    QuaternionDistanceConditionConfig,
+from src.states.logic.distances.distance_angular import (
+    AngularDistance,
+    AngularDistanceConfig,
 )
-from src.states.logic.value_cnd import ValueCondition, ValueConfig
+from src.states.logic.values.value import Value, ValueConfig
 from src.states.state import StateConfig, State
 
 
@@ -94,28 +94,28 @@ def select_skills(configs: Sequence[TreeNodeConfig]) -> list[TreeNode]:
     return [TreeNode(config) for config in configs]
 
 
-def select_value_condition(config: ValueConfig) -> ValueCondition:
+def select_value_condition(config: ValueConfig) -> Value:
     """Create normalizer from config - simple factory function"""
-    if isinstance(config, LinearValueNormalizerConfig):
-        return LinearValueNormalizer(config)
+    if isinstance(config, LinearValueConfig):
+        return LinearValue(config)
     elif isinstance(config, IdentityValueConfig):
         return IdentityValue(config)
-    elif isinstance(config, QuaternionValueConditionConfig):
-        return QuaternionValueCondition(config)
+    elif isinstance(config, QuaternionValueConfig):
+        return QuaternionValue(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 
 
 def select_distance(config: DistanceConfig) -> Distance:
     """Create distance condition from config - simple factory function"""
-    if isinstance(config, RangeDistanceConditionConfig):
-        return RangeDistanceCondition(config)
-    elif isinstance(config, EuclideanDistanceConditionConfig):
-        return EuclideanDistanceCondition(config)
-    elif isinstance(config, FlipDistanceConditionConfig):
-        return SwitchDistanceCondition(config)
-    elif isinstance(config, QuaternionDistanceConditionConfig):
-        return QuaternionDistanceCondition(config)
+    if isinstance(config, ScalarDistanceConfig):
+        return ScalarDistance(config)
+    elif isinstance(config, EuclideanDistanceConfig):
+        return EuclideanDistance(config)
+    elif isinstance(config, FlipDistanceConfig):
+        return FlipDistance(config)
+    elif isinstance(config, AngularDistanceConfig):
+        return AngularDistance(config)
     else:
         raise ValueError(f"Unknown config.")
 
@@ -164,10 +164,10 @@ def select_networker(config: NodeNetworkerConfig) -> NodeNetworker:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_eval_condition(config: EvaluationConfig) -> EvalCondition:
+def select_eval_condition(config: EvaluationConfig) -> Evaluation:
     """Create eval condition from config - simple factory function"""
-    if isinstance(config, ThresholdEvalConditionConfig):
-        return ThresholdEvalCondition(config)
+    if isinstance(config, ThresholdEvaluationConfig):
+        return ThresholdEvaluation(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 

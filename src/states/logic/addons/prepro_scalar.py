@@ -6,7 +6,7 @@ from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
-from src.states.logic.thresholds.threshold_boundary import (
+from src.states.logic.threshold_boundary import (
     BoundaryThresholdConfig,
     BoundaryThreshold,
 )

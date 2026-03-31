@@ -2,26 +2,26 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.rotation.quaternion import Quaternion, QuaternionConfig
-from src.states.logic.value_cnd import ValueCondition, ValueConfig
+from src.states.logic.quaternion import Quaternion, QuaternionConfig
+from src.states.logic.values.value import Value, ValueConfig
 
 
 @dataclass
-class QuaternionValueConditionConfig(ValueConfig):
+class QuaternionValueConfig(ValueConfig):
     rotation: QuaternionConfig = QuaternionConfig()
 
 
-class QuaternionValueCondition(ValueCondition):
+class QuaternionValue(Value):
     def __init__(
         self,
-        config: QuaternionValueConditionConfig,
+        config: QuaternionValueConfig,
     ):
         self.rotation = Quaternion(config.rotation)
 
-    def value(self, x: torch.Tensor) -> torch.Tensor:
+    def __call__(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the quaternion."""
         return self.rotation.normalize_quat(x)
 
     def make_input(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the quaternion."""
-        return self.value(x)
+        return self.__call__(x)

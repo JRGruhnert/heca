@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.rotation.quaternion import Quaternion, QuaternionConfig
+from src.states.logic.quaternion import Quaternion, QuaternionConfig
 from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,

@@ -3,13 +3,13 @@ from dataclasses import dataclass
 from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
 from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.boundary import AreaBoundaryConfig
-from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
-from src.states.logic.location.euclidean_distance_cnd import (
-    EuclideanDistanceConditionConfig,
+from src.states.logic.values.value_linear import LinearValueConfig
+from src.states.logic.distances.distance_euclidean import (
+    EuclideanDistanceConfig,
 )
 
-from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
-from src.states.logic.value_cnd import ValueCondition
+from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
+from src.states.logic.values.value import Value
 from src.states.state import StateConfig
 
 
@@ -17,17 +17,13 @@ from src.states.state import StateConfig
 class LocationStateConfig(StateConfig):
     size: int = 3
     type_str: str = "EulerPrecise"
-    distance_cnd_goal: EuclideanDistanceConditionConfig = (
-        EuclideanDistanceConditionConfig()
+    distance_cnd_goal: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    distance_cnd_skill: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    eval_cnd: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
+        distance=EuclideanDistanceConfig(),
     )
-    distance_cnd_skill: EuclideanDistanceConditionConfig = (
-        EuclideanDistanceConditionConfig()
-    )
-    eval_cnd: ThresholdEvalConditionConfig = ThresholdEvalConditionConfig(
-        distance=EuclideanDistanceConditionConfig(),
-    )
-    value_cnd: LinearValueNormalizerConfig = LinearValueNormalizerConfig(
+    value_cnd: LinearValueConfig = LinearValueConfig(
         boundary=AreaBoundaryConfig(),
     )
-    value_cnd_eval: ValueCondition | None = None
+    value_cnd_eval: Value | None = None
     preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()
