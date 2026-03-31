@@ -14,11 +14,11 @@ from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import ScalarDistanceConfig
 from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass
-class RangeStateConfig(StateConfig):
+class RangeStateConfig(ObjectConfig):
     low: float = 0.0
     high: float = 1.0
     encoder: StateEncoderConfig = StateEncoderConfig(

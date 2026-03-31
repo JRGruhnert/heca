@@ -41,7 +41,7 @@ BLUE = [
 ]
 
 
-class StateSet(Enum):
+class ObjectSet(Enum):
     BASE = "base"
     SLIDE = "slide"
     RED = "red"
@@ -52,13 +52,13 @@ class StateSet(Enum):
     SRPB = "srpb"
 
 
-STATES_SETS = {
-    StateSet.BASE: BASE,
-    StateSet.SLIDE: BASE + SLIDE,
-    StateSet.RED: BASE + RED,
-    StateSet.PINK: BASE + PINK,
-    StateSet.BLUE: BASE + BLUE,
-    StateSet.SR: BASE + SLIDE + RED,
-    StateSet.SRP: BASE + SLIDE + RED + PINK,
-    StateSet.SRPB: BASE + SLIDE + RED + PINK + BLUE,
+OBJECT_SETS = {
+    ObjectSet.BASE: BASE,
+    ObjectSet.SLIDE: BASE + SLIDE,
+    ObjectSet.RED: BASE + RED,
+    ObjectSet.PINK: BASE + PINK,
+    ObjectSet.BLUE: BASE + BLUE,
+    ObjectSet.SR: BASE + SLIDE + RED,
+    ObjectSet.SRP: BASE + SLIDE + RED + PINK,
+    ObjectSet.SRPB: BASE + SLIDE + RED + PINK + BLUE,
 }

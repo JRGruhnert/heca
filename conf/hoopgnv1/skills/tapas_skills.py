@@ -4,7 +4,7 @@ from src.skills.tree.leafs.tapas.tapas_leaf import TapasConfig
 
 
 @dataclass
-class TapaLeafSet:
+class TapasSkillSet:
     close_drawer = TapasConfig(label="CloseDrawer", id=0)
     close_drawer_back = TapasConfig(
         label="CloseDrawerBack",

@@ -16,7 +16,7 @@ from src.states.logic.distances.distance_euclidean import (
 from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
 from src.states.logic.value_handler.value_handler import ValueHandlerConfig
 from src.states.logic.value_handler.value_one_hot import OneHotValueConfig
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass
@@ -48,7 +48,7 @@ class CalvinAreaConfig(AreaConfig):
 
 
 @dataclass
-class CalvinAreaStateConfig(StateConfig):
+class CalvinAreaStateConfig(ObjectConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="AreaEuler",
         dim_input=6,

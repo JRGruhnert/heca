@@ -11,11 +11,11 @@ from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluatio
 from src.states.logic.value_handler.normalizers.rotation_normalizer import (
     QuaternionNormalizerConfig,
 )
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass
-class RotationStateConfig(StateConfig):
+class RotationStateConfig(ObjectConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="Quat",
         dim_input=4,

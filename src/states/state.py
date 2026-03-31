@@ -20,7 +20,7 @@ from src.states.logic.value_handler.value_handler import ValueHandlerConfig
 
 
 @dataclass
-class StateConfig:
+class ObjectConfig:
     id: int
     label: str
     condition: ConditionConfig
@@ -36,7 +36,7 @@ class StateConfig:
 class State:
     def __init__(
         self,
-        config: StateConfig,
+        config: ObjectConfig,
     ):
         self.config = config
         self.dst_skill = select_distance(config.dst_skill)

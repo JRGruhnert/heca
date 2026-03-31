@@ -130,9 +130,8 @@ class CriticReadoutNetwork(ReadoutNetwork):
 
 @dataclass
 class GraphNetworkConfig(NetworkConfig):
-    # Network cant be trained in explain mode, only used for generating explanations with a trained model.
     explain_mode: bool = False
-    name: str = "gnn"
+    label: str = "gnn"
 
 
 class GraphNetwork(Network):

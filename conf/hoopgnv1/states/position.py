@@ -13,11 +13,11 @@ from src.states.logic.distances.distance_euclidean import (
 
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass
-class PositionStateConfig(StateConfig):
+class PositionStateConfig(ObjectConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="EulerPrecise",
         dim_input=3,

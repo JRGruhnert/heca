@@ -2,15 +2,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from src.factory import select_skills, select_states
 from src.skills.tree.node import TreeNode, TreeNodeConfig
-from src.states.state import State, StateConfig
+from src.states.state import State, ObjectConfig
 import os
 
 
 @dataclass
 class StorageConfig:
     skills: Sequence[TreeNodeConfig]
-    states_network: Sequence[StateConfig]
-    states_eval: Sequence[StateConfig]
+    states_network: Sequence[ObjectConfig]
+    states_eval: Sequence[ObjectConfig]
     tag: str = "untagged_run"
     storage_path: str = "data"
     results_path: str = "results"

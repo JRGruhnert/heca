@@ -11,7 +11,7 @@ from src.states.state import State
 
 @dataclass
 class BaselineNetworkConfig(NetworkConfig):
-    name: str = "baseline"
+    label: str = "baseline"
 
 
 class BaselineNetwork(Network):

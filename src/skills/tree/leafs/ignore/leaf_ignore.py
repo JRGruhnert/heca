@@ -8,7 +8,7 @@ from src.observation.demonstration import Demo
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass

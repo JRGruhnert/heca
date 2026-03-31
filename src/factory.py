@@ -81,10 +81,10 @@ from src.states.logic.distances.distance_angular import (
     AngularDistanceConfig,
 )
 from src.states.logic.values.value_handler import ValueHandler, ValueHandlerConfig
-from src.states.state import StateConfig, State
+from src.states.state import ObjectConfig, State
 
 
-def select_states(configs: Sequence[StateConfig]) -> list[State]:
+def select_states(configs: Sequence[ObjectConfig]) -> list[State]:
     """Create states from configs - simple factory function"""
     return [State(config) for config in configs]
 

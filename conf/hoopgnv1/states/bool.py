@@ -14,11 +14,11 @@ from src.states.logic.value_handler.normalizers.normalizer import NormalizerConf
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import ScalarDistanceConfig
-from src.states.state import StateConfig
+from src.states.state import ObjectConfig
 
 
 @dataclass
-class BoolStateConfig(StateConfig):
+class BoolStateConfig(ObjectConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="Bool",
         dim_input=1,
