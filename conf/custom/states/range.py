@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
+from src.modules.evaluators.evaluator import EvaluatorConfig
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.distances.distance import DistanceConfig
+from src.states.logic.evaluations.evaluation import EvaluationConfig
 from src.states.logic.value_handler.normalizers.boundary_normalizer import (
     BoundaryNormalizerConfig,
 )
@@ -10,6 +13,7 @@ from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import ScalarDistanceConfig
+from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
 from src.states.state import StateConfig
 
 
@@ -22,9 +26,8 @@ class RangeStateConfig(StateConfig):
         dim_input=1,
         middle_dim=8,
     )
-    dst_skill: ScalarDistanceConfig = ScalarDistanceConfig()
-    dst_goal: ScalarDistanceConfig = ScalarDistanceConfig()
-    evaluator: ThresholdEvaluationConfig = field(init=False)
+    distance: DistanceConfig = ScalarDistanceConfig()
+    evaluator: EvaluationConfig = field(init=False)
     normalizer: NormalizerConfig = field(init=False)
     condition: ConditionConfig = field(init=False)
 
@@ -32,15 +35,13 @@ class RangeStateConfig(StateConfig):
         self.evaluator = ThresholdEvaluationConfig(
             distance=ScalarDistanceConfig(),
         )
-        boundary = BoundaryNormalizerConfig(
+        self.normalizer = BoundaryNormalizerConfig(
             lower=[self.low],
             upper=[self.high],
         )
-
-        self.normalizer = BoundaryNormalizerConfig(boundary=boundary)
         self.condition = ConditionConfig(
             distance=EuclideanDistanceConfig(),
             preprocessor=ScalarStatePreprocessorConfig(
-                threshold=BoundaryThresholdConfig(boundary=boundary),
+                threshold=BoundaryThresholdConfig(boundary=self.normalizer),
             ),
         )

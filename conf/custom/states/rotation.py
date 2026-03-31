@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.logic.addons.prepro_rotation import RotationStatePreprocessorConfig
+from src.states.logic.addons.prepro_rotation import QuaternionPreprocessorConfig
 from src.states.logic.condition import ConditionConfig
 from src.states.logic.distances.distance_angular import (
     AngularDistanceConfig,
@@ -21,12 +21,11 @@ class RotationStateConfig(StateConfig):
         dim_input=4,
     )
     normalizer: QuaternionNormalizerConfig = QuaternionNormalizerConfig()
-    dst_skill: AngularDistanceConfig = AngularDistanceConfig()
-    dst_goal: AngularDistanceConfig = AngularDistanceConfig()
+    distance: AngularDistanceConfig = AngularDistanceConfig()
     evaluator: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
         distance=AngularDistanceConfig(),
     )
     condition: ConditionConfig = ConditionConfig(
         distance=AngularDistanceConfig(),
-        preprocessor=RotationStatePreprocessorConfig(),
+        preprocessor=QuaternionPreprocessorConfig(),
     )

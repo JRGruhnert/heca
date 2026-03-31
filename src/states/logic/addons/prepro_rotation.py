@@ -10,14 +10,14 @@ from src.states.logic.addons.state_preprocessor import (
 
 
 @dataclass
-class RotationStatePreprocessorConfig(StatePreprocessorConfig):
+class QuaternionPreprocessorConfig(StatePreprocessorConfig):
     rotation: QuaternionConfig = QuaternionConfig()
 
 
 class RotationStatePreprocessor(StatePreprocessor):
     def __init__(
         self,
-        config: RotationStatePreprocessorConfig,
+        config: QuaternionPreprocessorConfig,
     ):
         super().__init__(config)
         self.config = config

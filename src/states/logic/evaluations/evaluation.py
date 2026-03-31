@@ -4,7 +4,7 @@ import torch
 
 
 @dataclass
-class ValueEvaluationConfig:
+class EvaluationConfig:
     pass
 
 

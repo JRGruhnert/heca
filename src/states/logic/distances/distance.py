@@ -4,12 +4,12 @@ import torch
 
 
 @dataclass
-class ValueDistanceConfig:
+class DistanceConfig:
     pass
 
 
 class Distance(ABC):
-    def __init__(self, config: ValueDistanceConfig):
+    def __init__(self, config: DistanceConfig):
         self.config = config
 
     def __call__(self, a: torch.Tensor, b: torch.Tensor) -> float:

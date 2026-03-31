@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.distances.distance import DistanceConfig
 from src.states.logic.value_handler.normalizers.boundary_normalizer import (
     BoolBoundaryConfig,
 )
@@ -24,8 +25,7 @@ class BoolStateConfig(StateConfig):
         middle_dim=8,
     )
     normalizer: NormalizerConfig = IgnoreValueConfig()
-    dst_skill: ScalarDistanceConfig = ScalarDistanceConfig()
-    dst_goal: ScalarDistanceConfig = ScalarDistanceConfig()
+    distance: DistanceConfig = ScalarDistanceConfig()
     evaluator: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
         distance=ScalarDistanceConfig(),
     )

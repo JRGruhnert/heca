@@ -1,27 +1,22 @@
 from dataclasses import dataclass
 
+import torch
 import torch.nn as nn
 
 
 @dataclass
 class StateClassifierConfig:
-    label: str
-    dim_input: int
-    middle_dim: int = 16
-    dim_encoder: int = 32
+    pass
 
 
 class StateClassifier(nn.Module):
     def __init__(self, config: StateClassifierConfig):
         super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(config.dim_input, config.middle_dim),
-            nn.ReLU(),
-            nn.Linear(config.middle_dim, config.dim_encoder),
-            nn.ReLU(),
-        )
+        self.config = config
+        self.fc = nn.Sequential()
 
-    def forward(self, x):
+    # TODO: get image as input and give output
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.fc(x)
 
 
@@ -35,22 +30,6 @@ class StateClassifierRegistry:
     def __init__(self, config: StateClassifierRegistryConfig):
         self._dict = nn.ModuleDict()
         self.config = config
-
-    def get(self, config: StateClassifierConfig):
-        if config.label not in self._dict:
-            if self.config.dynamic_create:
-                if config.dim_encoder != self.config.dim_encoder:
-                    raise ValueError(
-                        f"Dimension mismatch for '{config.label}': "
-                        f"expected {self.config.dim_encoder}, got {config.dim_encoder}. "
-                        f"Currently only uniform Node Feature Sizes are supported."
-                    )
-                self._dict[config.label] = StateClassifier(config)
-            else:
-                raise KeyError(
-                    f"Encoder with key '{config.label}' not found and dynamic create is disabled."
-                )
-        return self._dict[config.label]
 
     def modules(self):
         return self._dict.values()
