@@ -7,40 +7,38 @@ from loguru import logger
 import numpy as np
 import torch
 
-from external.calvin_env_modified.calvin_env_modified.envs.observation import (
+from calvin_env_modified.envs.observation import (
     CalvinEnvObservation,
 )
-from external.tapas_gmm_modified.tapas_gmm.policy import import_policy
-from external.tapas_gmm_modified.tapas_gmm.policy.gmm import GMMPolicy, GMMPolicyConfig
-from external.tapas_gmm_modified.tapas_gmm.policy.models.tpgmm import (
+from tapas_gmm.policy import import_policy
+from tapas_gmm.policy.gmm import GMMPolicy, GMMPolicyConfig
+from tapas_gmm.policy.models.tpgmm import (
     AutoTPGMM,
     AutoTPGMMConfig,
     ModelType,
     TPGMMConfig,
 )
-from external.tapas_gmm_modified.tapas_gmm.utils.observation import (
+from tapas_gmm.utils.observation import (
     SceneObservation,
     SingleCamObservation,
     dict_to_tensordict,
 )
-from external.tapas_gmm_modified.tapas_gmm.utils.robot_trajectory import (
+from tapas_gmm.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.loader import OperatorLoaderConfig
-from src.operators.operator import Operator, OperatorConfig
+from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
 from src.states.logic.area.area_eval_cnd import AreaEvalCondition
 from src.states.logic.condition import Condition
 from src.states.state import State
 
 
 @dataclass
-class TapasOperatorConfig(OperatorConfig):
+class TapasOperatorConfig(NodeOperatorConfig):
     label: str
     reversed: bool
     overrides: list[str]
-    loader: OperatorLoaderConfig
     predict_as_batch: bool = True
     control_duration: int = -1
     policy: GMMPolicyConfig = GMMPolicyConfig(
@@ -89,7 +87,7 @@ class TapasOperatorConfig(OperatorConfig):
         )
 
 
-class TapasOperator(Operator):
+class TapasLeafOperator(NodeOperator):
     def __init__(self, config: TapasOperatorConfig):
         super().__init__(config)
         self.config = config
@@ -98,14 +96,7 @@ class TapasOperator(Operator):
         self.prediction = None
         self.goal: StateValueDict | None = None
 
-    def prepare(self, goal: StateValueDict):
-        self.policy.reset_episode()
-        self.first_prediction = True
-        self.predictions = None
-        self.prediction = None
-        self.goal = goal
-
-    def predict(
+    def __call__(
         self,
         current: CalvinEnvObservation,
         states: list[State],
@@ -147,6 +138,13 @@ class TapasOperator(Operator):
             if self.prediction is None:
                 return None
             return self._to_action(self.prediction)  # type: ignore
+
+    def reset(self, goal: StateValueDict):
+        self.policy.reset_episode()
+        self.first_prediction = True
+        self.predictions = None
+        self.prediction = None
+        self.goal = goal
 
     def _to_action(self, prediction: TrajectoryPoint | np.ndarray) -> np.ndarray:
         if isinstance(prediction, np.ndarray):
@@ -206,7 +204,7 @@ class TapasOperator(Operator):
         )
         object_poses_dict = obs.object_poses
         object_states_dict = obs.object_states
-        if goal is not None and self.config.reversed:
+        if goal is not None and len(self.config.overrides) != 0:
             states_dict = {s.config.label: s for s in states} if states else {}
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
@@ -296,66 +294,18 @@ class TapasOperator(Operator):
             batch_size=empty_batchsize,
         )
 
-    def load_demo_precons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(self.config.reversed)
-
-    def load_demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(not self.config.reversed)
-
     def _load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
         if reversed:
             return self.model.end_values
         else:
             return self.model.start_values
 
-    def load_parameter_precons(self) -> dict[str, Condition]:
-        return self._load_tp_cons(self.config.reversed)
-
-    def load_parameter_postcons(self) -> dict[str, Condition]:
-        return self._load_tp_cons(not self.config.reversed)
-
-    def _load_tp_cons(self, reversed: bool) -> dict[str, Condition]:
-        values = {}
-        for label in self.demo_labels:
-            value = state.run_addon(
-                "tapas",
-                self.demo_precons[label],
-                self.demo_postcons[label],
-                reversed,
-                self.tapas_tp_labels.issubset(label),
-            )
-            if value is not None:
-                values[label] = value
-        return values
-
-        # TODO: How to get postocons just from state label?
-        for key, cfg in self.config.precons.items():
-            self.precons[key] = Condition(config=cfg)
-        if self.config.postcons:
-            for key, cfg in self.config.postcons.items():
-                self.postcons[key] = Condition(config=cfg)
+    @cached_property
+    def demo_labels(self) -> set[str]:
+        return set(self.demo_precons.keys()) | set(self.demo_postcons.keys())
 
     @cached_property
-    def policy(self) -> GMMPolicy:
-        PolicyClass = import_policy("gmm")
-        temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
-
-        logger.info("Loading tapas operator from: {}", self.config.file_name)
-        temp.from_disk(self.config.file_name)
-        temp.eval()
-        return temp
-
-    @cached_property
-    def model(self) -> AutoTPGMM:
-        temp = self.policy.model
-        if not isinstance(temp, AutoTPGMM):
-            raise ValueError(
-                f"Expected model to be AutoTPGMM, but got {type(temp)}. This should not happen."
-            )
-        return temp
-
-    @cached_property
-    def tapas_tp_labels(self) -> set[str]:
+    def tapas_labels(self) -> set[str]:
         temp: set[str] = set()
         for _, segment in enumerate(self.model.segment_frames):  # type: ignore
             for _, frame_idx in enumerate(segment):
@@ -366,30 +316,56 @@ class TapasOperator(Operator):
 
     @cached_property
     def overrides(self) -> dict[str, np.ndarray]:
-        temp: dict[str, np.ndarray] = {}
-        for label in self.config.overrides:
-            value = self.loader.state.run_addon(
-                "tapas",
-                self.model.start_values[label],
-                self.model.end_values[label],
-                not self.config.reversed,  # NOTE: We want the opposite of the reverse trajectory
-                True,
-            )
-            if value is None:
-                raise ValueError(
-                    f"Failed to create override for state {label}. This should not happen."
-                )
-            temp[label] = value.numpy()
-        return temp
-
-    @cached_property
-    def demo_labels(self) -> set[str]:
-        return set(self.demo_precons.keys()) | set(self.demo_postcons.keys())
+        return self._load_overrides_conditions()
 
     @cached_property
     def demo_precons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_precons()
+        return self._load_demo_cons(self.config.reversed)
 
     @cached_property
     def demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_postcons()
+        return self._load_demo_cons(not self.config.reversed)
+
+    def load_parameter_precons(self) -> dict[str, Condition]:
+        return self._load_conditions(self.config.reversed)
+
+    def load_parameter_postcons(self) -> dict[str, Condition]:
+        return self._load_conditions(not self.config.reversed)
+
+    def _load_overrides_conditions(self) -> dict[str, Condition]:
+        return self._load_conditions(not self.config.reversed, self.config.overrides)
+
+    def _load_conditions(
+        self,
+        reversed: bool,
+        labels: set[str] | None = None,
+    ) -> dict[str, Condition]:
+        return {
+            l: Condition.from_demos(
+                (
+                    self.demo_precons[l],
+                    self.demo_postcons[l],
+                    reversed,
+                    l in self.tapas_labels,
+                ),
+                c,
+            )
+            for l, c in self.config.conditions.items()
+            if labels is None or l in labels
+        }
+
+    @cached_property
+    def policy(self) -> GMMPolicy:
+        logger.info("Loading tapas operator from: {}", self.config.file_name)
+        PolicyClass = import_policy("gmm")
+        temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
+        temp.from_disk(self.config.file_name)
+        temp.eval()
+        return temp
+
+    @cached_property
+    def model(self) -> AutoTPGMM:
+        temp = self.policy.model
+        if not isinstance(temp, AutoTPGMM):
+            raise ValueError(f"Expected AutoTPGMM, but got {type(temp)}.")
+        return temp

@@ -1,36 +1,30 @@
+from abc import abstractmethod
 from dataclasses import dataclass
+
 import numpy as np
 import torch
 
-from calvin_env_modified.envs.observation import (
-    CalvinEnvObservation,
-)
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.loader import OperatorLoader, OperatorLoaderConfig
+from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
 from src.states.logic.condition import Condition
-from src.states.state import State
 
 
 @dataclass
-class OperatorConfig:
-    loader: OperatorLoaderConfig
+class TreeOperatorConfig(NodeOperatorConfig):
+    pass
 
 
-class Operator:
-    def __init__(self, config: OperatorConfig):
+class TreeOperator(NodeOperator):
+    def __init__(self, config: TreeOperatorConfig):
         self.config = config
-        self.loader = OperatorLoader(config.loader)
+
+    @abstractmethod
+    def __call__(self, start: StateValueDict) -> np.ndarray | None:
+        """Predict the next action given the current observation."""
+        raise NotImplementedError("Subclasses must implement method.")
 
     def reset(self, goal: StateValueDict):
         """Prepare the operator for execution. Before each use."""
-        raise NotImplementedError("Subclasses must implement method.")
-
-    def predict(
-        self,
-        current: CalvinEnvObservation,
-        states: list[State],
-    ) -> np.ndarray | None:
-        """Predict the next action given the current observation."""
         raise NotImplementedError("Subclasses must implement method.")
 
     def load_demo_precons(self) -> dict[str, torch.Tensor]:

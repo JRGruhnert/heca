@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.rotation.quaternion_distance_cnd import (
     QuaternionDistanceConditionConfig,
 )
@@ -26,3 +28,4 @@ class RotationStateConfig(StateConfig):
         distance=QuaternionDistanceConditionConfig(),
     )
     value_cnd_eval: ValueCondition | None = None
+    preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()

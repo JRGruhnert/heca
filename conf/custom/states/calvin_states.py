@@ -5,7 +5,7 @@ from src.states.state_bool import BoolStateConfig
 from src.states.state_location import LocationStateConfig
 from src.states.state_range import RangeStateConfig
 from src.states.state_rotation import RotationStateConfig
-from src.states.state_switch import FlipStateConfig
+from conf.custom.states.flip import FlipStateConfig
 
 
 @dataclass

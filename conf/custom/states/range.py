@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.boundary import BoundaryConfig
 from src.states.logic.linear.linear_value_cnd import LinearValueNormalizerConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
@@ -21,7 +22,7 @@ class RangeStateConfig(StateConfig):
     value_cnd_eval: ValueConditionConfig | None = None
     eval_cnd: ThresholdEvalConditionConfig = field(init=False)
     value_cnd: LinearValueNormalizerConfig = field(init=False)
-    addons: dict[str, ScalarStatePreprocessorConfig] = field(init=False)
+    preprocessor_old: StatePreprocessorConfig = field(init=False)
 
     def __post_init__(self):
         self.eval_cnd = ThresholdEvalConditionConfig(
@@ -33,13 +34,11 @@ class RangeStateConfig(StateConfig):
                 upper=[self.high],
             ),
         )
-        self.addons = {
-            "tapas": ScalarStatePreprocessorConfig(
-                threshold=BoundaryThresholdConfig(
-                    boundary=BoundaryConfig(
-                        lower=[self.low],
-                        upper=[self.high],
-                    )
+        self.preprocessor_old = ScalarStatePreprocessorConfig(
+            threshold=BoundaryThresholdConfig(
+                boundary=BoundaryConfig(
+                    lower=[self.low],
+                    upper=[self.high],
                 )
-            ),
-        }
+            )
+        )

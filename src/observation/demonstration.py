@@ -1,20 +1,8 @@
-from dataclasses import dataclass
-
 import torch
 
 
-@dataclass
-class DemoTrajectoryConfig:
-    label: str
-    id: int
-
-
-class Demos:
-    def __init__(
-        self,
-        config: DemoTrajectoryConfig,
-    ):
-        self.config = config
+class Demo:
+    def __init__(self):
         self.precons_raw: dict[str, torch.Tensor] = {}
         self.postcons_raw: dict[str, torch.Tensor] = {}
 

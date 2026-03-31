@@ -7,7 +7,7 @@ from src.observation.observation import StateValueDict
 
 from src.observation.calvin import CalvinObservation
 from src.skills.tree.leafs.leaf import Leaf
-from src.skills.tree.leafs.leaf_ignore import IgnoreLeaf
+from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
 
 
 @dataclass
@@ -63,7 +63,7 @@ class CalvinEnvironment(Environment):
         assert isinstance(skill, Leaf) or isinstance(
             skill, IgnoreLeaf
         ), "CalvinEnvironment only supports TapasSkill at this time."
-        skill.prepare(self.goal)
+        skill.reset(self.goal)
         while (
             action := skill.predict(self.calvin_obs, self.storage.states_eval)
         ) is not None:

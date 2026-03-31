@@ -1,7 +1,12 @@
 from dataclasses import dataclass
 
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.logic.boundary import BoundaryConfig, FlipBoundaryConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
+from src.states.logic.boundary import (
+    BoolBoundaryConfig,
+    BoundaryConfig,
+    FlipBoundaryConfig,
+)
 from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
@@ -22,10 +27,8 @@ class BoolStateConfig(StateConfig):
     )
     value_cnd_eval: ValueConditionConfig | None = None
 
-    addons: dict[str, ScalarStatePreprocessorConfig] = {
-        "tapas": ScalarStatePreprocessorConfig(
-            threshold=BoundaryThresholdConfig(
-                boundary=FlipBoundaryConfig(),
-            )
-        ),
-    }
+    preprocessor_old: StatePreprocessorConfig = ScalarStatePreprocessorConfig(
+        threshold=BoundaryThresholdConfig(
+            boundary=BoolBoundaryConfig(),
+        )
+    )

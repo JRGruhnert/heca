@@ -3,25 +3,25 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.rotation.quaternion import Quaternion, QuaternionConfig
-from src.states.logic.state_preprocessor import (
+from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
 
 
 @dataclass
-class QuatStatePreprocessorConfig(StatePreprocessorConfig):
-    quaternion: QuaternionConfig = QuaternionConfig()
+class RotationStatePreprocessorConfig(StatePreprocessorConfig):
+    rotation: QuaternionConfig = QuaternionConfig()
 
 
-class QuatStatePreprocessor(StatePreprocessor):
+class RotationStatePreprocessor(StatePreprocessor):
     def __init__(
         self,
-        config: QuatStatePreprocessorConfig,
+        config: RotationStatePreprocessorConfig,
     ):
         super().__init__(config)
         self.config = config
-        self.quaternion = Quaternion(config.quaternion)
+        self.rotation = Quaternion(config.rotation)
 
     def run(
         self,
@@ -34,6 +34,6 @@ class QuatStatePreprocessor(StatePreprocessor):
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
         if selected_by_tapas:
             if reversed:
-                return self.quaternion.mean(end)
-            return self.quaternion.mean(start)
+                return self.rotation.mean(end)
+            return self.rotation.mean(start)
         return None

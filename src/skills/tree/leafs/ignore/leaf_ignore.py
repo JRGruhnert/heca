@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from build.lib.src.skills.empty import EmptySkillConfig
-from src.observation.demonstration import Demos
+from src.observation.demonstration import Demo
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.states.logic.condition import ConditionConfig
@@ -24,7 +24,7 @@ class IgnoreLeaf(Leaf):
         super().__init__(config)
         self.config = config
 
-    def prepare(self, goal: StateValueDict, env: object):
+    def reset(self, goal: StateValueDict, env: object):
         pass
 
     def predict(

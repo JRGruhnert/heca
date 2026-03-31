@@ -21,6 +21,12 @@ class FlipBoundaryConfig(BoundaryConfig):
     upper: list[float] = field(default_factory=lambda: [1.0])
 
 
+@dataclass
+class BoolBoundaryConfig(BoundaryConfig):
+    lower: list[float] = field(default_factory=lambda: [0.0])
+    upper: list[float] = field(default_factory=lambda: [1.0])
+
+
 class Boundary:
     def __init__(
         self,

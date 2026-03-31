@@ -21,9 +21,22 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
 )
 
-from src.operators.operator import Operator, OperatorConfig
-from src.operators.tapas import TapasOperator, TapasOperatorConfig
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
+from src.skills.tree.leafs.tapas.tapas_networker import (
+    TapasLeafNetworker,
+    TapasLeafNetworkerConfig,
+)
+from src.skills.tree.leafs.tapas.tapas_operator import (
+    TapasLeafOperator,
+    TapasOperatorConfig,
+)
+from src.skills.tree.leafs.tapas.tapas_parameter import (
+    TapasParameter,
+    TapasParameterConfig,
+)
+from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
+from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
+from src.skills.tree.parameter import NodeParameter, NodeParameterConfig
 from src.states.logic.addons.prepro_flip import (
     FlipStatePreprocessor,
     FlipStatePreprocessorConfig,
@@ -51,7 +64,7 @@ from src.states.logic.location.euclidean_distance_cnd import (
     EuclideanDistanceCondition,
     EuclideanDistanceConditionConfig,
 )
-from src.states.logic.state_preprocessor import (
+from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
@@ -127,10 +140,26 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
     return conditions
 
 
-def select_operator(config: OperatorConfig) -> Operator:
+def select_operator(config: NodeOperatorConfig) -> NodeOperator:
     """Create operator from config - simple factory function"""
     if isinstance(config, TapasOperatorConfig):
-        return TapasOperator(config)
+        return TapasLeafOperator(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
+def select_parameter(config: NodeParameterConfig) -> NodeParameter:
+    """Create operator loader from config - simple factory function"""
+    if isinstance(config, TapasParameterConfig):
+        return TapasParameter(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
+def select_networker(config: NodeNetworkerConfig) -> NodeNetworker:
+    """Create networker from config - simple factory function"""
+    if isinstance(config, TapasLeafNetworkerConfig):
+        return TapasLeafNetworker(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 

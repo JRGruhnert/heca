@@ -8,7 +8,7 @@ from src.modules.evaluators.tree import TreeEvaluator, TreeEvaluatorConfig
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.leaf import Leaf
-from src.skills.tree.leafs.leaf_ignore import IgnoreLeaf
+from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
 from loguru import logger
 from heapq import heapify, heappop, heappush
 

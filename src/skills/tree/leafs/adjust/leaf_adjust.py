@@ -20,7 +20,7 @@ class AdjustLeaf(Leaf):
 
         self.step_size = step_size
 
-    def prepare(self):
+    def reset(self):
         pass
 
     def predict(

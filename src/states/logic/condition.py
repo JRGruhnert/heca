@@ -4,7 +4,7 @@ import torch
 
 from src.factory import select_distance_condition, select_state_preprocessor
 from src.states.logic.distance import DistanceConfig
-from src.states.logic.state_preprocessor import StatePreprocessorConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 
 
 @dataclass
@@ -21,8 +21,11 @@ class Condition:
         self.preprocessor = select_state_preprocessor(config.preprocessor)
         self.value = self.preprocessor(config.value)
 
-    def set(self, value: torch.Tensor | list[float] | float | int):
-        self.value = self.preprocessor(value)
+    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> float:
+        return self.distance(x, y)
 
-    def __call__(self, x: torch.Tensor) -> float:
-        return self.distance(x, self.value)
+    @classmethod
+    def from_demos(cls, value: tuple, config: ConditionConfig) -> "Condition":
+        instance = cls(config)
+        instance.value = instance.preprocessor(value)
+        return instance

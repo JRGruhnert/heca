@@ -1,20 +1,23 @@
 from dataclasses import dataclass
 
-from src.operators.operator import Operator, OperatorConfig
+from src.skills.tree.branches.branch_operator import (
+    BranchOperator,
+    BranchOperatorConfig,
+)
 from src.states.logic.condition import Condition, ConditionConfig
 
 
 @dataclass
-class OperatorLoaderConfig:
+class BranchParameterConfig:
     precons: dict[str, ConditionConfig] | None
     postcons: dict[str, ConditionConfig] | None
 
 
-class OperatorLoader:
-    def __init__(self, config: OperatorLoaderConfig):
+class BranchParameter:
+    def __init__(self, config: BranchParameterConfig):
         self.config = config
 
-    def load_operator(self, config: OperatorConfig) -> Operator:
+    def load_operator(self, config: BranchOperatorConfig) -> BranchOperator:
         """Load the demonstration preconditions for the leaf."""
         # Load Demos
 

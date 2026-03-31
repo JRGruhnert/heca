@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
-from src.states.logic.addons.prepro_euler import EulerTapasAddonConfig
+from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.area.area import AreaConfig
 from src.states.logic.area.area_value_cnd import AreaValueConditionConfig
 from src.states.logic.boundary import AreaBoundaryConfig
@@ -56,6 +57,4 @@ class CalvinAreaStateConfig(StateConfig):
     )
     eval_cnd: EvalConditionConfig = EvalConditionConfig()
     value_cnd_eval: ValueConditionConfig | None = None
-    addons: dict[str, EulerTapasAddonConfig] = {
-        "tapas": EulerTapasAddonConfig(),
-    }
+    preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()

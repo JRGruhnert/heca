@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
+from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.boundary import FlipBoundaryConfig
 from src.states.logic.scalars.switch_distance_cnd import FlipDistanceConditionConfig
 from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
@@ -22,10 +23,8 @@ class FlipStateConfig(StateConfig):
         distance=RangeDistanceConditionConfig(),
     )
     value_cnd_eval: ValueConditionConfig | None = None
-    addons: dict[str, ScalarStatePreprocessorConfig] = {
-        "tapas": ScalarStatePreprocessorConfig(
-            threshold=BoundaryThresholdConfig(
-                boundary=FlipBoundaryConfig(),
-            )
-        ),
-    }
+    preprocessor_old: StatePreprocessorConfig = ScalarStatePreprocessorConfig(
+        threshold=BoundaryThresholdConfig(
+            boundary=FlipBoundaryConfig(),
+        )
+    )
