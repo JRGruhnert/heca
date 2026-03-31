@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.rotation.quaternion import Quaternion, QuaternionConfig
-from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
+from src.states.logic.value_cnd import ValueCondition, ValueConfig
 
 
 @dataclass
-class QuaternionValueConditionConfig(ValueConditionConfig):
+class QuaternionValueConditionConfig(ValueConfig):
     rotation: QuaternionConfig = QuaternionConfig()
 
 

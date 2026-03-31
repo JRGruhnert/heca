@@ -7,7 +7,7 @@ from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConf
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
 from src.states.logic.scalars.range_distance_cnd import RangeDistanceConditionConfig
-from src.states.logic.value_cnd import ValueConditionConfig
+from src.states.logic.value_cnd import ValueConfig
 from src.states.state import StateConfig
 
 
@@ -19,7 +19,7 @@ class RangeStateConfig(StateConfig):
     size: int = 1
     distance_cnd_skill: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
     distance_cnd_goal: RangeDistanceConditionConfig = RangeDistanceConditionConfig()
-    value_cnd_eval: ValueConditionConfig | None = None
+    value_cnd_eval: ValueConfig | None = None
     eval_cnd: ThresholdEvalConditionConfig = field(init=False)
     value_cnd: LinearValueNormalizerConfig = field(init=False)
     preprocessor_old: StatePreprocessorConfig = field(init=False)

@@ -2,11 +2,11 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
+from src.states.logic.value_cnd import ValueCondition, ValueConfig
 
 
 @dataclass
-class IdentityValueConfig(ValueConditionConfig):
+class IdentityValueConfig(ValueConfig):
     type_str: str = "IdentityValue"
 
 

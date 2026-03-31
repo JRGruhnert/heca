@@ -14,8 +14,8 @@ from src.states.state import StateConfig
 @dataclass
 class TapasConfig(TreeNodeConfig):
     states: list[StateConfig] = field(default_factory=list)
-    overrides: list[str] = field(default_factory=list)
-    childs: list[int] = field(default_factory=list)
+    overrides: set[str] = field(default_factory=set)
+    childs: set[int] = field(default_factory=set)
     distance: DistanceConfig = DistanceConfig()
     networker: NodeNetworkerConfig = TapasNetworkerConfig()
     operator: TapasOperatorConfig = field(init=False)
@@ -23,6 +23,7 @@ class TapasConfig(TreeNodeConfig):
 
     def __post_init__(self):
         self.operator = TapasOperatorConfig(
+            conditions={state.label: state.condition for state in self.states},
             label=self.label,
             reversed=self.reversed,
             overrides=self.overrides,

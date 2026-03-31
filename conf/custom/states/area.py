@@ -5,11 +5,11 @@ from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.area.area import AreaConfig
 from src.states.logic.area.area_value_cnd import AreaValueConditionConfig
 from src.states.logic.boundary import AreaBoundaryConfig
-from src.states.logic.eval_cnd import EvalConditionConfig
+from src.states.logic.eval_cnd import EvaluationConfig
 from src.states.logic.location.euclidean_distance_cnd import (
     EuclideanDistanceConditionConfig,
 )
-from src.states.logic.value_cnd import ValueConditionConfig
+from src.states.logic.value_cnd import ValueConfig
 from src.states.state import StateConfig
 
 
@@ -55,6 +55,6 @@ class CalvinAreaStateConfig(StateConfig):
     distance_cnd_goal: EuclideanDistanceConditionConfig = (
         EuclideanDistanceConditionConfig()
     )
-    eval_cnd: EvalConditionConfig = EvalConditionConfig()
-    value_cnd_eval: ValueConditionConfig | None = None
+    eval_cnd: EvaluationConfig = EvaluationConfig()
+    value_cnd_eval: ValueConfig | None = None
     preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()

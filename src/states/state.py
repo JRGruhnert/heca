@@ -10,8 +10,8 @@ from src.factory import (
 
 from src.states.logic.condition import ConditionConfig
 from src.states.logic.distance import DistanceConfig
-from src.states.logic.eval_cnd import EvalConditionConfig
-from src.states.logic.value_cnd import ValueConditionConfig
+from src.states.logic.eval_cnd import EvaluationConfig
+from src.states.logic.value_cnd import ValueConfig
 
 
 @dataclass
@@ -22,9 +22,9 @@ class StateConfig:
     type_str: str
     distance_cnd_skill: DistanceConfig
     distance_cnd_goal: DistanceConfig
-    eval_cnd: EvalConditionConfig
-    value_cnd: ValueConditionConfig
-    value_cnd_eval: ValueConditionConfig | None
+    eval_cnd: EvaluationConfig
+    value_cnd: ValueConfig
+    value_cnd_eval: ValueConfig | None
     condition: ConditionConfig
 
 

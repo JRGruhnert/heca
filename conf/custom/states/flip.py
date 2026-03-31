@@ -8,7 +8,7 @@ from src.states.logic.identity.identity_value_cnd import IdentityValueConfig
 from src.states.logic.thresholds.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.thresholds.threshold_eval_cnd import ThresholdEvalConditionConfig
 from src.states.logic.scalars.range_distance_cnd import RangeDistanceConditionConfig
-from src.states.logic.value_cnd import ValueConditionConfig
+from src.states.logic.value_cnd import ValueConfig
 from src.states.state import StateConfig
 
 
@@ -22,7 +22,7 @@ class FlipStateConfig(StateConfig):
     eval_cnd: ThresholdEvalConditionConfig = ThresholdEvalConditionConfig(
         distance=RangeDistanceConditionConfig(),
     )
-    value_cnd_eval: ValueConditionConfig | None = None
+    value_cnd_eval: ValueConfig | None = None
     preprocessor_old: StatePreprocessorConfig = ScalarStatePreprocessorConfig(
         threshold=BoundaryThresholdConfig(
             boundary=FlipBoundaryConfig(),

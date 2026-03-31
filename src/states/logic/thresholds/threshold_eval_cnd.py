@@ -4,11 +4,11 @@ import torch
 
 from src.factory import select_distance_condition
 from src.states.logic.distance import DistanceConfig
-from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
+from src.states.logic.eval_cnd import EvalCondition, EvaluationConfig
 
 
 @dataclass
-class ThresholdEvalConditionConfig(EvalConditionConfig):
+class ThresholdEvalConditionConfig(EvaluationConfig):
     distance: DistanceConfig
     threshold: float = 0.05
 

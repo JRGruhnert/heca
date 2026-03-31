@@ -4,14 +4,15 @@ import torch
 
 from src.states.logic.area.area import Area, AreaConfig
 from src.states.logic.boundary import Boundary, BoundaryConfig
-from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
+from src.states.logic.value_cnd import ValueCondition, ValueConfig
 
 
 @dataclass
-class AreaValueConditionConfig(ValueConditionConfig):
+class AreaValueConditionConfig(ValueConfig):
     area: AreaConfig
     boundary: BoundaryConfig = BoundaryConfig(
-        lower_bound=[-1.0, -1.0, -1.0], upper_bound=[1.0, 1.0, 1.0]
+        lower=[-1.0, -1.0, -1.0],
+        upper=[1.0, 1.0, 1.0],
     )
 
 

@@ -38,7 +38,7 @@ from src.states.state import State
 class TapasOperatorConfig(NodeOperatorConfig):
     label: str
     reversed: bool
-    overrides: list[str]
+    overrides: set[str]
     predict_as_batch: bool = True
     control_duration: int = -1
     policy: GMMPolicyConfig = GMMPolicyConfig(
@@ -209,7 +209,11 @@ class TapasLeafOperator(NodeOperator):
             # NOTE: This is only a hack to make reversed tapas models work
             # TODO: Update this when possible
             # logger.debug(f"Overriding Tapas Task {task.name}")
-            for state_name, state_value in self.overrides.items():
+            for state_name, condition in self.overrides.items():
+                state_value = (
+                    condition.value.numpy() if condition.value is not None else None
+                )
+                assert state_value is not None, f"Condition {condition} has no value."
                 match_position = re.search(r"(.+?)_(?:position)", state_name)
                 match_rotation = re.search(r"(.+?)_(?:rotation)", state_name)
                 match_scalar = re.search(r"(.+?)_(?:scalar)", state_name)
@@ -315,7 +319,7 @@ class TapasLeafOperator(NodeOperator):
         return temp
 
     @cached_property
-    def overrides(self) -> dict[str, np.ndarray]:
+    def overrides(self) -> dict[str, Condition]:
         return self._load_overrides_conditions()
 
     @cached_property

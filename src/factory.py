@@ -21,10 +21,9 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
 )
 
-from src.skills.tree.leafs.leaf import Leaf, LeafConfig
 from src.skills.tree.leafs.tapas.tapas_networker import (
-    TapasLeafNetworker,
-    TapasLeafNetworkerConfig,
+    TapasNetworker,
+    TapasNetworkerConfig,
 )
 from src.skills.tree.leafs.tapas.tapas_operator import (
     TapasLeafOperator,
@@ -35,6 +34,7 @@ from src.skills.tree.leafs.tapas.tapas_parameter import (
     TapasParameterConfig,
 )
 from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
+from src.skills.tree.node import TreeNode, TreeNodeConfig
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
 from src.skills.tree.parameter import NodeParameter, NodeParameterConfig
 from src.states.logic.addons.prepro_flip import (
@@ -47,7 +47,7 @@ from src.states.logic.rotation.quaternion_value_cnd import (
     QuaternionValueConditionConfig,
 )
 from src.states.logic.distance import Distance, DistanceConfig
-from src.states.logic.eval_cnd import EvalCondition, EvalConditionConfig
+from src.states.logic.eval_cnd import EvalCondition, EvaluationConfig
 from src.states.logic.scalars.switch_distance_cnd import (
     SwitchDistanceCondition,
     FlipDistanceConditionConfig,
@@ -80,7 +80,7 @@ from src.states.logic.rotation.quaternion_distance_cnd import (
     QuaternionDistanceCondition,
     QuaternionDistanceConditionConfig,
 )
-from src.states.logic.value_cnd import ValueCondition, ValueConditionConfig
+from src.states.logic.value_cnd import ValueCondition, ValueConfig
 from src.states.state import StateConfig, State
 
 
@@ -89,12 +89,12 @@ def select_states(configs: Sequence[StateConfig]) -> list[State]:
     return [State(config) for config in configs]
 
 
-def select_skills(configs: Sequence[LeafConfig]) -> list[Leaf]:
+def select_skills(configs: Sequence[TreeNodeConfig]) -> list[TreeNode]:
     """Create skills from configs - simple factory function"""
-    return [Leaf(config) for config in configs]
+    return [TreeNode(config) for config in configs]
 
 
-def select_value_condition(config: ValueConditionConfig) -> ValueCondition:
+def select_value_condition(config: ValueConfig) -> ValueCondition:
     """Create normalizer from config - simple factory function"""
     if isinstance(config, LinearValueNormalizerConfig):
         return LinearValueNormalizer(config)
@@ -133,7 +133,7 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
     for key, config in cons.items():
         if isinstance(config, DistanceConfig):
             conditions[key] = select_distance_condition(config)
-        elif isinstance(config, ValueConditionConfig):
+        elif isinstance(config, ValueConfig):
             conditions[key] = select_value_condition(config)
         else:
             raise NotImplementedError(f"Unknown config.")
@@ -158,13 +158,13 @@ def select_parameter(config: NodeParameterConfig) -> NodeParameter:
 
 def select_networker(config: NodeNetworkerConfig) -> NodeNetworker:
     """Create networker from config - simple factory function"""
-    if isinstance(config, TapasLeafNetworkerConfig):
-        return TapasLeafNetworker(config)
+    if isinstance(config, TapasNetworkerConfig):
+        return TapasNetworker(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_eval_condition(config: EvalConditionConfig) -> EvalCondition:
+def select_eval_condition(config: EvaluationConfig) -> EvalCondition:
     """Create eval condition from config - simple factory function"""
     if isinstance(config, ThresholdEvalConditionConfig):
         return ThresholdEvalCondition(config)
