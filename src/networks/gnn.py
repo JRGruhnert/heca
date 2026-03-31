@@ -143,8 +143,10 @@ class GraphNetwork(Network):
     ):
         super().__init__(config)
 
-        self.actor = ActorReadoutNetwork(dim_features=self.config.dim_encoder)
-        self.critic = CriticReadoutNetwork(dim_features=self.config.dim_encoder)
+        self.actor = ActorReadoutNetwork(dim_features=self.config.registry.dim_encoder)
+        self.critic = CriticReadoutNetwork(
+            dim_features=self.config.registry.dim_encoder
+        )
         self.actor_explainer = HoopgnExplainer(
             self.actor,  # It is assumed that model outputs a single tensor.
             algorithm=CaptumExplainer("IntegratedGradients"),
@@ -290,7 +292,9 @@ class GraphNetwork(Network):
             data = HeteroData()
             data["goal"].x = g
             data["obs"].x = c
-            data["task"].x = torch.zeros(self.config.dim_skill, self.config.dim_encoder)
+            data["task"].x = torch.zeros(
+                self.config.dim_skill, self.config.registry.dim_encoder
+            )
             data["actor"].x = torch.zeros(self.config.dim_skill, 1)
             data["critic"].x = torch.zeros(1, 1)
 

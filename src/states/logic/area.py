@@ -3,16 +3,16 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
+from src.states.logic.x_state import XState, XStateConfig
+
 
 @dataclass
-class AreaConfig:
-    label: str
-    surfaces: list[str]
+class AreaConfig(XStateConfig):
     spawn_surfaces: dict[str, list[list[float]]]
     eval_surfaces: dict[str, list[list[float]]]
 
 
-class Area:
+class Area(XState):
     """Mixin for area-based success conditions"""
 
     def __init__(
@@ -22,6 +22,9 @@ class Area:
         self.config = config
         self.spawn_surfaces = self._make_surfaces(config.spawn_surfaces)
         self.eval_surfaces = self._make_surfaces(config.eval_surfaces)
+
+    def label(self, x: torch.Tensor) -> str | None:
+        return self.check_eval_area(x)
 
     def check_eval_area(self, x: torch.Tensor) -> str | None:
         """Check if the point x is in any of the defined areas."""
@@ -80,17 +83,3 @@ class Area:
         ]
 
         return padded_surface
-
-    def get_one_hot_area_vector(
-        self,
-        area_name: str | None,
-    ) -> torch.Tensor:
-        """Get one-hot encoded vector for the given area name."""
-        area_names = list(self.eval_surfaces.keys())
-        one_hot = torch.zeros(len(area_names), dtype=torch.float32)
-        if area_name in area_names:
-            index = area_names.index(area_name)
-            one_hot[index] = 1.0
-        else:
-            pass  # Area name not found, return all zeros
-        return one_hot

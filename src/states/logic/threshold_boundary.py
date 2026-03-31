@@ -2,12 +2,15 @@ from dataclasses import dataclass
 from functools import cached_property
 import torch
 
-from src.states.logic.boundary import Boundary, BoundaryConfig
+from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+    BoundaryNormalizer,
+    BoundaryNormalizerConfig,
+)
 
 
 @dataclass
 class BoundaryThresholdConfig:
-    boundary: BoundaryConfig
+    boundary: BoundaryNormalizerConfig
     threshold: float = 0.05
 
 
@@ -17,7 +20,7 @@ class BoundaryThreshold:
         config: BoundaryThresholdConfig,
     ):
         self.config = config
-        self.boundary = Boundary(config.boundary)
+        self.boundary = BoundaryNormalizer(config.boundary)
 
     @cached_property
     def relative(self) -> torch.Tensor:

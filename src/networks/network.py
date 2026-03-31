@@ -21,7 +21,7 @@ class NetworkConfig:
     dim_skill: int
     dim_state: int
     checkpoint_path: str | None = None
-    encoder_registry: StateEncoderRegistryConfig = StateEncoderRegistryConfig()
+    registry: StateEncoderRegistryConfig = StateEncoderRegistryConfig()
 
 
 class Network(nn.Module, ABC):
@@ -33,7 +33,7 @@ class Network(nn.Module, ABC):
         super().__init__()
         self.config = config
         self.is_eval_mode = False
-        self.registry = StateEncoderRegistry(config.encoder_registry)
+        self.registry = StateEncoderRegistry(config.registry)
 
     def eval(self):
         super().eval()  # Call PyTorch's nn.Module.eval() instead of iterating manually
@@ -56,7 +56,7 @@ class Network(nn.Module, ABC):
         temp = []
         for state in states:
             encoder = self.registry.get(state.config.encoder)
-            temp.append(encoder(state.make_input(x[state.config.label])))
+            temp.append(encoder(state.pre_encode(x[state.config.label])))
         return torch.stack(temp, dim=0)
 
     def to_encoded_batch(

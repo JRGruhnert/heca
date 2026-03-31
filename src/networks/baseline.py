@@ -22,7 +22,9 @@ class BaselineNetwork(Network):
     ):
         super().__init__(config)
 
-        self.combined_feature_dim = self.config.dim_encoder * self.config.dim_state * 2
+        self.combined_feature_dim = (
+            self.config.registry.dim_encoder * self.config.dim_state * 2
+        )
 
         h_dim1 = self.combined_feature_dim // 2
         h_dim2 = h_dim1 // 2
@@ -61,8 +63,8 @@ class BaselineNetwork(Network):
         """Group state values by their type strings."""
         grouped = defaultdict(list)
         for state in states:
-            value = state.make_input(x[state.config.label])
-            grouped[state.config.type_str].append(value)
+            value = state.pre_encode(x[state.config.label])
+            grouped[state.config.encoder.label].append(value)
         return {k: torch.stack(v).float() for k, v in grouped.items()}
 
     def _to_batch(

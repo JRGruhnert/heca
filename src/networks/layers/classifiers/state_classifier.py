@@ -4,15 +4,15 @@ import torch.nn as nn
 
 
 @dataclass
-class StateEncoderConfig:
+class StateClassifierConfig:
     label: str
     dim_input: int
     middle_dim: int = 16
     dim_encoder: int = 32
 
 
-class StateEncoder(nn.Module):
-    def __init__(self, config: StateEncoderConfig):
+class StateClassifier(nn.Module):
+    def __init__(self, config: StateClassifierConfig):
         super().__init__()
         self.fc = nn.Sequential(
             nn.Linear(config.dim_input, config.middle_dim),
@@ -26,17 +26,17 @@ class StateEncoder(nn.Module):
 
 
 @dataclass
-class StateEncoderRegistryConfig:
+class StateClassifierRegistryConfig:
     dynamic_create: bool = True
     dim_encoder: int = 32
 
 
-class StateEncoderRegistry:
-    def __init__(self, config: StateEncoderRegistryConfig):
+class StateClassifierRegistry:
+    def __init__(self, config: StateClassifierRegistryConfig):
         self._dict = nn.ModuleDict()
         self.config = config
 
-    def get(self, config: StateEncoderConfig):
+    def get(self, config: StateClassifierConfig):
         if config.label not in self._dict:
             if self.config.dynamic_create:
                 if config.dim_encoder != self.config.dim_encoder:
@@ -45,7 +45,7 @@ class StateEncoderRegistry:
                         f"expected {self.config.dim_encoder}, got {config.dim_encoder}. "
                         f"Currently only uniform Node Feature Sizes are supported."
                     )
-                self._dict[config.label] = StateEncoder(config)
+                self._dict[config.label] = StateClassifier(config)
             else:
                 raise KeyError(
                     f"Encoder with key '{config.label}' not found and dynamic create is disabled."

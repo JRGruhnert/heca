@@ -80,7 +80,7 @@ from src.states.logic.distances.distance_angular import (
     AngularDistance,
     AngularDistanceConfig,
 )
-from src.states.logic.values.value import Value, ValueHandlerConfig
+from src.states.logic.values.value_handler import ValueHandler, ValueHandlerConfig
 from src.states.state import StateConfig, State
 
 
@@ -94,7 +94,7 @@ def select_skills(configs: Sequence[TreeNodeConfig]) -> list[TreeNode]:
     return [TreeNode(config) for config in configs]
 
 
-def select_value_condition(config: ValueHandlerConfig) -> Value:
+def select_value_handler(config: ValueHandlerConfig) -> ValueHandler:
     """Create normalizer from config - simple factory function"""
     if isinstance(config, LinearValueConfig):
         return LinearValue(config)
@@ -134,7 +134,7 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
         if isinstance(config, ValueDistanceConfig):
             conditions[key] = select_distance(config)
         elif isinstance(config, ValueHandlerConfig):
-            conditions[key] = select_value_condition(config)
+            conditions[key] = select_value_handler(config)
         else:
             raise NotImplementedError(f"Unknown config.")
     return conditions

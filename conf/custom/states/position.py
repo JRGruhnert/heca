@@ -2,7 +2,9 @@ from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
-from src.states.logic.boundary import AreaBoundaryConfig
+from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+    AreaBoundaryConfig,
+)
 from src.states.logic.condition import ConditionConfig
 from src.states.logic.values.value_linear import LinearValueConfig
 from src.states.logic.distances.distance_euclidean import (
@@ -10,7 +12,7 @@ from src.states.logic.distances.distance_euclidean import (
 )
 
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
-from src.states.logic.values.value import Value
+from src.states.logic.values.value_handler import ValueHandler
 from src.states.state import StateConfig
 
 
@@ -32,4 +34,4 @@ class PositionStateConfig(StateConfig):
         distance=EuclideanDistanceConfig(),
         preprocessor=EuclideanStatePreprocessorConfig(),
     )
-    value_handler_eval: Value | None = None
+    value_handler_eval: ValueHandler | None = None

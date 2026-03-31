@@ -5,27 +5,32 @@ import torch
 from src.factory import (
     select_distance,
     select_eval_condition,
-    select_value_condition,
+    select_value_handler,
 )
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance import ValueDistanceConfig
+from src.states.logic.distances.distance import Distance, ValueDistanceConfig
 from src.states.logic.evaluations.evaluation import ValueEvaluationConfig
-from src.states.logic.values.value import ValueHandlerConfig
+from src.states.logic.value_handler.normalizers.ignore_normalizer import (
+    IgnoreValueConfig,
+)
+from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
+from src.states.logic.value_handler.value_handler import ValueHandlerConfig
 
 
 @dataclass
 class StateConfig:
     id: int
     label: str
-    encoder: StateEncoderConfig
-    distance_skill: ValueDistanceConfig
-    distance_goal: ValueDistanceConfig
-    eval_handler: ValueEvaluationConfig
-    value_handler: ValueHandlerConfig
-    value_handler_eval: ValueHandlerConfig | None
     condition: ConditionConfig
+    dst_skill: ValueDistanceConfig
+    dst_goal: ValueDistanceConfig
+    evaluator: ValueEvaluationConfig
+    encoder: StateEncoderConfig
+    normalizer: NormalizerConfig
+    preencoder: ValueHandlerConfig = IgnoreValueConfig()
+    validator: ValueHandlerConfig = IgnoreValueConfig()
 
 
 class State:
@@ -34,62 +39,46 @@ class State:
         config: StateConfig,
     ):
         self.config = config
-        self.distance_cnd_skill = select_distance(config.distance_skill)
-        self.distance_cnd_goal = select_distance(config.distance_goal)
-        self.eval_cnd = select_eval_condition(config.eval_handler)
-        self.value_cnd = select_value_condition(config.value_handler)
-        self.value_cnd_eval = (
-            select_value_condition(config.value_handler_eval)
-            if config.value_handler_eval is not None
-            else self.value_cnd
-        )
+        self.dst_skill = select_distance(config.dst_skill)
+        self.dst_goal = select_distance(config.dst_goal)
+        self.evaluator = select_eval_condition(config.evaluator)
+        self.normalizer = select_value_handler(config.normalizer)
+        self.preencoder = select_value_handler(config.preencoder)
+        self.validator = select_value_handler(config.validator)
 
-    def make_input(self, x: torch.Tensor) -> torch.Tensor:
-        """Returns the value of the state as a tensor."""
-        assert isinstance(x, torch.Tensor), "Input must be torch.Tensor"
-        return self.value_cnd.make_input(x)
+    def pre_encode(self, x: torch.Tensor) -> torch.Tensor:
+        nx = self.normalizer(x)
+        return self.preencoder(nx)
+
+    def distance(
+        self,
+        x: torch.Tensor,
+        y: torch.Tensor,
+        dst: Distance,
+    ) -> float:
+        xn = self.normalizer(x)
+        yn = self.normalizer(y)
+        return dst.distance(xn, yn)
 
     def distance_to_skill(
         self,
-        current: torch.Tensor,
-        precon: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
     ) -> float:
-        """Returns the distance of the state as a tensor."""
-        assert isinstance(current, torch.Tensor) and isinstance(
-            precon, torch.Tensor
-        ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd(current)
-        precon_norm = self.value_cnd(precon)
-        value = self.distance_cnd_skill.distance(current_norm, precon_norm)
-        assert isinstance(value, float), "Distance must be a float"
-        assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
-        return value
+        return self.distance(x, y, self.dst_skill)
 
     def distance_to_goal(
         self,
-        current: torch.Tensor,
-        goal: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
     ) -> float:
-        """Returns the distance of the state as a tensor."""
-        assert isinstance(current, torch.Tensor) and isinstance(
-            goal, torch.Tensor
-        ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd(current)
-        goal_norm = self.value_cnd(goal)
-        value = self.distance_cnd_goal.distance(current_norm, goal_norm)
-        assert isinstance(value, float), "Distance must be a float"
-        assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
-        return value
+        return self.distance(x, y, self.dst_goal)
 
     def evaluate(
         self,
-        current: torch.Tensor,
-        goal: torch.Tensor,
+        x: torch.Tensor,
+        y: torch.Tensor,
     ) -> bool:
-        """Evaluate success using injected strategy."""
-        assert isinstance(current, torch.Tensor) and isinstance(
-            goal, torch.Tensor
-        ), "Inputs must be torch.Tensor"
-        current_norm = self.value_cnd_eval(current)
-        goal_norm = self.value_cnd_eval(goal)
-        return self.eval_cnd(current_norm, goal_norm)
+        xn = self.validator(x)
+        yn = self.validator(y)
+        return self.evaluator(xn, yn)

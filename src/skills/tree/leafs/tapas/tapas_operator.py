@@ -239,8 +239,8 @@ class TapasLeafOperator(NodeOperator):
                     position_state_name = f"{match_position.group(1)}_position"
                     if position_state_name in states_dict:
                         temp_state = states_dict[position_state_name]
-                        if isinstance(temp_state.eval_cnd, AreaEvalCondition):
-                            area = temp_state.eval_cnd.area.check_eval_area(
+                        if isinstance(temp_state.evaluator, AreaEvalCondition):
+                            area = temp_state.evaluator.area.check_eval_area(
                                 goal[position_state_name]
                             )
                             temp_pos = goal[position_state_name].clone()

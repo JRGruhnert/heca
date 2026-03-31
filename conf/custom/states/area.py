@@ -2,16 +2,17 @@ from dataclasses import dataclass, field
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
-from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.area import AreaConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.values.value_area import AreaValueConfig
-from src.states.logic.boundary import AreaBoundaryConfig
+from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+    AreaBoundaryConfig,
+)
 from src.states.logic.evaluations.evaluation import ValueEvaluationConfig
 from src.states.logic.distances.distance_euclidean import (
     EuclideanDistanceConfig,
 )
-from src.states.logic.values.value import ValueHandlerConfig
+from src.states.logic.values.value_handler import ValueHandlerConfig
+from src.states.logic.values.value_one_hot import OneHotValueConfig
 from src.states.state import StateConfig
 
 
@@ -49,7 +50,7 @@ class CalvinAreaStateConfig(StateConfig):
         label="AreaEuler",
         dim_input=6,
     )
-    value_handler: AreaValueConfig = AreaValueConfig(
+    normalizer: OneHotValueConfig = OneHotValueConfig(
         area=CalvinAreaConfig(),
         boundary=AreaBoundaryConfig(),
     )
@@ -57,6 +58,10 @@ class CalvinAreaStateConfig(StateConfig):
     distance_goal: EuclideanDistanceConfig = EuclideanDistanceConfig()
     eval_handler: ValueEvaluationConfig = ValueEvaluationConfig()
     value_handler_eval: ValueHandlerConfig | None = None
+    preencoder: ValueHandlerConfig | None = OneHotValueConfig(
+        state=CalvinAreaConfig(),
+        boundary=AreaBoundaryConfig(),
+    )
     condition: ConditionConfig = ConditionConfig(
         distance=EuclideanDistanceConfig(),
         preprocessor=EuclideanStatePreprocessorConfig(),

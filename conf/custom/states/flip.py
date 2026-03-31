@@ -2,14 +2,14 @@ from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.logic.boundary import FlipBoundaryConfig
+from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+    FlipBoundaryConfig,
+)
 from src.states.logic.condition import ConditionConfig
 from src.states.logic.distances.distance_flip_special import FlipDistanceConfig
-from src.states.logic.values.value_identity import IdentityValueConfig
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import ScalarDistanceConfig
-from src.states.logic.values.value import ValueHandlerConfig
 from src.states.state import StateConfig
 
 
