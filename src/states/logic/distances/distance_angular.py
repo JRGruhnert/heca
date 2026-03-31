@@ -3,11 +3,11 @@ import math
 
 import torch
 
-from src.states.logic.distances.distance import Distance, DistanceConfig
+from src.states.logic.distances.distance import Distance, ValueDistanceConfig
 
 
 @dataclass
-class AngularDistanceConfig(DistanceConfig):
+class AngularDistanceConfig(ValueDistanceConfig):
     pass
 
 

@@ -1,13 +1,23 @@
+from dataclasses import dataclass
+
 import torch.nn as nn
 
 
+@dataclass
+class StateEncoderConfig:
+    label: str
+    dim_input: int
+    middle_dim: int = 16
+    dim_encoder: int = 32
+
+
 class StateEncoder(nn.Module):
-    def __init__(self, input_dim: int, out_dim: int):
+    def __init__(self, config: StateEncoderConfig):
         super().__init__()
         self.fc = nn.Sequential(
-            nn.Linear(input_dim, 16),
+            nn.Linear(config.dim_input, config.middle_dim),
             nn.ReLU(),
-            nn.Linear(16, out_dim),
+            nn.Linear(config.middle_dim, config.dim_encoder),
             nn.ReLU(),
         )
 
@@ -15,57 +25,34 @@ class StateEncoder(nn.Module):
         return self.fc(x)
 
 
-class QuaternionEncoder(nn.Module):
-    def __init__(self, out_dim):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(4, 16),
-            nn.ReLU(),
-            nn.Linear(16, out_dim),
-            nn.ReLU(),
-        )
-
-    def forward(self, q):
-        return self.fc(q)
+@dataclass
+class StateEncoderRegistryConfig:
+    dynamic_create: bool = True
 
 
-class PositionEncoder(nn.Module):
-    def __init__(self, out_dim):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(3, 16),
-            nn.ReLU(),
-            nn.Linear(16, out_dim),
-            nn.ReLU(),
-        )
+class StateEncoderRegistry:
+    def __init__(self, config: StateEncoderRegistryConfig):
+        self._dict = nn.ModuleDict()
+        self.config = config
 
-    def forward(self, e):
-        return self.fc(e)
+    def get(self, config: StateEncoderConfig):
+        if config.label not in self._dict:
+            if self.config.dynamic_create:
+                self._dict[config.label] = StateEncoder(config)
+            else:
+                raise KeyError(
+                    f"Encoder with key '{config.label}' not found and dynamic create is disabled."
+                )
+        return self._dict[config.label]
 
+    def modules(self):
+        return self._dict.values()
 
-class AreaPositionEncoder(nn.Module):
-    def __init__(self, out_dim):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(6, 16),
-            nn.ReLU(),
-            nn.Linear(16, out_dim),
-            nn.ReLU(),
-        )
+    def __getitem__(self, key):
+        return self._dict[key]
 
-    def forward(self, e):
-        return self.fc(e)
+    def __contains__(self, key):
+        return key in self._dict
 
-
-class ScalarEncoder(nn.Module):
-    def __init__(self, out_dim):
-        super().__init__()
-        self.fc = nn.Sequential(
-            nn.Linear(1, 8),
-            nn.ReLU(),
-            nn.Linear(8, out_dim),
-            nn.ReLU(),
-        )
-
-    def forward(self, s):
-        return self.fc(s)
+    def __setitem__(self, key, value):
+        self._dict[key] = value

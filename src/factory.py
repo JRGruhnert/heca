@@ -46,8 +46,8 @@ from src.states.logic.values.value_quaternion import (
     QuaternionValue,
     QuaternionValueConfig,
 )
-from src.states.logic.distances.distance import Distance, DistanceConfig
-from src.states.logic.evaluations.evaluation import Evaluation, EvaluationConfig
+from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
 from src.states.logic.distances.distance_flip_special import (
     FlipDistance,
     FlipDistanceConfig,
@@ -80,7 +80,7 @@ from src.states.logic.distances.distance_angular import (
     AngularDistance,
     AngularDistanceConfig,
 )
-from src.states.logic.values.value import Value, ValueConfig
+from src.states.logic.values.value import Value, ValueHandlerConfig
 from src.states.state import StateConfig, State
 
 
@@ -94,7 +94,7 @@ def select_skills(configs: Sequence[TreeNodeConfig]) -> list[TreeNode]:
     return [TreeNode(config) for config in configs]
 
 
-def select_value_condition(config: ValueConfig) -> Value:
+def select_value_condition(config: ValueHandlerConfig) -> Value:
     """Create normalizer from config - simple factory function"""
     if isinstance(config, LinearValueConfig):
         return LinearValue(config)
@@ -106,7 +106,7 @@ def select_value_condition(config: ValueConfig) -> Value:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance(config: DistanceConfig) -> Distance:
+def select_distance(config: ValueDistanceConfig) -> Distance:
     """Create distance condition from config - simple factory function"""
     if isinstance(config, ScalarDistanceConfig):
         return ScalarDistance(config)
@@ -131,9 +131,9 @@ def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
     """Create condition from config - simple factory function"""
     conditions = {}
     for key, config in cons.items():
-        if isinstance(config, DistanceConfig):
+        if isinstance(config, ValueDistanceConfig):
             conditions[key] = select_distance(config)
-        elif isinstance(config, ValueConfig):
+        elif isinstance(config, ValueHandlerConfig):
             conditions[key] = select_value_condition(config)
         else:
             raise NotImplementedError(f"Unknown config.")
@@ -164,7 +164,7 @@ def select_networker(config: NodeNetworkerConfig) -> NodeNetworker:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_eval_condition(config: EvaluationConfig) -> Evaluation:
+def select_eval_condition(config: ValueEvaluationConfig) -> Evaluation:
     """Create eval condition from config - simple factory function"""
     if isinstance(config, ThresholdEvaluationConfig):
         return ThresholdEvaluation(config)

@@ -1,9 +1,14 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
-from src.networks.layers.encoder import StateEncoder
+from src.networks.layers.encoder import (
+    StateEncoder,
+    StateEncoderRegistry,
+    StateEncoderRegistryConfig,
+)
+
 from src.observation.observation import StateValueDict
 from src.skills.tree.node import TreeNode
 from src.states.state import State
@@ -11,29 +16,12 @@ from loguru import logger
 
 
 @dataclass
-class StateTypeConfig:
-    type: str
-    size: int
-
-
-@dataclass
 class NetworkConfig:
-    skill_count: int
-    state_count: int
-    name: str
-    dim_encoder: int = 32
+    label: str
+    dim_skill: int
+    dim_state: int
     checkpoint_path: str | None = None
-    state_types: list[StateTypeConfig] = field(
-        default_factory=lambda: [
-            StateTypeConfig(type="EulerPrecise", size=3),
-            StateTypeConfig(type="EulerArea", size=6),
-            StateTypeConfig(type="Quat", size=4),
-            StateTypeConfig(type="Range", size=1),
-            StateTypeConfig(type="Bool", size=1),
-            StateTypeConfig(type="Flip", size=1),
-            StateTypeConfig(type="State", size=10),
-        ]
-    )
+    encoder_registry: StateEncoderRegistryConfig = StateEncoderRegistryConfig()
 
 
 class Network(nn.Module, ABC):
@@ -45,13 +33,7 @@ class Network(nn.Module, ABC):
         super().__init__()
         self.config = config
         self.is_eval_mode = False
-
-        self.encoders = nn.ModuleDict(
-            {
-                state.type: StateEncoder(state.size, self.config.dim_encoder)
-                for state in config.state_types
-            }
-        )
+        self.registry = StateEncoderRegistry(config.encoder_registry)
 
     def eval(self):
         super().eval()  # Call PyTorch's nn.Module.eval() instead of iterating manually
@@ -67,17 +49,15 @@ class Network(nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement the forward method.")
 
     @abstractmethod
-    def explain(self, batch, skill: TreeNode) -> Any:
+    def explain(self, batch, skill: TreeNode) -> tuple:
         raise NotImplementedError("This network does not support explanations.")
 
     def _encode_states(self, x: StateValueDict, states: list[State]) -> torch.Tensor:
-        encoded_x = [
-            self.encoders[state.config.type_str](
-                state.make_input(x[state.config.label])
-            )
-            for state in states
-        ]
-        return torch.stack(encoded_x, dim=0)
+        temp = []
+        for state in states:
+            encoder = self.registry.get(state.config.encoder)
+            temp.append(encoder(state.make_input(x[state.config.label])))
+        return torch.stack(temp, dim=0)
 
     def to_encoded_batch(
         self,

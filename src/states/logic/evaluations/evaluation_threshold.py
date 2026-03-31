@@ -3,13 +3,13 @@ from dataclasses import dataclass
 import torch
 
 from src.factory import select_distance
-from src.states.logic.distances.distance import DistanceConfig
-from src.states.logic.evaluations.evaluation import Evaluation, EvaluationConfig
+from src.states.logic.distances.distance import ValueDistanceConfig
+from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
 
 
 @dataclass
-class ThresholdEvaluationConfig(EvaluationConfig):
-    distance: DistanceConfig
+class ThresholdEvaluationConfig(ValueEvaluationConfig):
+    distance: ValueDistanceConfig
     threshold: float = 0.05
 
 

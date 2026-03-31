@@ -4,14 +4,14 @@ import torch
 
 
 @dataclass
-class ValueConfig:
+class ValueHandlerConfig:
     pass
 
 
 class Value(ABC):
     def __init__(
         self,
-        config: ValueConfig,
+        config: ValueHandlerConfig,
     ):
         self.config = config
 

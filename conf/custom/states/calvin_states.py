@@ -1,16 +1,16 @@
 from dataclasses import dataclass
 
 from conf.custom.states.area import CalvinAreaStateConfig
-from src.states.state_bool import BoolStateConfig
-from src.states.state_location import LocationStateConfig
-from src.states.state_range import RangeStateConfig
-from src.states.state_rotation import RotationStateConfig
+from conf.custom.states.bool import BoolStateConfig
+from conf.custom.states.position import PositionStateConfig
+from conf.custom.states.range import RangeStateConfig
+from conf.custom.states.rotation import RotationStateConfig
 from conf.custom.states.flip import FlipStateConfig
 
 
 @dataclass
 class CalvinStateSet:
-    ee_position: LocationStateConfig = LocationStateConfig(
+    ee_position: PositionStateConfig = PositionStateConfig(
         label="ee_position",
         id=0,
     )
@@ -22,7 +22,7 @@ class CalvinStateSet:
         label="ee_scalar",
         id=2,
     )
-    slide_position: LocationStateConfig = LocationStateConfig(
+    slide_position: PositionStateConfig = PositionStateConfig(
         label="slide_position",
         id=3,
     )
@@ -36,7 +36,7 @@ class CalvinStateSet:
         low=0.0,
         high=0.28,
     )
-    drawer_position: LocationStateConfig = LocationStateConfig(
+    drawer_position: PositionStateConfig = PositionStateConfig(
         label="drawer_position",
         id=6,
     )
@@ -50,7 +50,7 @@ class CalvinStateSet:
         low=0.0,
         high=0.22,
     )
-    button_position: LocationStateConfig = LocationStateConfig(
+    button_position: PositionStateConfig = PositionStateConfig(
         label="button_position",
         id=9,
     )
@@ -62,7 +62,7 @@ class CalvinStateSet:
         label="button_scalar",
         id=11,
     )
-    led_position: LocationStateConfig = LocationStateConfig(
+    led_position: PositionStateConfig = PositionStateConfig(
         label="led_position",
         id=12,
     )

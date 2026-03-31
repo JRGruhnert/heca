@@ -174,33 +174,33 @@ class GraphNetwork(Network):
     @cached_property
     def state_state_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.config.state_count)
+            torch.arange(self.config.dim_state)
             .unsqueeze(1)
-            .repeat(1, self.config.state_count)
+            .repeat(1, self.config.dim_state)
             .flatten()
         )
-        dst = torch.arange(self.config.state_count).repeat(self.config.state_count)
+        dst = torch.arange(self.config.dim_state).repeat(self.config.dim_state)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_skill_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.config.state_count)
+            torch.arange(self.config.dim_state)
             .unsqueeze(1)
-            .repeat(1, self.config.skill_count)
+            .repeat(1, self.config.dim_skill)
             .flatten()
         )
-        dst = torch.arange(self.config.skill_count).repeat(self.config.state_count)
+        dst = torch.arange(self.config.dim_skill).repeat(self.config.dim_state)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_state_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.config.state_count)
+        indices = torch.arange(self.config.dim_state)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
     def skill_skill_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.config.skill_count)
+        indices = torch.arange(self.config.dim_skill)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
@@ -214,22 +214,22 @@ class GraphNetwork(Network):
 
     @cached_property
     def skill_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.config.skill_count)
+        indices = torch.arange(self.config.dim_skill)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_skill(self) -> torch.Tensor:
-        indices = torch.arange(self.config.skill_count)
+        indices = torch.arange(self.config.dim_skill)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
     def state_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.config.state_count)
+        indices = torch.arange(self.config.dim_state)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_state(self) -> torch.Tensor:
-        indices = torch.arange(self.config.state_count)
+        indices = torch.arange(self.config.dim_state)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
@@ -243,12 +243,11 @@ class GraphNetwork(Network):
     @cached_property
     def state_skill_01_attr(self) -> torch.Tensor:
         sparse = (
-            self.state_skill_sparse[0] * self.config.skill_count
+            self.state_skill_sparse[0] * self.config.dim_skill
             + self.state_skill_sparse[1]
         )
         full = (
-            self.state_skill_full[0] * self.config.skill_count
-            + self.state_skill_full[1]
+            self.state_skill_full[0] * self.config.dim_skill + self.state_skill_full[1]
         )
         return torch.isin(full, sparse).float().unsqueeze(-1)
 
@@ -291,10 +290,8 @@ class GraphNetwork(Network):
             data = HeteroData()
             data["goal"].x = g
             data["obs"].x = c
-            data["task"].x = torch.zeros(
-                self.config.skill_count, self.config.dim_encoder
-            )
-            data["actor"].x = torch.zeros(self.config.skill_count, 1)
+            data["task"].x = torch.zeros(self.config.dim_skill, self.config.dim_encoder)
+            data["actor"].x = torch.zeros(self.config.dim_skill, 1)
             data["critic"].x = torch.zeros(1, 1)
 
             data[("goal", "goal-obs", "obs")].edge_index = self.state_state_sparse

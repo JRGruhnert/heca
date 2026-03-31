@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.boundary import Boundary, BoundaryConfig
-from src.states.logic.values.value import Value, ValueConfig
+from src.states.logic.values.value import Value, ValueHandlerConfig
 
 
 @dataclass
-class LinearValueConfig(ValueConfig):
+class LinearValueConfig(ValueHandlerConfig):
     boundary: BoundaryConfig = BoundaryConfig(
         lower=[0.0],
         upper=[1.0],

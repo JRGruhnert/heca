@@ -1,8 +1,9 @@
 from dataclasses import dataclass
 
+from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
-from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.boundary import AreaBoundaryConfig
+from src.states.logic.condition import ConditionConfig
 from src.states.logic.values.value_linear import LinearValueConfig
 from src.states.logic.distances.distance_euclidean import (
     EuclideanDistanceConfig,
@@ -14,16 +15,21 @@ from src.states.state import StateConfig
 
 
 @dataclass
-class LocationStateConfig(StateConfig):
-    size: int = 3
-    type_str: str = "EulerPrecise"
-    distance_cnd_goal: EuclideanDistanceConfig = EuclideanDistanceConfig()
-    distance_cnd_skill: EuclideanDistanceConfig = EuclideanDistanceConfig()
-    eval_cnd: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
+class PositionStateConfig(StateConfig):
+    encoder: StateEncoderConfig = StateEncoderConfig(
+        label="EulerPrecise",
+        dim_input=3,
+    )
+    distance_goal: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    distance_skill: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    eval_handler: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
         distance=EuclideanDistanceConfig(),
     )
-    value_cnd: LinearValueConfig = LinearValueConfig(
+    value_handler: LinearValueConfig = LinearValueConfig(
         boundary=AreaBoundaryConfig(),
     )
-    value_cnd_eval: Value | None = None
-    preprocessor_old: StatePreprocessorConfig = EuclideanStatePreprocessorConfig()
+    condition: ConditionConfig = ConditionConfig(
+        distance=EuclideanDistanceConfig(),
+        preprocessor=EuclideanStatePreprocessorConfig(),
+    )
+    value_handler_eval: Value | None = None

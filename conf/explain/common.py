@@ -44,7 +44,7 @@ def get_explain_config(
         buffer=BufferConfig(steps=16),
         logger=logger_config(
             LogMode.TERMINAL,
-            network.name,
+            network.label,
             prefix_tag,
             state_set_tag,
             skill_set_tag,

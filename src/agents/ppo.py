@@ -105,8 +105,8 @@ class PPOAgent(Agent):
             logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             1,
-            self.config.network.skill_count,
-        ), f"Expected logits shape ({1}, {self.config.network.skill_count}), got {logits.shape}"
+            self.config.network.dim_skill,
+        ), f"Expected logits shape ({1}, {self.config.network.dim_skill}), got {logits.shape}"
         assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
 
         dist = Categorical(logits=logits)
@@ -146,8 +146,8 @@ class PPOAgent(Agent):
         logits, value = self.policy_old.forward(batch)
         assert logits.shape == (
             len(obs),
-            self.config.network.skill_count,
-        ), f"Expected logits shape ({len(obs)}, {self.config.network.skill_count}), got {logits.shape}"
+            self.config.network.dim_skill,
+        ), f"Expected logits shape ({len(obs)}, {self.config.network.dim_skill}), got {logits.shape}"
         assert value.shape == (
             len(obs),
         ), f"Expected value shape ({len(obs)},), got {value.shape}"
@@ -189,7 +189,7 @@ class PPOAgent(Agent):
 
         ### Saves batch values
         batch_success_rate = self.buffer.save(
-            self.storage.buffer_saving_path(self.config.network.name),
+            self.storage.buffer_saving_path(self.config.network.label),
             self._current_epoch,
         )
 
@@ -414,13 +414,13 @@ class PPOAgent(Agent):
         """
         if tag == "":
             checkpoint_path = self.storage.agent_saving_path(
-                self.config.network.name
+                self.config.network.label
             ) + "model_cp_epoch_{}.pth".format(
                 self._current_epoch,
             )
         else:
             checkpoint_path = self.storage.agent_saving_path(
-                self.config.network.name
+                self.config.network.label
             ) + "model_cp_{}.pth".format(
                 tag,
             )

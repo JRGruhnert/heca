@@ -17,7 +17,7 @@ class StatePreprocessor(ABC):
     # Remove it as soon as starting with master
     def __call__(
         self,
-        value: tuple | torch.Tensor | list[float] | float | int,
+        value: tuple | torch.Tensor | list[float] | float | int | None,
     ) -> torch.Tensor:
         if isinstance(value, torch.Tensor):
             return value
@@ -28,7 +28,7 @@ class StatePreprocessor(ABC):
                 raise ValueError(f"Unsupported value type: {type(value)}")
 
     @abstractmethod
-    def tapas(
+    def hoopgnv1(
         self,
         start: torch.Tensor,
         end: torch.Tensor,

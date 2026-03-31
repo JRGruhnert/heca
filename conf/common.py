@@ -85,14 +85,14 @@ def network_config(
         GraphNetworkConfig(
             checkpoint_path=checkpoint_path,
             explain_mode=explain_mode,
-            skill_count=skill_count,
-            state_count=state_count,
+            dim_skill=skill_count,
+            dim_state=state_count,
         )
         if is_gnn
         else BaselineNetworkConfig(
             checkpoint_path=checkpoint_path,
-            skill_count=skill_count,
-            state_count=state_count,
+            dim_skill=skill_count,
+            dim_state=state_count,
         )
     )
 

@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.area import Area, AreaConfig
-from src.states.logic.evaluations.evaluation import Evaluation, EvaluationConfig
+from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
 
 
 @dataclass
-class AreaEvalConditionConfig(EvaluationConfig):
+class AreaEvalConditionConfig(ValueEvaluationConfig):
     area: AreaConfig
 
 

@@ -4,11 +4,11 @@ import torch
 
 from src.states.logic.area import Area, AreaConfig
 from src.states.logic.boundary import Boundary, BoundaryConfig
-from src.states.logic.values.value import Value, ValueConfig
+from src.states.logic.values.value import Value, ValueHandlerConfig
 
 
 @dataclass
-class AreaValueConfig(ValueConfig):
+class AreaValueConfig(ValueHandlerConfig):
     area: AreaConfig
     boundary: BoundaryConfig = BoundaryConfig(
         lower=[-1.0, -1.0, -1.0],

@@ -22,9 +22,7 @@ class BaselineNetwork(Network):
     ):
         super().__init__(config)
 
-        self.combined_feature_dim = (
-            self.config.dim_encoder * self.config.state_count * 2
-        )
+        self.combined_feature_dim = self.config.dim_encoder * self.config.dim_state * 2
 
         h_dim1 = self.combined_feature_dim // 2
         h_dim2 = h_dim1 // 2
@@ -33,7 +31,7 @@ class BaselineNetwork(Network):
             nn.ReLU(),
             nn.Linear(h_dim1, h_dim2),
             nn.ReLU(),
-            nn.Linear(h_dim2, self.config.skill_count),
+            nn.Linear(h_dim2, self.config.dim_skill),
         )
         # critic
         self.critic = nn.Sequential(

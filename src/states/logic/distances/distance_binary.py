@@ -2,11 +2,11 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distances.distance import Distance, DistanceConfig
+from src.states.logic.distances.distance import Distance, ValueDistanceConfig
 
 
 @dataclass
-class ScalarDistanceConfig(DistanceConfig):
+class ScalarDistanceConfig(ValueDistanceConfig):
     pass
 
 

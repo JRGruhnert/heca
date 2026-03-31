@@ -1,13 +1,15 @@
 from dataclasses import dataclass, field
+from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.logic.addons.state_preprocessor import StatePreprocessorConfig
 from src.states.logic.boundary import BoundaryConfig
+from src.states.logic.condition import ConditionConfig
+from src.states.logic.distances.distance_euclidean import EuclideanDistanceConfig
 from src.states.logic.values.value_linear import LinearValueConfig
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import ScalarDistanceConfig
-from src.states.logic.values.value import ValueConfig
+from src.states.logic.values.value import ValueHandlerConfig
 from src.states.state import StateConfig
 
 
@@ -15,30 +17,31 @@ from src.states.state import StateConfig
 class RangeStateConfig(StateConfig):
     low: float = 0.0
     high: float = 1.0
-    type_str: str = "Range"
-    size: int = 1
-    distance_cnd_skill: ScalarDistanceConfig = ScalarDistanceConfig()
-    distance_cnd_goal: ScalarDistanceConfig = ScalarDistanceConfig()
-    value_cnd_eval: ValueConfig | None = None
-    eval_cnd: ThresholdEvaluationConfig = field(init=False)
-    value_cnd: LinearValueConfig = field(init=False)
-    preprocessor_old: StatePreprocessorConfig = field(init=False)
+    encoder: StateEncoderConfig = StateEncoderConfig(
+        label="Range",
+        dim_input=1,
+        middle_dim=8,
+    )
+    distance_skill: ScalarDistanceConfig = ScalarDistanceConfig()
+    distance_goal: ScalarDistanceConfig = ScalarDistanceConfig()
+    value_handler_eval: ValueHandlerConfig | None = None
+    eval_handler: ThresholdEvaluationConfig = field(init=False)
+    value_handler: LinearValueConfig = field(init=False)
+    condition: ConditionConfig = field(init=False)
 
     def __post_init__(self):
-        self.eval_cnd = ThresholdEvaluationConfig(
+        self.eval_handler = ThresholdEvaluationConfig(
             distance=ScalarDistanceConfig(),
         )
-        self.value_cnd = LinearValueConfig(
-            boundary=BoundaryConfig(
-                lower=[self.low],
-                upper=[self.high],
-            ),
+        boundary = BoundaryConfig(
+            lower=[self.low],
+            upper=[self.high],
         )
-        self.preprocessor_old = ScalarStatePreprocessorConfig(
-            threshold=BoundaryThresholdConfig(
-                boundary=BoundaryConfig(
-                    lower=[self.low],
-                    upper=[self.high],
-                )
-            )
+
+        self.value_handler = LinearValueConfig(boundary=boundary)
+        self.condition = ConditionConfig(
+            distance=EuclideanDistanceConfig(),
+            preprocessor=ScalarStatePreprocessorConfig(
+                threshold=BoundaryThresholdConfig(boundary=boundary),
+            ),
         )

@@ -8,23 +8,23 @@ from src.factory import (
     select_value_condition,
 )
 
+from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance import DistanceConfig
-from src.states.logic.evaluations.evaluation import EvaluationConfig
-from src.states.logic.values.value import ValueConfig
+from src.states.logic.distances.distance import ValueDistanceConfig
+from src.states.logic.evaluations.evaluation import ValueEvaluationConfig
+from src.states.logic.values.value import ValueHandlerConfig
 
 
 @dataclass
 class StateConfig:
     id: int
-    size: int
     label: str
-    type_str: str
-    distance_cnd_skill: DistanceConfig
-    distance_cnd_goal: DistanceConfig
-    eval_cnd: EvaluationConfig
-    value_cnd: ValueConfig
-    value_cnd_eval: ValueConfig | None
+    encoder: StateEncoderConfig
+    distance_skill: ValueDistanceConfig
+    distance_goal: ValueDistanceConfig
+    eval_handler: ValueEvaluationConfig
+    value_handler: ValueHandlerConfig
+    value_handler_eval: ValueHandlerConfig | None
     condition: ConditionConfig
 
 
@@ -34,13 +34,13 @@ class State:
         config: StateConfig,
     ):
         self.config = config
-        self.distance_cnd_skill = select_distance(config.distance_cnd_skill)
-        self.distance_cnd_goal = select_distance(config.distance_cnd_goal)
-        self.eval_cnd = select_eval_condition(config.eval_cnd)
-        self.value_cnd = select_value_condition(config.value_cnd)
+        self.distance_cnd_skill = select_distance(config.distance_skill)
+        self.distance_cnd_goal = select_distance(config.distance_goal)
+        self.eval_cnd = select_eval_condition(config.eval_handler)
+        self.value_cnd = select_value_condition(config.value_handler)
         self.value_cnd_eval = (
-            select_value_condition(config.value_cnd_eval)
-            if config.value_cnd_eval is not None
+            select_value_condition(config.value_handler_eval)
+            if config.value_handler_eval is not None
             else self.value_cnd
         )
 

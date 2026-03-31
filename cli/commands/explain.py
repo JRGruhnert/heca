@@ -125,7 +125,7 @@ class ExplainScript:
             f"Sampled Start and Goal Positions of {self.trained_object} and {self.current_object}.",
             True,
             True,
-            f"{self.storage.agent_saving_path(self.config.agent.network.name)}/plots/{self.trained_object}_s_{self.current_object}.png",
+            f"{self.storage.agent_saving_path(self.config.agent.network.label)}/plots/{self.trained_object}_s_{self.current_object}.png",
         )
 
     def run(self):
