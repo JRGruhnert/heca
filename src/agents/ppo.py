@@ -118,7 +118,7 @@ class PPOAgent(Agent):
         self.buffer.act_values(
             obs, goal, action.detach(), logprob.detach(), value.detach()
         )
-        return self.storage.skill_by_index(int(action.item()))
+        return self.storage.skills[int(action.item())]
 
     def explain(
         self,

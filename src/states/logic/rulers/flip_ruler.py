@@ -2,16 +2,16 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass
-class FlipDistanceConfig(ValueDistanceConfig):
+class FlipRulerConfig(RulerConfig):
     pass
 
 
-class FlipDistance(Distance):
-    def __init__(self, config: FlipDistanceConfig):
+class FlipRuler(Ruler):
+    def __init__(self, config: FlipRulerConfig):
         super().__init__(config)
         self.config = config
 

@@ -46,11 +46,11 @@ from src.states.logic.values.value_quaternion import (
     QuaternionValue,
     QuaternionValueConfig,
 )
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.distances.distance import Ruler, ValueDistanceConfig
 from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
 from src.states.logic.distances.distance_flip_special import (
-    FlipDistance,
-    FlipDistanceConfig,
+    FlipRuler,
+    FlipRulerConfig,
 )
 from src.states.logic.values.value_identity import (
     IdentityValue,
@@ -61,8 +61,8 @@ from src.states.logic.values.value_linear import (
     LinearValueConfig,
 )
 from src.states.logic.distances.distance_euclidean import (
-    EuclideanDistance,
-    EuclideanDistanceConfig,
+    EuclideanRuler,
+    EuclideanRulerConfig,
 )
 from src.states.logic.addons.state_preprocessor import (
     StatePreprocessor,
@@ -73,18 +73,18 @@ from src.states.logic.evaluations.evaluation_threshold import (
     ThresholdEvaluationConfig,
 )
 from src.states.logic.distances.distance_binary import (
-    ScalarDistanceConfig,
+    BinaryRulerConfig,
     ScalarDistance,
 )
 from src.states.logic.distances.distance_angular import (
     AngularDistance,
-    AngularDistanceConfig,
+    AngularRulerConfig,
 )
 from src.states.logic.values.value_handler import ValueHandler, ValueHandlerConfig
-from src.states.state import ObjectConfig, State
+from src.states.state import StateConfig, State
 
 
-def select_states(configs: Sequence[ObjectConfig]) -> list[State]:
+def select_states(configs: Sequence[StateConfig]) -> list[State]:
     """Create states from configs - simple factory function"""
     return [State(config) for config in configs]
 
@@ -106,15 +106,15 @@ def select_value_handler(config: ValueHandlerConfig) -> ValueHandler:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance(config: ValueDistanceConfig) -> Distance:
+def select_distance(config: ValueDistanceConfig) -> Ruler:
     """Create distance condition from config - simple factory function"""
-    if isinstance(config, ScalarDistanceConfig):
+    if isinstance(config, BinaryRulerConfig):
         return ScalarDistance(config)
-    elif isinstance(config, EuclideanDistanceConfig):
-        return EuclideanDistance(config)
-    elif isinstance(config, FlipDistanceConfig):
-        return FlipDistance(config)
-    elif isinstance(config, AngularDistanceConfig):
+    elif isinstance(config, EuclideanRulerConfig):
+        return EuclideanRuler(config)
+    elif isinstance(config, FlipRulerConfig):
+        return FlipRuler(config)
+    elif isinstance(config, AngularRulerConfig):
         return AngularDistance(config)
     else:
         raise ValueError(f"Unknown config.")

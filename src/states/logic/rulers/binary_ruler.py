@@ -2,15 +2,15 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass
-class ScalarDistanceConfig(ValueDistanceConfig):
+class BinaryRulerConfig(RulerConfig):
     pass
 
 
-class ScalarDistance(Distance):
+class BinaryRuler(Ruler):
     def distance(
         self,
         current: torch.Tensor,

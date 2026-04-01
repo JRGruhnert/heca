@@ -10,8 +10,8 @@ from src.factory import (
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
-from src.states.logic.evaluations.evaluation import ValueEvaluationConfig
+from src.states.logic.evaluators.evaluation import StateEvaluatorConfig
+from src.states.logic.rulers.ruler import RulerConfig
 from src.states.logic.value_handler.normalizers.ignore_normalizer import (
     IgnoreValueConfig,
 )
@@ -20,13 +20,12 @@ from src.states.logic.value_handler.value_handler import ValueHandlerConfig
 
 
 @dataclass
-class ObjectConfig:
+class StateConfig:
     id: int
     label: str
+    ruler: RulerConfig
     condition: ConditionConfig
-    dst_skill: ValueDistanceConfig
-    dst_goal: ValueDistanceConfig
-    evaluator: ValueEvaluationConfig
+    evaluator: StateEvaluatorConfig
     encoder: StateEncoderConfig
     normalizer: NormalizerConfig
     preencoder: ValueHandlerConfig = IgnoreValueConfig()
@@ -36,49 +35,31 @@ class ObjectConfig:
 class State:
     def __init__(
         self,
-        config: ObjectConfig,
+        config: StateConfig,
     ):
         self.config = config
-        self.dst_skill = select_distance(config.dst_skill)
-        self.dst_goal = select_distance(config.dst_goal)
+        self.ruler = select_distance(config.ruler)
+        self.validator = select_value_handler(config.validator)
         self.evaluator = select_eval_condition(config.evaluator)
         self.normalizer = select_value_handler(config.normalizer)
         self.preencoder = select_value_handler(config.preencoder)
-        self.validator = select_value_handler(config.validator)
+
+    def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
+        xn = self.normalizer(x)
+        yn = self.normalizer(y)
+        return self.ruler(xn, yn)
+
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        xn = self.normalizer(x)
+        yn = self.normalizer(y)
+        return self.evaluator(xn, yn)
+
+    def validate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        """Checks if the given value is a valid sample."""
+        nx = self.normalizer(x)
+        ny = self.normalizer(y)
+        return self.validator(nx, ny)
 
     def pre_encode(self, x: torch.Tensor) -> torch.Tensor:
         nx = self.normalizer(x)
         return self.preencoder(nx)
-
-    def distance(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-        dst: Distance,
-    ) -> float:
-        xn = self.normalizer(x)
-        yn = self.normalizer(y)
-        return dst.distance(xn, yn)
-
-    def distance_to_skill(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> float:
-        return self.distance(x, y, self.dst_skill)
-
-    def distance_to_goal(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> float:
-        return self.distance(x, y, self.dst_goal)
-
-    def evaluate(
-        self,
-        x: torch.Tensor,
-        y: torch.Tensor,
-    ) -> bool:
-        xn = self.validator(x)
-        yn = self.validator(y)
-        return self.evaluator(xn, yn)

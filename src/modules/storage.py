@@ -2,15 +2,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from src.factory import select_skills, select_states
 from src.skills.tree.node import TreeNode, TreeNodeConfig
-from src.states.state import State, ObjectConfig
+from src.states.state import State, StateConfig
 import os
 
 
 @dataclass
 class StorageConfig:
     skills: Sequence[TreeNodeConfig]
-    states_network: Sequence[ObjectConfig]
-    states_eval: Sequence[ObjectConfig]
+    states_network: Sequence[StateConfig]
+    states_eval: Sequence[StateConfig]
     tag: str = "untagged_run"
     storage_path: str = "data"
     results_path: str = "results"
@@ -38,8 +38,8 @@ class Storage:
             select_skills(self.config.skills), key=lambda s: s.config.id
         )
 
-        self.states_network_dict = {s.config.label: s for s in self.states_network}
-        self.states_eval_dict = {s.config.label: s for s in self.states_eval}
+        self.states_dict_network = {s.config.label: s for s in self.states_network}
+        self.states_dict_eval = {s.config.label: s for s in self.states_eval}
         self.skills_dict = {s.config.label: s for s in self.skills}
 
     def create_directory(self, path: str):
@@ -70,12 +70,3 @@ class Storage:
         if skill is None:
             raise ValueError(f"Skill with name {name} not found in storage.")
         return skill
-
-    def get_state_by_name(self, name: str) -> State:
-        state = self.states_network_dict.get(name) or self.states_eval_dict.get(name)
-        if state is None:
-            raise ValueError(f"State with name {name} not found in storage.")
-        return state
-
-    def skill_by_index(self, idx: int) -> TreeNode:
-        return self.skills[idx]

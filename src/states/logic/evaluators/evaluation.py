@@ -4,11 +4,11 @@ import torch
 
 
 @dataclass
-class EvaluationConfig:
+class StateEvaluatorConfig:
     pass
 
 
-class Evaluation(ABC):
+class StateEvaluator(ABC):
     """Abstract base class for success evaluation strategies."""
 
     @abstractmethod

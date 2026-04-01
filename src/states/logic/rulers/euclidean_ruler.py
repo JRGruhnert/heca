@@ -1,18 +1,17 @@
 from dataclasses import dataclass
 import math
-
 import torch
 
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass
-class EuclideanDistanceConfig(ValueDistanceConfig):
+class EuclideanRulerConfig(RulerConfig):
     pass
 
 
-class EuclideanDistance(Distance):
-    def __init__(self, config: EuclideanDistanceConfig):
+class EuclideanRuler(Ruler):
+    def __init__(self, config: EuclideanRulerConfig):
         super().__init__(config)
         self.config = config
         self.max_dist = math.sqrt(3)

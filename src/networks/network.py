@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
 from src.networks.layers.encoder import (
-    StateEncoder,
     StateEncoderRegistry,
     StateEncoderRegistryConfig,
 )

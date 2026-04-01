@@ -1,6 +1,4 @@
-from collections.abc import Sequence
-
-from conf.state_sets import OBJECT_SETS, ObjectSet
+from conf.object_sets import OBJECT_SETS, ObjectSet
 from conf.skill_sets import SKILL_SETS, SkillSet
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
@@ -12,8 +10,6 @@ from src.experiments.pepr import PePrConfig
 from src.networks.baseline import BaselineNetworkConfig
 from src.networks.gnn import GraphNetworkConfig
 from src.networks.network import NetworkConfig
-from src.skills.tree.node import TreeNodeConfig
-from src.states.state import ObjectConfig
 
 evaluator = Dense3EvaluatorConfig(
     success_reward=25.0,
@@ -37,9 +33,9 @@ def storage_config(
     skill_set: SkillSet,
 ) -> StorageConfig:
     return StorageConfig(
-        skills=skill_configs(skill_set),
-        states_network=state_configs(state_set),
-        states_eval=state_configs(state_set),
+        skills=SKILL_SETS[skill_set],
+        states_network=OBJECT_SETS[state_set],
+        states_eval=OBJECT_SETS[state_set],
         tag=f"{prefix_tag}_{state_set.value}_{skill_set.value}",
     )
 
@@ -116,11 +112,3 @@ def evaluator_config(evaluator_tag: str = "dense3") -> Dense3EvaluatorConfig:
         )
     else:
         raise ValueError(f"Unknown evaluator tag: {evaluator_tag}")
-
-
-def skill_configs(skill_set: SkillSet) -> Sequence[TreeNodeConfig]:
-    return SKILL_SETS[skill_set]
-
-
-def state_configs(state_set: ObjectSet) -> Sequence[ObjectConfig]:
-    return OBJECT_SETS[state_set]

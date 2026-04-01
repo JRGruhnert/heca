@@ -23,12 +23,12 @@ class Dense3Evaluator(Evaluator):
         self.config = config
         self.max_percentage_done: float = 0.0
 
-    def is_valid_sample(
+    def evaluate_sample(
         self,
         current: StateValueDict,
         goal: StateValueDict,
     ) -> bool:
-        valid = super().is_valid_sample(current, goal)
+        valid = super().evaluate_sample(current, goal)
         self.max_percentage_done = max(self.max_percentage_done, self.percentage_done)
         # print("Resetting")
         return valid

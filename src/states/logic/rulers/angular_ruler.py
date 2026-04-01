@@ -3,15 +3,15 @@ import math
 
 import torch
 
-from src.states.logic.distances.distance import Distance, ValueDistanceConfig
+from src.states.logic.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass
-class AngularDistanceConfig(ValueDistanceConfig):
+class AngularRulerConfig(RulerConfig):
     pass
 
 
-class AngularDistance(Distance):
+class AngularRuler(Ruler):
     def distance(
         self,
         current: torch.Tensor,

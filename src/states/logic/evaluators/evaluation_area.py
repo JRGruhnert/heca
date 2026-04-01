@@ -3,15 +3,15 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.area import Area, AreaConfig
-from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
+from src.states.logic.evaluators.evaluation import StateEvaluator, StateEvaluatorConfig
 
 
 @dataclass
-class AreaEvalConditionConfig(ValueEvaluationConfig):
+class AreaEvalConditionConfig(StateEvaluatorConfig):
     area: AreaConfig
 
 
-class AreaEvalCondition(Evaluation):
+class AreaEvalCondition(StateEvaluator):
     def __init__(self, config: AreaEvalConditionConfig):
         self.config = config
         self.area = Area(config.area)
@@ -20,5 +20,9 @@ class AreaEvalCondition(Evaluation):
         return self.area.check_area_similarity(current, goal)
 
     def is_in_area(self, value: torch.Tensor) -> bool:
+        """Checks if the given value is within the defined areas."""
+        return self.area.check_eval_area(value) is not None
+
+    def validate(self, value: torch.Tensor) -> bool:
         """Checks if the given value is within the defined areas."""
         return self.area.check_eval_area(value) is not None

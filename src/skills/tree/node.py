@@ -52,7 +52,7 @@ class TreeNode:
         return self.stamp(x, y)
 
     @cached_property
-    def parameter(self) -> set[str]:
+    def parameter_label(self) -> set[str]:
         return set(self.precons.keys()) | set(self.postcons.keys())
 
     @cached_property

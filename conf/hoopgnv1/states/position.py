@@ -8,26 +8,26 @@ from src.states.logic.value_handler.normalizers.boundary_normalizer import (
 )
 from src.states.logic.condition import ConditionConfig
 from src.states.logic.distances.distance_euclidean import (
-    EuclideanDistanceConfig,
+    EuclideanRulerConfig,
 )
 
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.state import ObjectConfig
+from src.states.state import StateConfig
 
 
 @dataclass
-class PositionStateConfig(ObjectConfig):
+class PositionStateConfig(StateConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="EulerPrecise",
         dim_input=3,
     )
-    distance: EuclideanDistanceConfig = EuclideanDistanceConfig()
+    distance: EuclideanRulerConfig = EuclideanRulerConfig()
     evaluator: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
-        distance=EuclideanDistanceConfig(),
+        distance=EuclideanRulerConfig(),
     )
     normalizer: NormalizerConfig = AreaBoundaryConfig()
     condition: ConditionConfig = ConditionConfig(
-        distance=EuclideanDistanceConfig(),
+        distance=EuclideanRulerConfig(),
         preprocessor=EuclideanStatePreprocessorConfig(),
     )
