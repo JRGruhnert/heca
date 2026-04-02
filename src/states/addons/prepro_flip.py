@@ -2,20 +2,19 @@ from dataclasses import dataclass
 
 import torch
 
-from src.states.logic.addons.state_preprocessor import (
+from src.states.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
 
 
 @dataclass
-class EuclideanStatePreprocessorConfig(StatePreprocessorConfig):
+class FlipStatePreprocessorConfig(StatePreprocessorConfig):
     pass
 
 
-class EuclideanStatePreprocessor(StatePreprocessor):
-
-    def __init__(self, config: EuclideanStatePreprocessorConfig):
+class FlipStatePreprocessor(StatePreprocessor):
+    def __init__(self, config: FlipStatePreprocessorConfig):
         super().__init__(config)
         self.config = config
 
@@ -26,10 +25,13 @@ class EuclideanStatePreprocessor(StatePreprocessor):
         reversed: bool,
         selected_by_tapas: bool = False,
     ) -> torch.Tensor | None:
+        """Returns the mean of the given tensor values."""
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
-        if selected_by_tapas:
-            if reversed:
-                return end.mean(dim=0)
-            return start.mean(dim=0)
-        return None  # Not selected by tapas
+        if
+        if (end == (1 - start)).all():
+            return torch.tensor([1.0])  # Flip state
+        return None
+
+    def process(self, x: torch.Tensor) -> torch.Tensor:
+        raise NotImplementedError

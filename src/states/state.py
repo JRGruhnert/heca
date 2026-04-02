@@ -10,13 +10,13 @@ from src.factory import (
 
 from src.networks.layers.encoder import StateEncoderConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.evaluators.evaluation import StateEvaluatorConfig
-from src.states.logic.rulers.ruler import RulerConfig
-from src.states.logic.value_handler.normalizers.ignore_normalizer import (
+from src.states.evaluators.evaluation import StateEvaluatorConfig
+from src.states.rulers.ruler import RulerConfig
+from src.states.value_handler.normalizers.ignore_normalizer import (
     IgnoreValueConfig,
 )
-from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.logic.value_handler.value_handler import ValueHandlerConfig
+from src.states.value_handler.normalizers.normalizer import NormalizerConfig
+from src.states.value_handler.value_handler import ValueHandlerConfig
 
 
 @dataclass

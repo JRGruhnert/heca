@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from src.states import state
-from src.states.logic.value_handler.value_handler import (
+from src.states.value_handler.value_handler import (
     ValueHandler,
     ValueHandlerConfig,
 )

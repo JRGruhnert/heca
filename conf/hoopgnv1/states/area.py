@@ -2,20 +2,20 @@ from dataclasses import dataclass, field
 
 from src.networks.layers.classifiers.state_classifier import StateClassifierConfig
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.logic.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
+from src.states.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
 from src.states.logic.area import AreaConfig
 from src.states.logic.condition import ConditionConfig
-from src.states.logic.evaluators.evaluation import StateEvaluatorConfig
-from src.states.logic.rulers.euclidean_ruler import EuclideanRulerConfig
-from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+from src.states.evaluators.evaluation import StateEvaluatorConfig
+from src.states.rulers.euclidean_ruler import EuclideanRulerConfig
+from src.states.value_handler.normalizers.boundary_normalizer import (
     AreaBoundaryConfig,
 )
 
 
-from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.logic.value_handler.validators.area_validator import AreaValidatorConfig
-from src.states.logic.value_handler.value_handler import ValueHandlerConfig
-from src.states.logic.value_handler.value_one_hot import OneHotValueConfig
+from src.states.value_handler.normalizers.normalizer import NormalizerConfig
+from src.states.value_handler.validators.area_validator import AreaValidatorConfig
+from src.states.value_handler.value_handler import ValueHandlerConfig
+from src.states.value_handler.value_one_hot import OneHotValueConfig
 from src.states.state import StateConfig
 
 
@@ -62,7 +62,7 @@ class CalvinAreaStateConfig(StateConfig):
         ),
     )
     condition: ConditionConfig = ConditionConfig(
-        distance=EuclideanRulerConfig(),
+        ruler=EuclideanRulerConfig(),
         preprocessor=EuclideanStatePreprocessorConfig(),
     )
     validator: ValueHandlerConfig = AreaValidatorConfig(

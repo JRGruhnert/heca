@@ -37,51 +37,18 @@ from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
 from src.skills.tree.node import TreeNode, TreeNodeConfig
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
 from src.skills.tree.parameter import NodeParameter, NodeParameterConfig
-from src.states.logic.addons.prepro_flip import (
+from src.states.addons.prepro_flip import (
     FlipStatePreprocessor,
     FlipStatePreprocessorConfig,
 )
 from src.states.logic.condition import Condition, ConditionConfig
-from src.states.logic.values.value_quaternion import (
-    QuaternionValue,
-    QuaternionValueConfig,
-)
-from src.states.logic.distances.distance import Ruler, ValueDistanceConfig
-from src.states.logic.evaluations.evaluation import Evaluation, ValueEvaluationConfig
-from src.states.logic.distances.distance_flip_special import (
-    FlipRuler,
-    FlipRulerConfig,
-)
-from src.states.logic.values.value_identity import (
-    IdentityValue,
-    IdentityValueConfig,
-)
-from src.states.logic.values.value_linear import (
-    LinearValue,
-    LinearValueConfig,
-)
-from src.states.logic.distances.distance_euclidean import (
-    EuclideanRuler,
-    EuclideanRulerConfig,
-)
-from src.states.logic.addons.state_preprocessor import (
+from src.states.addons.state_preprocessor import (
     StatePreprocessor,
     StatePreprocessorConfig,
 )
-from src.states.logic.evaluations.evaluation_threshold import (
-    ThresholdEvaluation,
-    ThresholdEvaluationConfig,
-)
-from src.states.logic.distances.distance_binary import (
-    BinaryRulerConfig,
-    ScalarDistance,
-)
-from src.states.logic.distances.distance_angular import (
-    AngularDistance,
-    AngularRulerConfig,
-)
-from src.states.logic.values.value_handler import ValueHandler, ValueHandlerConfig
+from src.states.rulers.ruler import Ruler, RulerConfig
 from src.states.state import StateConfig, State
+from src.states.value_handler.value_handler import ValueHandler, ValueHandlerConfig
 
 
 def select_states(configs: Sequence[StateConfig]) -> list[State]:
@@ -106,7 +73,7 @@ def select_value_handler(config: ValueHandlerConfig) -> ValueHandler:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance(config: ValueDistanceConfig) -> Ruler:
+def select_distance(config: RulerConfig) -> Ruler:
     """Create distance condition from config - simple factory function"""
     if isinstance(config, BinaryRulerConfig):
         return ScalarDistance(config)

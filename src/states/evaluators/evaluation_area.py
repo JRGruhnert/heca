@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from src.states.logic.area import Area, AreaConfig
-from src.states.logic.evaluators.evaluation import StateEvaluator, StateEvaluatorConfig
+from src.states.evaluators.evaluation import StateEvaluator, StateEvaluatorConfig
 
 
 @dataclass

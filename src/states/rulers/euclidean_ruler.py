@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import math
 import torch
 
-from src.states.logic.rulers.ruler import Ruler, RulerConfig
+from src.states.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass

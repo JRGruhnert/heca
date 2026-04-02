@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.logic.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.logic.value_handler.normalizers.boundary_normalizer import (
+from src.states.addons.prepro_scalar import ScalarStatePreprocessorConfig
+from src.states.value_handler.normalizers.boundary_normalizer import (
     BoolBoundaryConfig,
 )
 from src.states.logic.condition import ConditionConfig
@@ -10,7 +10,7 @@ from src.states.logic.distances.distance_flip_special import FlipRulerConfig
 from src.states.logic.threshold_boundary import BoundaryThresholdConfig
 from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
 from src.states.logic.distances.distance_binary import BinaryRulerConfig
-from src.states.logic.value_handler.normalizers.normalizer import NormalizerConfig
+from src.states.value_handler.normalizers.normalizer import NormalizerConfig
 from src.states.state import StateConfig
 
 
@@ -27,7 +27,7 @@ class FlipStateConfig(StateConfig):
         distance=BinaryRulerConfig(),
     )
     condition: ConditionConfig = ConditionConfig(
-        distance=FlipRulerConfig(),
+        ruler=FlipRulerConfig(),
         preprocessor=ScalarStatePreprocessorConfig(
             threshold=BoundaryThresholdConfig(
                 boundary=BoolBoundaryConfig(),
