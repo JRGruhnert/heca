@@ -1,5 +1,11 @@
 # HRL Master Project
 
+```bash
+python -m cli.hoopgn explain -c conf/explain/gnn.py
+```
+
+## bla
+
 A hierarchical reinforcement learning framework for robotic manipulation tasks using a slighly modified version of [CALVIN Environment](https://github.com/mees/calvin). This project implements skill-based learning with [TAPAS](https://github.com/robot-learning-freiburg/TAPAS) (Task-Parameterized Gaussian Mixture Models) and supports various agent architectures including GNN-based and baseline approaches.
 
 ## Requirements
