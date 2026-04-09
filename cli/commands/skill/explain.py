@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from src.modules.storage import Storage, StorageConfig
+from src.storage import Storage, StorageConfig
 from src.plotting.object_point import ObjectLocationPoint
 from src.plotting.plots.skill.tp import ObjectConditionsPlot
 from src.skills.tree.leafs.leaf import Leaf

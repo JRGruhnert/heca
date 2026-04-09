@@ -6,8 +6,8 @@ import wandb
 from torch.distributions import Categorical
 from src.hardware import device
 from src.agents.agent import Agent, AgentConfig
-from src.modules.buffer import Buffer
-from src.modules.storage import Storage
+from src.buffer import Buffer
+from src.storage import Storage
 from src.modules.watcher import Watcher
 from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from src.networks.gnn import GraphNetwork, GraphNetworkConfig
@@ -16,7 +16,7 @@ from src.networks.network import Network, NetworkConfig
 from loguru import logger
 from thop import profile
 
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

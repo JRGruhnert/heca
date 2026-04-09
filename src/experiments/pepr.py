@@ -3,12 +3,12 @@ import math
 import random
 
 from loguru import logger
-from src.modules.storage import Storage
+from src.storage import Storage
 from src.experiments.experiment import Experiment, ExperimentConfig
 from src.environments.environment import Environment
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

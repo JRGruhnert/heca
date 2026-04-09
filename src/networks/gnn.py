@@ -6,11 +6,11 @@ import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
-from src.modules.explainer import HoopgnExplainer
+from src.explainer import HoopgnExplainer
 from src.observation.observation import StateValueDict
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 from src.objects.properties.condition import Condition
 from src.objects.properties.property import State
 from torch_geometric.data import HeteroData

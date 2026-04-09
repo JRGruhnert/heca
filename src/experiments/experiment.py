@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from src.environments.environment import Environment
-from src.modules.storage import Storage
+from src.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

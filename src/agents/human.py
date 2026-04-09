@@ -1,9 +1,9 @@
 from dataclasses import dataclass
 from src.agents.agent import Agent, AgentConfig
-from src.modules.buffer import Buffer
-from src.modules.storage import Storage
+from src.buffer import Buffer
+from src.storage import Storage
 from src.observation.observation import StateValueDict
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

@@ -4,9 +4,9 @@ import loguru
 from omegaconf import OmegaConf, SCMode
 from tapas_gmm.utils.argparse import parse_and_build_config
 from src.factory import select_environment, select_evaluator
-from src.modules.evaluators.evaluator import EvaluatorConfig
-from src.modules.logger import Logger, LoggerConfig
-from src.modules.storage import Storage, StorageConfig
+from src.evaluators.evaluator import EvaluatorConfig
+from src.logger import Logger, LoggerConfig
+from src.storage import Storage, StorageConfig
 from src.environments.environment import EnvironmentConfig
 from src.experiments.skill_check import SkillCheckExperiment, SkillCheckExperimentConfig
 from src.skills.tree.leafs.leaf import Leaf

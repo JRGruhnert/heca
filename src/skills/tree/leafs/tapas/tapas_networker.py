@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
+from src.skills.networker import NodeNetworker, NodeNetworkerConfig
 
 
 @dataclass

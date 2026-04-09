@@ -3,10 +3,10 @@ import re
 
 from tqdm import trange
 
-from src.modules.logger import LoggerConfig, Logger
-from src.modules.buffer import BufferConfig, Buffer
-from src.modules.evaluators.evaluator import EvaluatorConfig
-from src.modules.storage import Storage, StorageConfig
+from src.logger import LoggerConfig, Logger
+from src.buffer import BufferConfig, Buffer
+from src.evaluators.evaluator import EvaluatorConfig
+from src.storage import Storage, StorageConfig
 from src.environments.environment import EnvironmentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig

@@ -9,9 +9,9 @@ from conf.common import (
     network_config,
     evaluator_config,
 )
-from src.modules.buffer import BufferConfig
-from src.modules.logger import LogMode
-from src.modules.storage import Storage
+from src.buffer import BufferConfig
+from src.logger import LogMode
+from src.storage import Storage
 
 
 def get_explain_config(

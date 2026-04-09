@@ -4,7 +4,7 @@ from conf.hoopgnv1.states.area import CalvinAreaStateConfig
 from conf.hoopgnv1.states.bool import BoolStateConfig
 from conf.hoopgnv1.states.position import PositionStateConfig
 from conf.hoopgnv1.states.range import RangeStateConfig
-from conf.hoopgnv1.states.rotation import RotationStateConfig
+from conf.hoopgnv1.states.quaternion import QuaternionStateConfig
 from conf.hoopgnv1.states.flip import FlipStateConfig
 
 
@@ -14,7 +14,7 @@ class CalvinStateSet:
         label="ee_position",
         id=0,
     )
-    ee_rotation: RotationStateConfig = RotationStateConfig(
+    ee_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="ee_rotation",
         id=1,
     )
@@ -26,7 +26,7 @@ class CalvinStateSet:
         label="slide_position",
         id=3,
     )
-    slide_rotation: RotationStateConfig = RotationStateConfig(
+    slide_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="slide_rotation",
         id=4,
     )
@@ -40,7 +40,7 @@ class CalvinStateSet:
         label="drawer_position",
         id=6,
     )
-    drawer_rotation: RotationStateConfig = RotationStateConfig(
+    drawer_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="drawer_rotation",
         id=7,
     )
@@ -54,7 +54,7 @@ class CalvinStateSet:
         label="button_position",
         id=9,
     )
-    button_rotation: RotationStateConfig = RotationStateConfig(
+    button_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="button_rotation",
         id=10,
     )
@@ -66,7 +66,7 @@ class CalvinStateSet:
         label="led_position",
         id=12,
     )
-    led_rotation: RotationStateConfig = RotationStateConfig(
+    led_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="led_rotation",
         id=13,
     )
@@ -74,7 +74,7 @@ class CalvinStateSet:
         label="block_red_position",
         id=14,
     )
-    block_red_rotation: RotationStateConfig = RotationStateConfig(
+    block_red_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="block_red_rotation",
         id=15,
         # ignore=True,
@@ -87,7 +87,7 @@ class CalvinStateSet:
         label="block_blue_position",
         id=17,
     )
-    block_blue_rotation: RotationStateConfig = RotationStateConfig(
+    block_blue_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="block_blue_rotation",
         id=18,
         # ignore=True,
@@ -100,7 +100,7 @@ class CalvinStateSet:
         label="block_pink_position",
         id=20,
     )
-    block_pink_rotation: RotationStateConfig = RotationStateConfig(
+    block_pink_rotation: QuaternionStateConfig = QuaternionStateConfig(
         label="block_pink_rotation",
         id=21,
         # ignore=True,

@@ -2,29 +2,25 @@ from dataclasses import dataclass
 
 import torch
 
-from src.factory import (
-    select_state_evaluator,
-    select_state_ruler,
-    select_eval_condition,
-    select_state_validator,
-    select_value_handler,
-)
-
 from src.networks.layers.encoder import StateEncoderConfig
 from src.objects.properties.condition import ConditionConfig
-from src.objects.properties.value_handler.evaluators.evaluator import (
+from src.objects.properties.handlers import select_state_handler
+from src.objects.properties.handlers.evaluators import select_state_evaluator
+from src.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.value_handler.rulers.ruler import RulerConfig
-from src.objects.properties.value_handler.normalizers.ignore_normalizer import (
-    IgnoreValueConfig,
-)
-from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
-from src.objects.properties.value_handler.validators.ignore_validator import (
+from src.objects.properties.handlers.ignore_handler import IgnoreValueConfig
+from src.objects.properties.handlers.normalizers import select_state_normalizer
+from src.objects.properties.handlers.rulers import select_state_ruler
+from src.objects.properties.handlers.rulers.ruler import RulerConfig
+
+from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.handlers.validators import select_state_validator
+from src.objects.properties.handlers.validators.ignore_validator import (
     IgnoreValidatorConfig,
 )
-from src.objects.properties.value_handler.validators.validator import ValidatorConfig
-from src.objects.properties.value_handler.value_handler import ValueHandlerConfig
+from src.objects.properties.handlers.validators.validator import StateValidatorConfig
+from src.objects.properties.handlers.handler import ValueHandlerConfig
 
 
 @dataclass
@@ -36,7 +32,7 @@ class StateConfig:
     evaluator: StateEvaluatorConfig
     encoder: StateEncoderConfig
     normalizer: NormalizerConfig
-    validator: ValidatorConfig = IgnoreValidatorConfig()
+    validator: StateValidatorConfig = IgnoreValidatorConfig()
     preencoder: ValueHandlerConfig = IgnoreValueConfig()
 
 
@@ -50,7 +46,7 @@ class State:
         self.validator = select_state_validator(config.validator)
         self.evaluator = select_state_evaluator(config.evaluator)
         self.normalizer = select_state_normalizer(config.normalizer)
-        self.preencoder = select_value_handler(config.preencoder)
+        self.preencoder = select_state_handler(config.preencoder)
 
     def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
         xn = self.normalizer(x)

@@ -3,9 +3,9 @@ from conf.skill_sets import SKILL_SETS, SkillSet
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.environments.environment import EnvironmentConfig
-from src.modules.evaluators.dense3 import Dense3EvaluatorConfig
-from src.modules.logger import LogMode, LoggerConfig
-from src.modules.storage import StorageConfig
+from src.evaluators.dense3 import Dense3EvaluatorConfig
+from src.logger import LogMode, LoggerConfig
+from src.storage import StorageConfig
 from src.experiments.pepr import PePrConfig
 from src.networks.baseline import BaselineNetworkConfig
 from src.networks.gnn import GraphNetworkConfig

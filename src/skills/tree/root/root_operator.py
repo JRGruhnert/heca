@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from src.observation.observation import StateValueDict
-from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
+from src.skills.operator import NodeOperator, NodeOperatorConfig
 from src.objects.properties.condition import Condition
 
 

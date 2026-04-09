@@ -3,16 +3,16 @@ from typing import Optional
 
 import torch
 from src.agents.agent import AgentConfig, Agent
-from src.modules.buffer import Buffer
-from src.modules.evaluators.tree import TreeEvaluator, TreeEvaluatorConfig
-from src.modules.storage import Storage
+from src.buffer import Buffer
+from src.evaluators.tree import TreeEvaluator, TreeEvaluatorConfig
+from src.storage import Storage
 from src.observation.observation import StateValueDict
 
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
 from loguru import logger
 from heapq import heapify, heappop, heappush
 
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 class SRNode:
@@ -105,7 +105,7 @@ class SearchTreeAgent(Agent):
             # )  # Just for checking if its really the same
         self.index += 1
         # print(f"Chosen Skill: {skill.name}")
-        self.buffer.act_values_tree(obs, goal, skill.id)
+        self.buffer.act_values_tree(obs, goal, skill.config.id)
         return skill
 
     def explain(

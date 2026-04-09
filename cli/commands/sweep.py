@@ -1,10 +1,10 @@
 import wandb
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.experiments.pepr import PePrConfig
-from src.modules.buffer import BufferConfig
-from src.modules.evaluators.dense3 import Dense3EvaluatorConfig
-from src.modules.logger import LoggerConfig
-from src.modules.storage import StorageConfig
+from src.buffer import BufferConfig
+from src.evaluators.dense3 import Dense3EvaluatorConfig
+from src.logger import LoggerConfig
+from src.storage import StorageConfig
 from src.agents.ppo import PPOAgentConfig
 from cli.hoopgn import TrainConfig, Trainer
 

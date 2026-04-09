@@ -1,9 +1,9 @@
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.experiments.skill_check import SkillCheckExperimentConfig
-from src.modules.evaluators.skill import SkillEvaluatorConfig
-from src.modules.evaluators.sparse import SparseEvaluatorConfig
-from src.modules.logger import LogMode, LoggerConfig
-from src.modules.storage import StorageConfig
+from src.evaluators.skill import SkillEvaluatorConfig
+from src.evaluators.sparse import SparseEvaluatorConfig
+from src.logger import LogMode, LoggerConfig
+from src.storage import StorageConfig
 from src.variables import SET_SRPB
 
 mode = LogMode.TERMINAL

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from src.observation.observation import StateValueDict
 
-from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
+from src.skills.networker import NodeNetworker, NodeNetworkerConfig
 
 
 @dataclass

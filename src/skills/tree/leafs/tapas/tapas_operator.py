@@ -28,9 +28,9 @@ from tapas_gmm.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from src.observation.observation import StateValueDict
-from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
+from src.skills.operator import NodeOperator, NodeOperatorConfig
 from src.objects.properties.value_handler.evaluators.area_evaluator import (
-    AreaEvalCondition,
+    AreaEvaluator,
 )
 from src.objects.properties.condition import Condition
 from src.objects.properties.property import State
@@ -241,7 +241,7 @@ class TapasLeafOperator(NodeOperator):
                     position_state_name = f"{match_position.group(1)}_position"
                     if position_state_name in states_dict:
                         temp_state = states_dict[position_state_name]
-                        if isinstance(temp_state.evaluator, AreaEvalCondition):
+                        if isinstance(temp_state.evaluator, AreaEvaluator):
                             area = temp_state.evaluator.area.check_eval_area(
                                 goal[position_state_name]
                             )

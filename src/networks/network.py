@@ -9,7 +9,7 @@ from src.networks.layers.encoder import (
 )
 
 from src.observation.observation import StateValueDict
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 from src.objects.properties.property import State
 from loguru import logger
 

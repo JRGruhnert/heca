@@ -5,15 +5,15 @@ from src.skills.tree.leafs.tapas.tapas_networker import (
     TapasNetworkerConfig,
 )
 from src.skills.tree.leafs.tapas.tapas_operator import TapasOperatorConfig
-from src.skills.tree.networker import NodeNetworkerConfig
-from src.skills.tree.node import TreeNodeConfig
+from src.skills.networker import NodeNetworkerConfig
+from src.skills.node import TreeNodeConfig
 from src.objects.properties.property import StateConfig
 
 
 @dataclass
 class TapasConfig(TreeNodeConfig):
     states: list[StateConfig] = field(default_factory=list)
-    overrides: set[str] = field(default_factory=set)
+    overrides: list[str] = field(default_factory=list)
     childs: set[int] = field(default_factory=set)
     networker: NodeNetworkerConfig = TapasNetworkerConfig()
     operator: TapasOperatorConfig = field(init=False)
@@ -24,6 +24,6 @@ class TapasConfig(TreeNodeConfig):
             conditions={state.label: state.condition for state in self.states},
             label=self.label,
             reversed=self.reversed,
-            overrides=self.overrides,
+            overrides=set(self.overrides),
         )
         self.reversed = True if len(self.overrides) != 0 else False

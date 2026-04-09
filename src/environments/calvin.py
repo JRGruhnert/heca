@@ -1,13 +1,13 @@
 from dataclasses import dataclass
 from external.tapas_gmm_modified.tapas_gmm.env.calvin import Calvin, CalvinConfig
-from src.modules.evaluators.evaluator import Evaluator
-from src.modules.storage import Storage
+from src.evaluators.evaluator import Evaluator
+from src.storage import Storage
 from src.environments.environment import Environment, EnvironmentConfig
 from src.observation.observation import StateValueDict
 
 from src.observation.calvin import CalvinObservation
 from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

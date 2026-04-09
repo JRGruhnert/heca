@@ -3,7 +3,7 @@ from typing import Any
 from src.observation.observation import StateValueDict
 from dataclasses import dataclass
 
-from src.skills.tree.node import TreeNode
+from src.skills.node import TreeNode
 
 
 @dataclass

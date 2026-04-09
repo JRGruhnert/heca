@@ -4,25 +4,26 @@ from src.networks.layers.classifiers.state_classifier import StateClassifierConf
 from src.networks.layers.encoder import StateEncoderConfig
 from src.objects.properties.area import AreaConfig
 from src.objects.properties.condition import ConditionConfig
-from src.objects.properties.value_handler.evaluators.evaluator import (
+from src.objects.properties.handlers.validators.validator import StateValidatorConfig
+from src.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+from src.objects.properties.handlers.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
 )
-from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+from src.objects.properties.handlers.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
+from src.objects.properties.handlers.normalizers.boundary_normalizer import (
     AreaBoundaryConfig,
 )
 
-from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
-from src.objects.properties.value_handler.validators.area_validator import (
+from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.handlers.validators.area_validator import (
     AreaValidatorConfig,
 )
-from src.objects.properties.value_handler.value_handler import ValueHandlerConfig
-from src.objects.properties.value_handler.value_one_hot import OneHotValueConfig
+from src.objects.properties.handlers.handler import ValueHandlerConfig
+from src.objects.properties.handlers.one_hot_handler import OneHotValueConfig
 from src.objects.properties.property import StateConfig
 
 
@@ -67,7 +68,7 @@ class CalvinAreaStateConfig(StateConfig):
         ruler=EuclideanRulerConfig(),
         parameter=EuclideanParameterConfig(),
     )
-    validator: ValueHandlerConfig = AreaValidatorConfig(
+    validator: StateValidatorConfig = AreaValidatorConfig(
         area=CalvinAreaConfig(
             classifier=StateClassifierConfig(),
         )

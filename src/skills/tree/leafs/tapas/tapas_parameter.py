@@ -4,7 +4,7 @@ from src.skills.tree.leafs.tapas.tapas_operator import (
     TapasLeafOperator,
     TapasOperatorConfig,
 )
-from src.skills.tree.parameter import NodeParameter, NodeParameterConfig
+from src.skills.parameter import NodeParameter, NodeParameterConfig
 from src.objects.properties.condition import Condition, ConditionConfig
 
 

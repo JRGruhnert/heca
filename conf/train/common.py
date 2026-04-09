@@ -8,8 +8,8 @@ from conf.common import (
     network_config,
     evaluator_config,
 )
-from src.modules.buffer import BufferConfig
-from src.modules.logger import LogMode
+from src.buffer import BufferConfig
+from src.logger import LogMode
 
 
 def get_explain_config(

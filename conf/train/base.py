@@ -1,8 +1,8 @@
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
-from src.modules.buffer import BufferConfig
-from src.modules.logger import LogMode, LoggerConfig
-from src.modules.storage import StorageConfig
+from src.buffer import BufferConfig
+from src.logger import LogMode, LoggerConfig
+from src.storage import StorageConfig
 from src.experiments.pepr import PePrConfig
 from conf.common.evaluator import dense3_evaluator
 from conf.common.evaluator import sparse_evaluator
