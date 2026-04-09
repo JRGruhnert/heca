@@ -21,6 +21,43 @@ from src.environments.calvin import (
     CalvinEnvironmentConfig,
 )
 
+from src.objects.properties.property import State, StateConfig
+from src.objects.properties.value_handler.evaluators.area_evaluator import (
+    AreaEvaluator,
+    AreaEvaluatorConfig,
+)
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluator,
+    StateEvaluatorConfig,
+)
+from src.objects.properties.value_handler.evaluators.ignore_evaluator import (
+    IgnoreEvaluator,
+    IgnoreEvaluatorConfig,
+)
+from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+    ThresholdEvaluator,
+    ThresholdEvaluatorConfig,
+)
+from src.objects.properties.value_handler.parameters.parameter import (
+    StateParameter,
+    StateParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.binary_ruler import (
+    BinaryRulerConfig,
+    BinaryRuler,
+)
+from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+    EuclideanRuler,
+    EuclideanRulerConfig,
+)
+from src.objects.properties.value_handler.rulers.flip_ruler import (
+    FlipRuler,
+    FlipRulerConfig,
+)
+from src.objects.properties.value_handler.rulers.angular_ruler import (
+    AngularRuler,
+    AngularRulerConfig,
+)
 from src.skills.tree.leafs.tapas.tapas_networker import (
     TapasNetworker,
     TapasNetworkerConfig,
@@ -37,18 +74,35 @@ from src.skills.tree.networker import NodeNetworker, NodeNetworkerConfig
 from src.skills.tree.node import TreeNode, TreeNodeConfig
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
 from src.skills.tree.parameter import NodeParameter, NodeParameterConfig
-from src.states.addons.prepro_flip import (
-    FlipStatePreprocessor,
-    FlipStatePreprocessorConfig,
-)
-from src.states.logic.condition import Condition, ConditionConfig
-from src.states.addons.state_preprocessor import (
-    StatePreprocessor,
-    StatePreprocessorConfig,
-)
-from src.states.rulers.ruler import Ruler, RulerConfig
-from src.states.state import StateConfig, State
-from src.states.value_handler.value_handler import ValueHandler, ValueHandlerConfig
+
+
+STATE_RULER_BUILDERS = {
+    BinaryRulerConfig: lambda config: BinaryRuler(config),
+    EuclideanRulerConfig: lambda config: EuclideanRuler(config),
+    FlipRulerConfig: lambda config: FlipRuler(config),
+    AngularRulerConfig: lambda config: AngularRuler(config),
+}
+
+AGENT_BUILDERS = {
+    PPOAgentConfig: lambda config, storage, buffer: PPOAgent(config, buffer, storage),
+    SearchTreeAgentConfig: lambda config, storage, buffer: SearchTreeAgent(
+        config,
+        storage,
+        buffer,
+    ),
+    HumanAgentConfig: lambda config, storage, buffer: HumanAgent(
+        config,
+        storage,
+        buffer,
+    ),
+}
+
+EVALUATOR_BUILDERS = {
+    DenseEvaluatorConfig: lambda config, storage: DenseEvaluator(config, storage),
+    Dense2EvaluatorConfig: lambda config, storage: Dense2Evaluator(config, storage),
+    Dense3EvaluatorConfig: lambda config, storage: Dense3Evaluator(config, storage),
+    SparseEvaluatorConfig: lambda config, storage: SparseEvaluator(config, storage),
+}
 
 
 def select_states(configs: Sequence[StateConfig]) -> list[State]:
@@ -61,8 +115,27 @@ def select_skills(configs: Sequence[TreeNodeConfig]) -> list[TreeNode]:
     return [TreeNode(config) for config in configs]
 
 
+def select_eval_condition(config: StateEvaluatorConfig) -> StateEvaluator:
+    """Create eval condition from config - simple factory function"""
+    if isinstance(config, ThresholdEvaluatorConfig):
+        return ThresholdEvaluator(config)
+    elif isinstance(config, IgnoreEvaluatorConfig):
+        return IgnoreEvaluator(config)
+    elif isinstance(config, AreaEvaluatorConfig):
+        return AreaEvaluator(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
+def select_parameter(config: StateParameterConfig) -> StateParameter:
+    """Create addon from config - simple factory function"""
+    if isinstance(config, FlipStateParameterConfig):
+        return FlipStateParameter(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
+
+
 def select_value_handler(config: ValueHandlerConfig) -> ValueHandler:
-    """Create normalizer from config - simple factory function"""
     if isinstance(config, LinearValueConfig):
         return LinearValue(config)
     elif isinstance(config, IdentityValueConfig):
@@ -73,38 +146,32 @@ def select_value_handler(config: ValueHandlerConfig) -> ValueHandler:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_distance(config: RulerConfig) -> Ruler:
+def select_state_ruler(config: RulerConfig) -> Ruler:
     """Create distance condition from config - simple factory function"""
-    if isinstance(config, BinaryRulerConfig):
-        return ScalarDistance(config)
-    elif isinstance(config, EuclideanRulerConfig):
-        return EuclideanRuler(config)
-    elif isinstance(config, FlipRulerConfig):
-        return FlipRuler(config)
-    elif isinstance(config, AngularRulerConfig):
-        return AngularDistance(config)
+    builder = STATE_RULER_BUILDERS.get(type(config))
+    if builder is None:
+        raise ValueError(f"Unknown config type: {type(config)}")
+    return builder(config)
+
+
+def select_state_validator(config: ValidatorConfig) -> Validator:
+    if isinstance(config, AreaValidatorConfig):
+        return AreaValidator(config)
     else:
-        raise ValueError(f"Unknown config.")
+        raise NotImplementedError(f"Unknown config.")
 
 
-def select_state_preprocessor(config: StatePreprocessorConfig) -> StatePreprocessor:
-    """Create state preprocessor from config - simple factory function"""
-    # if isinstance(config, SomeStatePreprocessorConfig):
-    #     return SomeStatePreprocessor(config)
+def select_state_parameter(config: StateParameterConfig) -> StateParameter:
+
     raise NotImplementedError(f"Unknown config.")
 
 
-def select_conditions(cons: dict[str, ConditionConfig]) -> dict[str, Condition]:
-    """Create condition from config - simple factory function"""
-    conditions = {}
-    for key, config in cons.items():
-        if isinstance(config, ValueDistanceConfig):
-            conditions[key] = select_distance(config)
-        elif isinstance(config, ValueHandlerConfig):
-            conditions[key] = select_value_handler(config)
-        else:
-            raise NotImplementedError(f"Unknown config.")
-    return conditions
+def select_node_parameter(config: NodeParameterConfig) -> NodeParameter:
+    """Create operator loader from config - simple factory function"""
+    if isinstance(config, TapasParameterConfig):
+        return TapasParameter(config)
+    else:
+        raise NotImplementedError(f"Unknown config.")
 
 
 def select_operator(config: NodeOperatorConfig) -> NodeOperator:
@@ -115,34 +182,10 @@ def select_operator(config: NodeOperatorConfig) -> NodeOperator:
         raise NotImplementedError(f"Unknown config.")
 
 
-def select_parameter(config: NodeParameterConfig) -> NodeParameter:
-    """Create operator loader from config - simple factory function"""
-    if isinstance(config, TapasParameterConfig):
-        return TapasParameter(config)
-    else:
-        raise NotImplementedError(f"Unknown config.")
-
-
 def select_networker(config: NodeNetworkerConfig) -> NodeNetworker:
     """Create networker from config - simple factory function"""
     if isinstance(config, TapasNetworkerConfig):
         return TapasNetworker(config)
-    else:
-        raise NotImplementedError(f"Unknown config.")
-
-
-def select_eval_condition(config: ValueEvaluationConfig) -> Evaluation:
-    """Create eval condition from config - simple factory function"""
-    if isinstance(config, ThresholdEvaluationConfig):
-        return ThresholdEvaluation(config)
-    else:
-        raise NotImplementedError(f"Unknown config.")
-
-
-def select_addon(config: StatePreprocessorConfig) -> StatePreprocessor:
-    """Create addon from config - simple factory function"""
-    if isinstance(config, FlipStatePreprocessorConfig):
-        return FlipStatePreprocessor(config)
     else:
         raise NotImplementedError(f"Unknown config.")
 
@@ -168,14 +211,10 @@ def select_agent(
     buffer_module: Buffer,
 ) -> Agent:
     """Create agent from config - simple factory function"""
-    if isinstance(config, PPOAgentConfig):
-        return PPOAgent(config, buffer_module, storage_module)
-    elif isinstance(config, SearchTreeAgentConfig):
-        return SearchTreeAgent(config, storage_module, buffer_module)
-    elif isinstance(config, HumanAgentConfig):
-        return HumanAgent(config, storage_module, buffer_module)
-    else:
+    builder = AGENT_BUILDERS.get(type(config))
+    if builder is None:
         raise ValueError(f"Unknown agent type: {type(config)}")
+    return builder(config, storage_module, buffer_module)
 
 
 def select_evaluator(
@@ -183,16 +222,10 @@ def select_evaluator(
     storage: Storage,
 ) -> Evaluator:
     """Create reward module from config - simple factory function"""
-    if isinstance(config, DenseEvaluatorConfig):
-        return DenseEvaluator(config, storage)
-    elif isinstance(config, Dense2EvaluatorConfig):
-        return Dense2Evaluator(config, storage)
-    elif isinstance(config, Dense3EvaluatorConfig):
-        return Dense3Evaluator(config, storage)
-    elif isinstance(config, SparseEvaluatorConfig):
-        return SparseEvaluator(config, storage)
-    else:
+    builder = EVALUATOR_BUILDERS.get(type(config))
+    if builder is None:
         raise ValueError(f"Unknown evaluator type: {type(config)}")
+    return builder(config, storage)
 
 
 def select_environment(

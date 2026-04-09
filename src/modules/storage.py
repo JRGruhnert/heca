@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from src.factory import select_skills, select_states
 from src.skills.tree.node import TreeNode, TreeNodeConfig
-from src.states.state import State, StateConfig
+from src.objects.properties.property import State, StateConfig
 import os
 
 

@@ -1,17 +1,21 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.addons.prepro_rotation import QuaternionPreprocessorConfig
-from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance_angular import (
-    AngularRulerConfig,
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluatorConfig,
 )
-
-from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
-from src.states.value_handler.normalizers.rotation_normalizer import (
+from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+    ThresholdEvaluatorConfig,
+)
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.value_handler.parameters.quaternion_parameter import (
+    QuaternionParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.angular_ruler import AngularRulerConfig
+from src.objects.properties.value_handler.normalizers.rotation_normalizer import (
     QuaternionNormalizerConfig,
 )
-from src.states.state import StateConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
@@ -21,11 +25,11 @@ class RotationStateConfig(StateConfig):
         dim_input=4,
     )
     normalizer: QuaternionNormalizerConfig = QuaternionNormalizerConfig()
-    distance: AngularRulerConfig = AngularRulerConfig()
-    evaluator: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
-        distance=AngularRulerConfig(),
+    ruler: AngularRulerConfig = AngularRulerConfig()
+    evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
+        ruler=AngularRulerConfig(),
     )
     condition: ConditionConfig = ConditionConfig(
         ruler=AngularRulerConfig(),
-        preprocessor=QuaternionPreprocessorConfig(),
+        parameter=QuaternionParameterConfig(),
     )

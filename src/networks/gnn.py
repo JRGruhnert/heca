@@ -11,8 +11,8 @@ from src.observation.observation import StateValueDict
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
 from src.skills.tree.node import TreeNode
-from src.states.logic.condition import Condition
-from src.states.state import State
+from src.objects.properties.condition import Condition
+from src.objects.properties.property import State
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (
     Explainer,

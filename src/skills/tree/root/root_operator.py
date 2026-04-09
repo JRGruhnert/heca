@@ -6,7 +6,7 @@ import torch
 
 from src.observation.observation import StateValueDict
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
-from src.states.logic.condition import Condition
+from src.objects.properties.condition import Condition
 
 
 @dataclass

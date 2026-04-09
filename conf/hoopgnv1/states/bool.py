@@ -1,21 +1,24 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.evaluators.evaluation import StateEvaluatorConfig
-from src.states.evaluators.evaluation_threshold import ThresholdEvaluationConfig
-from src.states.rulers.binary_ruler import BinaryRulerConfig
-from src.states.rulers.ruler import RulerConfig
-from src.states.value_handler.normalizers.boundary_normalizer import (
-    BoolBoundaryConfig,
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluatorConfig,
 )
-from src.states.logic.condition import ConditionConfig
-from src.states.value_handler.normalizers.ignore_normalizer import (
+from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+    ThresholdEvaluatorConfig,
+)
+from src.objects.properties.value_handler.parameters.binary_parameter import (
+    BinaryParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.binary_ruler import BinaryRulerConfig
+from src.objects.properties.value_handler.rulers.ruler import RulerConfig
+
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.value_handler.normalizers.ignore_normalizer import (
     IgnoreValueConfig,
 )
-from src.states.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.logic.threshold_boundary import BoundaryThresholdConfig
-from src.states.state import StateConfig
+from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
@@ -27,14 +30,10 @@ class BoolStateConfig(StateConfig):
     )
     normalizer: NormalizerConfig = IgnoreValueConfig()
     ruler: RulerConfig = BinaryRulerConfig()
-    evaluator: StateEvaluatorConfig = ThresholdEvaluationConfig(
+    evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
         ruler=BinaryRulerConfig(),
     )
     condition: ConditionConfig = ConditionConfig(
         ruler=BinaryRulerConfig(),
-        preprocessor=ScalarStatePreprocessorConfig(
-            threshold=BoundaryThresholdConfig(
-                boundary=BoolBoundaryConfig(),
-            )
-        ),
+        parameter=BinaryParameterConfig(),
     )

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
-from conf.custom.states.area import CalvinAreaStateConfig
-from conf.custom.states.bool import BoolStateConfig
-from conf.custom.states.position import PositionStateConfig
-from conf.custom.states.range import RangeStateConfig
-from conf.custom.states.rotation import RotationStateConfig
-from conf.custom.states.flip import FlipStateConfig
+from conf.hoopgnv1.states.area import CalvinAreaStateConfig
+from conf.hoopgnv1.states.bool import BoolStateConfig
+from conf.hoopgnv1.states.position import PositionStateConfig
+from conf.hoopgnv1.states.range import RangeStateConfig
+from conf.hoopgnv1.states.rotation import RotationStateConfig
+from conf.hoopgnv1.states.flip import FlipStateConfig
 
 
 @dataclass

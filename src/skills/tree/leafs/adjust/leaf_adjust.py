@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 from src.observation.observation import StateValueDict
 from src.skills.tree.leafs.leaf import Leaf, LeafConfig
-from src.states.logic.condition import ConditionConfig
+from src.object.properties.condition import ConditionConfig
 
 
 @dataclass

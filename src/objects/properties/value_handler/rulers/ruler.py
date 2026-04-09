@@ -1,0 +1,27 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+import torch
+
+
+@dataclass
+class RulerConfig:
+    pass
+
+
+class Ruler(ABC):
+    def __init__(self, config: RulerConfig):
+        self.config = config
+
+    def __call__(self, a: torch.Tensor, b: torch.Tensor) -> float:
+        value = self.distance(a, b)
+        assert isinstance(value, float), "Distance must be a float"
+        assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
+        return value
+
+    @abstractmethod
+    def distance(self, a: torch.Tensor, b: torch.Tensor) -> float:
+        raise NotImplementedError("Subclasses must implement the distance method.")
+
+    def edge_feature(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        """Optional method to compute edge features for graph-based models."""
+        return torch.tensor([self.distance(a, b), 0], dtype=torch.float32)

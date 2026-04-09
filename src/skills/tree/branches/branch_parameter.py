@@ -4,7 +4,7 @@ from src.skills.tree.branches.branch_operator import (
     BranchOperator,
     BranchOperatorConfig,
 )
-from src.states.logic.condition import Condition, ConditionConfig
+from src.objects.properties.condition import Condition, ConditionConfig
 
 
 @dataclass

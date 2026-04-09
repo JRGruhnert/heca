@@ -9,7 +9,7 @@ from src.logic.distance_condition import (
     FlipDistanceCondition,
 )
 
-from src.states.calvin import (
+from src.properties.calvin import (
     CalvinState,
     BoolState,
     EulerState,

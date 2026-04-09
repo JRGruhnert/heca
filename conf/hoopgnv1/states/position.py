@@ -1,19 +1,24 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
-from src.states.value_handler.normalizers.boundary_normalizer import (
-    AreaBoundaryConfig,
-    BoundaryNormalizerConfig,
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluatorConfig,
 )
-from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance_euclidean import (
+from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+    ThresholdEvaluatorConfig,
+)
+from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+    EuclideanParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-
-from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
-from src.states.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.state import StateConfig
+from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
+    AreaBoundaryConfig,
+)
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
@@ -22,12 +27,12 @@ class PositionStateConfig(StateConfig):
         label="EulerPrecise",
         dim_input=3,
     )
-    distance: EuclideanRulerConfig = EuclideanRulerConfig()
-    evaluator: ThresholdEvaluationConfig = ThresholdEvaluationConfig(
-        distance=EuclideanRulerConfig(),
+    ruler: EuclideanRulerConfig = EuclideanRulerConfig()
+    evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
+        ruler=EuclideanRulerConfig(),
     )
     normalizer: NormalizerConfig = AreaBoundaryConfig()
     condition: ConditionConfig = ConditionConfig(
         ruler=EuclideanRulerConfig(),
-        preprocessor=EuclideanStatePreprocessorConfig(),
+        parameter=EuclideanParameterConfig(),
     )

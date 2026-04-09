@@ -6,7 +6,7 @@ from src.networks.network import Network, NetworkConfig
 from src.observation.observation import StateValueDict
 from collections import defaultdict
 
-from src.states.state import State
+from src.objects.properties.property import State
 
 
 @dataclass

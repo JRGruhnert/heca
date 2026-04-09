@@ -2,21 +2,28 @@ from dataclasses import dataclass, field
 
 from src.networks.layers.classifiers.state_classifier import StateClassifierConfig
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.addons.prepro_euclidean import EuclideanStatePreprocessorConfig
-from src.states.logic.area import AreaConfig
-from src.states.logic.condition import ConditionConfig
-from src.states.evaluators.evaluation import StateEvaluatorConfig
-from src.states.rulers.euclidean_ruler import EuclideanRulerConfig
-from src.states.value_handler.normalizers.boundary_normalizer import (
+from src.objects.properties.area import AreaConfig
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluatorConfig,
+)
+from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+    EuclideanParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+    EuclideanRulerConfig,
+)
+from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
     AreaBoundaryConfig,
 )
 
-
-from src.states.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.value_handler.validators.area_validator import AreaValidatorConfig
-from src.states.value_handler.value_handler import ValueHandlerConfig
-from src.states.value_handler.value_one_hot import OneHotValueConfig
-from src.states.state import StateConfig
+from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.value_handler.validators.area_validator import (
+    AreaValidatorConfig,
+)
+from src.objects.properties.value_handler.value_handler import ValueHandlerConfig
+from src.objects.properties.value_handler.value_one_hot import OneHotValueConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
@@ -54,19 +61,19 @@ class CalvinAreaStateConfig(StateConfig):
         dim_input=6,
     )
     normalizer: NormalizerConfig = AreaBoundaryConfig()
-    distance: EuclideanRulerConfig = EuclideanRulerConfig()
+    ruler: EuclideanRulerConfig = EuclideanRulerConfig()
     evaluator: StateEvaluatorConfig = StateEvaluatorConfig()
-    preencoder: ValueHandlerConfig = OneHotValueConfig(
-        state=CalvinAreaConfig(
-            classifier=StateClassifierConfig(),
-        ),
-    )
     condition: ConditionConfig = ConditionConfig(
         ruler=EuclideanRulerConfig(),
-        preprocessor=EuclideanStatePreprocessorConfig(),
+        parameter=EuclideanParameterConfig(),
     )
     validator: ValueHandlerConfig = AreaValidatorConfig(
         area=CalvinAreaConfig(
             classifier=StateClassifierConfig(),
         )
+    )
+    preencoder: ValueHandlerConfig = OneHotValueConfig(
+        state=CalvinAreaConfig(
+            classifier=StateClassifierConfig(),
+        ),
     )

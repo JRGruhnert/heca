@@ -3,16 +3,14 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from calvin_env_modified.envs.observation import CalvinEnvObservation
-from build.lib.src.skills.empty import EmptySkillConfig
 from src.observation.demonstration import Demo
 from src.observation.observation import StateValueDict
-from src.skills.tree.leafs.leaf import Leaf, LeafConfig
-from src.states.logic.condition import ConditionConfig
-from src.states.state import StateConfig
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
-class IgnoreLeafConfig(LeafConfig):
+class IgnoreLeafConfig(TreeNodeConfig):
     label: str = "IgnoreLeaf"
     id: int = -1
     precons: dict[str, ConditionConfig] | None = None

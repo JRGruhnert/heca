@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from src.modules.evaluators.evaluator import Evaluator
 from src.modules.storage import Storage
 from src.observation.observation import StateValueDict
-from src.states.calvin import AreaEulerState
+from src.properties.calvin import AreaEulerState
 
 
 @dataclass

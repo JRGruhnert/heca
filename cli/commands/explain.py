@@ -18,8 +18,8 @@ from src.factory import (
 )
 from src.observation.observation import StateValueDict
 from src.plotting.plots.environment.samples import ObjectSamplingPlot
-from src.states.calvin import AreaEulerState
-from src.states.state import State
+from src.objects.properties.calvin import AreaEulerState
+from src.objects.properties.property import State
 from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
 
 

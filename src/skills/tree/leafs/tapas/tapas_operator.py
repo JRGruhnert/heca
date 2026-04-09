@@ -29,9 +29,11 @@ from tapas_gmm.utils.robot_trajectory import (
 )
 from src.observation.observation import StateValueDict
 from src.skills.tree.operator import NodeOperator, NodeOperatorConfig
-from src.states.logic.evaluations.evaluation_area import AreaEvalCondition
-from src.states.logic.condition import Condition
-from src.states.state import State
+from src.objects.properties.value_handler.evaluators.area_evaluator import (
+    AreaEvalCondition,
+)
+from src.objects.properties.condition import Condition
+from src.objects.properties.property import State
 
 
 @dataclass
@@ -347,7 +349,7 @@ class TapasLeafOperator(NodeOperator):
         result = {}
         for l, c in self.config.conditions.items():
             if labels is None or l in labels:
-                cond = Condition.from_demos(
+                result[l] = Condition.from_demos(
                     (
                         self.demo_precons[l],
                         self.demo_postcons[l],
@@ -356,8 +358,6 @@ class TapasLeafOperator(NodeOperator):
                     ),
                     c,
                 )
-                if cond is not None:
-                    result[l] = cond
         return result
 
     @cached_property

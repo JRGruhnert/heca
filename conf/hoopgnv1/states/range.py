@@ -1,20 +1,25 @@
 from dataclasses import dataclass, field
-from src.modules.evaluators.evaluator import EvaluatorConfig
 from src.networks.layers.encoder import StateEncoderConfig
-from src.states.addons.prepro_scalar import ScalarStatePreprocessorConfig
-from src.states.logic.distances.distance import RulerConfig
-from src.states.logic.evaluations.evaluation import EvaluationConfig
-from src.states.value_handler.normalizers.boundary_normalizer import (
+from src.objects.properties.value_handler.evaluators.evaluator import (
+    StateEvaluatorConfig,
+)
+from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+    ThresholdEvaluatorConfig,
+)
+from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+    EuclideanParameterConfig,
+)
+from src.objects.properties.value_handler.rulers.binary_ruler import BinaryRulerConfig
+from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+    EuclideanRulerConfig,
+)
+from src.objects.properties.value_handler.rulers.ruler import RulerConfig
+from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
     BoundaryNormalizerConfig,
 )
-from src.states.logic.condition import ConditionConfig
-from src.states.logic.distances.distance_euclidean import EuclideanRulerConfig
-from src.states.logic.threshold_boundary import BoundaryThresholdConfig
-from src.states.logic.threshold_boundary import BoundaryThresholdConfig
-from src.states.logic.evaluations.evaluation_threshold import ThresholdEvaluationConfig
-from src.states.logic.distances.distance_binary import BinaryRulerConfig
-from src.states.value_handler.normalizers.normalizer import NormalizerConfig
-from src.states.state import StateConfig
+from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.property import StateConfig
 
 
 @dataclass
@@ -26,14 +31,14 @@ class RangeStateConfig(StateConfig):
         dim_input=1,
         middle_dim=8,
     )
-    distance: RulerConfig = BinaryRulerConfig()
-    evaluator: EvaluationConfig = field(init=False)
+    ruler: RulerConfig = BinaryRulerConfig()
+    evaluator: StateEvaluatorConfig = field(init=False)
     normalizer: NormalizerConfig = field(init=False)
     condition: ConditionConfig = field(init=False)
 
     def __post_init__(self):
-        self.evaluator = ThresholdEvaluationConfig(
-            distance=BinaryRulerConfig(),
+        self.evaluator = ThresholdEvaluatorConfig(
+            ruler=BinaryRulerConfig(),
         )
         self.normalizer = BoundaryNormalizerConfig(
             lower=[self.low],
@@ -41,7 +46,5 @@ class RangeStateConfig(StateConfig):
         )
         self.condition = ConditionConfig(
             ruler=EuclideanRulerConfig(),
-            preprocessor=ScalarStatePreprocessorConfig(
-                threshold=BoundaryThresholdConfig(boundary=self.normalizer),
-            ),
+            parameter=EuclideanParameterConfig(),
         )

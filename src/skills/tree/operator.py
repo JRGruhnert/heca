@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.states.logic.condition import Condition, ConditionConfig
+from src.objects.properties.condition import Condition, ConditionConfig
 
 
 @dataclass
