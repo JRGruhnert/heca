@@ -1,21 +1,24 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-
-from src.storage import Storage
+from src.storage import select_states
+from collections.abc import Sequence
+from src.objects.properties.property import PropertyConfig
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class EvaluatorConfig:
     success_reward: float
+    states_eval: Sequence[PropertyConfig]
+    states_network: Sequence[PropertyConfig]
 
 
 class Evaluator(ABC):
-    def __init__(
-        self,
-        storage: Storage,
-    ):
-        self.storage = storage
+    def __init__(self, config: EvaluatorConfig):
+        self.config = config
+        self.states_eval = select_states(config.states_eval)
+        self.states_network = select_states(config.states_network)
+
         self.percentage_done: float = 0.0
 
     def is_equal(
@@ -25,12 +28,13 @@ class Evaluator(ABC):
     ) -> bool:
         """Generic method to check if states match target conditions."""
         finished = 0
-        for label, state in self.storage.states_dict_eval.items():
+        for state in self.states_eval:
+            label = state.config.label
             if label in current.keys():
                 if state.evaluate(current[label], goal[label]):
                     finished += 1
-        self.percentage_done = finished / max(len(self.storage.states_eval), 1)
-        return finished == len(self.storage.states_eval)
+        self.percentage_done = finished / max(len(self.states_eval), 1)
+        return finished == len(self.states_eval)
 
     def evaluate_sample(
         self,
@@ -47,7 +51,7 @@ class Evaluator(ABC):
         goal: StateValueDict,
     ) -> bool:
         """Special method to check wether the sampled states are buggy or not."""
-        for state in self.storage.states_network:
+        for state in self.states_network:
             if not state.validate(
                 current[state.config.label],
                 goal[state.config.label],

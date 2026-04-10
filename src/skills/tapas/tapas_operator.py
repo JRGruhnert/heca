@@ -28,16 +28,16 @@ from tapas_gmm.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from src.observation.observation import StateValueDict
-from src.skills.operator import NodeOperator, NodeOperatorConfig
+from src.skills.skill_operator import SkillOperator, SkillOperatorConfig
 from src.objects.properties.handlers.evaluators.area_evaluator import (
     AreaEvaluator,
 )
-from src.objects.properties.condition import Condition
-from src.objects.properties.property import State
+from src.objects.properties.property_condition import PropertyCondition
+from src.objects.properties.property import Property
 
 
-@dataclass
-class TapasOperatorConfig(NodeOperatorConfig):
+@dataclass(kw_only=True)
+class TapasOperatorConfig(SkillOperatorConfig):
     label: str
     reversed: bool
     overrides: set[str]
@@ -89,7 +89,7 @@ class TapasOperatorConfig(NodeOperatorConfig):
         )
 
 
-class TapasLeafOperator(NodeOperator):
+class TapasOperator(SkillOperator):
     def __init__(self, config: TapasOperatorConfig):
         super().__init__(config)
         self.config = config
@@ -101,7 +101,7 @@ class TapasLeafOperator(NodeOperator):
     def __call__(
         self,
         current: CalvinEnvObservation,
-        states: list[State],
+        states: list[Property],
     ) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
         assert isinstance(
@@ -162,7 +162,7 @@ class TapasLeafOperator(NodeOperator):
         self,
         obs: CalvinEnvObservation,
         goal: StateValueDict | None = None,
-        states: list[State] | None = None,
+        states: list[Property] | None = None,
     ) -> SceneObservation:  # type: ignore
         """
         Convert the observation from the environment to a SceneObservation. This format is used for TAPAS.
@@ -321,7 +321,7 @@ class TapasLeafOperator(NodeOperator):
         return temp
 
     @cached_property
-    def overrides(self) -> dict[str, Condition]:
+    def overrides(self) -> dict[str, PropertyCondition]:
         return self._load_overrides_conditions()
 
     @cached_property
@@ -332,24 +332,24 @@ class TapasLeafOperator(NodeOperator):
     def demo_postcons(self) -> dict[str, torch.Tensor]:
         return self._load_demo_cons(not self.config.reversed)
 
-    def load_parameter_precons(self) -> dict[str, Condition]:
+    def load_parameter_precons(self) -> dict[str, PropertyCondition]:
         return self._load_conditions(self.config.reversed)
 
-    def load_parameter_postcons(self) -> dict[str, Condition]:
+    def load_parameter_postcons(self) -> dict[str, PropertyCondition]:
         return self._load_conditions(not self.config.reversed)
 
-    def _load_overrides_conditions(self) -> dict[str, Condition]:
+    def _load_overrides_conditions(self) -> dict[str, PropertyCondition]:
         return self._load_conditions(not self.config.reversed, self.config.overrides)
 
     def _load_conditions(
         self,
         reversed: bool,
         labels: set[str] | None = None,
-    ) -> dict[str, Condition]:
+    ) -> dict[str, PropertyCondition]:
         result = {}
         for l, c in self.config.conditions.items():
             if labels is None or l in labels:
-                result[l] = Condition.from_demos(
+                result[l] = PropertyCondition.from_demos(
                     (
                         self.demo_precons[l],
                         self.demo_postcons[l],

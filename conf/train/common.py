@@ -1,46 +1,47 @@
-from cli.commands.explain import ExplainManagerConfig
+from cli.commands.train import TrainerConfig
 from conf.common import (
     agent_config,
-    environment_config,
     experiment_config,
     logger_config,
     storage_config,
     network_config,
-    evaluator_config,
 )
+from conf.object_sets import OBJECT_SETS
+from conf.skill_sets import SKILL_SETS
 from src.buffer import BufferConfig
 from src.logger import LogMode
 
 
-def get_explain_config(
+def get_train_config(
     skill_set_tag: str,
     state_set_tag: str,
-    is_baseline: bool = False,
+    is_gnn: bool = False,
     prefix_tag: str = "",
     checkpoint_name: str | None = None,
     p_empty: float = 0.0,
     p_rand: float = 0.0,
-) -> ExplainManagerConfig:
+    batch_size: int = 1024,
+) -> TrainerConfig:
+    skills = SKILL_SETS[skill_set_tag]
+    states = OBJECT_SETS[state_set_tag]
     network = network_config(
-        checkpoint_name,
-        is_baseline,
+        is_gnn=is_gnn,
+        checkpoint_name=checkpoint_name,
         explain_mode=False,
+        skill_count=len(skills),
+        state_count=len(states),
     )
-    return ExplainManagerConfig(
-        agent=agent_config(
-            network,
-            False,
-        ),
-        buffer=BufferConfig(steps=1024),
+    return TrainerConfig(
+        agent=agent_config(network, eval=False),
+        buffer=BufferConfig(steps=batch_size),
         logger=logger_config(
             LogMode.WANDB,
-            network.name,
+            network.label,
             prefix_tag,
             state_set_tag,
             skill_set_tag,
         ),
         storage=storage_config(
-            network.name,
             prefix_tag,
             state_set_tag,
             skill_set_tag,
@@ -48,10 +49,9 @@ def get_explain_config(
         experiment=experiment_config(
             p_empty,
             p_rand,
-        ),
-        environment=environment_config(
+            min_steps=len(skills),
+            skill_set_tag=skill_set_tag,
             environment_tag="calvin",
-            render=False,
+            evaluator_tag="dense3",
         ),
-        evaluator=evaluator_config("dense3"),
     )

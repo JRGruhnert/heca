@@ -41,26 +41,15 @@ BLUE = [
 ]
 
 
-class SkillSet(Enum):
-    BASE = "base"
-    SLIDE = "slide"
-    RED = "red"
-    PINK = "pink"
-    BLUE = "blue"
-    SR = "sr"
-    SRP = "srp"
-    SRPB = "srpb"
-
-
 SKILL_SETS = {
-    SkillSet.BASE: BASE,
-    SkillSet.SLIDE: BASE + SLIDE,
-    SkillSet.RED: BASE + RED,
-    SkillSet.PINK: BASE + PINK,
-    SkillSet.BLUE: BASE + BLUE,
-    SkillSet.SR: BASE + SLIDE + RED,
-    SkillSet.SRP: BASE + SLIDE + RED + PINK,
-    SkillSet.SRPB: BASE + SLIDE + RED + PINK + BLUE,
+    "base": BASE,
+    "slider": BASE + SLIDE,
+    "red": BASE + RED,
+    "pink": BASE + PINK,
+    "blue": BASE + BLUE,
+    "sr": BASE + SLIDE + RED,
+    "srp": BASE + SLIDE + RED + PINK,
+    "srpb": BASE + SLIDE + RED + PINK + BLUE,
 }
 # if storage.config.skills == SET_SLIDE:
 #          num_skills = 6

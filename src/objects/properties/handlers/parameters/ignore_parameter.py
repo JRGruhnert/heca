@@ -9,7 +9,7 @@ from src.objects.properties.handlers.parameters.parameter import (
 from src.objects.properties.binary import Binary, BinaryConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IgnoreParameterConfig(StateParameterConfig):
     binary: BinaryConfig = BinaryConfig()
 

@@ -1,36 +1,55 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from src.environments.environment import Environment
-from src.storage import Storage
+from src.environments import select_environment
+from src.environments.environment import EnvironmentConfig
+from src.evaluators import select_evaluator
+from src.evaluators.evaluator import EvaluatorConfig
 from src.observation.observation import StateValueDict
-from src.skills.node import TreeNode
+from src.skills.skill import Skill
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ExperimentConfig:
-    pass
+    environment: EnvironmentConfig
+    evaluator: EvaluatorConfig
 
 
 class Experiment(ABC):
     """Simple Wrapper over the Calvin Environment to perform experiments."""
 
-    def __init__(self, config: ExperimentConfig, env: Environment, storage: Storage):
+    def __init__(self, config: ExperimentConfig):
         # We sort based on Id for the baseline network to be consistent
         self.config = config
-        self.env = env
-        self.storage = storage
+        self.evaluator = select_evaluator(config.evaluator)
+        self.env = select_environment(config.environment)
 
-    @abstractmethod
-    def step(self, leaf: TreeNode) -> tuple[StateValueDict, float, bool, bool]:
-        """Take a step in the environment using the provided leaf.
-        Returns the new observation, reward, done flag, and terminal flag."""
-        raise NotImplementedError("Step method not implemented yet.")
+        self.current_step = 0
+        self.max_allowed_steps = int("inf")  # No limit by default
+        self.current = self.env.reset()
+        self.goal = self.env.reset()
 
-    @abstractmethod
+    def step(self, skill: Skill) -> tuple[StateValueDict, float, bool, bool]:
+        selected_skill = self.modify(skill)
+        selected_skill.reset(self.goal)
+        while (action := selected_skill.predict(self.current)) is not None:
+            feedback = self.env.step(action)  # NOTE: feedback unused currently
+        reward, done = self.evaluator.step(self.current, self.goal)
+        self.current_step += 1
+        terminal = True if self.current_step >= self.max_allowed_steps else done
+        return self.current, reward, done, terminal
+
     def sample_task(self) -> tuple[StateValueDict, StateValueDict]:
-        """Sample a new task from the environment.
-        Returns the initial observation and goal."""
-        raise NotImplementedError("Sample task method not implemented yet.")
+        self.current_step = 0
+        self.current = self.env.reset()
+        self.goal = self.env.reset()
+        while not self.evaluator.evaluate_sample(self.current, self.goal):
+            self.goal = self.env.reset()
+        return self.current, self.goal
+
+    @abstractmethod
+    def modify(self, skill: Skill) -> Skill:
+        """Modify the skill before taking a step in the experiment."""
+        raise NotImplementedError("Modify method not implemented yet.")
 
     @abstractmethod
     def metadata(self) -> dict:

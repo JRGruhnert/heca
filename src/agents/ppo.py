@@ -8,7 +8,7 @@ from src.hardware import device
 from src.agents.agent import Agent, AgentConfig
 from src.buffer import Buffer
 from src.storage import Storage
-from src.modules.watcher import Watcher
+from src.watcher import Watcher
 from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from src.networks.gnn import GraphNetwork, GraphNetworkConfig
 from src.observation.observation import StateValueDict
@@ -16,10 +16,10 @@ from src.networks.network import Network, NetworkConfig
 from loguru import logger
 from thop import profile
 
-from src.skills.node import TreeNode
+from src.skills.skill import Skill
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PPOAgentConfig(AgentConfig):
     network: NetworkConfig
     retrain: bool = False
@@ -97,7 +97,7 @@ class PPOAgent(Agent):
         self,
         obs: StateValueDict,
         goal: StateValueDict,
-    ) -> TreeNode:
+    ) -> Skill:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(
                 obs, goal, self.storage.states_network
@@ -124,7 +124,7 @@ class PPOAgent(Agent):
         self,
         current: StateValueDict,
         goal: StateValueDict,
-        skill: TreeNode,
+        skill: Skill,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(

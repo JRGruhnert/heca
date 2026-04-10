@@ -12,7 +12,7 @@ from src.objects.properties.threshold_boundary import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ScalarParameterConfig(StateParameterConfig):
     threshold: BoundaryThresholdConfig
 

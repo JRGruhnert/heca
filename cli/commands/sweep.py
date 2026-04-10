@@ -1,6 +1,6 @@
 import wandb
 from src.environments.calvin import CalvinEnvironmentConfig
-from src.experiments.pepr import PePrConfig
+from src.experiments.noise.noise_experiment import NoiseExperimentConfig
 from src.buffer import BufferConfig
 from src.evaluators.dense3 import Dense3EvaluatorConfig
 from src.logger import LoggerConfig
@@ -46,7 +46,7 @@ def entry_point():
             states_eval=wandb.config["storage.eval_states"],
             network=wandb.config["storage.network"],
         ),
-        experiment=PePrConfig(
+        experiment=NoiseExperimentConfig(
             p_empty=wandb.config["experiment.p_empty"],
             p_rand=wandb.config["experiment.p_rand"],
         ),

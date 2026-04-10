@@ -9,7 +9,7 @@ from src.objects.properties.handlers.parameters.parameter import (
 from src.objects.properties.binary import Binary, BinaryConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FlipParameterConfig(StateParameterConfig):
     binary: BinaryConfig = BinaryConfig()
 

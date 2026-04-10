@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import torch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class StateParameterConfig:
     pass
 

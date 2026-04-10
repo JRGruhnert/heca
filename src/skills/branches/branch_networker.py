@@ -5,7 +5,7 @@ from src.observation.observation import StateValueDict
 from torch_geometric.data import Batch, HeteroData
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BranchNetworkerConfig:
     pass
 

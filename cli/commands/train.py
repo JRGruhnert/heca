@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 
+from src.agents import select_agent
+from src.environments import select_environment
+from src.evaluators import select_evaluator
+from src.experiments import select_experiment
 from src.logger import LoggerConfig, Logger
 from src.buffer import BufferConfig, Buffer
 from src.evaluators.evaluator import EvaluatorConfig
@@ -8,16 +12,10 @@ from src.environments.environment import EnvironmentConfig
 from src.agents.ppo import PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
 from wandb.wandb_run import Run
-from src.factory import (
-    select_agent,
-    select_environment,
-    select_experiment,
-    select_evaluator,
-)
 
 
 @dataclass
-class TrainConfig:
+class TrainerConfig:
     agent: PPOAgentConfig
     buffer: BufferConfig
     logger: LoggerConfig
@@ -28,16 +26,11 @@ class TrainConfig:
 
 
 class Trainer:
-    """Manages training loop"""
-
-    def __init__(self, config: TrainConfig, run: Run | None = None):
+    def __init__(self, config: TrainerConfig, run: Run | None = None):
         self.storage = Storage(config.storage)
         self.buffer = Buffer(config.buffer)
         self.logger = Logger(config.logger, run)
-
-        evaluator = select_evaluator(config.evaluator, self.storage)
-        env = select_environment(config.environment, evaluator, self.storage)
-        self.experiment = select_experiment(config.experiment, env, self.storage)
+        self.experiment = select_experiment(config.experiment)
         self.agent = select_agent(config.agent, self.storage, self.buffer)
 
     def collect_batch(self) -> bool:
@@ -47,8 +40,7 @@ class Trainer:
             episode_ended = False
             while not episode_ended:
                 skill = self.agent.act(obs, goal)
-                if skill:
-                    obs, reward, done, episode_ended = self.experiment.step(skill)
+                obs, reward, done, episode_ended = self.experiment.step(skill)
                 if self.agent.feedback(reward, done, episode_ended):
                     return True
 
@@ -77,6 +69,6 @@ class Trainer:
         self.experiment.close()
 
 
-def entry_point(config: TrainConfig):
+def entry_point(config: TrainerConfig):
     trainer = Trainer(config)
     trainer.run()

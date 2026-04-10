@@ -4,7 +4,7 @@ from torch_geometric.data import Batch, HeteroData
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BufferConfig:
     steps: int = 2048
 

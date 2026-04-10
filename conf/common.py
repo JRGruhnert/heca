@@ -1,42 +1,65 @@
-from conf.object_sets import OBJECT_SETS, ObjectSet
-from conf.skill_sets import SKILL_SETS, SkillSet
+from conf.object_sets import OBJECT_SETS
+from conf.skill_sets import SKILL_SETS
 from src.agents.ppo import PPOAgentConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.environments.environment import EnvironmentConfig
 from src.evaluators.dense3 import Dense3EvaluatorConfig
+from src.evaluators.evaluator import EvaluatorConfig
+from src.experiments.experiment import ExperimentConfig
 from src.logger import LogMode, LoggerConfig
 from src.storage import StorageConfig
-from src.experiments.pepr import PePrConfig
+from src.experiments.noise_experiment import NoiseExperimentConfig
 from src.networks.baseline import BaselineNetworkConfig
 from src.networks.gnn import GraphNetworkConfig
 from src.networks.network import NetworkConfig
 
-evaluator = Dense3EvaluatorConfig(
-    success_reward=25.0,
-    max_progress_reward=1.0,
-    step_penalty=-0.002,
-    add_monotonic_reward=True,
-)
+
+def evaluator_config(
+    tag: str,
+    state_eval_tag: str,
+    state_network_tag: str,
+) -> EvaluatorConfig:
+    if tag == "dense3":
+        return Dense3EvaluatorConfig(
+            success_reward=25.0,
+            max_progress_reward=1.0,
+            step_penalty=-0.002,
+            add_monotonic_reward=True,
+            states_network=OBJECT_SETS[state_network_tag],
+            states_eval=OBJECT_SETS[state_eval_tag],
+        )
+    else:
+        raise ValueError(f"Unknown evaluator tag: {tag}")
 
 
-def experiment_config(p_empty: float, p_rand: float, min_steps) -> PePrConfig:
-    return PePrConfig(
+def experiment_config(
+    p_empty: float,
+    p_rand: float,
+    min_steps: int,
+    skill_set_tag: str,
+    environment_tag: str = "calvin",
+    evaluator_tag: str = "dense3",
+) -> ExperimentConfig:
+    return NoiseExperimentConfig(
         p_empty=p_empty,
         p_rand=p_rand,
         min_steps=min_steps,
+        environment=environment_config(environment_tag),
+        evaluator=evaluator_config(evaluator_tag, environment_tag, environment_tag),
+        skills=SKILL_SETS[skill_set_tag],
     )
 
 
 def storage_config(
     prefix_tag: str,
-    state_set: ObjectSet,
-    skill_set: SkillSet,
+    state_set_tag: str,
+    skill_set_tag: str,
 ) -> StorageConfig:
     return StorageConfig(
-        skills=SKILL_SETS[skill_set],
-        states_network=OBJECT_SETS[state_set],
-        states_eval=OBJECT_SETS[state_set],
-        tag=f"{prefix_tag}_{state_set.value}_{skill_set.value}",
+        skills=SKILL_SETS[skill_set_tag],
+        states_network=OBJECT_SETS[state_set_tag],
+        states_eval=OBJECT_SETS[state_set_tag],
+        tag=f"{prefix_tag}_{state_set_tag}_{skill_set_tag}",
     )
 
 
@@ -55,12 +78,12 @@ def logger_config(
     mode: LogMode,
     network_tag: str,
     prefix_tag: str,
-    state_set: ObjectSet,
-    skill_set: SkillSet,
+    state_set_tag: str,
+    skill_set_tag: str,
 ) -> LoggerConfig:
     return LoggerConfig(
         mode=mode,
-        wandb_tag=f"{network_tag}_{prefix_tag}_{state_set.value}_{skill_set.value}",
+        wandb_tag=f"{network_tag}_{prefix_tag}_{state_set_tag}_{skill_set_tag}",
     )
 
 
@@ -93,22 +116,8 @@ def network_config(
     )
 
 
-def environment_config(
-    environment_tag="calvin", render: bool = False
-) -> EnvironmentConfig:
-    if environment_tag == "calvin":
-        return CalvinEnvironmentConfig(render=render)
+def environment_config(tag="calvin") -> EnvironmentConfig:
+    if tag == "calvin":
+        return CalvinEnvironmentConfig()
     else:
-        raise ValueError(f"Unknown environment tag: {environment_tag}")
-
-
-def evaluator_config(evaluator_tag: str = "dense3") -> Dense3EvaluatorConfig:
-    if evaluator_tag == "dense3":
-        return Dense3EvaluatorConfig(
-            success_reward=25.0,
-            max_progress_reward=1.0,
-            step_penalty=-0.002,
-            add_monotonic_reward=True,
-        )
-    else:
-        raise ValueError(f"Unknown evaluator tag: {evaluator_tag}")
+        raise ValueError(f"Unknown environment tag: {tag}")

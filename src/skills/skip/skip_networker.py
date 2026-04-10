@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
-from src.skills.networker import NodeNetworker, NodeNetworkerConfig
+from src.skills.skill_networker import SkillNetworker, SkillNetworkerConfig
 
 
-@dataclass
-class TapasNetworkerConfig(NodeNetworkerConfig):
+@dataclass(kw_only=True)
+class SkipNetworkerConfig(SkillNetworkerConfig):
     pass
 
 
-class TapasNetworker(NodeNetworker):
-    def __init__(self, config: TapasNetworkerConfig):
+class SkipNetworker(SkillNetworker):
+    def __init__(self, config: SkipNetworkerConfig):
         super().__init__(config)
         self.config = config
 

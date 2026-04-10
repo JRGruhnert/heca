@@ -1,21 +1,19 @@
-from src.experiments.pepr import PePrConfig, PePrExperiment
+from src.experiments.experiment import Experiment, ExperimentConfig
+from src.experiments.noise_experiment import (
+    NoiseExperimentConfig,
+    NoiseExperiment,
+)
 
 
-EXPERIMENT_BUILDERS = {
-    PePrConfig: lambda config, env, storage: PePrExperiment(
-        config,
-        env,
-        storage,
-    )
-}
+EXPERIMENT_BUILDERS = {NoiseExperimentConfig: lambda config: NoiseExperiment(config)}
 
 
 def register_experiment(config_type, builder):
     EXPERIMENT_BUILDERS[config_type] = builder
 
 
-def select_experiment(config, env, storage):
-    builder = EXPERIMENT_BUILDERS.get(type(config))
+def select_experiment(config: ExperimentConfig) -> Experiment:
+    builder = EXPERIMENT_BUILDERS.get(type(config))  # type: ignore
     if builder is None:
         for cfg_type, b in EXPERIMENT_BUILDERS.items():
             if isinstance(config, cfg_type):
@@ -23,4 +21,4 @@ def select_experiment(config, env, storage):
                 break
     if builder is None:
         raise ValueError(f"Unknown config type: {type(config)}")
-    return builder(config, env, storage)
+    return builder(config)

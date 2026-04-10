@@ -8,20 +8,20 @@ from src.objects.properties.handlers.normalizers.normalizer import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BoundaryNormalizerConfig(NormalizerConfig):
     lower: list[float]
     upper: list[float]
 
 
-@dataclass
-class AreaBoundaryConfig(BoundaryNormalizerConfig):
+@dataclass(kw_only=True)
+class AreaNormalizerConfig(BoundaryNormalizerConfig):
     lower: list[float] = field(default_factory=lambda: [-1.0, -1.0, -1.0])
     upper: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
 
 
-@dataclass
-class BoolBoundaryConfig(BoundaryNormalizerConfig):
+@dataclass(kw_only=True)
+class BoolNormalizerConfig(BoundaryNormalizerConfig):
     lower: list[float] = field(default_factory=lambda: [0.0])
     upper: list[float] = field(default_factory=lambda: [1.0])
 

@@ -4,14 +4,14 @@ from conf.common import (
     environment_config,
     experiment_config,
     logger_config,
-    skill_configs,
     storage_config,
     network_config,
     evaluator_config,
 )
+from conf.object_sets import OBJECT_SETS
+from conf.skill_sets import SKILL_SETS
 from src.buffer import BufferConfig
 from src.logger import LogMode
-from src.storage import Storage
 
 
 def get_explain_config(
@@ -21,8 +21,8 @@ def get_explain_config(
     is_gnn: bool = True,
     prefix_tag: str = "",
 ) -> ExplainManagerConfig:
-    states = skill_configs(skill_set_tag, state_set_tag)
-    skills = skill_configs(skill_set_tag, state_set_tag)
+    skills = SKILL_SETS[skill_set_tag]
+    states = OBJECT_SETS[state_set_tag]
     storage = storage_config(
         prefix_tag,
         state_set_tag,
@@ -53,10 +53,10 @@ def get_explain_config(
         experiment=experiment_config(
             0.0,
             0.0,
-        ),
-        environment=environment_config(
+            min_steps=len(skills),
+            skill_set_tag=skill_set_tag,
             environment_tag="calvin",
-            render=False,
+            evaluator_tag="dense3",
         ),
-        evaluator=evaluator_config("dense3"),
+        eval_set=state_set_tag,
     )

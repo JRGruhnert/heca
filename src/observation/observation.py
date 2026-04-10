@@ -2,7 +2,7 @@ import numpy as np
 from tensordict import TensorDict
 import torch
 
-empty_batchsize = torch.Size([])
+from src.observation import empty_batchsize
 
 
 class StateValueDict(TensorDict):

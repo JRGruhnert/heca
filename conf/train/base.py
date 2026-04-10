@@ -3,9 +3,8 @@ from src.environments.calvin import CalvinEnvironmentConfig
 from src.buffer import BufferConfig
 from src.logger import LogMode, LoggerConfig
 from src.storage import StorageConfig
-from src.experiments.pepr import PePrConfig
-from conf.common.evaluator import dense3_evaluator
-from conf.common.evaluator import sparse_evaluator
+from src.experiments.noise_experiment import NoiseExperimentConfig
+
 
 mode = LogMode.WANDB
 render = False
@@ -33,7 +32,7 @@ storage = StorageConfig(
     tag=tag,
     network=network,
 )
-experiment = PePrConfig(
+experiment = NoiseExperimentConfig(
     p_empty=p_empty,
     p_rand=p_rand,
 )

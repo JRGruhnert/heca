@@ -15,7 +15,7 @@ class LogMode(Enum):
     NONE = "none"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LoggerConfig:
     mode: LogMode = LogMode.SWEEP
     wandb_tag: str = "untagged_run"

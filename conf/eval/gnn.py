@@ -3,7 +3,7 @@ from src.environments.calvin import CalvinEnvironmentConfig
 from src.buffer import BufferConfig
 from src.logger import LogMode, LoggerConfig
 from src.storage import StorageConfig
-from src.experiments.pepr import PePrConfig
+from src.experiments.noise_experiment import NoiseExperimentConfig
 from cli.hoopgn import TrainConfig
 from conf.common.evaluator import dense3_evaluator
 from src.networks.gnn import GraphNetworkConfig
@@ -47,7 +47,7 @@ config = TrainConfig(
         network=network,
         checkpoint_path=f"results/{network}/{checkpoint_tag}/model_cp_best.pth",
     ),
-    experiment=PePrConfig(
+    experiment=NoiseExperimentConfig(
         p_empty=0.0,
         p_rand=0.0,
     ),

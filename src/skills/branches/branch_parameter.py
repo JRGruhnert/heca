@@ -1,16 +1,19 @@
 from dataclasses import dataclass
 
-from src.skills.tree.branches.branch_operator import (
+from src.skills.branches.branch_operator import (
     BranchOperator,
     BranchOperatorConfig,
 )
-from src.objects.properties.condition import Condition, ConditionConfig
+from src.objects.properties.property_condition import (
+    PropertyCondition,
+    PropertyConditionConfig,
+)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BranchParameterConfig:
-    precons: dict[str, ConditionConfig] | None
-    postcons: dict[str, ConditionConfig] | None
+    precons: dict[str, PropertyConditionConfig] | None
+    postcons: dict[str, PropertyConditionConfig] | None
 
 
 class BranchParameter:
@@ -27,8 +30,8 @@ class BranchParameter:
         """Load the demonstration preconditions for the leaf."""
         raise NotImplementedError("Subclasses must implement method.")
 
-    def load_parameter_precons(self) -> dict[str, Condition]:
+    def load_parameter_precons(self) -> dict[str, PropertyCondition]:
         """Load the preconditions for the operator parameters."""
         if self.config.precons is None:
             return {}
-        return {k: Condition(v) for k, v in self.config.precons.items()}
+        return {k: PropertyCondition(v) for k, v in self.config.precons.items()}

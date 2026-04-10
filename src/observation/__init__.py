@@ -1,2 +1,3 @@
-from .calvin import CalvinObservation
-from .observation import StateValueDict
+import torch
+
+empty_batchsize = torch.Size([])

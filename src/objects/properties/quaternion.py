@@ -4,7 +4,7 @@ import math
 import torch
 
 
-@dataclass
+@dataclass(kw_only=True)
 class QuaternionConfig:
     pass
 

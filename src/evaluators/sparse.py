@@ -1,21 +1,16 @@
 from dataclasses import dataclass
 from src.evaluators.evaluator import EvaluatorConfig, Evaluator
-from src.storage import Storage
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SparseEvaluatorConfig(EvaluatorConfig):
     step_reward: float
 
 
 class SparseEvaluator(Evaluator):
-    def __init__(
-        self,
-        config: SparseEvaluatorConfig,
-        storage: Storage,
-    ):
-        super().__init__(storage)
+    def __init__(self, config: SparseEvaluatorConfig):
+        super().__init__(config)
         self.config = config
 
     def step(

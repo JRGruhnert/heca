@@ -3,24 +3,16 @@ import re
 
 from tqdm import trange
 
+from src.experiments import select_experiment
 from src.logger import LoggerConfig, Logger
 from src.buffer import BufferConfig, Buffer
-from src.evaluators.evaluator import EvaluatorConfig
 from src.storage import Storage, StorageConfig
-from src.environments.environment import EnvironmentConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
-from src.factory import (
-    select_agent,
-    select_environment,
-    select_experiment,
-    select_evaluator,
-)
 from src.observation.observation import StateValueDict
 from src.plotting.plots.environment.samples import ObjectSamplingPlot
-from src.objects.properties.calvin import AreaEulerState
-from src.objects.properties.property import State
-from src.variables import SET_BLUE, SET_PINK, SET_RED, SET_SLIDE
+from src.objects.properties.property import Property
+from src.variables import BLUE, PINK, RED, SLIDE
 
 
 @dataclass
@@ -29,9 +21,8 @@ class ExplainManagerConfig:
     buffer: BufferConfig
     logger: LoggerConfig
     storage: StorageConfig
-    evaluator: EvaluatorConfig
     experiment: ExperimentConfig
-    environment: EnvironmentConfig
+    eval_set: str
 
 
 class ExplainScript:
@@ -44,17 +35,15 @@ class ExplainScript:
         self.storage = Storage(config.storage)
         self.buffer = Buffer(config.buffer)
         self.logger = Logger(config.logger)
-        evaluator = select_evaluator(config.evaluator, self.storage)
-        env = select_environment(config.environment, evaluator, self.storage)
-        self.experiment = select_experiment(config.experiment, env, self.storage)
-        self.agent: PPOAgent = select_agent(config.agent, self.storage, self.buffer)  # type: ignore
+        self.experiment = select_experiment(config.experiment)
+        self.agent = PPOAgent(config.agent, self.buffer, self.storage)
         self.plot = ObjectSamplingPlot()
 
         self.relevant_objects = {
-            SET_RED: "block_red",
-            SET_BLUE: "block_blue",
-            SET_PINK: "block_pink",
-            SET_SLIDE: "base__slide",
+            RED: "block_red",
+            BLUE: "block_blue",
+            PINK: "block_pink",
+            SLIDE: "base__slide",
         }
         self.object_pattern = re.compile(r"(red|blue|pink|slider)")
         # print(f"Checkpoint path: {self.config.agent.network.checkpoint_path}")
@@ -64,12 +53,12 @@ class ExplainScript:
         if match:
             object_name = match.group(1)  # 'red', 'blue', 'pink', or 'slide'
         self.trained_object = self.relevant_objects[object_name]
-        self.current_object = self.relevant_objects[self.config.storage.used_states]
+        self.current_object = self.relevant_objects[self.config.eval_set]
 
-        self.pos_state: State = self.storage.get_state_by_name(
+        self.pos_state: Property = self.storage.get_state_by_name(
             f"{self.current_object}_position"
         )
-        self.quat_state: State = self.storage.get_state_by_name(
+        self.quat_state: Property = self.storage.get_state_by_name(
             f"{self.current_object}_rotation"
         )
 
@@ -116,8 +105,6 @@ class ExplainScript:
                 solved=self.do_task(current, goal),
             )
 
-        if isinstance(self.pos_state, AreaEulerState):
-            self.plot.show_spawn_area(self.pos_state.eval_surfaces)
         self.plot.show_objects()
         # self.plot.show_ellipsoid()
         self.plot.show_edges()

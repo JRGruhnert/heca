@@ -7,7 +7,7 @@ from src.objects.properties.handlers.validators.validator import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IgnoreValidatorConfig(StateValidatorConfig):
     default: float = 0.0
 

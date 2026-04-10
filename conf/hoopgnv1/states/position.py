@@ -1,28 +1,28 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.objects.properties.value_handler.evaluators.evaluator import (
+from src.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+from src.objects.properties.handlers.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+from src.objects.properties.handlers.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
 )
-from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+from src.objects.properties.handlers.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
-    AreaBoundaryConfig,
+from src.objects.properties.handlers.normalizers.boundary_normalizer import (
+    AreaNormalizerConfig,
 )
-from src.objects.properties.condition import ConditionConfig
-from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
-from src.objects.properties.property import StateConfig
+from src.objects.properties.property_condition import PropertyConditionConfig
+from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.property import PropertyConfig
 
 
 @dataclass
-class PositionStateConfig(StateConfig):
+class PositionStateConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="EulerPrecise",
         dim_input=3,
@@ -31,8 +31,8 @@ class PositionStateConfig(StateConfig):
     evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
         ruler=EuclideanRulerConfig(),
     )
-    normalizer: NormalizerConfig = AreaBoundaryConfig()
-    condition: ConditionConfig = ConditionConfig(
+    normalizer: NormalizerConfig = AreaNormalizerConfig()
+    condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=EuclideanRulerConfig(),
         parameter=EuclideanParameterConfig(),
     )

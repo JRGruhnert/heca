@@ -6,7 +6,7 @@ import torch
 from src.objects.properties.x_state import XState, XStateConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AreaConfig(XStateConfig):
     spawn_surfaces: dict[str, list[list[float]]]
     eval_surfaces: dict[str, list[list[float]]]

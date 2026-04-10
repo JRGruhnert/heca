@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.objects.properties.condition import ConditionConfig
+from src.objects.properties.property_condition import PropertyConditionConfig
 from src.objects.properties.handlers import select_state_handler
 from src.objects.properties.handlers.evaluators import select_state_evaluator
 from src.objects.properties.handlers.evaluators.evaluator import (
@@ -23,12 +23,12 @@ from src.objects.properties.handlers.validators.validator import StateValidatorC
 from src.objects.properties.handlers.handler import ValueHandlerConfig
 
 
-@dataclass
-class StateConfig:
+@dataclass(kw_only=True)
+class PropertyConfig:
     id: int
     label: str
     ruler: RulerConfig
-    condition: ConditionConfig
+    condition: PropertyConditionConfig
     evaluator: StateEvaluatorConfig
     encoder: StateEncoderConfig
     normalizer: NormalizerConfig
@@ -36,10 +36,10 @@ class StateConfig:
     preencoder: ValueHandlerConfig = IgnoreValueConfig()
 
 
-class State:
+class Property:
     def __init__(
         self,
-        config: StateConfig,
+        config: PropertyConfig,
     ):
         self.config = config
         self.ruler = select_state_ruler(config.ruler)

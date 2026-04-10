@@ -9,7 +9,7 @@ from src.objects.properties.handlers.handler import (
 from src.objects.properties.x_state import XState, XStateConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class OneHotValueConfig(ValueHandlerConfig):
     state: XStateConfig
 

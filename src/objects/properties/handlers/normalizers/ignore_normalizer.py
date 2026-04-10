@@ -8,7 +8,7 @@ from src.objects.properties.handlers.normalizers.normalizer import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IgnoreNormalizerConfig(NormalizerConfig):
     pass
 

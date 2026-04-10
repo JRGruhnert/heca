@@ -5,7 +5,7 @@ import torch
 from src.objects.properties.handlers.rulers.ruler import Ruler, RulerConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FlipRulerConfig(RulerConfig):
     pass
 

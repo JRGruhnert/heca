@@ -1,16 +1,12 @@
+import numpy as np
 from dataclasses import dataclass
 from external.tapas_gmm_modified.tapas_gmm.env.calvin import Calvin, CalvinConfig
-from src.evaluators.evaluator import Evaluator
-from src.storage import Storage
-from src.environments.environment import Environment, EnvironmentConfig
+from src.environments.environment import Environment, EnvironmentConfig, StepFeedback
 from src.observation.observation import StateValueDict
-
 from src.observation.calvin import CalvinObservation
-from src.skills.tree.leafs.ignore.leaf_ignore import IgnoreLeaf
-from src.skills.node import TreeNode
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CalvinEnvironmentConfig(EnvironmentConfig):
     calvin_config: CalvinConfig = CalvinConfig(
         task="Undefined",
@@ -30,48 +26,27 @@ class CalvinEnvironmentConfig(EnvironmentConfig):
 
 
 class CalvinEnvironment(Environment):
-    def __init__(
-        self,
-        config: CalvinEnvironmentConfig,
-        evaluator: Evaluator,
-        storage: Storage,
-    ):
+    def __init__(self, config: CalvinEnvironmentConfig):
         self.config = config
-        self.evaluator = evaluator
-        self.storage = storage
 
         self.env = Calvin(self.config.calvin_config)
-        self.info = {}
 
-    def reset(self):
-        temp = self.env.reset(settle_time=50)[0]
-        self.goal = CalvinObservation.from_internal(temp)
+    def _reset(self):
         self.calvin_obs = self.env.reset(settle_time=50)[0]
-        self.current = CalvinObservation.from_internal(self.calvin_obs)
-
-    def sample_task(self) -> tuple[StateValueDict, StateValueDict]:
-        self.reset()
-        # Current and goal should not be equal
-        while not self.evaluator.evaluate_sample(self.current, self.goal):
-            self.reset()
-        return self.current, self.goal
 
     def step(
         self,
-        skill: TreeNode,
-    ) -> tuple[StateValueDict, float, bool]:
-        assert isinstance(skill, TreeNode) or isinstance(
-            skill, IgnoreLeaf
-        ), "CalvinEnvironment only supports TapasSkill at this time."
-        skill.reset(self.goal)
-        while (
-            action := skill.predict(self.calvin_obs, self.storage.states_eval)
-        ) is not None:
-            self.calvin_obs = self.env.step(action, self.config.render, self.info)[0]
-            self.current = CalvinObservation.from_internal(self.calvin_obs)
+        action: np.ndarray,
+    ) -> StepFeedback:
+        self.calvin_obs = self.env.step(action, render=False)[0]
+        # TODO: In Future implement error detection and return other Codes
+        return StepFeedback.OKAY
 
-        reward, done = self.evaluator.step(self.current, self.goal)
-        return self.current, reward, done
+    def render(self):
+        raise NotImplementedError("Render method not implemented yet.")
+
+    def get_observation(self) -> StateValueDict:
+        return CalvinObservation.from_internal(self.calvin_obs)
 
     def close(self):
         self.env.close()

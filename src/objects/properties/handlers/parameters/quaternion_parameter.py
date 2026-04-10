@@ -9,7 +9,7 @@ from src.objects.properties.handlers.parameters.parameter import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class QuaternionParameterConfig(StateParameterConfig):
     rotation: QuaternionConfig = QuaternionConfig()
 

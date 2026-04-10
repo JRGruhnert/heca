@@ -6,7 +6,7 @@ import torch
 from src.networks.layers.classifiers.state_classifier import StateClassifierConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class XStateConfig:
     label: str
     values: set[str]

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from src.networks.layers.classifiers.state_classifier import StateClassifierConfig
 from src.networks.layers.encoder import StateEncoderConfig
 from src.objects.properties.area import AreaConfig
-from src.objects.properties.condition import ConditionConfig
+
 from src.objects.properties.handlers.validators.validator import StateValidatorConfig
 from src.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
@@ -15,7 +15,7 @@ from src.objects.properties.handlers.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
 from src.objects.properties.handlers.normalizers.boundary_normalizer import (
-    AreaBoundaryConfig,
+    AreaNormalizerConfig,
 )
 
 from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
@@ -24,17 +24,12 @@ from src.objects.properties.handlers.validators.area_validator import (
 )
 from src.objects.properties.handlers.handler import ValueHandlerConfig
 from src.objects.properties.handlers.one_hot_handler import OneHotValueConfig
-from src.objects.properties.property import StateConfig
+from src.objects.properties.property import PropertyConfig
+from src.objects.properties.property_condition import PropertyConditionConfig
 
 
 @dataclass
 class CalvinAreaConfig(AreaConfig):
-    # ORIGINAl
-    # surfaces = {
-    #    "table": [[0.0, -0.15, 0.46], [0.30, -0.03, 0.46]],
-    #    "drawer_open": [[0.04, -0.35, 0.38], [0.30, -0.21, 0.38]],
-    #    "drawer_closed": [[0.04, -0.16, 0.38], [0.30, -0.03, 0.38]],
-    # }
     label: str = "AreaEuler"
     values: list[str] = field(
         default_factory=lambda: ["table", "drawer_open", "drawer_closed", "drawer"]
@@ -56,15 +51,15 @@ class CalvinAreaConfig(AreaConfig):
 
 
 @dataclass
-class CalvinAreaStateConfig(StateConfig):
+class CalvinAreaStateConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="AreaEuler",
         dim_input=6,
     )
-    normalizer: NormalizerConfig = AreaBoundaryConfig()
+    normalizer: NormalizerConfig = AreaNormalizerConfig()
     ruler: EuclideanRulerConfig = EuclideanRulerConfig()
     evaluator: StateEvaluatorConfig = StateEvaluatorConfig()
-    condition: ConditionConfig = ConditionConfig(
+    condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=EuclideanRulerConfig(),
         parameter=EuclideanParameterConfig(),
     )

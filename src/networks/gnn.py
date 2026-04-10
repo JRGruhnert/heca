@@ -10,9 +10,9 @@ from src.explainer import HoopgnExplainer
 from src.observation.observation import StateValueDict
 from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.networks.network import Network, NetworkConfig
-from src.skills.node import TreeNode
-from src.objects.properties.condition import Condition
-from src.objects.properties.property import State
+from src.skills.skill import Skill
+from src.objects.properties.property_condition import PropertyCondition
+from src.objects.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (
     Explainer,
@@ -128,7 +128,7 @@ class CriticReadoutNetwork(ReadoutNetwork):
         return value.squeeze(-1)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class GraphNetworkConfig(NetworkConfig):
     explain_mode: bool = False
     label: str = "gnn"
@@ -259,7 +259,7 @@ class GraphNetwork(Network):
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
     def explain(
-        self, batch: Batch, skill: TreeNode
+        self, batch: Batch, skill: Skill
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
         d: HeteroData = batch.get_example(0)  # type: ignore
         # print(batch)
@@ -323,7 +323,7 @@ class GraphNetwork(Network):
     def distances(
         self,
         obs: StateValueDict,
-        precons: dict[str, Condition],
+        precons: dict[str, PropertyCondition],
         pad: bool = False,
         sparse: bool = False,
     ) -> torch.Tensor:
@@ -369,7 +369,7 @@ class GraphNetwork(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any, skills: list[TreeNode], states: list[State]):
+    def _load(self, checkpoint: Any, skills: list[Skill], states: list[Property]):
         self.skills = skills
         self.states = states
         self.load_state_dict(checkpoint["model_state"], strict=False)

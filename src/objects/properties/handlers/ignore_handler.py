@@ -8,7 +8,7 @@ from src.objects.properties.handlers.handler import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IgnoreValueConfig(ValueHandlerConfig):
     pass
 

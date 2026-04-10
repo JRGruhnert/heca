@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 import torch
 import torch.nn as nn
@@ -9,16 +9,16 @@ from src.networks.layers.encoder import (
 )
 
 from src.observation.observation import StateValueDict
-from src.skills.node import TreeNode
-from src.objects.properties.property import State
+from src.skills.skill import Skill
+from src.objects.properties.property import Property
 from loguru import logger
 
 
-@dataclass
+@dataclass(kw_only=True)
 class NetworkConfig:
-    label: str
     dim_skill: int
     dim_state: int
+    label: str = field(init=False)
     checkpoint_path: str | None = None
     registry: StateEncoderRegistryConfig = StateEncoderRegistryConfig()
 
@@ -48,10 +48,10 @@ class Network(nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement the forward method.")
 
     @abstractmethod
-    def explain(self, batch, skill: TreeNode) -> tuple:
+    def explain(self, batch, skill: Skill) -> tuple:
         raise NotImplementedError("This network does not support explanations.")
 
-    def _encode_states(self, x: StateValueDict, states: list[State]) -> torch.Tensor:
+    def _encode_states(self, x: StateValueDict, states: list[Property]) -> torch.Tensor:
         temp = []
         for state in states:
             encoder = self.registry.get(state.config.encoder)
@@ -62,7 +62,7 @@ class Network(nn.Module, ABC):
         self,
         current: list[StateValueDict] | StateValueDict,
         goal: list[StateValueDict] | StateValueDict,
-        states: list[State],
+        states: list[Property],
     ) -> torch.Tensor:
         """Converts lists of observations and goals into a batch suitable for the network."""
         if isinstance(current, StateValueDict):
@@ -87,7 +87,7 @@ class Network(nn.Module, ABC):
     ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 
-    def load(self, skills: list[TreeNode], states: list[State]):
+    def load(self, skills: list[Skill], states: list[Property]):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint, skills, states)
@@ -100,7 +100,7 @@ class Network(nn.Module, ABC):
             )
 
     @abstractmethod
-    def _load(self, checkpoint: Any, skills: list[TreeNode], states: list[State]):
+    def _load(self, checkpoint: Any, skills: list[Skill], states: list[Property]):
         raise NotImplementedError("Subclasses must implement the _load method.")
 
     def _load_checkpoint(self, checkpoint_path: str) -> Any:

@@ -7,7 +7,7 @@ from src.objects.properties.handlers.evaluators.evaluator import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IgnoreEvaluatorConfig(StateEvaluatorConfig):
     pass
 

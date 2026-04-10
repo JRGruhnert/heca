@@ -1,22 +1,23 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from torch_geometric.data import Batch
 
 
-@dataclass
-class NodeParameterConfig:
+@dataclass(kw_only=True)
+class SkillNetworkerConfig:
     pass
 
 
-class NodeParameter(ABC):
-    def __init__(self, config: NodeParameterConfig):
+class SkillNetworker(ABC):
+    def __init__(self, config: SkillNetworkerConfig):
         self.config = config
 
     @abstractmethod
-    def __call__(self, start, goal) -> float:
+    def __call__(self, start) -> Batch:
         "TODO: implement"
         raise NotImplementedError()
 
     @abstractmethod
-    def reset(self):
+    def reset(self, goal):
         "TODO: implement"
         raise NotImplementedError()

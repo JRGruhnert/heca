@@ -10,7 +10,7 @@ from src.objects.properties.handlers.evaluators.evaluator import (
 from src.objects.properties.handlers.rulers import select_state_ruler
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ThresholdEvaluatorConfig(StateEvaluatorConfig):
     ruler: RulerConfig
     threshold: float = 0.05

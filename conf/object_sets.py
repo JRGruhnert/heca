@@ -1,6 +1,6 @@
 from enum import Enum
 
-from conf.calvin.states import CalvinStateSet
+from conf.hoopgnv1.states.hoopgnv1 import CalvinStateSet
 
 BASE = [
     CalvinStateSet.ee_position,
@@ -40,25 +40,13 @@ BLUE = [
     CalvinStateSet.block_blue_scalar,
 ]
 
-
-class ObjectSet(Enum):
-    BASE = "base"
-    SLIDE = "slide"
-    RED = "red"
-    PINK = "pink"
-    BLUE = "blue"
-    SR = "sr"
-    SRP = "srp"
-    SRPB = "srpb"
-
-
 OBJECT_SETS = {
-    ObjectSet.BASE: BASE,
-    ObjectSet.SLIDE: BASE + SLIDE,
-    ObjectSet.RED: BASE + RED,
-    ObjectSet.PINK: BASE + PINK,
-    ObjectSet.BLUE: BASE + BLUE,
-    ObjectSet.SR: BASE + SLIDE + RED,
-    ObjectSet.SRP: BASE + SLIDE + RED + PINK,
-    ObjectSet.SRPB: BASE + SLIDE + RED + PINK + BLUE,
+    "base": BASE,
+    "slider": BASE + SLIDE,
+    "red": BASE + RED,
+    "pink": BASE + PINK,
+    "blue": BASE + BLUE,
+    "sr": BASE + SLIDE + RED,
+    "srp": BASE + SLIDE + RED + PINK,
+    "srpb": BASE + SLIDE + RED + PINK + BLUE,
 }

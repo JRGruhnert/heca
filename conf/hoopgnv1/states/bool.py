@@ -1,39 +1,39 @@
 from dataclasses import dataclass
 
 from src.networks.layers.encoder import StateEncoderConfig
-from src.objects.properties.value_handler.evaluators.evaluator import (
+from src.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.value_handler.evaluators.threshold_evaluator import (
+from src.objects.properties.handlers.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from src.objects.properties.value_handler.parameters.binary_parameter import (
+from src.objects.properties.handlers.parameters.binary_parameter import (
     BinaryParameterConfig,
 )
-from src.objects.properties.value_handler.rulers.binary_ruler import BinaryRulerConfig
-from src.objects.properties.value_handler.rulers.ruler import RulerConfig
+from src.objects.properties.handlers.rulers.binary_ruler import BinaryRulerConfig
+from src.objects.properties.handlers.rulers.ruler import RulerConfig
 
-from src.objects.properties.condition import ConditionConfig
-from src.objects.properties.value_handler.normalizers.ignore_normalizer import (
-    IgnoreValueConfig,
+from src.objects.properties.handlers.normalizers.ignore_normalizer import (
+    IgnoreNormalizerConfig,
 )
-from src.objects.properties.value_handler.normalizers.normalizer import NormalizerConfig
-from src.objects.properties.property import StateConfig
+from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from src.objects.properties.property import PropertyConfig
+from src.objects.properties.property_condition import PropertyConditionConfig
 
 
 @dataclass
-class BoolStateConfig(StateConfig):
+class BoolStateConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="Bool",
         dim_input=1,
         middle_dim=8,
     )
-    normalizer: NormalizerConfig = IgnoreValueConfig()
+    normalizer: NormalizerConfig = IgnoreNormalizerConfig()
     ruler: RulerConfig = BinaryRulerConfig()
     evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
         ruler=BinaryRulerConfig(),
     )
-    condition: ConditionConfig = ConditionConfig(
+    condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=BinaryRulerConfig(),
         parameter=BinaryParameterConfig(),
     )

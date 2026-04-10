@@ -8,7 +8,7 @@ from src.objects.properties.handlers.normalizers.boundary_normalizer import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BoundaryThresholdConfig:
     boundary: BoundaryNormalizerConfig
     threshold: float = 0.05

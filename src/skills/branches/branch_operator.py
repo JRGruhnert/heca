@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BranchOperatorConfig:
     pass
 

@@ -8,7 +8,7 @@ from src.objects.properties.handlers.validators.validator import (
 )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AreaValidatorConfig(StateValidatorConfig):
     area: AreaConfig
 

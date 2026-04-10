@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from src.evaluators.evaluator import EvaluatorConfig, Evaluator
-from src.storage import Storage
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Dense3EvaluatorConfig(EvaluatorConfig):
     max_progress_reward: float = 1.0
     # Small step penalty to encourage efficiency
@@ -14,12 +13,8 @@ class Dense3EvaluatorConfig(EvaluatorConfig):
 
 
 class Dense3Evaluator(Evaluator):
-    def __init__(
-        self,
-        config: Dense3EvaluatorConfig,
-        storage: Storage,
-    ):
-        super().__init__(storage)
+    def __init__(self, config: Dense3EvaluatorConfig):
+        super().__init__(config)
         self.config = config
         self.max_percentage_done: float = 0.0
 

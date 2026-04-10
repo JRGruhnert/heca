@@ -1,22 +1,17 @@
 from dataclasses import dataclass
 from src.evaluators.evaluator import EvaluatorConfig, Evaluator
-from src.storage import Storage
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DenseEvaluatorConfig(EvaluatorConfig):
     negative_step_reward: float
     positive_step_reward: float
 
 
 class DenseEvaluator(Evaluator):
-    def __init__(
-        self,
-        config: DenseEvaluatorConfig,
-        storage: Storage,
-    ):
-        super().__init__(storage)
+    def __init__(self, config: DenseEvaluatorConfig):
+        super().__init__(config)
         self.config = config
 
     def step(

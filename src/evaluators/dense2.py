@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 from src.evaluators.evaluator import EvaluatorConfig, Evaluator
-from src.storage import Storage
 from src.observation.observation import StateValueDict
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Dense2EvaluatorConfig(EvaluatorConfig):
     # Reward for going from 0% correct to 100% correct (excluding success bonus)
     max_progress_reward: float = 0.5
@@ -15,12 +14,8 @@ class Dense2EvaluatorConfig(EvaluatorConfig):
 
 
 class Dense2Evaluator(Evaluator):
-    def __init__(
-        self,
-        config: Dense2EvaluatorConfig,
-        storage: Storage,
-    ):
-        super().__init__(storage)
+    def __init__(self, config: Dense2EvaluatorConfig):
+        super().__init__(config)
         self.config = config
 
     def step(

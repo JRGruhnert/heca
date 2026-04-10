@@ -14,8 +14,8 @@ from src.objects.properties.handlers.rulers.ignore_ruler import IgnoreRulerConfi
 from src.objects.properties.handlers.rulers.ruler import RulerConfig
 
 
-@dataclass
-class ConditionConfig:
+@dataclass(kw_only=True)
+class PropertyConditionConfig:
     ruler: RulerConfig
     parameter: StateParameterConfig
     value: list[float] | float | int | None = None
@@ -23,15 +23,15 @@ class ConditionConfig:
 
 
 @dataclass
-class IgnoreConditionConfig(ConditionConfig):
+class IgnoreConditionConfig(PropertyConditionConfig):
     ruler: RulerConfig = IgnoreRulerConfig()
     parameter: StateParameterConfig = IgnoreParameterConfig()
     value: list[float] | float | int | None = None
     last_digit: int = 1
 
 
-class Condition:
-    def __init__(self, config: ConditionConfig):
+class PropertyCondition:
+    def __init__(self, config: PropertyConditionConfig):
         self.config = config
         self.ruler = select_state_ruler(config.ruler)
         self.parameter = select_state_parameter(config.parameter)
@@ -48,13 +48,15 @@ class Condition:
         )
 
     @classmethod
-    def from_demos(cls, value: tuple, config: ConditionConfig) -> "Condition":
+    def from_demos(
+        cls, value: tuple, config: PropertyConditionConfig
+    ) -> "PropertyCondition":
         instance = cls(config)
         start, end, reversed, selected_by_tapas = value
         tp = instance.parameter.hoopgnv1(start, end, reversed, selected_by_tapas)
 
         if tp is None:
-            return Condition(IgnoreConditionConfig())
+            return PropertyCondition(IgnoreConditionConfig())
 
         instance.value = tp
         return instance

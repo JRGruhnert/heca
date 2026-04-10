@@ -1,16 +1,16 @@
-from src.objects.properties.handlers.evaluators.ignore_evaluator import (
-    IgnoreEvaluator,
-    IgnoreEvaluatorConfig,
-)
 from src.objects.properties.handlers.validators.area_validator import (
     AreaValidator,
     AreaValidatorConfig,
+)
+from src.objects.properties.handlers.validators.ignore_validator import (
+    IgnoreValidator,
+    IgnoreValidatorConfig,
 )
 
 
 STATE_VALIDATOR_BUILDERS = {
     AreaValidatorConfig: lambda config: AreaValidator(config),
-    IgnoreEvaluatorConfig: lambda config: IgnoreEvaluator(config),
+    IgnoreValidatorConfig: lambda config: IgnoreValidator(config),
 }
 
 

@@ -6,10 +6,10 @@ from src.networks.network import Network, NetworkConfig
 from src.observation.observation import StateValueDict
 from collections import defaultdict
 
-from src.objects.properties.property import State
+from src.objects.properties.property import Property
 
 
-@dataclass
+@dataclass(kw_only=True)
 class BaselineNetworkConfig(NetworkConfig):
     label: str = "baseline"
 
@@ -58,7 +58,7 @@ class BaselineNetwork(Network):
     def state_type_dict_values(
         self,
         x: StateValueDict,
-        states: list[State],
+        states: list[Property],
     ) -> dict[str, torch.Tensor]:
         """Group state values by their type strings."""
         grouped = defaultdict(list)
