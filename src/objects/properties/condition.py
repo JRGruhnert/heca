@@ -2,15 +2,16 @@ from dataclasses import dataclass
 
 import torch
 
-from src.factory import select_state_ruler, select_state_parameter
-from src.objects.properties.value_handler.parameters.ignore_parameter import (
+from src.objects.properties.handlers.parameters import select_state_parameter
+from src.objects.properties.handlers.parameters.ignore_parameter import (
     IgnoreParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.parameter import (
+from src.objects.properties.handlers.parameters.parameter import (
     StateParameterConfig,
 )
-from src.objects.properties.value_handler.rulers.ignore_ruler import IgnoreRulerConfig
-from src.objects.properties.value_handler.rulers.ruler import RulerConfig
+from src.objects.properties.handlers.rulers import select_state_ruler
+from src.objects.properties.handlers.rulers.ignore_ruler import IgnoreRulerConfig
+from src.objects.properties.handlers.rulers.ruler import RulerConfig
 
 
 @dataclass
@@ -18,6 +19,7 @@ class ConditionConfig:
     ruler: RulerConfig
     parameter: StateParameterConfig
     value: list[float] | float | int | None = None
+    last_digit: int = 0
 
 
 @dataclass
@@ -25,6 +27,7 @@ class IgnoreConditionConfig(ConditionConfig):
     ruler: RulerConfig = IgnoreRulerConfig()
     parameter: StateParameterConfig = IgnoreParameterConfig()
     value: list[float] | float | int | None = None
+    last_digit: int = 1
 
 
 class Condition:
@@ -40,7 +43,9 @@ class Condition:
         return self.ruler(x, self.value)
 
     def edge_feature(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        return self.ruler.edge_feature(a, b)
+        return torch.tensor(
+            [self.ruler(a, b), self.config.last_digit], dtype=torch.float32
+        )
 
     @classmethod
     def from_demos(cls, value: tuple, config: ConditionConfig) -> "Condition":

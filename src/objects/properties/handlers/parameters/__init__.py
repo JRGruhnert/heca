@@ -1,24 +1,25 @@
-from src.objects.properties.value_handler.parameters.binary_parameter import (
+from src.objects.properties.handlers.parameters.parameter import StateParameter
+from src.objects.properties.handlers.parameters.binary_parameter import (
     BinaryParameter,
     BinaryParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.euclidean_parameter import (
+from src.objects.properties.handlers.parameters.euclidean_parameter import (
     EuclideanParameter,
     EuclideanParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.flip_parameter import (
+from src.objects.properties.handlers.parameters.flip_parameter import (
     FlipParameter,
     FlipParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.ignore_parameter import (
+from src.objects.properties.handlers.parameters.ignore_parameter import (
     IgnoreParameter,
     IgnoreParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.quaternion_parameter import (
+from src.objects.properties.handlers.parameters.quaternion_parameter import (
     QuaternionParameter,
     QuaternionParameterConfig,
 )
-from src.objects.properties.value_handler.parameters.scalar_parameter import (
+from src.objects.properties.handlers.parameters.scalar_parameter import (
     ScalarParameter,
     ScalarParameterConfig,
 )
@@ -38,7 +39,7 @@ def register_state_parameter(config_type, builder):
     STATE_PARAMETER_BUILDERS[config_type] = builder
 
 
-def select_state_parameter(config):
+def select_state_parameter(config) -> StateParameter:
     builder = STATE_PARAMETER_BUILDERS.get(type(config))
     if builder is None:
         for cfg_type, b in STATE_PARAMETER_BUILDERS.items():

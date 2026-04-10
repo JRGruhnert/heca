@@ -1,16 +1,16 @@
-from src.objects.properties.value_handler.rulers.angular_ruler import (
+from src.objects.properties.handlers.rulers.angular_ruler import (
     AngularRuler,
     AngularRulerConfig,
 )
-from src.objects.properties.value_handler.rulers.binary_ruler import (
+from src.objects.properties.handlers.rulers.binary_ruler import (
     BinaryRuler,
     BinaryRulerConfig,
 )
-from src.objects.properties.value_handler.rulers.euclidean_ruler import (
+from src.objects.properties.handlers.rulers.euclidean_ruler import (
     EuclideanRuler,
     EuclideanRulerConfig,
 )
-from src.objects.properties.value_handler.rulers.flip_ruler import (
+from src.objects.properties.handlers.rulers.flip_ruler import (
     FlipRuler,
     FlipRulerConfig,
 )

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 import torch
 
-from src.objects.properties.value_handler.normalizers.boundary_normalizer import (
+from src.objects.properties.handlers.normalizers.boundary_normalizer import (
     BoundaryNormalizer,
     BoundaryNormalizerConfig,
 )

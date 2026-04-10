@@ -2,18 +2,18 @@ from dataclasses import dataclass
 import torch
 
 from src.objects.properties.area import Area, AreaConfig
-from src.objects.properties.value_handler.validators.validator import (
-    Validator,
-    ValidatorConfig,
+from src.objects.properties.handlers.validators.validator import (
+    StateValidator,
+    StateValidatorConfig,
 )
 
 
 @dataclass
-class AreaValidatorConfig(ValidatorConfig):
+class AreaValidatorConfig(StateValidatorConfig):
     area: AreaConfig
 
 
-class AreaValidator(Validator):
+class AreaValidator(StateValidator):
     def __init__(
         self,
         config: AreaValidatorConfig,

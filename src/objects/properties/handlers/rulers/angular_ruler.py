@@ -3,7 +3,7 @@ import math
 
 import torch
 
-from src.objects.properties.value_handler.rulers.ruler import Ruler, RulerConfig
+from src.objects.properties.handlers.rulers.ruler import Ruler, RulerConfig
 
 
 @dataclass

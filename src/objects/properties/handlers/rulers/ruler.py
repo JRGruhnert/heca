@@ -21,7 +21,3 @@ class Ruler(ABC):
     @abstractmethod
     def distance(self, a: torch.Tensor, b: torch.Tensor) -> float:
         raise NotImplementedError("Subclasses must implement the distance method.")
-
-    def edge_feature(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        """Optional method to compute edge features for graph-based models."""
-        return torch.tensor([self.distance(a, b), 0], dtype=torch.float32)
