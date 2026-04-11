@@ -10,20 +10,20 @@ import torch
 from calvin_env_modified.envs.observation import (
     CalvinEnvObservation,
 )
-from tapas_gmm.policy import import_policy
-from tapas_gmm.policy.gmm import GMMPolicy, GMMPolicyConfig
-from tapas_gmm.policy.models.tpgmm import (
+from tapas_gmm_modified.policy import import_policy
+from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
+from tapas_gmm_modified.policy.models.tpgmm import (
     AutoTPGMM,
     AutoTPGMMConfig,
     ModelType,
     TPGMMConfig,
 )
-from tapas_gmm.utils.observation import (
+from tapas_gmm_modified.utils.observation import (
     SceneObservation,
     SingleCamObservation,
     dict_to_tensordict,
 )
-from tapas_gmm.utils.robot_trajectory import (
+from tapas_gmm_modified.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )

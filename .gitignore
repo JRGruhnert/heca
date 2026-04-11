@@ -122,5 +122,3 @@ conf/machine.py
 results_old/
 results.zip
 /plots/
-/external/
-/dependencies/

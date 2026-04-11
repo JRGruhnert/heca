@@ -3,10 +3,10 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from external.calvin_env_modified.calvin_env_modified.envs.observation import (
+from calvin_env_modified.envs.observation import (
     CalvinEnvObservation,
 )
-from external.tapas_modified.tapas_gmm.utils.observation import (
+from tapas_gmm_modified.utils.observation import (
     CameraOrder,
     SingleCamObservation,
     SceneObservation,

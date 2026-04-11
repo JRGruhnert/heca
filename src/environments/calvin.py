@@ -1,6 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
-from external.tapas_gmm_modified.tapas_gmm.env.calvin import Calvin, CalvinConfig
+
+from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 from src.environments.environment import Environment, EnvironmentConfig, StepFeedback
 from src.observation.observation import StateValueDict
 from src.observation.calvin import CalvinObservation
