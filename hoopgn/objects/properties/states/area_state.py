@@ -3,22 +3,21 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from hoopgn.objects.properties.x_state import XState, XStateConfig
+from hoopgn.objects.properties.states.state import StateConfig, State
 
 
 @dataclass(kw_only=True)
-class AreaConfig(XStateConfig):
+class AreaStateConfig(StateConfig):
     spawn_surfaces: dict[str, list[list[float]]]
     eval_surfaces: dict[str, list[list[float]]]
 
 
-class Area(XState):
-    """Mixin for area-based success conditions"""
-
+class AreaState(State):
     def __init__(
         self,
-        config: AreaConfig,
+        config: AreaStateConfig,
     ):
+        super().__init__(config)
         self.config = config
         self.spawn_surfaces = self._make_surfaces(config.spawn_surfaces)
         self.eval_surfaces = self._make_surfaces(config.eval_surfaces)

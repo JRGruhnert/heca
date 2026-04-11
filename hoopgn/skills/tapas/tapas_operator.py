@@ -112,9 +112,9 @@ class TapasOperator(SkillOperator):
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
                     if self.override:
-                        value = self._hacky_postprocess(x, self.goal)
+                        value = self._hacky_postprocess(x)
                     else:
-                        value = x
+                        value = x.tapas
                     self.predictions, _ = self.policy.predict(value)  # type: ignore
                 except FloatingPointError as e:
                     logger.error(f"Numerical error in GMM prediction: {e}")
@@ -129,9 +129,9 @@ class TapasOperator(SkillOperator):
         else:
             try:
                 if self.override:
-                    value = self._hacky_postprocess(x, self.goal)
+                    value = self._hacky_postprocess(x)
                 else:
-                    value = x
+                    value = x.tapas
                 self.prediction, _ = self.policy.predict(value)  # type: ignore
             except FloatingPointError as e:
                 logger.error(f"Numerical error in GMM prediction: {e}")
@@ -160,65 +160,63 @@ class TapasOperator(SkillOperator):
             )  # type: ignore
         )  # type: ignore
 
-    def _hacky_postprocess(
-        self,
-        current: StateValueDict,
-        goal: StateValueDict,
-    ) -> SceneObservation:  # type: ignore
+    def _hacky_postprocess(self, x: StateValueDict) -> SceneObservation:  # type: ignore
+        assert self.goal is not None, "Goal must be set for hacky postprocess."
         for label, condition in self.overrides.items():
             pos = self.pos_reg.search(label)
             rot = self.rot_reg.search(label)
             scalar = self.scalar_reg.search(label)
             if label == "ee_position":
-                current.tapas.ee_pose = torch.cat(
+                x.tapas.ee_pose = torch.cat(
                     [
                         condition.value,
-                        current.tapas.ee_pose[3:],
+                        x.tapas.ee_pose[3:],
                     ]
                 )
             elif label == "ee_rotation":
-                current.tapas.ee_pose = torch.cat(
+                x.tapas.ee_pose = torch.cat(
                     [
-                        current.tapas.ee_pose[:3],
+                        x.tapas.ee_pose[:3],
                         condition.value,
                     ]
                 )
             elif label == "ee_scalar":
-                current.tapas.ee_scalar = condition.value
+                x.tapas.ee_scalar = condition.value
             elif pos:
-                current.tapas.object_poses[pos.group(1)] = np.concatenate(
+                x.tapas.object_poses[pos.group(1)] = np.concatenate(
                     [
-                        self._hacky_position(pos.group(1), goal),
-                        current.tapas.object_poses[pos.group(1)][3:],
+                        self._hacky_position(pos.group(1)),
+                        x.tapas.object_poses[pos.group(1)][3:],
                     ]
                 )
             elif rot:
-                current.tapas.object_poses[rot.group(1)] = np.concatenate(
+                x.tapas.object_poses[rot.group(1)] = np.concatenate(
                     [
-                        current.tapas.object_poses[rot.group(1)][:3],
-                        goal[f"{rot.group(1)}_rotation"].numpy(),
+                        x.tapas.object_poses[rot.group(1)][:3],
+                        self.goal[f"{rot.group(1)}_rotation"].numpy(),
                     ]
                 )
             elif scalar:
-                current.tapas.object_states[scalar.group(1)] = goal[
+                x.tapas.object_states[scalar.group(1)] = self.goal[
                     f"{scalar.group(1)}_scalar"
                 ].numpy()
             else:
                 raise ValueError(f"Unknown state name: {label}")
 
-        return current
+        return x.tapas
 
-    def _hacky_position(self, label: str, goal: StateValueDict) -> np.ndarray:
+    def _hacky_position(self, label: str) -> np.ndarray:
+        assert self.goal is not None, "Goal must be set for hacky position."
         property = self.hacky_properties[label]
         if isinstance(property.evaluator, AreaEvaluator):
-            area = property.evaluator.area.check_eval_area(goal[label])
-            temp_pos = goal[label].clone()
+            area = property.evaluator.area.check_eval_area(self.goal[label])
+            temp_pos = self.goal[label].clone()
             if (
                 area == "drawer_closed"
             ):  # NOTE: This is a hardcoded fix for the drawer, since the position of the drawer in the reversed trajectory is in the closed position but the model expects it to be in the open position. This is because the model was trained with the open position as precondition and the closed position as postcondition, so when we reverse it, we need to also reverse the positions.
                 temp_pos[1] -= 0.17  # Drawer Offset
         else:
-            temp_pos = goal[label]
+            temp_pos = self.goal[label]
         return temp_pos.numpy()
 
     @cached_property

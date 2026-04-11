@@ -2,22 +2,22 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.objects.properties.states.area_state import AreaStateConfig, AreaState
-from hoopgn.objects.properties.features.evaluators.evaluator import (
-    PropertyEvaluator,
-    PropertyEvaluatorConfig,
+from hoopgn.objects.properties.states.area import Area, AreaConfig
+from hoopgn.objects.properties.evaluators.evaluator import (
+    StateEvaluator,
+    StateEvaluatorConfig,
 )
 
 
 @dataclass(kw_only=True)
-class AreaEvaluatorConfig(PropertyEvaluatorConfig):
-    area: AreaStateConfig
+class AreaEvaluatorConfig(StateEvaluatorConfig):
+    area: AreaConfig
 
 
-class AreaEvaluator(PropertyEvaluator):
+class AreaEvaluator(StateEvaluator):
     def __init__(self, config: AreaEvaluatorConfig):
         self.config = config
-        self.area = AreaState(config.area)
+        self.area = Area(config.area)
 
     def __call__(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
         return self.area.check_area_similarity(current, goal)

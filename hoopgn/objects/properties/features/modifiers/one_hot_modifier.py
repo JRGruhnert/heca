@@ -6,14 +6,13 @@ from hoopgn.objects.properties.features.modifiers.modifier import (
     PropertyModifier,
     PropertyModifierConfig,
 )
-
-
-from hoopgn.objects.properties.x_state import XState, XStateConfig
+from hoopgn.objects.properties.states import select_state_property
+from hoopgn.objects.properties.states.state import StateConfig
 
 
 @dataclass(kw_only=True)
 class OneHotModifierConfig(PropertyModifierConfig):
-    state: XStateConfig
+    state: StateConfig
 
 
 class OneHotModifier(PropertyModifier):
@@ -22,7 +21,8 @@ class OneHotModifier(PropertyModifier):
         config: OneHotModifierConfig,
     ):
         super().__init__(config)
-        self.state = XState(config.state)
+        self.config = config
+        self.state = select_state_property(config.state)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         lx = self.state(x)

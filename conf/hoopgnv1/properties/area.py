@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 
 from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierConfig
-from hoopgn.networks.layers.encoder import StateEncoderConfig
-from hoopgn.objects.properties.area import AreaConfig
+from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 
+from hoopgn.objects.properties.features.evaluators.area_evaluator import (
+    AreaEvaluatorConfig,
+)
 from hoopgn.objects.properties.features.extractors.calvin_gt_extractor import (
     CalvinGTExtractorConfig,
 )
@@ -41,13 +43,14 @@ from hoopgn.objects.properties.property import PropertyConfig
 from hoopgn.objects.properties.features.conditions.condition import (
     PropertyConditionConfig,
 )
+from hoopgn.objects.properties.states.area_state import AreaStateConfig
 
 
 @dataclass
-class CalvinAreaConfig(AreaConfig):
+class CalvinAreaConfig(AreaStateConfig):
     label: str = "Area"
-    values: list[str] = field(
-        default_factory=lambda: ["table", "drawer_open", "drawer_closed", "drawer"]
+    values: set[str] = field(
+        default_factory=lambda: {"table", "drawer_open", "drawer_closed"}
     )
     spawn_surfaces: dict = field(
         default_factory=lambda: {
@@ -67,26 +70,24 @@ class CalvinAreaConfig(AreaConfig):
 
 @dataclass
 class AreaPropertyConfig(PropertyConfig):
-    encoder: StateEncoderConfig = StateEncoderConfig(
+    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
         label="AreaEuler",
         dim_input=6,
     )
     normalizer: PropertyNormalizerConfig = AreaNormalizerConfig()
     ruler: EuclideanRulerConfig = EuclideanRulerConfig()
-    evaluator: PropertyEvaluatorConfig = PropertyEvaluatorConfig()
+    evaluator: PropertyEvaluatorConfig = AreaEvaluatorConfig(
+        area=CalvinAreaConfig(),
+    )
     condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=EuclideanRulerConfig(),
         parameter=EuclideanParameterConfig(),
     )
     validator: PropertyValidatorConfig = AreaValidatorConfig(
-        area=CalvinAreaConfig(
-            classifier=StateClassifierConfig(),
-        )
+        area=CalvinAreaConfig(),
     )
     modifier: PropertyModifierConfig = OneHotModifierConfig(
-        state=CalvinAreaConfig(
-            classifier=StateClassifierConfig(),
-        ),
+        state=CalvinAreaConfig(),
     )
 
     def __post_init__(self):

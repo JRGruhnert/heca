@@ -2,14 +2,14 @@ import numpy as np
 from dataclasses import dataclass
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
+import torch
 from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.observation import StateValueDict
-from hoopgn.observation.calvin import CalvinObservation
+from hoopgn.observation.observation import StateValueDict, empty_batchsize
 
 
 @dataclass(kw_only=True)
 class CalvinEnvironmentConfig(EnvironmentConfig):
-    calvin_config: CalvinConfig = CalvinConfig(
+    calvin: CalvinConfig = CalvinConfig(
         task="Undefined",
         cameras=("wrist", "front"),
         camera_pose={},
@@ -28,9 +28,13 @@ class CalvinEnvironmentConfig(EnvironmentConfig):
 
 class CalvinEnvironment(Environment):
     def __init__(self, config: CalvinEnvironmentConfig):
+        super().__init__(config)
         self.config = config
 
-        self.env = Calvin(self.config.calvin_config)
+        self.env = Calvin(self.config.calvin)
+
+    def close(self):
+        self.env.close()
 
     def _reset(self):
         self.calvin_obs = self.env.reset(settle_time=50)[0]
@@ -47,9 +51,29 @@ class CalvinEnvironment(Environment):
         raise NotImplementedError("Render method not implemented yet.")
 
     def get_observation(self) -> StateValueDict:
-        return CalvinObservation.from_internal(
-            self.calvin_obs, converters=self.converters
+        state_dict = {}
+        state_dict["ee_position"] = torch.tensor(
+            self.calvin_obs.ee_pose[:3], dtype=torch.float32
+        )
+        state_dict["ee_rotation"] = torch.tensor(
+            self.calvin_obs.ee_pose[-4:], dtype=torch.float32
+        )
+        state_dict["ee_scalar"] = torch.tensor(
+            np.array([self.calvin_obs.ee_state]), dtype=torch.float32
         )
 
-    def close(self):
-        self.env.close()
+        for label, value in self.calvin_obs.object_poses.items():
+            k = label.removeprefix("base__")
+            state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
+            state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
+
+        for label, value in self.calvin_obs.object_states.items():
+            k = label.removeprefix("base__")
+            state_dict[f"{k}_scalar"] = torch.tensor(
+                np.array([value]), dtype=torch.float32
+            )
+
+        for converter in self.converters:
+            state_dict[converter.config.label] = converter(self.calvin_obs)
+
+        return StateValueDict(state_dict, batch_size=empty_batchsize)

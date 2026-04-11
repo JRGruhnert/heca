@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import torch
 
-from hoopgn.objects.properties.area import Area, AreaConfig
+from hoopgn.objects.properties.states.area_state import AreaState, AreaStateConfig
 from hoopgn.objects.properties.features.validators.validator import (
     PropertyValidator,
     PropertyValidatorConfig,
@@ -10,7 +10,7 @@ from hoopgn.objects.properties.features.validators.validator import (
 
 @dataclass(kw_only=True)
 class AreaValidatorConfig(PropertyValidatorConfig):
-    area: AreaConfig
+    area: AreaStateConfig
 
 
 class AreaValidator(PropertyValidator):
@@ -19,7 +19,7 @@ class AreaValidator(PropertyValidator):
         config: AreaValidatorConfig,
     ):
         self.config = config
-        self.area = Area(config.area)
+        self.area = AreaState(config.area)
 
     def __call__(self, x: torch.Tensor, y: torch.Tensor) -> bool:
         ax = self.area.label(x)

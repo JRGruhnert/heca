@@ -4,7 +4,7 @@ from tensordict import TensorDictBase
 
 @dataclass(kw_only=True)
 class ConverterConfig:
-    pass
+    label: str
 
 
 class Converter:

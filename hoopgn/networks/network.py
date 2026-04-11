@@ -64,7 +64,7 @@ class Network(nn.Module, ABC):
         temp = []
         for state in states:
             pre = state.modify(x[state.config.label])
-            enc = self._encode_properties(pre, state.config.label)
+            enc = self._encode_properties(pre, state.config.encoder.label)
             temp.append(enc)
         return torch.stack(temp, dim=0)
 
@@ -98,6 +98,7 @@ class Network(nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 
     def load(self, skills: list[Skill], states: list[Property]):
+        self.register_encoder(states)
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint, skills, states)

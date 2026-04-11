@@ -6,19 +6,19 @@ from hoopgn.objects.properties.features.parameters.parameter import (
     PropertyParameter,
     PropertyParameterConfig,
 )
-from hoopgn.objects.properties.binary import Binary, BinaryConfig
+from hoopgn.objects.properties.states.binary_state import BinaryState, BinaryStateConfig
 
 
 @dataclass(kw_only=True)
 class BinaryParameterConfig(PropertyParameterConfig):
-    binary: BinaryConfig = BinaryConfig()
+    binary: BinaryStateConfig = BinaryStateConfig()
 
 
 class BinaryParameter(PropertyParameter):
     def __init__(self, config: BinaryParameterConfig):
         super().__init__(config)
         self.config = config
-        self.binary = Binary(config.binary)
+        self.binary = BinaryState(config.binary)
 
     def hoopgnv1(
         self,
@@ -30,7 +30,7 @@ class BinaryParameter(PropertyParameter):
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
         if self.binary.is_binary(start) and self.binary.is_binary(end):
-            candidate = end if reversed else start
-            if ((end < start) | (start < end)).all():
+            if self.binary.is_always_same(start, end):
+                candidate = end if reversed else start
                 return candidate.mean(dim=0)
         return None  # Not constant enough

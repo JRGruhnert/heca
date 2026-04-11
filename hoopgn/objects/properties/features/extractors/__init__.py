@@ -8,20 +8,20 @@ from hoopgn.objects.properties.features.extractors.calvin_image_extractor import
 )
 
 
-EXTRACTOR_BUILDERS = {
+_PROPERTY_EXTRACTOR_BUILDERS = {
     CalvinGTExtractorConfig: lambda config: CalvinGTExtractor(config),
     CalvinImageExtractorConfig: lambda config: CalvinImageExtractor(config),
 }
 
 
-def register_extractor(config_type, builder):
-    EXTRACTOR_BUILDERS[config_type] = builder
+def register_property_extractor(config_type, builder):
+    _PROPERTY_EXTRACTOR_BUILDERS[config_type] = builder
 
 
 def select_property_extractor(config):
-    builder = EXTRACTOR_BUILDERS.get(type(config))
+    builder = _PROPERTY_EXTRACTOR_BUILDERS.get(type(config))
     if builder is None:
-        for cfg_type, b in EXTRACTOR_BUILDERS.items():
+        for cfg_type, b in _PROPERTY_EXTRACTOR_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break

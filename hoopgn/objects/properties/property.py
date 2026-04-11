@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import torch
-from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 
 from hoopgn.objects.properties.features.extractors import select_property_extractor
 from hoopgn.objects.properties.features.extractors.extractor import (
@@ -41,11 +41,11 @@ class PropertyConfig:
     id: int
     label: str
     ruler: PropertyRulerConfig
+    encoder: PropertyEncoderConfig
     condition: PropertyConditionConfig
     evaluator: PropertyEvaluatorConfig
-    encoder: StateEncoderConfig
     normalizer: PropertyNormalizerConfig
-    extractor: PropertyExtractorConfig
+    extractor: PropertyExtractorConfig = field(init=False)
     modifier: PropertyModifierConfig = SkipModifierConfig()
     validator: PropertyValidatorConfig = SkipValidatorConfig()
 
@@ -57,34 +57,27 @@ class Property:
     ):
         self.config = config
         self.ruler = select_property_ruler(config.ruler)
-        self.validator = select_property_validator(config.validator)
-        self.evaluator = select_property_evaluator(config.evaluator)
-        self.normalizer = select_property_normalizer(config.normalizer)
-        self.extractor = select_property_extractor(config.extractor)
         self.modifier = select_property_modifier(config.modifier)
+        self.evaluator = select_property_evaluator(config.evaluator)
+        self.validator = select_property_validator(config.validator)
+        self.extractor = select_property_extractor(config.extractor)
+        self.normalizer = select_property_normalizer(config.normalizer)
 
-    def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
+    def measure(self, x: torch.Tensor, y: torch.Tensor) -> float:
         """Measures the distance between two values."""
-        xn = self.normalizer(x)
-        yn = self.normalizer(y)
-        return self.ruler(xn, yn)
-
-    def evaluate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
-        """Evaluates whether given values are similar."""
-        xn = self.normalizer(x)
-        yn = self.normalizer(y)
-        return self.evaluator(xn, yn)
-
-    def validate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
-        """Checks if the given value is a valid sample."""
-        nx = self.normalizer(x)
-        ny = self.normalizer(y)
-        return self.validator(nx, ny)
+        return self.ruler(x, y)
 
     def modify(self, x: torch.Tensor) -> torch.Tensor:
         """Applies additional modifications to the given value."""
-        nx = self.normalizer(x)
-        return self.modifier(nx)
+        return self.modifier(x)
+
+    def evaluate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        """Evaluates whether given values are similar."""
+        return self.evaluator(x, y)
+
+    def validate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        """Checks if the given value is a valid sample."""
+        return self.validator(x, y)
 
     def extract(self, x: torch.Tensor) -> torch.Tensor:
         """Extracts the property value from the given modality."""

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 from hoopgn.objects.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
@@ -26,7 +26,7 @@ from hoopgn.objects.properties.property import PropertyConfig
 
 @dataclass
 class QuaternionPropertyConfig(PropertyConfig):
-    encoder: StateEncoderConfig = StateEncoderConfig(
+    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
         label="Quat",
         dim_input=4,
     )

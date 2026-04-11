@@ -1,18 +1,19 @@
 from dataclasses import dataclass
 
+from loguru import logger
 import torch.nn as nn
 
 
 @dataclass
-class StateEncoderConfig:
+class PropertyEncoderConfig:
     label: str
     dim_input: int
     middle_dim: int = 16
     dim_encoder: int = 32
 
 
-class StateEncoder(nn.Module):
-    def __init__(self, config: StateEncoderConfig):
+class PropertyEncoder(nn.Module):
+    def __init__(self, config: PropertyEncoderConfig):
         super().__init__()
         self.fc = nn.Sequential(
             nn.Linear(config.dim_input, config.middle_dim),
@@ -36,18 +37,19 @@ class PropertyEncoderRegistry(nn.ModuleDict):
         super().__init__()
         self.config = config
 
-    def register(self, config: StateEncoderConfig):
+    def register(self, config: PropertyEncoderConfig):
         if config.label in self:
-            raise KeyError(f"Encoder with key '{config.label}' already exists.")
+            logger.info(f"Encoder for '{config.label}' already registered. Skipping.")
+            return
         if self.config.dynamic_create and config.dim_encoder != self.config.dim_encoder:
             raise ValueError(
                 f"Dimension mismatch for '{config.label}': "
                 f"expected {self.config.dim_encoder}, got {config.dim_encoder}. "
                 f"Currently only uniform Node Feature Sizes are supported."
             )
-        self[config.label] = StateEncoder(config)
+        self[config.label] = PropertyEncoder(config)
 
-    def get(self, label: str) -> StateEncoder:
+    def get(self, label: str) -> PropertyEncoder:
         encoder = self[label]
-        assert isinstance(encoder, StateEncoder)
+        assert isinstance(encoder, PropertyEncoder)
         return encoder

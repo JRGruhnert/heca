@@ -7,16 +7,14 @@ from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierC
 
 
 @dataclass(kw_only=True)
-class XStateConfig:
-    label: str
+class StateConfig:
     values: set[str]
-    classifier: StateClassifierConfig
 
 
-class XState:
+class State:
     def __init__(
         self,
-        config: XStateConfig,
+        config: StateConfig,
     ):
         self.config = config
         self.one_hots: dict[str, torch.Tensor] = {

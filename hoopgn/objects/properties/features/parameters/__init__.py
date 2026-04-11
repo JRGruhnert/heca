@@ -25,7 +25,7 @@ from hoopgn.objects.properties.features.parameters.scalar_parameter import (
 )
 
 
-STATE_PARAMETER_BUILDERS = {
+_PROPERTY_PARAMETER_BUILDERS = {
     BinaryParameterConfig: lambda config: BinaryParameter(config),
     EuclideanParameterConfig: lambda config: EuclideanParameter(config),
     FlipParameterConfig: lambda config: FlipParameter(config),
@@ -35,14 +35,14 @@ STATE_PARAMETER_BUILDERS = {
 }
 
 
-def register_state_parameter(config_type, builder):
-    STATE_PARAMETER_BUILDERS[config_type] = builder
+def register_property_parameter(config_type, builder):
+    _PROPERTY_PARAMETER_BUILDERS[config_type] = builder
 
 
 def select_property_parameter(config) -> PropertyParameter:
-    builder = STATE_PARAMETER_BUILDERS.get(type(config))
+    builder = _PROPERTY_PARAMETER_BUILDERS.get(type(config))
     if builder is None:
-        for cfg_type, b in STATE_PARAMETER_BUILDERS.items():
+        for cfg_type, b in _PROPERTY_PARAMETER_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break

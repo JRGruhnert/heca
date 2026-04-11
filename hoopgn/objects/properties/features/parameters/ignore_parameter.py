@@ -6,19 +6,19 @@ from hoopgn.objects.properties.features.parameters.parameter import (
     PropertyParameter,
     PropertyParameterConfig,
 )
-from hoopgn.objects.properties.binary import Binary, BinaryConfig
+from hoopgn.objects.properties.states.binary_state import BinaryState, BinaryStateConfig
 
 
 @dataclass(kw_only=True)
 class IgnoreParameterConfig(PropertyParameterConfig):
-    binary: BinaryConfig = BinaryConfig()
+    binary: BinaryStateConfig = BinaryStateConfig()
 
 
 class IgnoreParameter(PropertyParameter):
     def __init__(self, config: IgnoreParameterConfig):
         super().__init__(config)
         self.config = config
-        self.binary = Binary(config.binary)
+        self.binary = BinaryState(config.binary)
 
     def hoopgnv1(
         self,

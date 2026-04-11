@@ -12,16 +12,13 @@ class StepFeedback(Enum):
 
 @dataclass(kw_only=True)
 class EnvironmentConfig:
-    converter: dict[str, ConverterConfig] = field(default_factory=dict)
+    converters: list[ConverterConfig] = field(default_factory=list)
 
 
 class Environment(ABC):
     def __init__(self, config: EnvironmentConfig):
         self.config = config
-        self.converters = {
-            label: Converter(config=converter_config)
-            for label, converter_config in config.converter.items()
-        }
+        self.converters = [Converter(config=config) for config in config.converters]
 
     def reset(self) -> StateValueDict:
         self._reset()

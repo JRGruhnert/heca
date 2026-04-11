@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 from hoopgn.objects.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
@@ -31,7 +31,7 @@ from hoopgn.objects.properties.features.conditions.condition import (
 
 @dataclass
 class BoolPropertyConfig(PropertyConfig):
-    encoder: StateEncoderConfig = StateEncoderConfig(
+    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
         label="Bool",
         dim_input=1,
         middle_dim=8,

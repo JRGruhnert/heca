@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 from hoopgn.objects.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
@@ -34,7 +34,7 @@ from hoopgn.objects.properties.property import PropertyConfig
 class RangePropertyConfig(PropertyConfig):
     low: float = 0.0
     high: float = 1.0
-    encoder: StateEncoderConfig = StateEncoderConfig(
+    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
         label="Range",
         dim_input=1,
         middle_dim=8,

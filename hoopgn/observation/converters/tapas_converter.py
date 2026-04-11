@@ -22,14 +22,14 @@ from hoopgn.observation.converters.converter import (
 
 @dataclass(kw_only=True)
 class TapasConverterConfig(ConverterConfig):
-    pass
+    label: str = "tapas"
 
 
 class TapasConverter(Converter):
     def __init__(self, config: TapasConverterConfig):
         self.config = config
 
-    def __call__(self, obs: CalvinEnvObservation) -> SceneObservation:  # type: ignore
+    def __call__(self, obs: CalvinEnvObservation, batch_size: int) -> SceneObservation:  # type: ignore
 
         if obs.action is None:
             action = None

@@ -8,20 +8,20 @@ from hoopgn.objects.properties.features.modifiers.skip_modifier import (
 )
 
 
-MODIFIER_BUILDERS = {
+_PROPERTY_MODIFIER_BUILDERS = {
     SkipModifierConfig: lambda config: SkipModifier(config),
     OneHotModifierConfig: lambda config: OneHotModifier(config),
 }
 
 
-def register_modifier(config_type, builder):
-    MODIFIER_BUILDERS[config_type] = builder
+def register_property_modifier(config_type, builder):
+    _PROPERTY_MODIFIER_BUILDERS[config_type] = builder
 
 
 def select_property_modifier(config):
-    builder = MODIFIER_BUILDERS.get(type(config))
+    builder = _PROPERTY_MODIFIER_BUILDERS.get(type(config))
     if builder is None:
-        for cfg_type, b in MODIFIER_BUILDERS.items():
+        for cfg_type, b in _PROPERTY_MODIFIER_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break

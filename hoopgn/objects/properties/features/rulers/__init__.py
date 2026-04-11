@@ -16,7 +16,7 @@ from hoopgn.objects.properties.features.rulers.flip_ruler import (
 )
 
 
-STATE_RULER_BUILDERS = {
+_PROPERTY_RULER_BUILDERS = {
     BinaryRulerConfig: lambda config: BinaryRuler(config),
     EuclideanRulerConfig: lambda config: EuclideanRuler(config),
     FlipRulerConfig: lambda config: FlipRuler(config),
@@ -24,14 +24,14 @@ STATE_RULER_BUILDERS = {
 }
 
 
-def register_state_ruler(config_type, builder):
-    STATE_RULER_BUILDERS[config_type] = builder
+def register_property_ruler(config_type, builder):
+    _PROPERTY_RULER_BUILDERS[config_type] = builder
 
 
 def select_property_ruler(config):
-    builder = STATE_RULER_BUILDERS.get(type(config))
+    builder = _PROPERTY_RULER_BUILDERS.get(type(config))
     if builder is None:
-        for cfg_type, b in STATE_RULER_BUILDERS.items():
+        for cfg_type, b in _PROPERTY_RULER_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break

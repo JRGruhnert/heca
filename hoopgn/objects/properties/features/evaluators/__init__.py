@@ -16,7 +16,7 @@ from hoopgn.objects.properties.features.evaluators.threshold_evaluator import (
 )
 
 
-PROPERTY_EVALUATOR_BUILDERS = {
+_PROPERTY_EVALUATOR_BUILDERS = {
     AreaEvaluatorConfig: lambda config: AreaEvaluator(config),
     IgnoreEvaluatorConfig: lambda config: IgnoreEvaluator(config),
     ThresholdEvaluatorConfig: lambda config: ThresholdEvaluator(config),
@@ -24,13 +24,13 @@ PROPERTY_EVALUATOR_BUILDERS = {
 
 
 def register_property_evaluator(config_type, builder):
-    PROPERTY_EVALUATOR_BUILDERS[config_type] = builder
+    _PROPERTY_EVALUATOR_BUILDERS[config_type] = builder
 
 
 def select_property_evaluator(config: PropertyEvaluatorConfig) -> PropertyEvaluator:
-    builder = PROPERTY_EVALUATOR_BUILDERS.get(type(config))
+    builder = _PROPERTY_EVALUATOR_BUILDERS.get(type(config))
     if builder is None:
-        for cfg_type, b in PROPERTY_EVALUATOR_BUILDERS.items():
+        for cfg_type, b in _PROPERTY_EVALUATOR_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break
