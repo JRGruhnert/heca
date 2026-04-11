@@ -4,17 +4,17 @@ import torch
 
 from hoopgn.objects.properties.area import Area, AreaConfig
 from hoopgn.objects.properties.features.evaluators.evaluator import (
-    StateEvaluator,
-    StateEvaluatorConfig,
+    PropertyEvaluator,
+    PropertyEvaluatorConfig,
 )
 
 
 @dataclass(kw_only=True)
-class AreaEvaluatorConfig(StateEvaluatorConfig):
+class AreaEvaluatorConfig(PropertyEvaluatorConfig):
     area: AreaConfig
 
 
-class AreaEvaluator(StateEvaluator):
+class AreaEvaluator(PropertyEvaluator):
     def __init__(self, config: AreaEvaluatorConfig):
         self.config = config
         self.area = Area(config.area)

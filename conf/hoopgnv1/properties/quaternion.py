@@ -2,13 +2,17 @@ from dataclasses import dataclass
 
 from hoopgn.networks.layers.encoder import StateEncoderConfig
 from hoopgn.objects.properties.features.evaluators.evaluator import (
-    StateEvaluatorConfig,
+    PropertyEvaluatorConfig,
 )
 from hoopgn.objects.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
 from hoopgn.objects.properties.features.conditions.condition import (
     PropertyConditionConfig,
+)
+
+from hoopgn.objects.properties.features.extractors.calvin_gt_extractor import (
+    CalvinGTExtractorConfig,
 )
 from hoopgn.objects.properties.features.parameters.quaternion_parameter import (
     QuaternionParameterConfig,
@@ -28,10 +32,13 @@ class QuaternionPropertyConfig(PropertyConfig):
     )
     normalizer: QuaternionNormalizerConfig = QuaternionNormalizerConfig()
     ruler: AngularRulerConfig = AngularRulerConfig()
-    evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
+    evaluator: PropertyEvaluatorConfig = ThresholdEvaluatorConfig(
         ruler=AngularRulerConfig(),
     )
     condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=AngularRulerConfig(),
         parameter=QuaternionParameterConfig(),
     )
+
+    def __post_init__(self):
+        self.extractor = CalvinGTExtractorConfig(label=self.label)

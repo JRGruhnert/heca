@@ -1,16 +1,16 @@
-from hoopgn.objects.properties.features.extractors.gt_extractor import (
-    GTExtractor,
-    GTExtractorConfig,
+from hoopgn.objects.properties.features.extractors.calvin_gt_extractor import (
+    CalvinGTExtractor,
+    CalvinGTExtractorConfig,
 )
-from hoopgn.objects.properties.features.extractors.image_extractor import (
-    ImageExtractor,
-    ImageExtractorConfig,
+from hoopgn.objects.properties.features.extractors.calvin_image_extractor import (
+    CalvinImageExtractor,
+    CalvinImageExtractorConfig,
 )
 
 
 EXTRACTOR_BUILDERS = {
-    GTExtractorConfig: lambda config: GTExtractor(config),
-    ImageExtractorConfig: lambda config: ImageExtractor(config),
+    CalvinGTExtractorConfig: lambda config: CalvinGTExtractor(config),
+    CalvinImageExtractorConfig: lambda config: CalvinImageExtractor(config),
 }
 
 

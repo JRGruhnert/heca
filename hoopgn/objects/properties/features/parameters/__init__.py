@@ -1,4 +1,4 @@
-from hoopgn.objects.properties.features.parameters.parameter import StateParameter
+from hoopgn.objects.properties.features.parameters.parameter import PropertyParameter
 from hoopgn.objects.properties.features.parameters.binary_parameter import (
     BinaryParameter,
     BinaryParameterConfig,
@@ -39,7 +39,7 @@ def register_state_parameter(config_type, builder):
     STATE_PARAMETER_BUILDERS[config_type] = builder
 
 
-def select_state_parameter(config) -> StateParameter:
+def select_property_parameter(config) -> PropertyParameter:
     builder = STATE_PARAMETER_BUILDERS.get(type(config))
     if builder is None:
         for cfg_type, b in STATE_PARAMETER_BUILDERS.items():

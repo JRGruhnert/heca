@@ -4,17 +4,17 @@ import torch
 
 from hoopgn.objects.properties.quaternion import Quaternion, QuaternionConfig
 from hoopgn.objects.properties.features.normalizers.normalizer import (
-    Normalizer,
-    NormalizerConfig,
+    PropertyNormalizer,
+    PropertyNormalizerConfig,
 )
 
 
 @dataclass(kw_only=True)
-class QuaternionNormalizerConfig(NormalizerConfig):
+class QuaternionNormalizerConfig(PropertyNormalizerConfig):
     rotation: QuaternionConfig = QuaternionConfig()
 
 
-class QuaternionNormalizer(Normalizer):
+class QuaternionNormalizer(PropertyNormalizer):
     def __init__(
         self,
         config: QuaternionNormalizerConfig,

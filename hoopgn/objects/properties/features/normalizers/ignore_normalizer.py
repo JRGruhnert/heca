@@ -3,16 +3,16 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.normalizers.normalizer import (
-    Normalizer,
-    NormalizerConfig,
+    PropertyNormalizer,
+    PropertyNormalizerConfig,
 )
 
 
 @dataclass(kw_only=True)
-class IgnoreNormalizerConfig(NormalizerConfig):
+class IgnoreNormalizerConfig(PropertyNormalizerConfig):
     pass
 
 
-class IgnoreNormalizer(Normalizer):
+class IgnoreNormalizer(PropertyNormalizer):
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return x

@@ -2,18 +2,18 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.validators.validator import (
-    StateValidator,
-    StateValidatorConfig,
+    PropertyValidator,
+    PropertyValidatorConfig,
 )
 
 
 @dataclass(kw_only=True)
-class IgnoreValidatorConfig(StateValidatorConfig):
+class SkipValidatorConfig(PropertyValidatorConfig):
     default: float = 0.0
 
 
-class IgnoreValidator(StateValidator):
-    def __init__(self, config: IgnoreValidatorConfig):
+class SkipValidator(PropertyValidator):
+    def __init__(self, config: SkipValidatorConfig):
         super().__init__(config)
         self.config = config
 

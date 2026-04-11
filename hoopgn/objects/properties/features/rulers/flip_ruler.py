@@ -2,15 +2,18 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.objects.properties.features.rulers.ruler import Ruler, RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import (
+    PropertyRuler,
+    PropertyRulerConfig,
+)
 
 
 @dataclass(kw_only=True)
-class FlipRulerConfig(RulerConfig):
+class FlipRulerConfig(PropertyRulerConfig):
     pass
 
 
-class FlipRuler(Ruler):
+class FlipRuler(PropertyRuler):
     def __init__(self, config: FlipRulerConfig):
         super().__init__(config)
         self.config = config

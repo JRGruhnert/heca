@@ -2,10 +2,10 @@ from dataclasses import dataclass
 
 from conf.hoopgnv1.properties.area import AreaPropertyConfig
 from conf.hoopgnv1.properties.bool import BoolPropertyConfig
-from conf.hoopgnv1.properties.position import PositionPropertyConfig
-from conf.hoopgnv1.properties.range import RangePropertyConfig
-from conf.hoopgnv1.properties.quaternion import QuaternionPropertyConfig
 from conf.hoopgnv1.properties.flip import FlipPropertyConfig
+from conf.hoopgnv1.properties.range import RangePropertyConfig
+from conf.hoopgnv1.properties.position import PositionPropertyConfig
+from conf.hoopgnv1.properties.quaternion import QuaternionPropertyConfig
 
 
 @dataclass

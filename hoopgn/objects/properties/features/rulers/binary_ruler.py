@@ -2,15 +2,18 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.objects.properties.features.rulers.ruler import Ruler, RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import (
+    PropertyRuler,
+    PropertyRulerConfig,
+)
 
 
 @dataclass(kw_only=True)
-class BinaryRulerConfig(RulerConfig):
+class BinaryRulerConfig(PropertyRulerConfig):
     pass
 
 
-class BinaryRuler(Ruler):
+class BinaryRuler(PropertyRuler):
     def distance(
         self,
         current: torch.Tensor,

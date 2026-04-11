@@ -3,18 +3,18 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.parameters.parameter import (
-    StateParameter,
-    StateParameterConfig,
+    PropertyParameter,
+    PropertyParameterConfig,
 )
 from hoopgn.objects.properties.binary import Binary, BinaryConfig
 
 
 @dataclass(kw_only=True)
-class FlipParameterConfig(StateParameterConfig):
+class FlipParameterConfig(PropertyParameterConfig):
     binary: BinaryConfig = BinaryConfig()
 
 
-class FlipParameter(StateParameter):
+class FlipParameter(PropertyParameter):
     def __init__(self, config: FlipParameterConfig):
         super().__init__(config)
         self.config = config

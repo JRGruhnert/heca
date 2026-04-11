@@ -4,13 +4,21 @@ from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierC
 from hoopgn.networks.layers.encoder import StateEncoderConfig
 from hoopgn.objects.properties.area import AreaConfig
 
-from hoopgn.objects.properties.features.modifiers.modifier import ModifierConfig
+from hoopgn.objects.properties.features.extractors.calvin_gt_extractor import (
+    CalvinGTExtractorConfig,
+)
+from hoopgn.objects.properties.features.extractors.extractor import (
+    PropertyExtractorConfig,
+)
+from hoopgn.objects.properties.features.modifiers.modifier import PropertyModifierConfig
 from hoopgn.objects.properties.features.modifiers.one_hot_modifier import (
     OneHotModifierConfig,
 )
-from hoopgn.objects.properties.features.validators.validator import StateValidatorConfig
+from hoopgn.objects.properties.features.validators.validator import (
+    PropertyValidatorConfig,
+)
 from hoopgn.objects.properties.features.evaluators.evaluator import (
-    StateEvaluatorConfig,
+    PropertyEvaluatorConfig,
 )
 from hoopgn.objects.properties.features.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
@@ -22,7 +30,9 @@ from hoopgn.objects.properties.features.normalizers.boundary_normalizer import (
     AreaNormalizerConfig,
 )
 
-from hoopgn.objects.properties.features.normalizers.normalizer import NormalizerConfig
+from hoopgn.objects.properties.features.normalizers.normalizer import (
+    PropertyNormalizerConfig,
+)
 from hoopgn.objects.properties.features.validators.area_validator import (
     AreaValidatorConfig,
 )
@@ -61,20 +71,23 @@ class AreaPropertyConfig(PropertyConfig):
         label="AreaEuler",
         dim_input=6,
     )
-    normalizer: NormalizerConfig = AreaNormalizerConfig()
+    normalizer: PropertyNormalizerConfig = AreaNormalizerConfig()
     ruler: EuclideanRulerConfig = EuclideanRulerConfig()
-    evaluator: StateEvaluatorConfig = StateEvaluatorConfig()
+    evaluator: PropertyEvaluatorConfig = PropertyEvaluatorConfig()
     condition: PropertyConditionConfig = PropertyConditionConfig(
         ruler=EuclideanRulerConfig(),
         parameter=EuclideanParameterConfig(),
     )
-    validator: StateValidatorConfig = AreaValidatorConfig(
+    validator: PropertyValidatorConfig = AreaValidatorConfig(
         area=CalvinAreaConfig(
             classifier=StateClassifierConfig(),
         )
     )
-    modifier: ModifierConfig = OneHotModifierConfig(
+    modifier: PropertyModifierConfig = OneHotModifierConfig(
         state=CalvinAreaConfig(
             classifier=StateClassifierConfig(),
         ),
     )
+
+    def __post_init__(self):
+        self.extractor = CalvinGTExtractorConfig(label=self.label)

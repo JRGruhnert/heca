@@ -2,33 +2,36 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.objects.properties.features.parameters import select_state_parameter
+from hoopgn.objects.properties.features.parameters import select_property_parameter
 from hoopgn.objects.properties.features.parameters.ignore_parameter import (
     IgnoreParameterConfig,
 )
 from hoopgn.objects.properties.features.parameters.parameter import (
-    StateParameterConfig,
+    PropertyParameterConfig,
 )
 from hoopgn.objects.properties.features.rulers import select_property_ruler
 from hoopgn.objects.properties.features.rulers.ignore_ruler import IgnoreRulerConfig
-from hoopgn.objects.properties.features.rulers.ruler import RulerConfig
-from hoopgn.objects.properties.features.feature import Feature, FeatureConfig
+from hoopgn.objects.properties.features.rulers.ruler import PropertyRulerConfig
+from hoopgn.objects.properties.features.feature import (
+    PropertyFeature,
+    PropertyFeatureConfig,
+)
 
 
 @dataclass(kw_only=True)
-class PropertyConditionConfig(FeatureConfig):
-    ruler: RulerConfig
-    parameter: StateParameterConfig
+class PropertyConditionConfig(PropertyFeatureConfig):
+    ruler: PropertyRulerConfig
+    parameter: PropertyParameterConfig
     value: list[float] | float | int | None = None
     last_digit: int = 0
 
 
-class PropertyCondition(Feature):
+class PropertyCondition(PropertyFeature):
     def __init__(self, config: PropertyConditionConfig):
         super().__init__(config)
         self.config = config
         self.ruler = select_property_ruler(config.ruler)
-        self.parameter = select_state_parameter(config.parameter)
+        self.parameter = select_property_parameter(config.parameter)
         self.value = self.parameter(config.value)
         assert self.value is not None, f"No {type(self)} value."
 

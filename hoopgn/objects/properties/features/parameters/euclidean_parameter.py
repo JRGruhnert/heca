@@ -3,17 +3,17 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.parameters.parameter import (
-    StateParameter,
-    StateParameterConfig,
+    PropertyParameter,
+    PropertyParameterConfig,
 )
 
 
 @dataclass(kw_only=True)
-class EuclideanParameterConfig(StateParameterConfig):
+class EuclideanParameterConfig(PropertyParameterConfig):
     pass
 
 
-class EuclideanParameter(StateParameter):
+class EuclideanParameter(PropertyParameter):
 
     def __init__(self, config: EuclideanParameterConfig):
         super().__init__(config)

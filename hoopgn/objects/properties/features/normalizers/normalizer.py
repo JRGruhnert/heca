@@ -2,18 +2,21 @@ from abc import abstractmethod
 from dataclasses import dataclass
 import torch
 
-from hoopgn.objects.properties.features.feature import Feature, FeatureConfig
+from hoopgn.objects.properties.features.feature import (
+    PropertyFeature,
+    PropertyFeatureConfig,
+)
 
 
 @dataclass(kw_only=True)
-class NormalizerConfig(FeatureConfig):
+class PropertyNormalizerConfig(PropertyFeatureConfig):
     pass
 
 
-class Normalizer(Feature):
+class PropertyNormalizer(PropertyFeature):
     def __init__(
         self,
-        config: NormalizerConfig,
+        config: PropertyNormalizerConfig,
     ):
         super().__init__(config)
         self.config = config

@@ -3,6 +3,9 @@ import torch
 from hoopgn.networks.layers.encoder import StateEncoderConfig
 
 from hoopgn.objects.properties.features.extractors import select_property_extractor
+from hoopgn.objects.properties.features.extractors.extractor import (
+    PropertyExtractorConfig,
+)
 from hoopgn.objects.properties.features.modifiers import select_property_modifier
 
 from hoopgn.objects.properties.features.conditions.condition import (
@@ -10,36 +13,41 @@ from hoopgn.objects.properties.features.conditions.condition import (
 )
 from hoopgn.objects.properties.features.evaluators import select_property_evaluator
 from hoopgn.objects.properties.features.evaluators.evaluator import (
-    StateEvaluatorConfig,
+    PropertyEvaluatorConfig,
 )
-from hoopgn.objects.properties.features.modifiers.modifier import ModifierConfig
+from hoopgn.objects.properties.features.modifiers.modifier import PropertyModifierConfig
 from hoopgn.objects.properties.features.modifiers.skip_modifier import (
     SkipModifierConfig,
 )
 from hoopgn.objects.properties.features.normalizers import select_property_normalizer
 from hoopgn.objects.properties.features.rulers import select_property_ruler
-from hoopgn.objects.properties.features.rulers.ruler import RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import PropertyRulerConfig
 
-from hoopgn.objects.properties.features.normalizers.normalizer import NormalizerConfig
-from hoopgn.objects.properties.features.validators import select_property_validator
-from hoopgn.objects.properties.features.validators.ignore_validator import (
-    IgnoreValidatorConfig,
+from hoopgn.objects.properties.features.normalizers.normalizer import (
+    PropertyNormalizerConfig,
 )
-from hoopgn.objects.properties.features.validators.validator import StateValidatorConfig
+from hoopgn.objects.properties.features.validators import select_property_validator
+
+from hoopgn.objects.properties.features.validators.skip_validator import (
+    SkipValidatorConfig,
+)
+from hoopgn.objects.properties.features.validators.validator import (
+    PropertyValidatorConfig,
+)
 
 
 @dataclass(kw_only=True)
 class PropertyConfig:
     id: int
     label: str
-    ruler: RulerConfig
+    ruler: PropertyRulerConfig
     condition: PropertyConditionConfig
-    evaluator: StateEvaluatorConfig
+    evaluator: PropertyEvaluatorConfig
     encoder: StateEncoderConfig
-    normalizer: NormalizerConfig
-    validator: StateValidatorConfig = IgnoreValidatorConfig()
-    extractor: StateEvaluatorConfig = StateEvaluatorConfig()
-    modifier: ModifierConfig = SkipModifierConfig()
+    normalizer: PropertyNormalizerConfig
+    extractor: PropertyExtractorConfig
+    modifier: PropertyModifierConfig = SkipModifierConfig()
+    validator: PropertyValidatorConfig = SkipValidatorConfig()
 
 
 class Property:

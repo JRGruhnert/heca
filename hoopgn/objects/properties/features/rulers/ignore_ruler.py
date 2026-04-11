@@ -2,15 +2,18 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.objects.properties.features.rulers.ruler import Ruler, RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import (
+    PropertyRuler,
+    PropertyRulerConfig,
+)
 
 
 @dataclass(kw_only=True)
-class IgnoreRulerConfig(RulerConfig):
+class IgnoreRulerConfig(PropertyRulerConfig):
     default: float = 0.0
 
 
-class IgnoreRuler(Ruler):
+class IgnoreRuler(PropertyRuler):
     def __init__(self, config: IgnoreRulerConfig):
         super().__init__(config)
         self.config = config

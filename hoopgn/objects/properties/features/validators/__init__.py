@@ -2,15 +2,15 @@ from hoopgn.objects.properties.features.validators.area_validator import (
     AreaValidator,
     AreaValidatorConfig,
 )
-from hoopgn.objects.properties.features.validators.ignore_validator import (
-    IgnoreValidator,
-    IgnoreValidatorConfig,
+from hoopgn.objects.properties.features.validators.skip_validator import (
+    SkipValidator,
+    SkipValidatorConfig,
 )
 
 
 STATE_VALIDATOR_BUILDERS = {
     AreaValidatorConfig: lambda config: AreaValidator(config),
-    IgnoreValidatorConfig: lambda config: IgnoreValidator(config),
+    SkipValidatorConfig: lambda config: SkipValidator(config),
 }
 
 

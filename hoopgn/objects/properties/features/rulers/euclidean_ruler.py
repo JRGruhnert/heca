@@ -2,15 +2,18 @@ from dataclasses import dataclass
 import math
 import torch
 
-from hoopgn.objects.properties.features.rulers.ruler import Ruler, RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import (
+    PropertyRuler,
+    PropertyRulerConfig,
+)
 
 
 @dataclass(kw_only=True)
-class EuclideanRulerConfig(RulerConfig):
+class EuclideanRulerConfig(PropertyRulerConfig):
     pass
 
 
-class EuclideanRuler(Ruler):
+class EuclideanRuler(PropertyRuler):
     def __init__(self, config: EuclideanRulerConfig):
         super().__init__(config)
         self.config = config

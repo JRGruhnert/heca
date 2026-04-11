@@ -1,16 +1,19 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import torch
-from hoopgn.objects.properties.features.feature import Feature, FeatureConfig
+from hoopgn.objects.properties.features.feature import (
+    PropertyFeature,
+    PropertyFeatureConfig,
+)
 
 
 @dataclass(kw_only=True)
-class StateEvaluatorConfig(FeatureConfig):
+class PropertyEvaluatorConfig(PropertyFeatureConfig):
     pass
 
 
-class StateEvaluator(Feature):
-    def __init__(self, config: StateEvaluatorConfig):
+class PropertyEvaluator(PropertyFeature):
+    def __init__(self, config: PropertyEvaluatorConfig):
         super().__init__(config)
         self.config = config
 

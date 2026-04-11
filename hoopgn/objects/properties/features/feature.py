@@ -3,14 +3,14 @@ from dataclasses import dataclass
 
 
 @dataclass(kw_only=True)
-class FeatureConfig:
+class PropertyFeatureConfig:
     pass
 
 
-class Feature(ABC):
+class PropertyFeature(ABC):
     def __init__(
         self,
-        config: FeatureConfig,
+        config: PropertyFeatureConfig,
     ):
         self.config = config
 

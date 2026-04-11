@@ -3,13 +3,13 @@ from dataclasses import dataclass, field
 import torch
 
 from hoopgn.objects.properties.features.normalizers.normalizer import (
-    Normalizer,
-    NormalizerConfig,
+    PropertyNormalizer,
+    PropertyNormalizerConfig,
 )
 
 
 @dataclass(kw_only=True)
-class BoundaryNormalizerConfig(NormalizerConfig):
+class BoundaryNormalizerConfig(PropertyNormalizerConfig):
     lower: list[float]
     upper: list[float]
 
@@ -26,7 +26,7 @@ class BoolNormalizerConfig(BoundaryNormalizerConfig):
     upper: list[float] = field(default_factory=lambda: [1.0])
 
 
-class BoundaryNormalizer(Normalizer):
+class BoundaryNormalizer(PropertyNormalizer):
     def __init__(
         self,
         config: BoundaryNormalizerConfig,

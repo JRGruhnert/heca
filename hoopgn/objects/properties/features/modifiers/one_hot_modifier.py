@@ -3,8 +3,8 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.modifiers.modifier import (
-    Modifier,
-    ModifierConfig,
+    PropertyModifier,
+    PropertyModifierConfig,
 )
 
 
@@ -12,11 +12,11 @@ from hoopgn.objects.properties.x_state import XState, XStateConfig
 
 
 @dataclass(kw_only=True)
-class OneHotModifierConfig(ModifierConfig):
+class OneHotModifierConfig(PropertyModifierConfig):
     state: XStateConfig
 
 
-class OneHotModifier(Modifier):
+class OneHotModifier(PropertyModifier):
     def __init__(
         self,
         config: OneHotModifierConfig,

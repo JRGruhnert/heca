@@ -3,17 +3,17 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.modifiers.modifier import (
-    Modifier,
-    ModifierConfig,
+    PropertyModifier,
+    PropertyModifierConfig,
 )
 
 
 @dataclass(kw_only=True)
-class SkipModifierConfig(ModifierConfig):
+class SkipModifierConfig(PropertyModifierConfig):
     pass
 
 
-class SkipModifier(Modifier):
+class SkipModifier(PropertyModifier):
     def __init__(
         self,
         config: SkipModifierConfig,

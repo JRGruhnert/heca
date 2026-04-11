@@ -2,17 +2,17 @@ import torch
 from dataclasses import dataclass
 
 from hoopgn.objects.properties.features.evaluators.evaluator import (
-    StateEvaluator,
-    StateEvaluatorConfig,
+    PropertyEvaluator,
+    PropertyEvaluatorConfig,
 )
 
 
 @dataclass(kw_only=True)
-class IgnoreEvaluatorConfig(StateEvaluatorConfig):
+class IgnoreEvaluatorConfig(PropertyEvaluatorConfig):
     pass
 
 
-class IgnoreEvaluator(StateEvaluator):
+class IgnoreEvaluator(PropertyEvaluator):
     def __init__(self, config: IgnoreEvaluatorConfig):
         self.config = config
 

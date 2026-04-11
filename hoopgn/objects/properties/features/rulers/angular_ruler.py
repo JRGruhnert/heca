@@ -3,15 +3,18 @@ import math
 
 import torch
 
-from hoopgn.objects.properties.features.rulers.ruler import Ruler, RulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import (
+    PropertyRuler,
+    PropertyRulerConfig,
+)
 
 
 @dataclass(kw_only=True)
-class AngularRulerConfig(RulerConfig):
+class AngularRulerConfig(PropertyRulerConfig):
     pass
 
 
-class AngularRuler(Ruler):
+class AngularRuler(PropertyRuler):
     def distance(
         self,
         current: torch.Tensor,

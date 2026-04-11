@@ -3,18 +3,18 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.objects.properties.features.parameters.parameter import (
-    StateParameter,
-    StateParameterConfig,
+    PropertyParameter,
+    PropertyParameterConfig,
 )
 from hoopgn.objects.properties.binary import Binary, BinaryConfig
 
 
 @dataclass(kw_only=True)
-class BinaryParameterConfig(StateParameterConfig):
+class BinaryParameterConfig(PropertyParameterConfig):
     binary: BinaryConfig = BinaryConfig()
 
 
-class BinaryParameter(StateParameter):
+class BinaryParameter(PropertyParameter):
     def __init__(self, config: BinaryParameterConfig):
         super().__init__(config)
         self.config = config
