@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from loguru import logger
+from hoopgn import logger
 from hoopgn.skills.skill import Skill, SkillConfig
 from hoopgn.objects.properties.property import Property, PropertyConfig
 import os
@@ -53,10 +53,10 @@ class Storage:
         self.states_dict_eval = {s.config.label: s for s in self.states_eval}
         self.skills_dict = {s.config.label: s for s in self.skills}
 
-        logger.info(
+        logger.log_info(
             "Loaded Skills and States:\n"
             f"No. Skills:  {len(self.skills)}\n"
-            f"No. Steps:   {len(self.states_network)}\n"
+            f"No. Steps:   {len(self.skills)}\n"
             f"List of Skills:\n {[s.config.label for s in self.skills]}\n"
             f"List of Network States:\n {[s.config.label for s in self.states_network]}\n"
             f"List of Eval States:\n {[s.config.label for s in self.states_eval]}\n"

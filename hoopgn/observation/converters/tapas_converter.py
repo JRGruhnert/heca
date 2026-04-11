@@ -29,7 +29,7 @@ class TapasConverter(Converter):
     def __init__(self, config: TapasConverterConfig):
         self.config = config
 
-    def __call__(self, obs: CalvinEnvObservation, batch_size: int) -> SceneObservation:  # type: ignore
+    def __call__(self, obs: CalvinEnvObservation) -> SceneObservation:  # type: ignore
 
         if obs.action is None:
             action = None

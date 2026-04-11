@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import torch
-from loguru import logger
+from hoopgn import logger
 
 # NOTE: copied from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 # for full control over hardware selection
@@ -20,4 +20,4 @@ def get_gpu_with_most_free_mem(tmp_file="/tmp/gpu_mem"):
 use_gpu = torch.cuda.is_available()
 gpu_no = get_gpu_with_most_free_mem() if use_gpu else None
 device = torch.device("cuda:{}".format(gpu_no) if use_gpu else "cpu")
-logger.info("Running on {}", device)
+logger.log_info(f"Running on {device}")

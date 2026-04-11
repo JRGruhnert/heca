@@ -36,7 +36,7 @@ def get_explain_config(
     return ExplainManagerConfig(
         agent=ppo_default_config(
             network=network,
-            batch_size=16,
+            batch_size=100,
             eval=True,
         ),
         logger=logger_config(

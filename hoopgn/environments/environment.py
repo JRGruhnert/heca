@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from hoopgn.observation.converters import select_observation_converter
 from hoopgn.observation.converters.converter import Converter, ConverterConfig
 from hoopgn.observation.observation import StateValueDict
 
@@ -18,7 +19,7 @@ class EnvironmentConfig:
 class Environment(ABC):
     def __init__(self, config: EnvironmentConfig):
         self.config = config
-        self.converters = [Converter(config=config) for config in config.converters]
+        self.converters = [select_observation_converter(config) for config in config.converters]
 
     def reset(self) -> StateValueDict:
         self._reset()

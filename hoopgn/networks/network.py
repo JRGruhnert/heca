@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any
 import torch
-import torch.nn as nn
 from abc import ABC, abstractmethod
 from hoopgn.networks.layers.encoder import (
     PropertyEncoderRegistry,
@@ -11,7 +10,7 @@ from hoopgn.networks.layers.encoder import (
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.skills.skill import Skill
 from hoopgn.objects.properties.property import Property
-from loguru import logger
+from hoopgn import logger
 
 
 @dataclass(kw_only=True)
@@ -23,7 +22,7 @@ class NetworkConfig:
     registry: PropertyEncoderRegistryConfig = PropertyEncoderRegistryConfig()
 
 
-class Network(nn.Module, ABC):
+class Network(torch.nn.Module, ABC):
 
     def __init__(
         self,
@@ -37,7 +36,7 @@ class Network(nn.Module, ABC):
     def eval(self):
         super().eval()  # Call PyTorch's nn.Module.eval() instead of iterating manually
         self.is_eval_mode = True
-        logger.info("Network set to evaluation mode.")
+        logger.log_info("Network set to evaluation mode.")
 
     def register_encoder(self, states: list[Property]):
         for state in states:
@@ -102,11 +101,11 @@ class Network(nn.Module, ABC):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint, skills, states)
-            logger.info(
+            logger.log_info(
                 f"Loading network checkpoint from: {self.config.checkpoint_path}"
             )
         else:
-            logger.info(
+            logger.log_info(
                 "No checkpoint path provided in network config. Starting with a new model."
             )
 

@@ -1,6 +1,5 @@
 from dataclasses import dataclass, field
 
-from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierConfig
 from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 
 from hoopgn.objects.properties.features.evaluators.area_evaluator import (
@@ -9,9 +8,7 @@ from hoopgn.objects.properties.features.evaluators.area_evaluator import (
 from hoopgn.objects.properties.features.extractors.calvin_gt_extractor import (
     CalvinGTExtractorConfig,
 )
-from hoopgn.objects.properties.features.extractors.extractor import (
-    PropertyExtractorConfig,
-)
+
 from hoopgn.objects.properties.features.modifiers.modifier import PropertyModifierConfig
 from hoopgn.objects.properties.features.modifiers.one_hot_modifier import (
     OneHotModifierConfig,

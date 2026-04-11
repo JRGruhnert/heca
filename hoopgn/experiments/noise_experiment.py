@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import math
 import random
 
-from loguru import logger
+from hoopgn import logger
 from hoopgn.skills.skip.skip_leaf import SkipConfig
 from hoopgn.experiments.experiment import Experiment, ExperimentConfig
 from hoopgn.skills.skill import Skill, SkillConfig
@@ -38,10 +38,8 @@ class NoiseExperiment(Experiment):
         )
         self.skills = select_skills(config.skills)
         self.skip_skill = Skill(config=SkipConfig())
-        logger.info(
+        logger.log_info(
             "Noise Experiment Values:\n"
-            f"No. Skills:  {self.config.min_steps}\n"
-            f"No. Steps:   {self.max_allowed_steps}\n"
             f"% Skip:      {self.config.p_empty}\n"
             f"% Random:    {self.config.p_rand}\n"
         )
@@ -50,10 +48,10 @@ class NoiseExperiment(Experiment):
         sample = random.random()
         if sample < self.config.p_empty:
             selected_skill = self.skip_skill
-            logger.info("Taking Empty Step")
+            logger.log_info("Taking Empty Step")
         elif sample < self.config.p_empty + self.config.p_rand:
             selected_skill = random.choice(self.skills)
-            logger.info("Taking Random Step")
+            logger.log_info("Taking Random Step")
         else:
             selected_skill = skill
 

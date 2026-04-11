@@ -7,6 +7,25 @@ from wandb import util as wandb_util
 import wandb
 from wandb.wandb_run import Run
 
+DEBUG = True
+
+
+def print_debug(message: str):
+    if DEBUG:
+        print(message)
+
+
+def log_warning(message: str):
+    logger.warning(message)
+
+
+def log_info(message: str):
+    logger.info(message)
+
+
+def log_error(message: str):
+    logger.error(message)
+
 
 class LogMode(Enum):
     SWEEP = "sweep"

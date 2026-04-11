@@ -3,7 +3,7 @@ from functools import cached_property
 import re
 from conf.hoopgnv1.properties.hoopgnv1 import PropertySet
 from hoopgn.hardware import device
-from loguru import logger
+from hoopgn import logger
 import numpy as np
 import torch
 from tapas_gmm_modified.policy import import_policy
@@ -26,6 +26,16 @@ from hoopgn.objects.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
 )
 from hoopgn.objects.properties.features.conditions.condition import PropertyCondition
+
+
+class _DummyEnv:
+    """Stub environment so GMMPolicy.publish_frames / publish_path don't crash."""
+
+    def publish_frames(self, *args, **kwargs):
+        pass
+
+    def publish_path(self, *args, **kwargs):
+        pass
 
 
 @dataclass(kw_only=True)
@@ -100,44 +110,47 @@ class TapasOperator(SkillOperator):
         }
         self.override = False
         if len(self.config.overrides):
-            logger.warning(
+            logger.log_warning(
                 f"Skill {self.config.label} has overrides: {self.config.overrides}."
             )
             self.override = True
 
     def __call__(self, x: StateValueDict) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
+        assert "tapas" in x.keys(), "Tapas observation must be present in the input."
         if self.config.predict_as_batch:
             if self.first_prediction:
-                # NOTE: Could use control_duration later to enforce certain length
                 try:
                     if self.override:
-                        value = self._hacky_postprocess(x)
+                        value = self._hacky_postprocess(x["tapas"])
                     else:
-                        value = x.tapas
+                        value = x["tapas"]
                     self.predictions, _ = self.policy.predict(value)  # type: ignore
                 except FloatingPointError as e:
-                    logger.error(f"Numerical error in GMM prediction: {e}")
+                    logger.log_error(f"Numerical error in GMM prediction: {e}")
                     return None  # TODO: I think its just cause of a bad robot position
                 except Exception as e:
-                    logger.error(f"Error in skill prediction: {e}")
+                    logger.log_error(f"Error in skill prediction: {e}")
                     return None
                 self.first_prediction = False
             if self.predictions is None or self.predictions.is_finished:
                 return None
             return self._to_action(self.predictions.step())
         else:
+            logger.print_debug(
+                "I am in the non-batch prediction mode, which is not recommended for performance reasons."
+            )
             try:
                 if self.override:
-                    value = self._hacky_postprocess(x)
+                    value = self._hacky_postprocess(x["tapas"])
                 else:
-                    value = x.tapas
+                    value = x["tapas"]
                 self.prediction, _ = self.policy.predict(value)  # type: ignore
             except FloatingPointError as e:
-                logger.error(f"Numerical error in GMM prediction: {e}")
+                logger.log_error(f"Numerical error in GMM prediction: {e}")
                 return None  # TODO: I think its just cause of a bad robot position
             except Exception as e:
-                logger.error(f"Error in skill prediction: {e}")
+                logger.log_error(f"Error in skill prediction: {e}")
                 return None
             if self.prediction is None:
                 return None
@@ -160,50 +173,50 @@ class TapasOperator(SkillOperator):
             )  # type: ignore
         )  # type: ignore
 
-    def _hacky_postprocess(self, x: StateValueDict) -> SceneObservation:  # type: ignore
+    def _hacky_postprocess(self, tapas: SceneObservation) -> SceneObservation:  # type: ignore
         assert self.goal is not None, "Goal must be set for hacky postprocess."
         for label, condition in self.overrides.items():
             pos = self.pos_reg.search(label)
             rot = self.rot_reg.search(label)
             scalar = self.scalar_reg.search(label)
             if label == "ee_position":
-                x.tapas.ee_pose = torch.cat(
+                tapas.ee_pose = torch.cat(
                     [
                         condition.value,
-                        x.tapas.ee_pose[3:],
+                        tapas.ee_pose[3:],
                     ]
                 )
             elif label == "ee_rotation":
-                x.tapas.ee_pose = torch.cat(
+                tapas.ee_pose = torch.cat(
                     [
-                        x.tapas.ee_pose[:3],
+                        tapas.ee_pose[:3],
                         condition.value,
                     ]
                 )
             elif label == "ee_scalar":
-                x.tapas.ee_scalar = condition.value
+                tapas.ee_scalar = condition.value
             elif pos:
-                x.tapas.object_poses[pos.group(1)] = np.concatenate(
+                tapas.object_poses[pos.group(1)] = np.concatenate(
                     [
                         self._hacky_position(pos.group(1)),
-                        x.tapas.object_poses[pos.group(1)][3:],
+                        tapas.object_poses[pos.group(1)][3:],
                     ]
                 )
             elif rot:
-                x.tapas.object_poses[rot.group(1)] = np.concatenate(
+                tapas.object_poses[rot.group(1)] = np.concatenate(
                     [
-                        x.tapas.object_poses[rot.group(1)][:3],
+                        tapas.object_poses[rot.group(1)][:3],
                         self.goal[f"{rot.group(1)}_rotation"].numpy(),
                     ]
                 )
             elif scalar:
-                x.tapas.object_states[scalar.group(1)] = self.goal[
+                tapas.object_states[scalar.group(1)] = self.goal[
                     f"{scalar.group(1)}_scalar"
                 ].numpy()
             else:
                 raise ValueError(f"Unknown state name: {label}")
 
-        return x.tapas
+        return tapas
 
     def _hacky_position(self, label: str) -> np.ndarray:
         assert self.goal is not None, "Goal must be set for hacky position."
@@ -275,10 +288,11 @@ class TapasOperator(SkillOperator):
 
     @cached_property
     def policy(self) -> GMMPolicy:
-        logger.info("Loading tapas operator from: {}", self.config.file_name)
+        logger.log_info(f"Loading tapas operator from: {self.config.file_name}")
         PolicyClass = import_policy("gmm")
         temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
         temp.from_disk(self.config.file_name)
+        temp._env = _DummyEnv()  # type: ignore[assignment]
         temp.eval()
         return temp
 

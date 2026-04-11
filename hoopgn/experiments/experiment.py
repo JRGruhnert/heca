@@ -16,8 +16,6 @@ class ExperimentConfig:
 
 
 class Experiment(ABC):
-    """Simple Wrapper over the Calvin Environment to perform experiments."""
-
     def __init__(self, config: ExperimentConfig):
         # We sort based on Id for the baseline network to be consistent
         self.config = config
@@ -33,7 +31,8 @@ class Experiment(ABC):
         selected_skill = self.modify(skill)
         selected_skill.reset(self.goal)
         while (action := selected_skill.predict(self.current)) is not None:
-            feedback = self.env.step(action)  # NOTE: feedback unused currently
+            feedback = self.env.step(action)  # TODO: feedback unused currently
+            self.current = self.env.get_observation()
         reward, done = self.evaluator.step(self.current, self.goal)
         self.current_step += 1
         terminal = True if self.current_step >= self.max_allowed_steps else done
