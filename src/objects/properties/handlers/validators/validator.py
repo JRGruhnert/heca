@@ -22,5 +22,5 @@ class StateValidator(ValueHandler):
         self.config = config
 
     @abstractmethod
-    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> bool:
         raise NotImplementedError("Subclasses must implement the __call__ method.")

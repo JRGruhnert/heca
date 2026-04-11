@@ -1,5 +1,3 @@
-from enum import Enum
-
 from conf.hoopgnv1.skills.tapas_skills import TapasSkillSet
 
 

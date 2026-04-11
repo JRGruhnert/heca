@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 import re
+import sys
 
 from tqdm import trange
 
 from src.experiments import select_experiment
 from src.logger import LoggerConfig, Logger
-from src.buffer import BufferConfig, Buffer
 from src.storage import Storage, StorageConfig
 from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
@@ -18,7 +18,6 @@ from src.variables import BLUE, PINK, RED, SLIDE
 @dataclass
 class ExplainManagerConfig:
     agent: PPOAgentConfig
-    buffer: BufferConfig
     logger: LoggerConfig
     storage: StorageConfig
     experiment: ExperimentConfig
@@ -31,19 +30,23 @@ class ExplainScript:
     def __init__(self, config: ExplainManagerConfig):
         if config is None:
             raise ValueError("Config cannot be None")
+        for name, mod in list(sys.modules.items()):
+            if name.startswith("tapas_gmm_modified"):
+                old_name = "tapas_gmm" + name[len("tapas_gmm_modified") :]
+                sys.modules.setdefault(old_name, mod)
+
         self.config = config
         self.storage = Storage(config.storage)
-        self.buffer = Buffer(config.buffer)
         self.logger = Logger(config.logger)
         self.experiment = select_experiment(config.experiment)
-        self.agent = PPOAgent(config.agent, self.buffer, self.storage)
+        self.agent = PPOAgent(config.agent, self.storage)
         self.plot = ObjectSamplingPlot()
 
         self.relevant_objects = {
             RED: "block_red",
             BLUE: "block_blue",
             PINK: "block_pink",
-            SLIDE: "base__slide",
+            SLIDE: "slide",
         }
         self.object_pattern = re.compile(r"(red|blue|pink|slider)")
         # print(f"Checkpoint path: {self.config.agent.network.checkpoint_path}")
@@ -55,10 +58,10 @@ class ExplainScript:
         self.trained_object = self.relevant_objects[object_name]
         self.current_object = self.relevant_objects[self.config.eval_set]
 
-        self.pos_state: Property = self.storage.get_state_by_name(
+        self.pos_state: Property = self.storage.get_property_by_name(
             f"{self.current_object}_position"
         )
-        self.quat_state: Property = self.storage.get_state_by_name(
+        self.quat_state: Property = self.storage.get_property_by_name(
             f"{self.current_object}_rotation"
         )
 
@@ -90,7 +93,9 @@ class ExplainScript:
     def run_batch(self):
         """Collect experiences until batch is ready"""
 
-        for i in trange(self.config.buffer.steps):
+        for i in trange(
+            self.config.agent.batch_size, desc="Collecting samples for explanation"
+        ):
             current, goal = self.experiment.sample_task()
             self.plot.set_object(
                 {

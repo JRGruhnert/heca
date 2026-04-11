@@ -47,7 +47,9 @@ class CalvinEnvironment(Environment):
         raise NotImplementedError("Render method not implemented yet.")
 
     def get_observation(self) -> StateValueDict:
-        return CalvinObservation.from_internal(self.calvin_obs)
+        return CalvinObservation.from_internal(
+            self.calvin_obs, converters=self.converters
+        )
 
     def close(self):
         self.env.close()

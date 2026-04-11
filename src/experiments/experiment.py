@@ -6,6 +6,7 @@ from src.evaluators import select_evaluator
 from src.evaluators.evaluator import EvaluatorConfig
 from src.observation.observation import StateValueDict
 from src.skills.skill import Skill
+import math
 
 
 @dataclass(kw_only=True)
@@ -24,7 +25,7 @@ class Experiment(ABC):
         self.env = select_environment(config.environment)
 
         self.current_step = 0
-        self.max_allowed_steps = int("inf")  # No limit by default
+        self.max_allowed_steps = math.inf
         self.current = self.env.reset()
         self.goal = self.env.reset()
 

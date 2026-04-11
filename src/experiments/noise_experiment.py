@@ -39,10 +39,11 @@ class NoiseExperiment(Experiment):
         self.skills = select_skills(config.skills)
         self.skip_skill = Skill(config=SkipConfig())
         logger.info(
-            f"No. Skills:       {self.config.min_steps},\n"
-            f"No. Steps:        {self.max_allowed_steps},\n"
-            f"% Skip:           {self.config.p_empty},\n"
-            f"% Random:         {self.config.p_rand},\n"
+            "Noise Experiment Values:\n"
+            f"No. Skills:  {self.config.min_steps}\n"
+            f"No. Steps:   {self.max_allowed_steps}\n"
+            f"% Skip:      {self.config.p_empty}\n"
+            f"% Random:    {self.config.p_rand}\n"
         )
 
     def modify(self, skill: Skill) -> Skill:

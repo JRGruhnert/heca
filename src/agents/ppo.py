@@ -6,7 +6,7 @@ import wandb
 from torch.distributions import Categorical
 from src.hardware import device
 from src.agents.agent import Agent, AgentConfig
-from src.buffer import Buffer
+from src.buffer import Buffer, BufferConfig
 from src.storage import Storage
 from src.watcher import Watcher
 from src.networks.baseline import BaselineNetwork, BaselineNetworkConfig
@@ -22,6 +22,7 @@ from src.skills.skill import Skill
 @dataclass(kw_only=True)
 class PPOAgentConfig(AgentConfig):
     network: NetworkConfig
+    batch_size: int
     retrain: bool = False
     eval: bool = False
     early_stop_patience: int = 5
@@ -60,13 +61,12 @@ class PPOAgent(Agent):
     def __init__(
         self,
         config: PPOAgentConfig,
-        buffer: Buffer,
         storage: Storage,
     ):
         ### Initialize hyperparameters
         self.config = config
         ### Initialize the agent
-        self.buffer = buffer
+        self.buffer = Buffer(BufferConfig(steps=config.batch_size))
         self.storage = storage
         self.mse_loss = nn.MSELoss()
         self.policy_new: Network = select_network(config.network).to(device)

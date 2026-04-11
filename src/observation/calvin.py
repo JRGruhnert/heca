@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from src.observation.converters.converter import Converter
 from src.observation.observation import StateValueDict, empty_batchsize
 
 from calvin_env_modified.envs.observation import (
@@ -13,7 +14,11 @@ class CalvinObservation(StateValueDict):
     to be called everywhere consistently."""
 
     @classmethod
-    def from_internal(cls, obs: CalvinEnvObservation) -> StateValueDict:
+    def from_internal(
+        cls,
+        obs: CalvinEnvObservation,
+        converters: dict[str, Converter],
+    ) -> StateValueDict:
         """Create BaseObservation from regular dict"""
         state_dict = {}
         state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
@@ -22,12 +27,18 @@ class CalvinObservation(StateValueDict):
             np.array([obs.ee_state]), dtype=torch.float32
         )
 
-        for k, pose in obs.object_poses.items():
-            state_dict[f"{k}_position"] = torch.tensor(pose[:3], dtype=torch.float32)
-            state_dict[f"{k}_rotation"] = torch.tensor(pose[-4:], dtype=torch.float32)
+        for label, value in obs.object_poses.items():
+            k = label.removeprefix("base__")
+            state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
+            state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
 
-        for k, val in obs.object_states.items():
+        for label, value in obs.object_states.items():
+            k = label.removeprefix("base__")
             state_dict[f"{k}_scalar"] = torch.tensor(
-                np.array([val]), dtype=torch.float32
+                np.array([value]), dtype=torch.float32
             )
+
+        for label, value in converters.items():
+            state_dict[label] = value(obs)
+
         return cls(state_dict, batch_size=empty_batchsize)

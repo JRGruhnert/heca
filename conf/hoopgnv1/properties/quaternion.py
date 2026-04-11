@@ -19,7 +19,7 @@ from src.objects.properties.property import PropertyConfig
 
 
 @dataclass
-class QuaternionStateConfig(PropertyConfig):
+class QuaternionPropertyConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="Quat",
         dim_input=4,

@@ -1,3 +1,5 @@
+from src.skills.skill_networker import SkillNetworker, SkillNetworkerConfig
+from src.skills.skill_operator import SkillOperator, SkillOperatorConfig
 from src.skills.skip.skip_networker import SkipNetworker, SkipNetworkerConfig
 from src.skills.skip.skip_operator import SkipOperator, SkipOperatorConfig
 from src.skills.tapas.tapas_networker import (
@@ -28,7 +30,7 @@ def register_skill_networker(config_type, builder):
     SKILL_NETWORKER_BUILDERS[config_type] = builder
 
 
-def select_skill_operator(config):
+def select_skill_operator(config: SkillOperatorConfig) -> SkillOperator:
     builder = SKILL_OPERATOR_BUILDERS.get(type(config))
     if builder is None:
         for cfg_type, b in SKILL_OPERATOR_BUILDERS.items():
@@ -40,7 +42,7 @@ def select_skill_operator(config):
     return builder(config)
 
 
-def select_skill_networker(config):
+def select_skill_networker(config: SkillNetworkerConfig) -> SkillNetworker:
     builder = SKILL_NETWORKER_BUILDERS.get(type(config))
     if builder is None:
         for cfg_type, b in SKILL_NETWORKER_BUILDERS.items():

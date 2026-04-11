@@ -1,15 +1,9 @@
 from dataclasses import dataclass
 
-from src.agents import select_agent
-from src.environments import select_environment
-from src.evaluators import select_evaluator
 from src.experiments import select_experiment
 from src.logger import LoggerConfig, Logger
-from src.buffer import BufferConfig, Buffer
-from src.evaluators.evaluator import EvaluatorConfig
 from src.storage import Storage, StorageConfig
-from src.environments.environment import EnvironmentConfig
-from src.agents.ppo import PPOAgentConfig
+from src.agents.ppo import PPOAgent, PPOAgentConfig
 from src.experiments.experiment import ExperimentConfig
 from wandb.wandb_run import Run
 
@@ -17,21 +11,17 @@ from wandb.wandb_run import Run
 @dataclass
 class TrainerConfig:
     agent: PPOAgentConfig
-    buffer: BufferConfig
     logger: LoggerConfig
     storage: StorageConfig
-    evaluator: EvaluatorConfig
     experiment: ExperimentConfig
-    environment: EnvironmentConfig
 
 
 class Trainer:
     def __init__(self, config: TrainerConfig, run: Run | None = None):
         self.storage = Storage(config.storage)
-        self.buffer = Buffer(config.buffer)
         self.logger = Logger(config.logger, run)
         self.experiment = select_experiment(config.experiment)
-        self.agent = select_agent(config.agent, self.storage, self.buffer)
+        self.agent = PPOAgent(config.agent, self.storage)
 
     def collect_batch(self) -> bool:
         """Collect experiences until batch is ready"""

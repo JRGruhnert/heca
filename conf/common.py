@@ -1,6 +1,7 @@
-from conf.object_sets import OBJECT_SETS
+from conf.property_sets import OBJECT_SETS
 from conf.skill_sets import SKILL_SETS
 from src.agents.ppo import PPOAgentConfig
+from src.buffer import BufferConfig
 from src.environments.calvin import CalvinEnvironmentConfig
 from src.environments.environment import EnvironmentConfig
 from src.evaluators.dense3 import Dense3EvaluatorConfig
@@ -37,6 +38,8 @@ def experiment_config(
     p_rand: float,
     min_steps: int,
     skill_set_tag: str,
+    state_eval_tag: str,
+    state_network_tag: str,
     environment_tag: str = "calvin",
     evaluator_tag: str = "dense3",
 ) -> ExperimentConfig:
@@ -45,7 +48,7 @@ def experiment_config(
         p_rand=p_rand,
         min_steps=min_steps,
         environment=environment_config(environment_tag),
-        evaluator=evaluator_config(evaluator_tag, environment_tag, environment_tag),
+        evaluator=evaluator_config(evaluator_tag, state_eval_tag, state_network_tag),
         skills=SKILL_SETS[skill_set_tag],
     )
 
@@ -63,9 +66,14 @@ def storage_config(
     )
 
 
-def agent_config(network: NetworkConfig, eval: bool) -> PPOAgentConfig:
+def ppo_default_config(
+    network: NetworkConfig,
+    eval: bool,
+    batch_size: int,
+) -> PPOAgentConfig:
     return PPOAgentConfig(
         network=network,
+        batch_size=batch_size,
         eval=eval,
         max_batches=750,
         early_stop_patience=50,

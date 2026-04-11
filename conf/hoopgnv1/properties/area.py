@@ -30,7 +30,7 @@ from src.objects.properties.property_condition import PropertyConditionConfig
 
 @dataclass
 class CalvinAreaConfig(AreaConfig):
-    label: str = "AreaEuler"
+    label: str = "Area"
     values: list[str] = field(
         default_factory=lambda: ["table", "drawer_open", "drawer_closed", "drawer"]
     )
@@ -51,7 +51,7 @@ class CalvinAreaConfig(AreaConfig):
 
 
 @dataclass
-class CalvinAreaStateConfig(PropertyConfig):
+class AreaPropertyConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
         label="AreaEuler",
         dim_input=6,

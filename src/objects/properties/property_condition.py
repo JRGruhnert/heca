@@ -36,6 +36,7 @@ class PropertyCondition:
         self.ruler = select_state_ruler(config.ruler)
         self.parameter = select_state_parameter(config.parameter)
         self.value = self.parameter(config.value)
+        assert self.value is not None, f"No {type(self)} value."
 
     def __call__(self, x: torch.Tensor, y: torch.Tensor | None = None) -> float:
         if y is not None:

@@ -1,15 +1,11 @@
 from dataclasses import dataclass
 from functools import cached_property
 import re
+from conf.hoopgnv1.properties.hoopgnv1 import PropertySet
 from src.hardware import device
-from src.observation.observation import empty_batchsize
 from loguru import logger
 import numpy as np
 import torch
-
-from calvin_env_modified.envs.observation import (
-    CalvinEnvObservation,
-)
 from tapas_gmm_modified.policy import import_policy
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import (
@@ -18,22 +14,18 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     ModelType,
     TPGMMConfig,
 )
-from tapas_gmm_modified.utils.observation import (
-    SceneObservation,
-    SingleCamObservation,
-    dict_to_tensordict,
-)
+from tapas_gmm_modified.utils.observation import SceneObservation
 from tapas_gmm_modified.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )
+from src.objects.properties.property import Property
 from src.observation.observation import StateValueDict
 from src.skills.skill_operator import SkillOperator, SkillOperatorConfig
 from src.objects.properties.handlers.evaluators.area_evaluator import (
     AreaEvaluator,
 )
 from src.objects.properties.property_condition import PropertyCondition
-from src.objects.properties.property import Property
 
 
 @dataclass(kw_only=True)
@@ -97,26 +89,35 @@ class TapasOperator(SkillOperator):
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
         self.goal: StateValueDict | None = None
+        self.pos_reg = re.compile(r"(.+?)_(?:position)")
+        self.rot_reg = re.compile(r"(.+?)_(?:rotation)")
+        self.scalar_reg = re.compile(r"(.+?)_(?:scalar)")
+        self.hacky_properties = {
+            "red_block_position": Property(config=PropertySet.block_red_position),
+            "blue_block_position": Property(config=PropertySet.block_blue_position),
+            "pink_block_position": Property(config=PropertySet.block_pink_position),
+            "slide_position": Property(config=PropertySet.slide_position),
+        }
+        self.override = False
+        if len(self.config.overrides):
+            logger.warning(
+                f"Skill {self.config.label} has overrides: {self.config.overrides}."
+            )
+            self.override = True
 
-    def __call__(
-        self,
-        current: CalvinEnvObservation,
-        states: list[Property],
-    ) -> np.ndarray | None:
+    def __call__(self, x: StateValueDict) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
-        assert isinstance(
-            current, CalvinEnvObservation
-        ), "Only supports CalvinEnvObservation."
         if self.config.predict_as_batch:
             if self.first_prediction:
                 # NOTE: Could use control_duration later to enforce certain length
                 try:
-                    self.predictions, _ = self.policy.predict(  # type: ignore
-                        self._to_skill_format(current, self.goal, states)
-                    )
+                    if self.override:
+                        value = self._hacky_postprocess(x, self.goal)
+                    else:
+                        value = x
+                    self.predictions, _ = self.policy.predict(value)  # type: ignore
                 except FloatingPointError as e:
                     logger.error(f"Numerical error in GMM prediction: {e}")
-                    # Return a safe default action (e.g., no movement)
                     return None  # TODO: I think its just cause of a bad robot position
                 except Exception as e:
                     logger.error(f"Error in skill prediction: {e}")
@@ -127,12 +128,13 @@ class TapasOperator(SkillOperator):
             return self._to_action(self.predictions.step())
         else:
             try:
-                self.prediction, _ = self.policy.predict(  # type: ignore
-                    self._to_skill_format(current, self.goal)
-                )
+                if self.override:
+                    value = self._hacky_postprocess(x, self.goal)
+                else:
+                    value = x
+                self.prediction, _ = self.policy.predict(value)  # type: ignore
             except FloatingPointError as e:
                 logger.error(f"Numerical error in GMM prediction: {e}")
-                # Return a safe default action (e.g., no movement)
                 return None  # TODO: I think its just cause of a bad robot position
             except Exception as e:
                 logger.error(f"Error in skill prediction: {e}")
@@ -158,147 +160,66 @@ class TapasOperator(SkillOperator):
             )  # type: ignore
         )  # type: ignore
 
-    def _to_skill_format(
+    def _hacky_postprocess(
         self,
-        obs: CalvinEnvObservation,
-        goal: StateValueDict | None = None,
-        states: list[Property] | None = None,
+        current: StateValueDict,
+        goal: StateValueDict,
     ) -> SceneObservation:  # type: ignore
-        """
-        Convert the observation from the environment to a SceneObservation. This format is used for TAPAS.
-
-        Returns
-        -------
-        SceneObservation
-            The observation in common format as SceneObservation.
-        """
-        if obs.action is None:
-            action = None
-        else:
-            action = torch.Tensor(obs.action)
-
-        if obs.reward is None:
-            reward = torch.Tensor([0.0])
-        else:
-            reward = torch.Tensor([obs.reward])
-        joint_pos = torch.Tensor(obs.joint_pos)
-        joint_vel = torch.Tensor(obs.joint_vel)
-        ee_pose = torch.Tensor(obs.ee_pose)
-        ee_state = torch.Tensor([obs.ee_state])
-        camera_obs = {}
-        for cam in obs.camera_names:
-            rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
-            mask = obs.mask[cam].astype(int)
-
-            camera_obs[cam] = SingleCamObservation(
-                **{
-                    "rgb": torch.Tensor(rgb),
-                    "depth": torch.Tensor(obs.depth[cam]),
-                    "mask": torch.Tensor(mask).to(torch.uint8),
-                    "extr": torch.Tensor(obs.extr[cam]),
-                    "intr": torch.Tensor(obs.intr[cam]),
-                },
-                batch_size=empty_batchsize,
-            )
-
-        multicam_obs = dict_to_tensordict(
-            {"_order": CameraOrder._create(obs.camera_names)} | camera_obs  # type: ignore
-        )
-        object_poses_dict = obs.object_poses
-        object_states_dict = obs.object_states
-        if goal is not None and len(self.config.overrides) != 0:
-            states_dict = {s.config.label: s for s in states} if states else {}
-            # NOTE: This is only a hack to make reversed tapas models work
-            # TODO: Update this when possible
-            # logger.debug(f"Overriding Tapas Task {task.name}")
-            for state_name, condition in self.overrides.items():
-                state_value = (
-                    condition.value.numpy() if condition.value is not None else None
+        for label, condition in self.overrides.items():
+            pos = self.pos_reg.search(label)
+            rot = self.rot_reg.search(label)
+            scalar = self.scalar_reg.search(label)
+            if label == "ee_position":
+                current.tapas.ee_pose = torch.cat(
+                    [
+                        condition.value,
+                        current.tapas.ee_pose[3:],
+                    ]
                 )
-                assert state_value is not None, f"Condition {condition} has no value."
-                match_position = re.search(r"(.+?)_(?:position)", state_name)
-                match_rotation = re.search(r"(.+?)_(?:rotation)", state_name)
-                match_scalar = re.search(r"(.+?)_(?:scalar)", state_name)
-                if state_name == "ee_position":
-                    ee_pose = torch.cat(
-                        [
-                            torch.Tensor(state_value),
-                            ee_pose[3:],
-                        ]
-                    )
-                elif state_name == "ee_rotation":
-                    ee_pose = torch.cat(
-                        [
-                            ee_pose[:3],
-                            torch.Tensor(state_value),
-                        ]
-                    )
-                elif state_name == "ee_scalar":
-                    ee_state = torch.Tensor(state_value)
-
-                elif match_position:
-                    # print(f"Overriding {state_name} in Tapas Skill {self.name}")
-                    position_state_name = f"{match_position.group(1)}_position"
-                    if position_state_name in states_dict:
-                        temp_state = states_dict[position_state_name]
-                        if isinstance(temp_state.evaluator, AreaEvaluator):
-                            area = temp_state.evaluator.area.check_eval_area(
-                                goal[position_state_name]
-                            )
-                            temp_pos = goal[position_state_name].clone()
-                            if (
-                                area == "drawer_closed"
-                            ):  # NOTE: This is a hardcoded fix for the drawer, since the position of the drawer in the reversed trajectory is in the closed position but the model expects it to be in the open position. This is because the model was trained with the open position as precondition and the closed position as postcondition, so when we reverse it, we need to also reverse the positions.
-                                temp_pos[1] -= 0.17  # Drawer Offset
-                        else:
-                            temp_pos = goal[position_state_name]
-                        object_poses_dict[match_position.group(1)] = np.concatenate(
-                            [
-                                temp_pos.numpy(),
-                                object_poses_dict[match_position.group(1)][3:],
-                            ]
-                        )
-                elif match_rotation:
-                    object_poses_dict[match_rotation.group(1)] = np.concatenate(
-                        [
-                            object_poses_dict[match_rotation.group(1)][:3],
-                            goal[f"{match_rotation.group(1)}_rotation"].numpy(),
-                        ]
-                    )
-                elif match_scalar:
-                    object_states_dict[match_scalar.group(1)] = goal[
-                        f"{match_scalar.group(1)}_scalar"
-                    ].numpy()
-                else:
-                    raise ValueError(f"Unknown state name: {state_name}")
-
-        object_poses = dict_to_tensordict(
-            {
-                name: torch.Tensor(pose)
-                for name, pose in sorted(object_poses_dict.items())
-            },
-        )
-        object_states = dict_to_tensordict(
-            {
-                name: (
-                    torch.tensor([state]) if np.isscalar(state) else torch.tensor(state)
+            elif label == "ee_rotation":
+                current.tapas.ee_pose = torch.cat(
+                    [
+                        current.tapas.ee_pose[:3],
+                        condition.value,
+                    ]
                 )
-                for name, state in sorted(object_states_dict.items())
-            },
-        )
+            elif label == "ee_scalar":
+                current.tapas.ee_scalar = condition.value
+            elif pos:
+                current.tapas.object_poses[pos.group(1)] = np.concatenate(
+                    [
+                        self._hacky_position(pos.group(1), goal),
+                        current.tapas.object_poses[pos.group(1)][3:],
+                    ]
+                )
+            elif rot:
+                current.tapas.object_poses[rot.group(1)] = np.concatenate(
+                    [
+                        current.tapas.object_poses[rot.group(1)][:3],
+                        goal[f"{rot.group(1)}_rotation"].numpy(),
+                    ]
+                )
+            elif scalar:
+                current.tapas.object_states[scalar.group(1)] = goal[
+                    f"{scalar.group(1)}_scalar"
+                ].numpy()
+            else:
+                raise ValueError(f"Unknown state name: {label}")
 
-        return SceneObservation(
-            feedback=reward,
-            action=action,
-            cameras=multicam_obs,
-            ee_pose=ee_pose,
-            gripper_state=ee_state,
-            object_poses=object_poses,
-            object_states=object_states,
-            joint_pos=joint_pos,
-            joint_vel=joint_vel,
-            batch_size=empty_batchsize,
-        )
+        return current
+
+    def _hacky_position(self, label: str, goal: StateValueDict) -> np.ndarray:
+        property = self.hacky_properties[label]
+        if isinstance(property.evaluator, AreaEvaluator):
+            area = property.evaluator.area.check_eval_area(goal[label])
+            temp_pos = goal[label].clone()
+            if (
+                area == "drawer_closed"
+            ):  # NOTE: This is a hardcoded fix for the drawer, since the position of the drawer in the reversed trajectory is in the closed position but the model expects it to be in the open position. This is because the model was trained with the open position as precondition and the closed position as postcondition, so when we reverse it, we need to also reverse the positions.
+                temp_pos[1] -= 0.17  # Drawer Offset
+        else:
+            temp_pos = goal[label]
+        return temp_pos.numpy()
 
     def _load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
         if reversed:

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-
+from torch_geometric.data import Batch
 from src.skills.skill_networker import SkillNetworker, SkillNetworkerConfig
 
 
@@ -13,10 +13,10 @@ class TapasNetworker(SkillNetworker):
         super().__init__(config)
         self.config = config
 
-    def __call__(self, start):
+    def __call__(self, x) -> Batch:
         "TODO: implement"
-        raise NotImplementedError()
+        return Batch()  # placeholder
 
     def reset(self, goal):
         "TODO: implement"
-        raise NotImplementedError()
+        pass

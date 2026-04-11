@@ -17,5 +17,5 @@ class IgnoreValidator(StateValidator):
         super().__init__(config)
         self.config = config
 
-    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError("Subclasses must implement the __call__ method.")
+    def __call__(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        return True

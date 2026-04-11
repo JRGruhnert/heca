@@ -1,16 +1,13 @@
 from cli.commands.explain import ExplainManagerConfig
 from conf.common import (
-    agent_config,
-    environment_config,
+    ppo_default_config,
     experiment_config,
     logger_config,
     storage_config,
     network_config,
-    evaluator_config,
 )
-from conf.object_sets import OBJECT_SETS
+from conf.property_sets import OBJECT_SETS
 from conf.skill_sets import SKILL_SETS
-from src.buffer import BufferConfig
 from src.logger import LogMode
 
 
@@ -37,11 +34,11 @@ def get_explain_config(
         state_count=len(states),
     )
     return ExplainManagerConfig(
-        agent=agent_config(
-            network,
-            True,
+        agent=ppo_default_config(
+            network=network,
+            batch_size=16,
+            eval=True,
         ),
-        buffer=BufferConfig(steps=16),
         logger=logger_config(
             LogMode.TERMINAL,
             network.label,
@@ -55,6 +52,8 @@ def get_explain_config(
             0.0,
             min_steps=len(skills),
             skill_set_tag=skill_set_tag,
+            state_eval_tag=state_set_tag,
+            state_network_tag=state_set_tag,
             environment_tag="calvin",
             evaluator_tag="dense3",
         ),

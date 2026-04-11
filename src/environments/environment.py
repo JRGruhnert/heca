@@ -16,6 +16,12 @@ class EnvironmentConfig:
 
 
 class Environment(ABC):
+    def __init__(self, config: EnvironmentConfig):
+        self.config = config
+        self.converters = {
+            label: Converter(config=converter_config)
+            for label, converter_config in config.converter.items()
+        }
 
     def reset(self) -> StateValueDict:
         self._reset()

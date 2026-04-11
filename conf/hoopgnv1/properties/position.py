@@ -7,14 +7,14 @@ from src.objects.properties.handlers.evaluators.evaluator import (
 from src.objects.properties.handlers.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from src.objects.properties.handlers.parameters.flip_parameter import (
-    FlipParameterConfig,
+from src.objects.properties.handlers.parameters.euclidean_parameter import (
+    EuclideanParameterConfig,
 )
-from src.objects.properties.handlers.rulers.binary_ruler import BinaryRulerConfig
-from src.objects.properties.handlers.rulers.flip_ruler import FlipRulerConfig
-from src.objects.properties.handlers.rulers.ruler import RulerConfig
+from src.objects.properties.handlers.rulers.euclidean_ruler import (
+    EuclideanRulerConfig,
+)
 from src.objects.properties.handlers.normalizers.boundary_normalizer import (
-    BoolNormalizerConfig,
+    AreaNormalizerConfig,
 )
 from src.objects.properties.property_condition import PropertyConditionConfig
 from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
@@ -22,18 +22,17 @@ from src.objects.properties.property import PropertyConfig
 
 
 @dataclass
-class FlipStateConfig(PropertyConfig):
+class PositionPropertyConfig(PropertyConfig):
     encoder: StateEncoderConfig = StateEncoderConfig(
-        label="Flip",
-        dim_input=1,
-        middle_dim=8,
+        label="EulerPrecise",
+        dim_input=3,
     )
-    normalizer: NormalizerConfig = BoolNormalizerConfig()
-    ruler: RulerConfig = BinaryRulerConfig()
+    ruler: EuclideanRulerConfig = EuclideanRulerConfig()
     evaluator: StateEvaluatorConfig = ThresholdEvaluatorConfig(
-        ruler=BinaryRulerConfig(),
+        ruler=EuclideanRulerConfig(),
     )
+    normalizer: NormalizerConfig = AreaNormalizerConfig()
     condition: PropertyConditionConfig = PropertyConditionConfig(
-        ruler=FlipRulerConfig(),
-        parameter=FlipParameterConfig(),
+        ruler=EuclideanRulerConfig(),
+        parameter=EuclideanParameterConfig(),
     )

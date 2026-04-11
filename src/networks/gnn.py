@@ -1,7 +1,8 @@
 from abc import abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Union
+from typing import Any, Union, cast
 import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
@@ -304,7 +305,7 @@ class GraphNetwork(Network):
             data[("task", "task-actor", "actor")].edge_index = self.skill_skill_sparse
             data[("task", "task-critic", "critic")].edge_index = self.skill_to_single
             batch_data.append(data)
-        return Batch.from_data_list(batch_data)
+        return cast(Batch, Batch.from_data_list(batch_data))
 
     def skill_state_distances(
         self,

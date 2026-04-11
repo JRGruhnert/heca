@@ -51,7 +51,7 @@ class TapasConverter(Converter):
             camera_obs[cam] = SingleCamObservation(
                 **{
                     "rgb": torch.Tensor(rgb),
-                    "depth": torch.Tensor(obs.depth[cam]),
+                    "d": torch.Tensor(obs.depth[cam]),
                     "mask": torch.Tensor(mask).to(torch.uint8),
                     "extr": torch.Tensor(obs.extr[cam]),
                     "intr": torch.Tensor(obs.intr[cam]),

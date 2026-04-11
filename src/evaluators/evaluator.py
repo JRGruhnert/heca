@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from src.storage import select_states
+from src.storage import select_properties
 from collections.abc import Sequence
 from src.objects.properties.property import PropertyConfig
 from src.observation.observation import StateValueDict
@@ -16,8 +16,8 @@ class EvaluatorConfig:
 class Evaluator(ABC):
     def __init__(self, config: EvaluatorConfig):
         self.config = config
-        self.states_eval = select_states(config.states_eval)
-        self.states_network = select_states(config.states_network)
+        self.states_eval = select_properties(config.states_eval)
+        self.states_network = select_properties(config.states_network)
 
         self.percentage_done: float = 0.0
 
