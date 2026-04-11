@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
-from src.experiments import select_experiment
-from src.logger import LoggerConfig, Logger
-from src.storage import Storage, StorageConfig
-from src.agents.ppo import PPOAgent, PPOAgentConfig
-from src.experiments.experiment import ExperimentConfig
+from hoopgn.experiments import select_experiment
+from hoopgn.logger import LoggerConfig, Logger
+from hoopgn.storage import Storage, StorageConfig
+from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
+from hoopgn.experiments.experiment import ExperimentConfig
 from wandb.wandb_run import Run
 
 

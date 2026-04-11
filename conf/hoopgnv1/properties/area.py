@@ -1,31 +1,31 @@
 from dataclasses import dataclass, field
 
-from src.networks.layers.classifiers.state_classifier import StateClassifierConfig
-from src.networks.layers.encoder import StateEncoderConfig
-from src.objects.properties.area import AreaConfig
+from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierConfig
+from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.objects.properties.area import AreaConfig
 
-from src.objects.properties.handlers.validators.validator import StateValidatorConfig
-from src.objects.properties.handlers.evaluators.evaluator import (
+from hoopgn.objects.properties.handlers.validators.validator import StateValidatorConfig
+from hoopgn.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.handlers.parameters.euclidean_parameter import (
+from hoopgn.objects.properties.handlers.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
 )
-from src.objects.properties.handlers.rulers.euclidean_ruler import (
+from hoopgn.objects.properties.handlers.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-from src.objects.properties.handlers.normalizers.boundary_normalizer import (
+from hoopgn.objects.properties.handlers.normalizers.boundary_normalizer import (
     AreaNormalizerConfig,
 )
 
-from src.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
-from src.objects.properties.handlers.validators.area_validator import (
+from hoopgn.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from hoopgn.objects.properties.handlers.validators.area_validator import (
     AreaValidatorConfig,
 )
-from src.objects.properties.handlers.handler import ValueHandlerConfig
-from src.objects.properties.handlers.one_hot_handler import OneHotValueConfig
-from src.objects.properties.property import PropertyConfig
-from src.objects.properties.property_condition import PropertyConditionConfig
+from hoopgn.objects.properties.handlers.handler import ValueHandlerConfig
+from hoopgn.objects.properties.handlers.one_hot_handler import OneHotValueConfig
+from hoopgn.objects.properties.property import PropertyConfig
+from hoopgn.objects.properties.property_condition import PropertyConditionConfig
 
 
 @dataclass

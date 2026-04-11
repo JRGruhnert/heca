@@ -1,10 +1,10 @@
-from src.environments.calvin import CalvinEnvironmentConfig
+from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from src.experiments.skill_check import SkillCheckExperimentConfig
-from src.evaluators.skill import SkillEvaluatorConfig
-from src.evaluators.sparse import SparseEvaluatorConfig
-from src.logger import LogMode, LoggerConfig
-from src.storage import StorageConfig
-from src.variables import SET_SRPB
+from hoopgn.evaluators.skill import SkillEvaluatorConfig
+from hoopgn.evaluators.sparse import SparseEvaluatorConfig
+from hoopgn.logger import LogMode, LoggerConfig
+from hoopgn.storage import StorageConfig
+from hoopgn.variables import SET_SRPB
 
 mode = LogMode.TERMINAL
 render = False

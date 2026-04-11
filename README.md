@@ -5,6 +5,10 @@ python -m cli.hoopgn explain -c conf/explain/gnn.py
 ```
 
 ```bash
+hoopgn explain -c conf/explain/gnn.py
+```
+
+```bash
 pip install --no-cache-dir --force-reinstall "calvin_env_modified @ git+https://github.com/JRGruhnert/calvin_env_modified.git@1738be9b9ae4ac94fbd572001898b4e36f4c2683"
 ```
 

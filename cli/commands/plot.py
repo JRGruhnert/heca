@@ -3,29 +3,29 @@ import re
 from itertools import product
 
 
-from src.plotting.run import RunData, RunDataCollection
-import src.plotting.plots.dual_time as dual_time
-import src.plotting.plots.all_sr as all_sr
-import src.plotting.plots.all_time as all_time
-import src.plotting.plots.domain_sr as domain_sr
-import src.plotting.plots.p_sr as p_sr
-import src.plotting.plots.retrain_sr as retrain_sr
-import src.plotting.plots.reward_sr as reward_sr
-import src.plotting.plots.network_stats as network_stats
-import src.plotting.plots.actions as actions
+from hoopgn.plotting.run import RunData, RunDataCollection
+import hoopgn.plotting.plots.dual_time as dual_time
+import hoopgn.plotting.plots.all_sr as all_sr
+import hoopgn.plotting.plots.all_time as all_time
+import hoopgn.plotting.plots.domain_sr as domain_sr
+import hoopgn.plotting.plots.p_sr as p_sr
+import hoopgn.plotting.plots.retrain_sr as retrain_sr
+import hoopgn.plotting.plots.reward_sr as reward_sr
+import hoopgn.plotting.plots.network_stats as network_stats
+import hoopgn.plotting.plots.actions as actions
 
 
 def make_plots(collection: RunDataCollection):
     print("Making plots...")
     # all_sr.plot(collection) # done
     # all_time.plot(collection) # done
-    #domain_sr.plot(collection)
+    # domain_sr.plot(collection)
     # p_sr.plot(collection)  # done
     # retrain_sr.plot(collection) # done
     # reward_sr.plot(collection)
     # network_stats.plot() # done
     # network_stats.plot_ratio() # done
-    #dual_time.plot(collection)  # done
+    # dual_time.plot(collection)  # done
     actions.plot(collection)  # done
 
 
@@ -86,7 +86,7 @@ def entry_point():
                     }
                     # Collect data for further analysis
                     run = RunData(path, metadata)
-                    #print(run.stats["batch_stats"][-1])
+                    # print(run.stats["batch_stats"][-1])
                     collection.add(run)
                 else:
                     pass  # print(f"    No tag match for: {file_match.group('tag')}")  # Debug

@@ -1,9 +1,9 @@
-from src.agents.ppo import PPOAgentConfig
-from src.environments.calvin import CalvinEnvironmentConfig
-from src.buffer import BufferConfig
-from src.logger import LogMode, LoggerConfig
-from src.storage import StorageConfig
-from src.experiments.noise_experiment import NoiseExperimentConfig
+from hoopgn.agents.ppo import PPOAgentConfig
+from hoopgn.environments.calvin import CalvinEnvironmentConfig
+from hoopgn.buffer import BufferConfig
+from hoopgn.logger import LogMode, LoggerConfig
+from hoopgn.storage import StorageConfig
+from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 
 
 mode = LogMode.WANDB

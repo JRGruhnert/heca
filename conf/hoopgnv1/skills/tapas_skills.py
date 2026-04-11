@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.skills.tapas.tapas_leaf import TapasConfig
+from hoopgn.skills.tapas.tapas_leaf import TapasConfig
 
 
 @dataclass

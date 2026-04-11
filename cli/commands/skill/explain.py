@@ -1,8 +1,8 @@
 from dataclasses import dataclass
-from src.storage import Storage, StorageConfig
-from src.plotting.object_point import ObjectLocationPoint
-from src.plotting.plots.skill.tp import ObjectConditionsPlot
-from src.skills.tree.leafs.leaf import Leaf
+from hoopgn.storage import Storage, StorageConfig
+from hoopgn.plotting.object_point import ObjectLocationPoint
+from hoopgn.plotting.plots.skill.tp import ObjectConditionsPlot
+from hoopgn.skills.skill import Skill
 
 
 @dataclass
@@ -30,13 +30,11 @@ class SkillExplainScript:
             state=int(con[f"{label}_state"].item()),
         )
 
-    def make_explanation(self, skill: Leaf):
+    def make_explanation(self, skill: Skill):
         """Returns an explanation for the given observation, goal and skill."""
-        pre = skill.demo_precons
-        post = skill.demo_postcons
         for o in self.object_labels:
-            pre_con = self.make_point(pre, o)
-            post_con = self.make_point(post, o)
+            pre_con = self.make_point(skill.demo_precons, o)
+            post_con = self.make_point(skill.demo_postcons, o)
             self.plot.set_precon(pre_con)
             self.plot.set_postcon(post_con)
 

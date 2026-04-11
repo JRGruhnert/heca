@@ -1,21 +1,21 @@
 from dataclasses import dataclass
 
-from src.networks.layers.encoder import StateEncoderConfig
-from src.objects.properties.handlers.evaluators.evaluator import (
+from hoopgn.networks.layers.encoder import StateEncoderConfig
+from hoopgn.objects.properties.handlers.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from src.objects.properties.handlers.evaluators.threshold_evaluator import (
+from hoopgn.objects.properties.handlers.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from src.objects.properties.property_condition import PropertyConditionConfig
-from src.objects.properties.handlers.parameters.quaternion_parameter import (
+from hoopgn.objects.properties.property_condition import PropertyConditionConfig
+from hoopgn.objects.properties.handlers.parameters.quaternion_parameter import (
     QuaternionParameterConfig,
 )
-from src.objects.properties.handlers.rulers.angular_ruler import AngularRulerConfig
-from src.objects.properties.handlers.normalizers.quaternion_normalizer import (
+from hoopgn.objects.properties.handlers.rulers.angular_ruler import AngularRulerConfig
+from hoopgn.objects.properties.handlers.normalizers.quaternion_normalizer import (
     QuaternionNormalizerConfig,
 )
-from src.objects.properties.property import PropertyConfig
+from hoopgn.objects.properties.property import PropertyConfig
 
 
 @dataclass

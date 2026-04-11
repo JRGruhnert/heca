@@ -8,7 +8,7 @@ from conf.common import (
 )
 from conf.property_sets import OBJECT_SETS
 from conf.skill_sets import SKILL_SETS
-from src.logger import LogMode
+from hoopgn.logger import LogMode
 
 
 def get_explain_config(

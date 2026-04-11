@@ -1,18 +1,17 @@
 from conf.property_sets import OBJECT_SETS
 from conf.skill_sets import SKILL_SETS
-from src.agents.ppo import PPOAgentConfig
-from src.buffer import BufferConfig
-from src.environments.calvin import CalvinEnvironmentConfig
-from src.environments.environment import EnvironmentConfig
-from src.evaluators.dense3 import Dense3EvaluatorConfig
-from src.evaluators.evaluator import EvaluatorConfig
-from src.experiments.experiment import ExperimentConfig
-from src.logger import LogMode, LoggerConfig
-from src.storage import StorageConfig
-from src.experiments.noise_experiment import NoiseExperimentConfig
-from src.networks.baseline import BaselineNetworkConfig
-from src.networks.gnn import GraphNetworkConfig
-from src.networks.network import NetworkConfig
+from hoopgn.agents.ppo import PPOAgentConfig
+from hoopgn.environments.calvin import CalvinEnvironmentConfig
+from hoopgn.environments.environment import EnvironmentConfig
+from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
+from hoopgn.evaluators.evaluator import EvaluatorConfig
+from hoopgn.experiments.experiment import ExperimentConfig
+from hoopgn.logger import LogMode, LoggerConfig
+from hoopgn.storage import StorageConfig
+from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
+from hoopgn.networks.baseline import BaselineNetworkConfig
+from hoopgn.networks.gnn import GraphNetworkConfig
+from hoopgn.networks.network import NetworkConfig
 
 
 def evaluator_config(

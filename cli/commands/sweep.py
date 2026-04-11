@@ -1,19 +1,20 @@
 import wandb
-from src.environments.calvin import CalvinEnvironmentConfig
-from src.experiments.noise.noise_experiment import NoiseExperimentConfig
-from src.buffer import BufferConfig
-from src.evaluators.dense3 import Dense3EvaluatorConfig
-from src.logger import LoggerConfig
-from src.storage import StorageConfig
-from src.agents.ppo import PPOAgentConfig
-from cli.hoopgn import TrainConfig, Trainer
+from hoopgn.environments.calvin import CalvinEnvironmentConfig
+from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
+from hoopgn.buffer import BufferConfig
+from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
+from hoopgn.logger import LoggerConfig
+from hoopgn.storage import StorageConfig
+from hoopgn.agents.ppo import PPOAgentConfig
+from cli.commands.train import TrainerConfig, Trainer
 
 
 def entry_point():
     run = wandb.init()
 
-    config = TrainConfig(
+    config = TrainerConfig(
         agent=PPOAgentConfig(
+            batch_size=wandb.config["agent.batch_size"],
             network=wandb.config["agent.network"],
             eval=wandb.config["agent.eval"],
             early_stop_patience=wandb.config["agent.early_stop_patience"],
@@ -36,22 +37,19 @@ def entry_point():
             target_kl=wandb.config["agent.target_kl"],
             clip_value_loss=wandb.config["agent.clip_val_loss"],
         ),
-        buffer=BufferConfig(
-            steps=wandb.config["buffer.steps"],
-        ),
         logger=LoggerConfig(),
         storage=StorageConfig(
-            used_skills=wandb.config["storage.used_skills"],
-            used_states=wandb.config["storage.used_states"],
+            skills=wandb.config["storage.used_skills"],
+            states_network=wandb.config["storage.used_states"],
             states_eval=wandb.config["storage.eval_states"],
-            network=wandb.config["storage.network"],
         ),
         experiment=NoiseExperimentConfig(
             p_empty=wandb.config["experiment.p_empty"],
             p_rand=wandb.config["experiment.p_rand"],
+            environment=CalvinEnvironmentConfig(render=False),
+            evaluator=Dense3EvaluatorConfig(),
+            min_steps=wandb.config["experiment.min_steps"],
         ),
-        environment=CalvinEnvironmentConfig(render=False),
-        evaluator=Dense3EvaluatorConfig(),
     )
 
     trainer = Trainer(config, run)
