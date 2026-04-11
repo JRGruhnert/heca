@@ -22,10 +22,10 @@ from tapas_gmm_modified.utils.robot_trajectory import (
 from hoopgn.objects.properties.property import Property
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
-from hoopgn.objects.properties.handlers.evaluators.area_evaluator import (
+from hoopgn.objects.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
 )
-from hoopgn.objects.properties.property_condition import PropertyCondition
+from hoopgn.objects.properties.features.conditions.condition import PropertyCondition
 
 
 @dataclass(kw_only=True)

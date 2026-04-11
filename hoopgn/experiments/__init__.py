@@ -1,10 +1,3 @@
-import sys
-
-for name, mod in list(sys.modules.items()):
-    if name.startswith("tapas_gmm_modified"):
-        old_name = "tapas_gmm" + name[len("tapas_gmm_modified") :]
-        sys.modules.setdefault(old_name, mod)
-
 from hoopgn.experiments.experiment import Experiment, ExperimentConfig
 from hoopgn.experiments.noise_experiment import (
     NoiseExperimentConfig,

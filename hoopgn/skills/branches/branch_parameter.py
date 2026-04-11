@@ -4,7 +4,7 @@ from hoopgn.skills.branches.branch_operator import (
     BranchOperator,
     BranchOperatorConfig,
 )
-from hoopgn.objects.properties.property_condition import (
+from hoopgn.objects.properties.features.conditions.condition import (
     PropertyCondition,
     PropertyConditionConfig,
 )

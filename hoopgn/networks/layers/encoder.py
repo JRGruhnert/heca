@@ -26,40 +26,28 @@ class StateEncoder(nn.Module):
 
 
 @dataclass
-class StateEncoderRegistryConfig:
+class PropertyEncoderRegistryConfig:
     dynamic_create: bool = True
     dim_encoder: int = 32
 
 
-class StateEncoderRegistry:
-    def __init__(self, config: StateEncoderRegistryConfig):
-        self._dict = nn.ModuleDict()
+class PropertyEncoderRegistry(nn.ModuleDict):
+    def __init__(self, config: PropertyEncoderRegistryConfig):
+        super().__init__()
         self.config = config
 
-    def get(self, config: StateEncoderConfig):
-        if config.label not in self._dict:
-            if self.config.dynamic_create:
-                if config.dim_encoder != self.config.dim_encoder:
-                    raise ValueError(
-                        f"Dimension mismatch for '{config.label}': "
-                        f"expected {self.config.dim_encoder}, got {config.dim_encoder}. "
-                        f"Currently only uniform Node Feature Sizes are supported."
-                    )
-                self._dict[config.label] = StateEncoder(config)
-            else:
-                raise KeyError(
-                    f"Encoder with key '{config.label}' not found and dynamic create is disabled."
-                )
-        return self._dict[config.label]
+    def register(self, config: StateEncoderConfig):
+        if config.label in self:
+            raise KeyError(f"Encoder with key '{config.label}' already exists.")
+        if self.config.dynamic_create and config.dim_encoder != self.config.dim_encoder:
+            raise ValueError(
+                f"Dimension mismatch for '{config.label}': "
+                f"expected {self.config.dim_encoder}, got {config.dim_encoder}. "
+                f"Currently only uniform Node Feature Sizes are supported."
+            )
+        self[config.label] = StateEncoder(config)
 
-    def modules(self):
-        return self._dict.values()
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __contains__(self, key):
-        return key in self._dict
-
-    def __setitem__(self, key, value):
-        self._dict[key] = value
+    def get(self, label: str) -> StateEncoder:
+        encoder = self[label]
+        assert isinstance(encoder, StateEncoder)
+        return encoder

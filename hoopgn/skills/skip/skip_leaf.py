@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from hoopgn.objects.properties.property_condition import PropertyCondition
+from hoopgn.objects.properties.features.conditions.condition import PropertyCondition
 from hoopgn.skills.skill_operator import SkillOperatorConfig
 from hoopgn.skills.skip.skip_networker import (
     SkipNetworkerConfig,

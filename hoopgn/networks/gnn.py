@@ -1,5 +1,4 @@
 from abc import abstractmethod
-from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Union, cast
@@ -12,7 +11,7 @@ from hoopgn.observation.observation import StateValueDict
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn.skills.skill import Skill
-from hoopgn.objects.properties.property_condition import PropertyCondition
+from hoopgn.objects.properties.features.conditions.condition import PropertyCondition
 from hoopgn.objects.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (

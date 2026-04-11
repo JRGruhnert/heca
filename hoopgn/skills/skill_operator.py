@@ -5,7 +5,7 @@ from functools import cached_property
 import numpy as np
 import torch
 
-from hoopgn.objects.properties.property_condition import (
+from hoopgn.objects.properties.features.conditions.condition import (
     PropertyCondition,
     PropertyConditionConfig,
 )

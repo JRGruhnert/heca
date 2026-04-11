@@ -1,24 +1,26 @@
 from dataclasses import dataclass
 
 from hoopgn.networks.layers.encoder import StateEncoderConfig
-from hoopgn.objects.properties.handlers.evaluators.evaluator import (
+from hoopgn.objects.properties.features.evaluators.evaluator import (
     StateEvaluatorConfig,
 )
-from hoopgn.objects.properties.handlers.evaluators.threshold_evaluator import (
+from hoopgn.objects.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from hoopgn.objects.properties.handlers.parameters.binary_parameter import (
+from hoopgn.objects.properties.features.parameters.binary_parameter import (
     BinaryParameterConfig,
 )
-from hoopgn.objects.properties.handlers.rulers.binary_ruler import BinaryRulerConfig
-from hoopgn.objects.properties.handlers.rulers.ruler import RulerConfig
+from hoopgn.objects.properties.features.rulers.binary_ruler import BinaryRulerConfig
+from hoopgn.objects.properties.features.rulers.ruler import RulerConfig
 
-from hoopgn.objects.properties.handlers.normalizers.ignore_normalizer import (
+from hoopgn.objects.properties.features.normalizers.ignore_normalizer import (
     IgnoreNormalizerConfig,
 )
-from hoopgn.objects.properties.handlers.normalizers.normalizer import NormalizerConfig
+from hoopgn.objects.properties.features.normalizers.normalizer import NormalizerConfig
 from hoopgn.objects.properties.property import PropertyConfig
-from hoopgn.objects.properties.property_condition import PropertyConditionConfig
+from hoopgn.objects.properties.features.conditions.condition import (
+    PropertyConditionConfig,
+)
 
 
 @dataclass
