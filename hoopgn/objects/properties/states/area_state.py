@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
+from hoopgn import logger
 from hoopgn.objects.properties.states.state import StateConfig, State
 
 

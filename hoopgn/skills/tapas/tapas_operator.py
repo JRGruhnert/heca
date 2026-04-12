@@ -137,7 +137,7 @@ class TapasOperator(SkillOperator):
                 return None
             return self._to_action(self.predictions.step())
         else:
-            logger.print_debug(
+            logger.log_debug(
                 "I am in the non-batch prediction mode, which is not recommended for performance reasons."
             )
             try:

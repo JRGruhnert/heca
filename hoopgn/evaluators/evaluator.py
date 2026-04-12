@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from hoopgn import logger
 from hoopgn.storage import select_properties
 from collections.abc import Sequence
 from hoopgn.objects.properties.property import PropertyConfig
@@ -32,7 +33,11 @@ class Evaluator(ABC):
             label = state.config.label
             if label in current.keys():
                 if state.evaluate(current[label], goal[label]):
+                    logger.log_info(f"State {label} is done.")
                     finished += 1
+                else:
+                    logger.log_info(f"State {label} is FAIL.")
+
         self.percentage_done = finished / max(len(self.states_eval), 1)
         return finished == len(self.states_eval)
 

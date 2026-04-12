@@ -28,7 +28,7 @@ class State:
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         label = self.label(x)
         if label in self.config.values:
-            return self.one_hots[label]
+            return self.one_hots.get(label, self.zeros)
         else:
             return self.zeros
 
@@ -39,14 +39,10 @@ class State:
     def make_zeros(self) -> torch.Tensor:
         return torch.zeros(len(self.config.values), dtype=torch.float32)
 
-    def make_one_hot(
-        self,
-        label: str | None,
-    ) -> torch.Tensor:
+    def make_one_hot(self, label: str) -> torch.Tensor:
         """Get one-hot encoded vector for the given area name."""
-        assert (
-            label is not None and label in self.config.values
-        ), "Label cannot be None."
+        assert label is not None, "Label cannot be None."
+        assert label in self.config.values, "Label must be in state values."
         one_hot = self.make_zeros()
         index = list(self.config.values).index(label)
         one_hot[index] = 1.0

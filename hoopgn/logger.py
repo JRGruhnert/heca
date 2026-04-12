@@ -8,11 +8,16 @@ import wandb
 from wandb.wandb_run import Run
 
 DEBUG = True
+logger.remove()
+
+if DEBUG:
+    logger.add(lambda msg: print(msg, end=""), level="DEBUG")
+else:
+    logger.add(lambda msg: print(msg, end=""), level="INFO")
 
 
-def print_debug(message: str):
-    if DEBUG:
-        print(message)
+def log_debug(message: str):
+    logger.debug(message)
 
 
 def log_warning(message: str):
