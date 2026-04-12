@@ -1,3 +1,5 @@
+from conf.commands.explain.common import get_explain_config
+
 from cli.commands.explain import ExplainManagerConfig
 from conf.common import (
     ppo_default_config,
@@ -61,3 +63,19 @@ def get_explain_config(
         areas=CalvinAreaConfig(),
         eval_set=state_set_tag,
     )
+
+
+trained_skill_tag = "blue"
+trained_state_tag = "blue"
+checkpoint_name = f"t_{trained_skill_tag}_{trained_state_tag}_pe0.0_pr0.0"
+
+skill_tag = "blue"
+state_tag = "blue"
+
+config = get_explain_config(
+    skill_set_tag=skill_tag,
+    state_set_tag=state_tag,
+    is_gnn=True,
+    prefix_tag="d",
+    checkpoint_name=checkpoint_name,
+)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import torch
+from cli.commands.skill.skill import SkillCommandConfig
 from hoopgn.entities.properties.features.conditions.condition import PropertyCondition
 from hoopgn.plotting.object_point import ObjectLocationPoint
 from hoopgn.plotting.plots.skill.tp import ObjectConditionsPlot
@@ -8,16 +9,15 @@ from hoopgn.skills.skill import Skill, SkillConfig
 
 
 @dataclass
-class SkillExplainManagerConfig:
-    skill: SkillConfig
+class TaskParameterPlotterConfig(SkillCommandConfig):
     plot_demos: bool = True
     plot_task_params: bool = True
 
 
-class SkillExplainScript:
-    def __init__(self, config: SkillExplainManagerConfig):
+class TaskParameterPlotter:
+    def __init__(self, config: TaskParameterPlotterConfig):
         self.config = config
-        self.skill = Skill(config.skill)
+        self.skills = [Skill(skill_config) for skill_config in config.skills]
         self.plot = ObjectConditionsPlot()
         self.entity_labels: list[str] = [
             "ee",
@@ -32,7 +32,8 @@ class SkillExplainScript:
         ]
 
     def run(self):
-        self.make_explanation(self.skill)
+        for skill in self.skills:
+            self.make_explanation(skill)
 
     def make_demo_point(
         self, label: str, value: dict[str, torch.Tensor]
@@ -68,8 +69,8 @@ class SkillExplainScript:
 
         for label in self.entity_labels:
             # Demo points
-            pre_point = self.make_demo_point(label, self.skill.demo_precons)
-            post_point = self.make_demo_point(label, self.skill.demo_postcons)
+            pre_point = self.make_demo_point(label, skill.demo_precons)
+            post_point = self.make_demo_point(label, skill.demo_postcons)
             self.plot.set_precon(pre_point)
             self.plot.set_postcon(post_point)
 
@@ -87,6 +88,6 @@ class SkillExplainScript:
         )
 
 
-def entry_point(config: SkillExplainManagerConfig):
-    script = SkillExplainScript(config)
+def run(config: TaskParameterPlotterConfig):
+    script = TaskParameterPlotter(config)
     script.run()

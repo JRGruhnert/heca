@@ -1,11 +1,10 @@
+from cli.commands.train import TrainerConfig
 from hoopgn.agents.ppo import PPOAgentConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
 from hoopgn.logger import LogMode, LoggerConfig
 from hoopgn.storage import StorageConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from cli.hoopgn import TrainConfig
-from conf.common.evaluator import dense3_evaluator
 from hoopgn.networks.gnn import GraphNetworkConfig
 
 mode = LogMode.TERMINAL
@@ -24,9 +23,10 @@ prefix = "d_blue"
 tag = f"{prefix}_{used_states}_{skills_eval_states}"
 wandb_tag = f"{network}_{tag}"
 
-config = TrainConfig(
+config = TrainerConfig(
     agent=PPOAgentConfig(
         network=GraphNetworkConfig(),
+        batch_size=2048,
         eval=eval,
         max_batches=1,
         early_stop_patience=1,
@@ -34,7 +34,6 @@ config = TrainConfig(
         retrain=retrain,
         use_ema_for_early_stopping=False,
     ),
-    buffer=BufferConfig(steps=2048),
     logger=LoggerConfig(
         mode=mode,
         wandb_tag=wandb_tag,
@@ -48,9 +47,8 @@ config = TrainConfig(
         checkpoint_path=f"results/{network}/{checkpoint_tag}/model_cp_best.pth",
     ),
     experiment=NoiseExperimentConfig(
+        environment=CalvinEnvironmentConfig(),
         p_empty=0.0,
         p_rand=0.0,
     ),
-    environment=CalvinEnvironmentConfig(render=render),
-    evaluator=dense3_evaluator,
 )
