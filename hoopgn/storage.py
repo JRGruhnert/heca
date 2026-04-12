@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from hoopgn import logger
 from hoopgn.skills.skill import Skill, SkillConfig
-from hoopgn.objects.properties.property import Property, PropertyConfig
+from hoopgn.entities.properties.property import Property, PropertyConfig
 import os
 
 

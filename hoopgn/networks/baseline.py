@@ -6,7 +6,7 @@ from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn.observation.observation import StateValueDict
 from collections import defaultdict
 
-from hoopgn.objects.properties.property import Property
+from hoopgn.entities.properties.property import Property
 
 
 @dataclass(kw_only=True)

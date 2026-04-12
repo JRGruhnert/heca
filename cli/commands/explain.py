@@ -11,7 +11,7 @@ from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.plotting.plots.environment.samples import ObjectSamplingPlot
-from hoopgn.objects.properties.property import Property
+from hoopgn.entities.properties.property import Property
 from hoopgn.variables import BLUE, PINK, RED, SLIDE
 
 

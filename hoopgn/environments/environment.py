@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from hoopgn.observation.converters import select_observation_converter
-from hoopgn.observation.converters.converter import Converter, ConverterConfig
+from hoopgn.observation.converters.converter import ConverterConfig
+from hoopgn.observation.converters.tapas_converter import TapasConverterConfig
 from hoopgn.observation.observation import StateValueDict
 
 
@@ -13,13 +14,17 @@ class StepFeedback(Enum):
 
 @dataclass(kw_only=True)
 class EnvironmentConfig:
-    converters: list[ConverterConfig] = field(default_factory=list)
+    converters: list[ConverterConfig] = field(
+        default_factory=lambda: [TapasConverterConfig()]
+    )
 
 
 class Environment(ABC):
     def __init__(self, config: EnvironmentConfig):
         self.config = config
-        self.converters = [select_observation_converter(config) for config in config.converters]
+        self.converters = [
+            select_observation_converter(config) for config in config.converters
+        ]
 
     def reset(self) -> StateValueDict:
         self._reset()

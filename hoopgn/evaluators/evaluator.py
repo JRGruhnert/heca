@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from hoopgn import logger
 from hoopgn.storage import select_properties
 from collections.abc import Sequence
-from hoopgn.objects.properties.property import PropertyConfig
+from hoopgn.entities.properties.property import PropertyConfig
 from hoopgn.observation.observation import StateValueDict
 
 

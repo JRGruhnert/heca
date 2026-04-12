@@ -11,8 +11,8 @@ from hoopgn.observation.observation import StateValueDict
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn.skills.skill import Skill
-from hoopgn.objects.properties.features.conditions.condition import PropertyCondition
-from hoopgn.objects.properties.property import Property
+from hoopgn.entities.properties.features.conditions.condition import PropertyCondition
+from hoopgn.entities.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import (
     Explainer,

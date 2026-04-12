@@ -1,19 +1,14 @@
 import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 import torch
 from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.converters.converter import ConverterConfig
-from hoopgn.observation.converters.tapas_converter import TapasConverterConfig
 from hoopgn.observation.observation import StateValueDict, empty_batchsize
 
 
 @dataclass(kw_only=True)
 class CalvinEnvironmentConfig(EnvironmentConfig):
-    converters: list[ConverterConfig] = field(
-        default_factory=lambda: [TapasConverterConfig()]
-    )
     calvin: CalvinConfig = CalvinConfig(
         task="Undefined",
         cameras=("wrist", "front"),

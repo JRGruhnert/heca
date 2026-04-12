@@ -7,7 +7,7 @@ from hoopgn.skills.tapas.tapas_networker import (
 from hoopgn.skills.tapas.tapas_operator import TapasOperatorConfig
 from hoopgn.skills.skill_networker import SkillNetworkerConfig
 from hoopgn.skills.skill import SkillConfig
-from hoopgn.objects.properties.property import PropertyConfig
+from hoopgn.entities.properties.property import PropertyConfig
 
 
 @dataclass(kw_only=True)
