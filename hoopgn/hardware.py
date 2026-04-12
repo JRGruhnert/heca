@@ -20,4 +20,4 @@ def get_gpu_with_most_free_mem(tmp_file="/tmp/gpu_mem"):
 use_gpu = torch.cuda.is_available()
 gpu_no = get_gpu_with_most_free_mem() if use_gpu else None
 device = torch.device("cuda:{}".format(gpu_no) if use_gpu else "cpu")
-logger.log_info(f"Running on {device}")
+logger.info(f"Running on {device}")

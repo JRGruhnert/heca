@@ -6,6 +6,7 @@ from conf.common import (
     storage_config,
     network_config,
 )
+from conf.entities.properties.area import CalvinAreaConfig
 from conf.property_sets import OBJECT_SETS
 from conf.skill_sets import SKILL_SETS
 from hoopgn.logger import LogMode
@@ -57,5 +58,6 @@ def get_explain_config(
             environment_tag="calvin",
             evaluator_tag="dense3",
         ),
+        areas=CalvinAreaConfig(),
         eval_set=state_set_tag,
     )

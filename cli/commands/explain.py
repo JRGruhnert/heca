@@ -4,6 +4,7 @@ import sys
 
 from tqdm import trange
 
+from hoopgn.entities.properties.states.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
 from hoopgn.logger import LoggerConfig, Logger
 from hoopgn.storage import Storage, StorageConfig
@@ -21,12 +22,11 @@ class ExplainManagerConfig:
     logger: LoggerConfig
     storage: StorageConfig
     experiment: ExperimentConfig
+    areas: AreaStateConfig
     eval_set: str
 
 
 class ExplainScript:
-    """Manages training loop"""
-
     def __init__(self, config: ExplainManagerConfig):
         if config is None:
             raise ValueError("Config cannot be None")
@@ -40,7 +40,6 @@ class ExplainScript:
         self.logger = Logger(config.logger)
         self.experiment = select_experiment(config.experiment)
         self.agent = PPOAgent(config.agent, self.storage)
-        self.plot = ObjectSamplingPlot()
 
         self.relevant_objects = {
             RED: "block_red",
@@ -57,6 +56,8 @@ class ExplainScript:
             object_name = match.group(1)  # 'red', 'blue', 'pink', or 'slide'
         self.trained_object = self.relevant_objects[object_name]
         self.current_object = self.relevant_objects[self.config.eval_set]
+
+        self.plot = ObjectSamplingPlot(object_label=self.current_object)
 
         self.pos_state: Property = self.storage.get_property_by_name(
             f"{self.current_object}_position"
@@ -111,7 +112,7 @@ class ExplainScript:
             )
 
         self.plot.show_objects()
-        # self.plot.show_ellipsoid()
+        self.plot.show_areas(self.config.areas)
         self.plot.show_edges()
         self.plot.create(
             f"Sampled Start and Goal Positions of {self.trained_object} and {self.current_object}.",

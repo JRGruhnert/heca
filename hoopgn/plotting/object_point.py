@@ -16,3 +16,4 @@ class ObjectLocationPoint:
     z: float
     rotation: float
     state: int
+    label: str = ""

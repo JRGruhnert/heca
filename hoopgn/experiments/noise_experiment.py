@@ -38,7 +38,7 @@ class NoiseExperiment(Experiment):
         )
         self.skills = select_skills(config.skills)
         self.skip_skill = Skill(config=SkipConfig())
-        logger.log_info(
+        logger.info(
             "Noise Experiment Values:\n"
             f"% Skip:      {self.config.p_empty}\n"
             f"% Random:    {self.config.p_rand}\n"
@@ -48,10 +48,10 @@ class NoiseExperiment(Experiment):
         sample = random.random()
         if sample < self.config.p_empty:
             selected_skill = self.skip_skill
-            logger.log_info("Taking Empty Step")
+            logger.info("Taking Empty Step")
         elif sample < self.config.p_empty + self.config.p_rand:
             selected_skill = random.choice(self.skills)
-            logger.log_info("Taking Random Step")
+            logger.info("Taking Random Step")
         else:
             selected_skill = skill
 

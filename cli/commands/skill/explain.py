@@ -1,42 +1,83 @@
 from dataclasses import dataclass
-from hoopgn.storage import Storage, StorageConfig
+
+import torch
+from hoopgn.entities.properties.features.conditions.condition import PropertyCondition
 from hoopgn.plotting.object_point import ObjectLocationPoint
 from hoopgn.plotting.plots.skill.tp import ObjectConditionsPlot
-from hoopgn.skills.skill import Skill
+from hoopgn.skills.skill import Skill, SkillConfig
 
 
 @dataclass
 class SkillExplainManagerConfig:
-    storage: StorageConfig
+    skill: SkillConfig
+    plot_demos: bool = True
+    plot_task_params: bool = True
 
 
 class SkillExplainScript:
     def __init__(self, config: SkillExplainManagerConfig):
         self.config = config
-        self.storage = Storage(config.storage)
+        self.skill = Skill(config.skill)
         self.plot = ObjectConditionsPlot()
-        self.object_labels: list[str] = ["ee", "red_block", "blue_block", "pink_block"]
+        self.entity_labels: list[str] = [
+            "ee",
+            "block_red",
+            "block_blue",
+            "block_pink",
+            "slide",
+            "drawer",
+            "button",
+            "led",
+            "lightbulb",
+        ]
 
     def run(self):
-        for skill in self.storage.skills:
-            self.make_explanation(skill)
+        self.make_explanation(self.skill)
 
-    def make_point(self, con: dict, label: str) -> ObjectLocationPoint:
+    def make_demo_point(
+        self, label: str, value: dict[str, torch.Tensor]
+    ) -> ObjectLocationPoint:
+        pos = value[f"{label}_position"].flatten()
+        rot = value[f"{label}_rotation"].flatten()
+        state = value[f"{label}_scalar"].flatten()
         return ObjectLocationPoint(
-            x=con[f"{label}_position"][0].item(),
-            y=con[f"{label}_position"][1].item(),
-            z=con[f"{label}_position"][2].item(),
-            rotation=con[f"{label}_rotation"].item(),
-            state=int(con[f"{label}_state"].item()),
+            x=pos[0].item(),
+            y=pos[1].item(),
+            z=pos[2].item(),
+            rotation=rot[0].item(),
+            state=int(state[0].item()),
+            label=label,
+        )
+
+    def make_tp_point(
+        self, label: str, conditions: dict[str, PropertyCondition]
+    ) -> ObjectLocationPoint:
+        pos = conditions[f"{label}_position"].value.flatten()
+        rot = conditions[f"{label}_rotation"].value.flatten()
+        state = conditions[f"{label}_scalar"].value.flatten()
+        return ObjectLocationPoint(
+            x=pos[0].item(),
+            y=pos[1].item(),
+            z=pos[2].item(),
+            rotation=rot[0].item(),
+            state=int(state[0].item()),
+            label=label,
         )
 
     def make_explanation(self, skill: Skill):
-        """Returns an explanation for the given observation, goal and skill."""
-        for o in self.object_labels:
-            pre_con = self.make_point(skill.demo_precons, o)
-            post_con = self.make_point(skill.demo_postcons, o)
-            self.plot.set_precon(pre_con)
-            self.plot.set_postcon(post_con)
+
+        for label in self.entity_labels:
+            # Demo points
+            pre_point = self.make_demo_point(label, self.skill.demo_precons)
+            post_point = self.make_demo_point(label, self.skill.demo_postcons)
+            self.plot.set_precon(pre_point)
+            self.plot.set_postcon(post_point)
+
+            # TP points
+            tp_pre = self.make_tp_point(label, skill.precons)
+            tp_post = self.make_tp_point(label, skill.postcons)
+            self.plot.set_precon_tp(tp_pre)
+            self.plot.set_postcon_tp(tp_post)
 
         self.plot.create(
             title=f"{skill.config.label} - Taskparameters.",

@@ -196,7 +196,7 @@ class PPOAgent(Agent):
         # Update best success rate
         if self._best_success <= batch_success_rate:
             self._best_success = batch_success_rate
-            logger.log_info(
+            logger.info(
                 f"Success rate {batch_success_rate:.4f} at epoch {self._current_epoch}. Saving best model."
             )
             self.save("best")
@@ -215,7 +215,7 @@ class PPOAgent(Agent):
 
         # Check batch success rate for early stopping
         if self.watcher.update(batch_success_rate, self._current_epoch):
-            logger.log_info(
+            logger.info(
                 f"Early stopping training after {self._current_epoch} epochs because of no improvement in the smoothed success rate."
             )
             return True
@@ -425,7 +425,7 @@ class PPOAgent(Agent):
                 tag,
             )
 
-        logger.log_info(
+        logger.info(
             f"Saving weights to: {checkpoint_path} at epoch {self._current_epoch}"
         )
         # torch.save(self.policy_old.state_dict(), checkpoint_path)

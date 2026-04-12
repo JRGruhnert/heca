@@ -3,6 +3,7 @@ from conf.skill_sets import SKILL_SETS
 from hoopgn.agents.ppo import PPOAgentConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.environments.environment import EnvironmentConfig
+from hoopgn.environments.ogbench import OGBenchEnvironmentConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.experiments.experiment import ExperimentConfig
@@ -126,5 +127,7 @@ def network_config(
 def environment_config(tag="calvin") -> EnvironmentConfig:
     if tag == "calvin":
         return CalvinEnvironmentConfig()
+    elif tag == "ogbench":
+        return OGBenchEnvironmentConfig()
     else:
         raise ValueError(f"Unknown environment tag: {tag}")

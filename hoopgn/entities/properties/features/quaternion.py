@@ -1,18 +1,8 @@
-from dataclasses import dataclass
 import math
-
 import torch
 
 
-@dataclass(kw_only=True)
-class QuaternionConfig:
-    pass
-
-
 class Quaternion:
-    def __init__(self, config: QuaternionConfig):
-        self.config = config
-
     def normalize_quat(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize quaternion and ensure positive w component."""
         nx = x / torch.linalg.norm(x)

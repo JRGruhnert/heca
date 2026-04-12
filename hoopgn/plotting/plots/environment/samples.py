@@ -1,21 +1,32 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from hoopgn.entities.properties.states.area_state import AreaStateConfig
 from hoopgn.plotting.helper import *
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.transform import Rotation as R
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.lines import Line2D
 
+OBJECT_COLORS: dict[str, str] = {
+    "ee": "black",
+    "block_red": "tab:red",
+    "block_blue": "tab:blue",
+    "block_pink": "tab:pink",
+    "slide": "black",
+    "drawer": "black",
+    "button": "black",
+    "led": "black",
+    "lightbulb": "black",
+}
+DEFAULT_COLOR = "white"
+
+SOLVED_COLOR = "tab:green"
+UNSOLVED_COLOR = "tab:red"
+TRUE_COLOR = "tab:yellow"
+FALSE_COLOR = "black"
+
 
 class ObjectSamplingPlot:
-    def __init__(
-        self,
-        color_map={
-            "object": "b",
-            "solved": "g",
-            "unsolved": "r",
-        },
-    ):
+    def __init__(self, object_label: str = ""):
         self.fig = plt.figure(figsize=(20, 10))
         self.ax_different = self.fig.add_subplot(121, projection="3d")
         self.ax_same = self.fig.add_subplot(122, projection="3d")
@@ -23,11 +34,11 @@ class ObjectSamplingPlot:
             "different": self.ax_different,
             "same": self.ax_same,
         }
+        self.object_label = object_label
         self.positions: dict[str, list[list]] = {"current": [], "goal": []}
         self.rotations: dict[str, list[list]] = {"current": [], "goal": []}
         self.differents: list[bool] = []
         self.solvings: list[bool] = []
-        self.color_map = color_map if color_map is not None else {}
 
     def set_object(
         self,
@@ -44,6 +55,7 @@ class ObjectSamplingPlot:
         self.solvings.append(solved)
 
     def show_objects(self, alpha: float = 0.75):
+        facecolor = OBJECT_COLORS.get(self.object_label, DEFAULT_COLOR)
         for start_pos, start_quat, end_pos, end_quat, diff, solved in zip(
             self.positions["current"],
             self.rotations["current"],
@@ -55,9 +67,9 @@ class ObjectSamplingPlot:
             start_dir = R.from_quat(start_quat).apply([0.01, 0, 0])
             end_dir = R.from_quat(end_quat).apply([0.01, 0, 0])
             axis = self.axes.get("different" if diff else "same", self.ax_same)
-            color = self.color_map.get("object", "m")
-            axis.scatter(start_pos[0], start_pos[1], start_pos[2], color=color, s=15)  # type: ignore
-            axis.scatter(end_pos[0], end_pos[1], end_pos[2], color=color, s=15)  # type: ignore
+            edgecolor = SOLVED_COLOR if solved else UNSOLVED_COLOR
+            axis.scatter(start_pos[0], start_pos[1], start_pos[2], c=facecolor, edgecolors=edgecolor, linewidths=1, s=30)  # type: ignore
+            axis.scatter(end_pos[0], end_pos[1], end_pos[2], c=facecolor, edgecolors=edgecolor, linewidths=1, s=30)  # type: ignore
             # Plot orientation as arrow
             axis.quiver(
                 start_pos[0],
@@ -117,7 +129,11 @@ class ObjectSamplingPlot:
             y = xyz[:, :, 1] + mean[1]
             z = xyz[:, :, 2] + mean[2]
             axis.plot_surface(
-                x, y, z, color=self.color_map.get("ellipsoid", "k"), alpha=alpha
+                x,
+                y,
+                z,
+                color=OBJECT_COLORS.get(self.object_label, DEFAULT_COLOR),
+                alpha=alpha,
             )
 
     def show_edges(self, alpha: float = 0.5):
@@ -135,13 +151,13 @@ class ObjectSamplingPlot:
                 [start_pos[0], end_pos[0]],
                 [start_pos[1], end_pos[1]],
                 [start_pos[2], end_pos[2]],
-                color=self.color_map["solved" if solved else "unsolved"],
+                color=SOLVED_COLOR if solved else UNSOLVED_COLOR,
                 alpha=alpha,
             )
 
-    def show_spawn_area(self, surfaces: dict[str, list[list[float]]]):
+    def show_areas(self, area: AreaStateConfig):
         for axis in self.axes.values():
-            for surface in surfaces.values():
+            for surface in area.eval_surfaces.values():
                 (x0, y0, z0), (x1, y1, z1) = surface
                 # 8 corners of the box
                 corners = np.array(
@@ -192,39 +208,60 @@ class ObjectSamplingPlot:
             f"Start == Goal (solved: {solved_same}/{self.differents.count(False)})"
         )
         self.fig.suptitle(title)
-        self.fig.legend(
-            handles=[
-                Line2D(
-                    [0],
-                    [0],
-                    marker="o",
-                    color="w",
-                    label="Position",
-                    markerfacecolor=self.color_map.get("object", "m"),
-                    markersize=10,
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    marker=">",
-                    color="k",
-                    label="Orientation",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=self.color_map.get("solved", "g"),
-                    label="Solved",
-                ),
-                Line2D(
-                    [0],
-                    [0],
-                    color=self.color_map.get("unsolved", "r"),
-                    label="Unsolved",
-                ),
-            ],
-            loc="upper right",
-        )
+
+        facecolor = OBJECT_COLORS.get(self.object_label, DEFAULT_COLOR)
+        object_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor=facecolor,
+                markeredgecolor="none",
+                markersize=8,
+                label=self.object_label or "Object",
+            ),
+        ]
+        result_handles = [
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor="white",
+                markeredgecolor=SOLVED_COLOR,
+                markeredgewidth=1.5,
+                markersize=8,
+                label="Solved",
+            ),
+            Line2D(
+                [0],
+                [0],
+                marker="o",
+                color="w",
+                markerfacecolor="white",
+                markeredgecolor=UNSOLVED_COLOR,
+                markeredgewidth=1.5,
+                markersize=8,
+                label="Unsolved",
+            ),
+        ]
+
+        for ax in [self.ax_different, self.ax_same]:
+            leg_a = ax.legend(
+                handles=object_handles,
+                title="Objects",
+                loc="upper left",
+                fontsize="small",
+            )
+            ax.add_artist(leg_a)
+            leg_b = ax.legend(
+                handles=result_handles,
+                title="Result",
+                loc="upper right",
+                fontsize="small",
+            )
+            ax.add_artist(leg_b)
         if save:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             plt.savefig(path)

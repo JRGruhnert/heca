@@ -53,7 +53,7 @@ class Storage:
         self.states_dict_eval = {s.config.label: s for s in self.states_eval}
         self.skills_dict = {s.config.label: s for s in self.skills}
 
-        logger.log_info(
+        logger.info(
             "Loaded Skills and States:\n"
             f"No. Skills:  {len(self.skills)}\n"
             f"No. Steps:   {len(self.skills)}\n"

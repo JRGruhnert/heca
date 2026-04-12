@@ -38,13 +38,13 @@ class Experiment(ABC):
         reward, done = self.evaluator.step(self.current, self.goal)
         self.current_step += 1
         terminal = True if self.current_step >= self.max_allowed_steps else done
-        logger.log_info(
+        logger.info(
             f"Step {self.current_step}: Reward={reward}, Done={done}, Terminal={terminal}"
         )
         return self.current, reward, done, terminal
 
     def sample_task(self) -> tuple[StateValueDict, StateValueDict]:
-        logger.log_info("Sampling new task...")
+        logger.info("Sampling new task...")
         self.current_step = 0
         self.current = self.env.reset()
         self.goal = self.env.reset()

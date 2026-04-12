@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import math
 import torch
 
-from hoopgn.entities.properties.states.state import StateConfig, State
+from hoopgn.entities.properties.state import StateConfig, State
 
 
 @dataclass(kw_only=True)

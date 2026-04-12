@@ -1,4 +1,4 @@
-from conf.explain.common import get_explain_config
+from conf.commands.explain.common import get_explain_config
 
 
 trained_skill_tag = "blue"

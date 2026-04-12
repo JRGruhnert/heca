@@ -3,8 +3,6 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.networks.layers.classifiers.state_classifier import StateClassifierConfig
-
 
 @dataclass(kw_only=True)
 class StateConfig:

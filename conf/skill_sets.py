@@ -1,4 +1,4 @@
-from conf.hoopgnv1.skills.tapas_skills import TapasSkillSet
+from conf.entities.skills.tapas_skills import TapasSkillSet
 
 
 BASE = [

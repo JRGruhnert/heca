@@ -13,22 +13,22 @@ logger.remove()
 if DEBUG:
     logger.add(lambda msg: print(msg, end=""), level="DEBUG")
 else:
-    logger.add(lambda msg: print(msg, end=""), level="INFO")
+    logger.add(lambda msg: print(msg, end=""), level="WARNING")
 
 
-def log_debug(message: str):
+def debug(message: str):
     logger.debug(message)
 
 
-def log_warning(message: str):
+def warning(message: str):
     logger.warning(message)
 
 
-def log_info(message: str):
+def info(message: str):
     logger.info(message)
 
 
-def log_error(message: str):
+def error(message: str):
     logger.error(message)
 
 

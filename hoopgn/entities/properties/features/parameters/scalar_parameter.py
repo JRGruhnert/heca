@@ -6,7 +6,7 @@ from hoopgn.entities.properties.features.parameters.parameter import (
     PropertyParameter,
     PropertyParameterConfig,
 )
-from hoopgn.entities.properties.threshold_boundary import (
+from hoopgn.entities.properties.features.threshold_boundary import (
     BoundaryThresholdConfig,
     BoundaryThreshold,
 )

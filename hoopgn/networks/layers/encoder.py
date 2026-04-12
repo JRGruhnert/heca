@@ -39,9 +39,7 @@ class PropertyEncoderRegistry(nn.ModuleDict):
 
     def register(self, config: PropertyEncoderConfig):
         if config.label in self:
-            logger.log_info(
-                f"Encoder for '{config.label}' already registered. Skipping."
-            )
+            logger.info(f"Encoder for '{config.label}' already registered. Skipping.")
             return
         if self.config.dynamic_create and config.dim_encoder != self.config.dim_encoder:
             raise ValueError(

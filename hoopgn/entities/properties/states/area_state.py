@@ -3,8 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from hoopgn import logger
-from hoopgn.entities.properties.states.state import StateConfig, State
+from hoopgn.entities.properties.state import StateConfig, State
 
 
 @dataclass(kw_only=True)

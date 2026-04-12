@@ -33,10 +33,10 @@ class Evaluator(ABC):
             label = state.config.label
             if label in current.keys():
                 if state.evaluate(current[label], goal[label]):
-                    logger.log_info(f"State {label} is done.")
+                    logger.info(f"State {label} is done.")
                     finished += 1
                 else:
-                    logger.log_info(f"State {label} is FAIL.")
+                    logger.info(f"State {label} is FAIL.")
 
         self.percentage_done = finished / max(len(self.states_eval), 1)
         return finished == len(self.states_eval)

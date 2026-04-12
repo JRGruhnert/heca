@@ -1,4 +1,4 @@
-from conf.explain.common import (
+from conf.commands.explain.common import (
     get_quick_config,
 )
 

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.entities.properties.quaternion import Quaternion, QuaternionConfig
+from hoopgn.entities.properties.features.quaternion import Quaternion
 from hoopgn.entities.properties.features.parameters.parameter import (
     PropertyParameter,
     PropertyParameterConfig,
@@ -11,14 +11,14 @@ from hoopgn.entities.properties.features.parameters.parameter import (
 
 @dataclass(kw_only=True)
 class QuaternionParameterConfig(PropertyParameterConfig):
-    rotation: QuaternionConfig = QuaternionConfig()
+    pass
 
 
 class QuaternionParameter(PropertyParameter):
     def __init__(self, config: QuaternionParameterConfig):
         super().__init__(config)
         self.config = config
-        self.rotation = Quaternion(config.rotation)
+        self.rotation = Quaternion()
 
     def hoopgnv1(
         self,

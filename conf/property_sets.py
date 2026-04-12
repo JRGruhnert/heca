@@ -1,4 +1,4 @@
-from conf.hoopgnv1.properties.hoopgnv1 import PropertySet
+from conf.entities.properties.hoopgnv1 import PropertySet
 
 BASE = [
     PropertySet.ee_position,

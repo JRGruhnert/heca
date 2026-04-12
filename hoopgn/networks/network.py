@@ -36,7 +36,7 @@ class Network(torch.nn.Module, ABC):
     def eval(self):
         super().eval()  # Call PyTorch's nn.Module.eval() instead of iterating manually
         self.is_eval_mode = True
-        logger.log_info("Network set to evaluation mode.")
+        logger.info("Network set to evaluation mode.")
 
     def register_encoder(self, states: list[Property]):
         for state in states:
@@ -101,11 +101,11 @@ class Network(torch.nn.Module, ABC):
         if self.config.checkpoint_path is not None:
             checkpoint = self._load_checkpoint(self.config.checkpoint_path)
             self._load(checkpoint, skills, states)
-            logger.log_info(
+            logger.info(
                 f"Loading network checkpoint from: {self.config.checkpoint_path}"
             )
         else:
-            logger.log_info(
+            logger.info(
                 "No checkpoint path provided in network config. Starting with a new model."
             )
 

@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from functools import cached_property
 import re
-from conf.hoopgnv1.properties.hoopgnv1 import PropertySet
+import sys
+from conf.entities.properties.hoopgnv1 import PropertySet
 from hoopgn.hardware import device
 from hoopgn import logger
 import numpy as np
 import torch
+import tapas_gmm_modified
 from tapas_gmm_modified.policy import import_policy
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import (
@@ -27,15 +29,7 @@ from hoopgn.entities.properties.features.evaluators.area_evaluator import (
 )
 from hoopgn.entities.properties.features.conditions.condition import PropertyCondition
 
-
-class _DummyEnv:
-    """Stub environment so GMMPolicy.publish_frames / publish_path don't crash."""
-
-    def publish_frames(self, *args, **kwargs):
-        pass
-
-    def publish_path(self, *args, **kwargs):
-        pass
+sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
 @dataclass(kw_only=True)
@@ -110,7 +104,7 @@ class TapasOperator(SkillOperator):
         }
         self.override = False
         if len(self.config.overrides):
-            logger.log_warning(
+            logger.warning(
                 f"Skill {self.config.label} has overrides: {self.config.overrides}."
             )
             self.override = True
@@ -127,17 +121,17 @@ class TapasOperator(SkillOperator):
                         value = x["tapas"]
                     self.predictions, _ = self.policy.predict(value)  # type: ignore
                 except FloatingPointError as e:
-                    logger.log_error(f"Numerical error in GMM prediction: {e}")
+                    logger.error(f"Numerical error in GMM prediction: {e}")
                     return None  # TODO: I think its just cause of a bad robot position
                 except Exception as e:
-                    logger.log_error(f"Error in skill prediction: {e}")
+                    logger.error(f"Error in skill prediction: {e}")
                     return None
                 self.first_prediction = False
             if self.predictions is None or self.predictions.is_finished:
                 return None
             return self._to_action(self.predictions.step())
         else:
-            logger.log_debug(
+            logger.debug(
                 "I am in the non-batch prediction mode, which is not recommended for performance reasons."
             )
             try:
@@ -147,10 +141,10 @@ class TapasOperator(SkillOperator):
                     value = x["tapas"]
                 self.prediction, _ = self.policy.predict(value)  # type: ignore
             except FloatingPointError as e:
-                logger.log_error(f"Numerical error in GMM prediction: {e}")
+                logger.error(f"Numerical error in GMM prediction: {e}")
                 return None  # TODO: I think its just cause of a bad robot position
             except Exception as e:
-                logger.log_error(f"Error in skill prediction: {e}")
+                logger.error(f"Error in skill prediction: {e}")
                 return None
             if self.prediction is None:
                 return None
@@ -288,11 +282,11 @@ class TapasOperator(SkillOperator):
 
     @cached_property
     def policy(self) -> GMMPolicy:
-        logger.log_info(f"Loading tapas operator from: {self.config.file_name}")
+        logger.info(f"Loading tapas operator from: {self.config.file_name}")
         PolicyClass = import_policy("gmm")
         temp: GMMPolicy = PolicyClass(self.config.policy).to(device)
         temp.from_disk(self.config.file_name)
-        temp._env = _DummyEnv()  # type: ignore[assignment]
+        # temp._env = _DummyEnv()  # type: ignore[assignment]
         temp.eval()
         return temp
 
