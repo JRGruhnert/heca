@@ -9,7 +9,7 @@ from hoopgn.networks.layers.encoder import (
 
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.skills.skill import Skill
-from hoopgn.entities.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn import logger
 
 

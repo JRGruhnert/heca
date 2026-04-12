@@ -4,15 +4,15 @@ import sys
 
 from tqdm import trange
 
-from hoopgn.entities.properties.states.area_state import AreaStateConfig
+from hoopgn.properties.states.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
 from hoopgn.logger import LoggerConfig, Logger
 from hoopgn.storage import Storage, StorageConfig
 from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.observation.observation import StateValueDict
-from hoopgn.plotting.plots.environment.samples import ObjectSamplingPlot
-from hoopgn.entities.properties.property import Property
+from hoopgn.plots.helper.environment.samples import ObjectSamplingPlot
+from hoopgn.properties.property import Property
 from hoopgn.variables import BLUE, PINK, RED, SLIDE
 
 

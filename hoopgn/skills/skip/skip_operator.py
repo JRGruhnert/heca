@@ -3,7 +3,7 @@ import numpy as np
 from torch._tensor import Tensor
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
-from hoopgn.entities.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
     PropertyConditionConfig,
 )

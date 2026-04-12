@@ -1,40 +1,40 @@
 from dataclasses import dataclass, field
 import torch
-from hoopgn.entities.properties.property import PropertyConfig
+from hoopgn.properties.property import PropertyConfig
 from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 
-from hoopgn.entities.properties.features.extractors import select_property_extractor
-from hoopgn.entities.properties.features.extractors.extractor import (
+from hoopgn.properties.features.extractors import select_property_extractor
+from hoopgn.properties.features.extractors.extractor import (
     PropertyExtractorConfig,
 )
-from hoopgn.entities.properties.features.modifiers import select_property_modifier
+from hoopgn.properties.features.modifiers import select_property_modifier
 
-from hoopgn.entities.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyConditionConfig,
 )
-from hoopgn.entities.properties.features.evaluators import select_property_evaluator
-from hoopgn.entities.properties.features.evaluators.evaluator import (
+from hoopgn.properties.features.evaluators import select_property_evaluator
+from hoopgn.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
-from hoopgn.entities.properties.features.modifiers.modifier import (
+from hoopgn.properties.features.modifiers.modifier import (
     PropertyModifierConfig,
 )
-from hoopgn.entities.properties.features.modifiers.skip_modifier import (
+from hoopgn.properties.features.modifiers.skip_modifier import (
     SkipModifierConfig,
 )
-from hoopgn.entities.properties.features.normalizers import select_property_normalizer
-from hoopgn.entities.properties.features.rulers import select_property_ruler
-from hoopgn.entities.properties.features.rulers.ruler import PropertyRulerConfig
+from hoopgn.properties.features.normalizers import select_property_normalizer
+from hoopgn.properties.features.rulers import select_property_ruler
+from hoopgn.properties.features.rulers.ruler import PropertyRulerConfig
 
-from hoopgn.entities.properties.features.normalizers.normalizer import (
+from hoopgn.properties.features.normalizers.normalizer import (
     PropertyNormalizerConfig,
 )
-from hoopgn.entities.properties.features.validators import select_property_validator
+from hoopgn.properties.features.validators import select_property_validator
 
-from hoopgn.entities.properties.features.validators.skip_validator import (
+from hoopgn.properties.features.validators.skip_validator import (
     SkipValidatorConfig,
 )
-from hoopgn.entities.properties.features.validators.validator import (
+from hoopgn.properties.features.validators.validator import (
     PropertyValidatorConfig,
 )
 

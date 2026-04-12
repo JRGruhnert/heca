@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.entities.properties.features.quaternion import Quaternion
-from hoopgn.entities.properties.features.normalizers.normalizer import (
+from hoopgn.properties.features.quaternion import Quaternion
+from hoopgn.properties.features.normalizers.normalizer import (
     PropertyNormalizer,
     PropertyNormalizerConfig,
 )

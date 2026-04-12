@@ -21,13 +21,13 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )
-from hoopgn.entities.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn.observation.observation import StateValueDict
 from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
-from hoopgn.entities.properties.features.evaluators.area_evaluator import (
+from hoopgn.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
 )
-from hoopgn.entities.properties.features.conditions.condition import PropertyCondition
+from hoopgn.properties.features.conditions.condition import PropertyCondition
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 

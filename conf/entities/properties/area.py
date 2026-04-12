@@ -2,47 +2,47 @@ from dataclasses import dataclass, field
 
 from hoopgn.networks.layers.encoder import PropertyEncoderConfig
 
-from hoopgn.entities.properties.features.evaluators.area_evaluator import (
+from hoopgn.properties.features.evaluators.area_evaluator import (
     AreaEvaluatorConfig,
 )
-from hoopgn.entities.properties.features.extractors.calvin_gt_extractor import (
+from hoopgn.properties.features.extractors.calvin_gt_extractor import (
     CalvinGTExtractorConfig,
 )
 
-from hoopgn.entities.properties.features.modifiers.modifier import (
+from hoopgn.properties.features.modifiers.modifier import (
     PropertyModifierConfig,
 )
-from hoopgn.entities.properties.features.modifiers.one_hot_modifier import (
+from hoopgn.properties.features.modifiers.one_hot_modifier import (
     OneHotModifierConfig,
 )
-from hoopgn.entities.properties.features.validators.validator import (
+from hoopgn.properties.features.validators.validator import (
     PropertyValidatorConfig,
 )
-from hoopgn.entities.properties.features.evaluators.evaluator import (
+from hoopgn.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
-from hoopgn.entities.properties.features.parameters.euclidean_parameter import (
+from hoopgn.properties.features.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
 )
-from hoopgn.entities.properties.features.rulers.euclidean_ruler import (
+from hoopgn.properties.features.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-from hoopgn.entities.properties.features.normalizers.boundary_normalizer import (
+from hoopgn.properties.features.normalizers.boundary_normalizer import (
     AreaNormalizerConfig,
 )
 
-from hoopgn.entities.properties.features.normalizers.normalizer import (
+from hoopgn.properties.features.normalizers.normalizer import (
     PropertyNormalizerConfig,
 )
-from hoopgn.entities.properties.features.validators.area_validator import (
+from hoopgn.properties.features.validators.area_validator import (
     AreaValidatorConfig,
 )
 
-from hoopgn.entities.properties.property import PropertyConfig
-from hoopgn.entities.properties.features.conditions.condition import (
+from hoopgn.properties.property import PropertyConfig
+from hoopgn.properties.features.conditions.condition import (
     PropertyConditionConfig,
 )
-from hoopgn.entities.properties.states.area_state import AreaStateConfig
+from hoopgn.properties.states.area_state import AreaStateConfig
 
 
 @dataclass
