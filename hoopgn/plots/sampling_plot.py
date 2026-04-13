@@ -47,7 +47,7 @@ class SpawnAreaPlot:
 
     def run(self):
         for i in trange(
-            self.config.agent.batch_size,
+            self.config.agent.buffer.steps,
             desc="Collecting samples for explanation",
         ):
             c, g = self.experiment.sample_task()

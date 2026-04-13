@@ -1,8 +1,8 @@
 import wandb
+from hoopgn.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
-from hoopgn.logger import LoggerConfig
 from hoopgn.storage import StorageConfig
 from hoopgn.agents.ppo import PPOAgentConfig
 from cli.cmd_train import TrainRunnerConfig, TrainRunner
@@ -19,8 +19,16 @@ def entry_point():
     run = wandb.init()
 
     config = TrainRunnerConfig(
+        skills=wandb.config["storage.used_skills"],
+        entities=[],
+        properties=wandb.config["storage.used_states"],
         agent=PPOAgentConfig(
-            batch_size=wandb.config["agent.batch_size"],
+            buffer=BufferConfig(steps=wandb.config["agent.batch_size"]),
+            storage=StorageConfig(
+                skills=wandb.config["storage.used_skills"],
+                states_network=wandb.config["storage.used_states"],
+                states_eval=wandb.config["storage.eval_states"],
+            ),
             network=wandb.config["agent.network"],
             eval=wandb.config["agent.eval"],
             early_stop_patience=wandb.config["agent.early_stop_patience"],
@@ -42,12 +50,6 @@ def entry_point():
             max_grad_norm=wandb.config["agent.max_grad_norm"],
             target_kl=wandb.config["agent.target_kl"],
             clip_value_loss=wandb.config["agent.clip_val_loss"],
-        ),
-        logger=LoggerConfig(),
-        storage=StorageConfig(
-            skills=wandb.config["storage.used_skills"],
-            states_network=wandb.config["storage.used_states"],
-            states_eval=wandb.config["storage.eval_states"],
         ),
         experiment=NoiseExperimentConfig(
             p_empty=wandb.config["experiment.p_empty"],

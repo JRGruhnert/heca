@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
-from hoopgn.entities.entity import EntityConfig
+from hoopgn.agents.ppo import PPOAgentConfig
 
+from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
-from hoopgn.skills.skill import SkillConfig
 
 
 @dataclass
 class ExplainRunnerConfig(HoopGNRunnerConfig):
-    skills: list[SkillConfig]
-    entities: list[EntityConfig]
+    agent: PPOAgentConfig
+    experiment: ExperimentConfig
 
 
 class ExplainRunner(HoopGNRunner):

@@ -1,25 +1,21 @@
 from dataclasses import dataclass
 
 from hoopgn.experiments import select_experiment
-from hoopgn.logger import LoggerConfig
-from hoopgn.storage import Storage, StorageConfig
 from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
 from hoopgn.experiments.experiment import ExperimentConfig
+from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 
 
 @dataclass
-class TrainRunnerConfig:
+class TrainRunnerConfig(HoopGNRunnerConfig):
     agent: PPOAgentConfig
-    logger: LoggerConfig
-    storage: StorageConfig
     experiment: ExperimentConfig
 
 
-class TrainRunner:
+class TrainRunner(HoopGNRunner):
     def __init__(self, config: TrainRunnerConfig):
-        self.storage = Storage(config.storage)
         self.experiment = select_experiment(config.experiment)
-        self.agent = PPOAgent(config.agent, self.storage)
+        self.agent = PPOAgent(config.agent)
 
     def collect_batch(self) -> bool:
         while True:

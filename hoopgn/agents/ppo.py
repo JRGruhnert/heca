@@ -24,7 +24,6 @@ class PPOAgentConfig(AgentConfig):
     network: NetworkConfig
     storage: StorageConfig
     buffer: BufferConfig
-    batch_size: int
     retrain: bool = False
     eval: bool = False
     early_stop_patience: int = 5
