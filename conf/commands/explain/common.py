@@ -12,7 +12,7 @@ from conf.skill_sets import SKILL_SETS
 from hoopgn.logger import LogMode
 
 
-def get_explain_config(
+def get_plot_runner_config(
     skill_set_tag: str,
     state_set_tag: str,
     checkpoint_name: str,

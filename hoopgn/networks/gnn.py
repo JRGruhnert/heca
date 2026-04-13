@@ -7,7 +7,7 @@ from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
 from hoopgn.explainer import HoopgnExplainer
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn.skills.skill import Skill
@@ -284,7 +284,7 @@ class GraphNetwork(Network):
         return actor_explanation, critic_explanation
 
     def _to_batch(
-        self, current: list[Tensor], goal: list[Tensor], obs: list[StateValueDict]
+        self, current: list[Tensor], goal: list[Tensor], obs: list[TDParameters]
     ) -> Batch:
         batch_data = []
         for c, g, o in zip(current, goal, obs):
@@ -308,7 +308,7 @@ class GraphNetwork(Network):
 
     def skill_state_distances(
         self,
-        obs: StateValueDict,
+        obs: TDParameters,
         pad: bool = False,
         sparse: bool = False,
     ) -> torch.Tensor:
@@ -322,7 +322,7 @@ class GraphNetwork(Network):
 
     def distances(
         self,
-        obs: StateValueDict,
+        obs: TDParameters,
         precons: dict[str, PropertyCondition],
         pad: bool = False,
         sparse: bool = False,
@@ -341,7 +341,7 @@ class GraphNetwork(Network):
 
     def s_s_attr(
         self,
-        current: StateValueDict,
+        current: TDParameters,
         pad: bool = True,
         sparse: bool = False,
     ) -> torch.Tensor:
@@ -359,7 +359,7 @@ class GraphNetwork(Network):
 
     def state_skill_attr_weighted_sparse(
         self,
-        current: StateValueDict,
+        current: TDParameters,
         pad: bool = True,
     ) -> torch.Tensor:
         dist_matrix = self.skill_state_distances(current, pad)  # [T, S, 2]

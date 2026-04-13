@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from torch_geometric.data import Batch, HeteroData
 
 
@@ -14,11 +14,11 @@ class BranchNetworker(ABC):
     def __init__(self, config: BranchNetworkerConfig):
         self.config = config
 
-    def reset(self, goal: StateValueDict):
+    def reset(self, goal: TDParameters):
         """Prepare the networker for execution. Before each use."""
         raise NotImplementedError("Subclasses must implement method.")
 
     @abstractmethod
-    def __call__(self, start: StateValueDict, goal: StateValueDict) -> Batch:
+    def __call__(self, start: TDParameters, goal: TDParameters) -> Batch:
         """Predict the next action given the current observation."""
         raise NotImplementedError("Subclasses must implement method.")

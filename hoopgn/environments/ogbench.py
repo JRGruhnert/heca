@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.observation import StateValueDict, empty_batchsize
+from hoopgn.observation.td_parameters import TDParameters, empty_batchsize
 import gymnasium as gym
 from ogbench import manipspace
 
@@ -54,7 +54,7 @@ class OGBenchEnvironment(Environment):
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
 
-    def get_observation(self) -> StateValueDict:
+    def get_observation(self) -> TDParameters:
         state_dict = {}
         # TODO: Implement proper observation parsing
-        return StateValueDict(state_dict, batch_size=empty_batchsize)
+        return TDParameters(state_dict, batch_size=empty_batchsize)

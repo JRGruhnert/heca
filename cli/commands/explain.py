@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 import re
-import sys
-
 from tqdm import trange
 
 from hoopgn.properties.states.area_state import AreaStateConfig
@@ -10,8 +8,8 @@ from hoopgn.logger import LoggerConfig, Logger
 from hoopgn.storage import Storage, StorageConfig
 from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
 from hoopgn.experiments.experiment import ExperimentConfig
-from hoopgn.observation.observation import StateValueDict
-from hoopgn.plots.helper.environment.samples import ObjectSamplingPlot
+from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.plots.entity_plot import Entity3DPlot
 from hoopgn.properties.property import Property
 from hoopgn.variables import BLUE, PINK, RED, SLIDE
 
@@ -28,13 +26,6 @@ class ExplainManagerConfig:
 
 class ExplainScript:
     def __init__(self, config: ExplainManagerConfig):
-        if config is None:
-            raise ValueError("Config cannot be None")
-        for name, mod in list(sys.modules.items()):
-            if name.startswith("tapas_gmm_modified"):
-                old_name = "tapas_gmm" + name[len("tapas_gmm_modified") :]
-                sys.modules.setdefault(old_name, mod)
-
         self.config = config
         self.storage = Storage(config.storage)
         self.logger = Logger(config.logger)
@@ -57,7 +48,7 @@ class ExplainScript:
         self.trained_object = self.relevant_objects[object_name]
         self.current_object = self.relevant_objects[self.config.eval_set]
 
-        self.plot = ObjectSamplingPlot(object_label=self.current_object)
+        self.plot = Entity3DPlot(object_label=self.current_object)
 
         self.pos_state: Property = self.storage.get_property_by_name(
             f"{self.current_object}_position"
@@ -66,7 +57,7 @@ class ExplainScript:
             f"{self.current_object}_rotation"
         )
 
-    def is_different_on_start(self, current: StateValueDict, goal: StateValueDict):
+    def is_different_on_start(self, current: TDParameters, goal: TDParameters):
         if self.pos_state is None or self.quat_state is None:
             raise ValueError("Position or rotation state not found in storage.")
         pos_eq = self.pos_state.evaluate(
@@ -79,7 +70,7 @@ class ExplainScript:
         )
         return not pos_eq
 
-    def do_task(self, current: StateValueDict, goal: StateValueDict) -> bool:
+    def do_task(self, current: TDParameters, goal: TDParameters) -> bool:
         episode_ended = False
         done = False
         while not episode_ended:
@@ -98,7 +89,7 @@ class ExplainScript:
             self.config.agent.batch_size, desc="Collecting samples for explanation"
         ):
             current, goal = self.experiment.sample_task()
-            self.plot.set_object(
+            self.plot.set_entity(
                 {
                     "current": current[f"{self.current_object}_position"].tolist(),
                     "goal": goal[f"{self.current_object}_position"].tolist(),
@@ -107,8 +98,8 @@ class ExplainScript:
                     "current": current[f"{self.current_object}_rotation"].tolist(),
                     "goal": goal[f"{self.current_object}_rotation"].tolist(),
                 },
-                different=self.is_different_on_start(current, goal),
-                solved=self.do_task(current, goal),
+                different_on_start=self.is_different_on_start(current, goal),
+                solved_in_the_end=self.do_task(current, goal),
             )
 
         self.plot.show_objects()
@@ -129,8 +120,3 @@ class ExplainScript:
         self.run_batch()
         self.logger.log(self.agent.metrics())
         self.experiment.close()
-
-
-def entry_point(config: ExplainManagerConfig):
-    script = ExplainScript(config)
-    script.run()

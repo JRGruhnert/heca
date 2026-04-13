@@ -7,7 +7,7 @@ from hoopgn.networks.layers.encoder import (
     PropertyEncoderRegistryConfig,
 )
 
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.skills.skill import Skill
 from hoopgn.properties.property import Property
 from hoopgn import logger
@@ -58,7 +58,7 @@ class Network(torch.nn.Module, ABC):
         return self.registry.get(label)(x)
 
     def _pre_encode_properties(
-        self, x: StateValueDict, states: list[Property]
+        self, x: TDParameters, states: list[Property]
     ) -> torch.Tensor:
         temp = []
         for state in states:
@@ -69,14 +69,14 @@ class Network(torch.nn.Module, ABC):
 
     def to_encoded_batch(
         self,
-        current: list[StateValueDict] | StateValueDict,
-        goal: list[StateValueDict] | StateValueDict,
+        current: list[TDParameters] | TDParameters,
+        goal: list[TDParameters] | TDParameters,
         states: list[Property],
     ) -> torch.Tensor:
         """Converts lists of observations and goals into a batch suitable for the network."""
-        if isinstance(current, StateValueDict):
+        if isinstance(current, TDParameters):
             current = [current]
-        if isinstance(goal, StateValueDict):
+        if isinstance(goal, TDParameters):
             goal = [goal]
         assert len(current) == len(
             goal
@@ -92,7 +92,7 @@ class Network(torch.nn.Module, ABC):
         self,
         current: list[torch.Tensor],
         goal: list[torch.Tensor],
-        obs: list[StateValueDict],
+        obs: list[TDParameters],
     ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 

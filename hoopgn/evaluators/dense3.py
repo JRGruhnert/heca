@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from hoopgn.evaluators.evaluator import EvaluatorConfig, Evaluator
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 
 
 @dataclass(kw_only=True)
@@ -20,8 +20,8 @@ class Dense3Evaluator(Evaluator):
 
     def evaluate_sample(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> bool:
         valid = super().evaluate_sample(current, goal)
         self.max_percentage_done = max(self.max_percentage_done, self.percentage_done)
@@ -30,8 +30,8 @@ class Dense3Evaluator(Evaluator):
 
     def step(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> tuple[float, bool]:
         prev_percentage_done = self.percentage_done
 

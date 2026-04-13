@@ -7,11 +7,34 @@ from hoopgn import logger
 
 
 @dataclass
+class StyleConfig:
+    grey: str = "grey"
+    black: str = "black"
+    white: str = "white"
+    solved: str = "tab:green"
+    unsolved: str = "tab:red"
+    true: str = "tab:yellow"
+    false: str = "black"
+    entity: dict[str, str] = {
+        "ee": "black",
+        "block_red": "tab:red",
+        "block_blue": "tab:blue",
+        "block_pink": "tab:pink",
+        "slide": "black",
+        "drawer": "black",
+        "button": "black",
+        "led": "black",
+        "lightbulb": "black",
+    }
+
+
+@dataclass
 class PlotConfig:
     title: str
     name: str
     subdir: str
     rootdir: str = "plots"
+    style: StyleConfig = StyleConfig()
 
 
 class Plot(ABC):

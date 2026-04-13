@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from hoopgn.agents.agent import Agent, AgentConfig
 from hoopgn.buffer import Buffer
 from hoopgn.storage import Storage
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.skills.skill import Skill
 
 
@@ -24,8 +24,8 @@ class HumanAgent(Agent):
 
     def act(
         self,
-        obs: StateValueDict,
-        goal: StateValueDict,
+        obs: TDParameters,
+        goal: TDParameters,
     ) -> Skill | None:
         """Select an action given the current observation and goal observation."""
         for i, skill in enumerate(self.storage.skills):
@@ -37,9 +37,7 @@ class HumanAgent(Agent):
             return None
         return self.storage.skills[choice]
 
-    def explain(
-        self, current: StateValueDict, goal: StateValueDict, skill: Skill
-    ) -> str:
+    def explain(self, current: TDParameters, goal: TDParameters, skill: Skill) -> str:
         raise NotImplementedError("")
 
     def feedback(self, reward: float, success: bool, terminal: bool) -> bool:

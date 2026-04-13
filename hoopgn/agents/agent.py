@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from dataclasses import dataclass
 
 from hoopgn.skills.skill import Skill
@@ -15,8 +15,8 @@ class Agent(ABC):
     @abstractmethod
     def act(
         self,
-        obs: StateValueDict,
-        goal: StateValueDict,
+        obs: TDParameters,
+        goal: TDParameters,
     ) -> Skill:
         """Select an action given the current observation and goal observation."""
         raise NotImplementedError("Act method not implemented yet.")
@@ -24,8 +24,8 @@ class Agent(ABC):
     @abstractmethod
     def explain(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
         skill: Skill,
     ) -> Any:
         """Return explanations for the actor and critic's decisions. By default, returns None."""

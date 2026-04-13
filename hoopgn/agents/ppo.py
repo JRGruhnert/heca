@@ -11,7 +11,7 @@ from hoopgn.storage import Storage
 from hoopgn.watcher import Watcher
 from hoopgn.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from hoopgn.networks.gnn import GraphNetwork, GraphNetworkConfig
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn import logger
 from thop import profile
@@ -95,8 +95,8 @@ class PPOAgent(Agent):
 
     def act(
         self,
-        obs: StateValueDict,
-        goal: StateValueDict,
+        obs: TDParameters,
+        goal: TDParameters,
     ) -> Skill:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(
@@ -122,8 +122,8 @@ class PPOAgent(Agent):
 
     def explain(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
         skill: Skill,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
@@ -137,8 +137,8 @@ class PPOAgent(Agent):
 
     def evaluate(
         self,
-        obs: list[StateValueDict],
-        goal: list[StateValueDict],
+        obs: list[TDParameters],
+        goal: list[TDParameters],
         action: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
         assert len(obs) == len(goal), "Observation and Goal lists have different sizes."
@@ -461,9 +461,7 @@ class PPOAgent(Agent):
     def metrics(self) -> dict:
         return self._metrics
 
-    def measure_flops(
-        self, obs: StateValueDict, goal: StateValueDict
-    ) -> tuple[int, int]:
+    def measure_flops(self, obs: TDParameters, goal: TDParameters) -> tuple[int, int]:
         """Measure FLOPs for a single forward pass through the policy network."""
         with torch.no_grad():
             obs_batch = [obs]

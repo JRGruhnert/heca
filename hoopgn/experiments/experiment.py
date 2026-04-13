@@ -6,7 +6,7 @@ from hoopgn.environments import select_environment
 from hoopgn.environments.environment import EnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.evaluator import EvaluatorConfig
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.skills.skill import Skill
 import math
 
@@ -29,7 +29,7 @@ class Experiment(ABC):
         self.current = self.env.reset()
         self.goal = self.env.reset()
 
-    def step(self, skill: Skill) -> tuple[StateValueDict, float, bool, bool]:
+    def step(self, skill: Skill) -> tuple[TDParameters, float, bool, bool]:
         selected_skill = self.modify(skill)
         selected_skill.reset(self.goal)
         while (action := selected_skill.predict(self.current)) is not None:
@@ -43,7 +43,7 @@ class Experiment(ABC):
         )
         return self.current, reward, done, terminal
 
-    def sample_task(self) -> tuple[StateValueDict, StateValueDict]:
+    def sample_task(self) -> tuple[TDParameters, TDParameters]:
         logger.info("Sampling new task...")
         self.current_step = 0
         self.current = self.env.reset()

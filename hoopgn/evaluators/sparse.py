@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from hoopgn.evaluators.evaluator import EvaluatorConfig, Evaluator
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 
 
 @dataclass(kw_only=True)
@@ -15,8 +15,8 @@ class SparseEvaluator(Evaluator):
 
     def step(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> tuple[float, bool]:
         if self.is_equal(current, goal):
             # Success reached

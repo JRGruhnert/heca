@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 import torch
 from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.observation import StateValueDict, empty_batchsize
+from hoopgn.observation.td_parameters import TDParameters, empty_batchsize
 
 
 @dataclass(kw_only=True)
@@ -50,7 +50,7 @@ class CalvinEnvironment(Environment):
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
 
-    def get_observation(self) -> StateValueDict:
+    def get_observation(self) -> TDParameters:
         state_dict = {}
         state_dict["ee_position"] = torch.tensor(
             self.calvin_obs.ee_pose[:3], dtype=torch.float32
@@ -76,4 +76,4 @@ class CalvinEnvironment(Environment):
         for converter in self.converters:
             state_dict[converter.config.label] = converter(self.calvin_obs)
 
-        return StateValueDict(state_dict, batch_size=empty_batchsize)
+        return TDParameters(state_dict, batch_size=empty_batchsize)

@@ -4,7 +4,7 @@ from hoopgn import logger
 from hoopgn.storage import select_properties
 from collections.abc import Sequence
 from hoopgn.properties.property import PropertyConfig
-from hoopgn.observation.observation import StateValueDict
+from hoopgn.observation.td_parameters import TDParameters
 
 
 @dataclass(kw_only=True)
@@ -24,8 +24,8 @@ class Evaluator(ABC):
 
     def is_equal(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> bool:
         """Generic method to check if states match target conditions."""
         finished = 0
@@ -43,8 +43,8 @@ class Evaluator(ABC):
 
     def evaluate_sample(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> bool:
         done = self.is_equal(current, goal)
         valid = self.is_valid(current, goal)
@@ -52,8 +52,8 @@ class Evaluator(ABC):
 
     def is_valid(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> bool:
         """Special method to check wether the sampled states are buggy or not."""
         for state in self.states_network:
@@ -67,8 +67,8 @@ class Evaluator(ABC):
     @abstractmethod
     def step(
         self,
-        current: StateValueDict,
-        goal: StateValueDict,
+        current: TDParameters,
+        goal: TDParameters,
     ) -> tuple[float, bool]:
         "Returns the step reward and wether the step is a terminal step, cause some ending condition was met."
         raise NotImplementedError()

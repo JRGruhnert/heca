@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 from hoopgn.properties.features.conditions.condition import PropertyCondition
 from hoopgn.plots.helper.object_point import ObjectLocationPoint
-from hoopgn.plots.helper.skill.tp import ObjectConditionsPlot
+from hoopgn.plots.tp import ObjectConditionsPlot
 from hoopgn.runners.skill.skill_runner import SkillRunner, SkillRunnerConfig
 from hoopgn.skills.skill import Skill
 
