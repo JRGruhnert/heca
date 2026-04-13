@@ -1,4 +1,4 @@
-from cli.commands.train import TrainerConfig
+from cli.cmd_train import TrainRunnerConfig
 from conf.common import (
     ppo_default_config,
     experiment_config,
@@ -21,7 +21,7 @@ def get_train_config(
     p_rand: float = 0.0,
     batch_size: int = 1024,
     log_mode: LogMode = LogMode.WANDB,
-) -> TrainerConfig:
+) -> TrainRunnerConfig:
     skills = SKILL_SETS[skill_set_tag]
     states = OBJECT_SETS[state_set_tag]
     network = network_config(
@@ -31,7 +31,7 @@ def get_train_config(
         skill_count=len(skills),
         state_count=len(states),
     )
-    return TrainerConfig(
+    return TrainRunnerConfig(
         agent=ppo_default_config(
             network=network,
             eval=False,

@@ -21,5 +21,5 @@ class HoopGNRunner(ABC):
         self.properties = [Property(c) for c in config.properties]
 
     @abstractmethod
-    def __call__(self):
+    def run(self):
         raise NotImplementedError()

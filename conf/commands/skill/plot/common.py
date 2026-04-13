@@ -1,4 +1,4 @@
-from cli.commands.explain import ExplainManagerConfig
+from cli.cmd_explain import ExplainManagerConfig
 from conf.common import (
     ppo_default_config,
     experiment_config,

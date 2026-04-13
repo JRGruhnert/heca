@@ -6,12 +6,12 @@ from hoopgn.skills.skill import Skill
 
 
 @dataclass
-class SkillPlotterConfig(SkillRunnerConfig):
+class SkillPlotRunnerConfig(SkillRunnerConfig):
     plots: list[SkillPlotConfig]
 
 
-class SkillPlotter(SkillRunner):
-    def __init__(self, config: SkillPlotterConfig):
+class SkillPlotRunner(SkillRunner):
+    def __init__(self, config: SkillPlotRunnerConfig):
         super().__init__(config)
         self.config = config
         self.plots = [SkillPlot(c) for c in config.plots]

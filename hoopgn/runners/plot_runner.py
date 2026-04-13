@@ -1,6 +1,6 @@
 from hoopgn.plots.helper.run_data import TrainingRunData
-from hoopgn.plots.trainings_plots import select_multiple_training_plots
-from hoopgn.plots.trainings_plots.trainings_plot import TrainingsPlotConfig
+from hoopgn.plots.hoopgn_plots import select_multiple_training_plots
+from hoopgn.plots.hoopgn_plots.hoopgn_plot import HoopGNPlotConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 from dataclasses import dataclass
 from glob import glob
@@ -9,7 +9,7 @@ import re
 
 @dataclass
 class PlotRunnerConfig(HoopGNRunnerConfig):
-    plots: list[TrainingsPlotConfig]
+    plots: list[HoopGNPlotConfig]
     networks: list[str]
     file_pattern: re.Pattern = re.compile(
         r"(?P<tag>\w+_\w+_\w+)_pe(?P<pe>[0-9.]+)_pr(?P<pr>[0-9.]+)"

@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import os
 
@@ -15,17 +15,19 @@ class StyleConfig:
     unsolved: str = "tab:red"
     true: str = "tab:yellow"
     false: str = "black"
-    entity: dict[str, str] = {
-        "ee": "black",
-        "block_red": "tab:red",
-        "block_blue": "tab:blue",
-        "block_pink": "tab:pink",
-        "slide": "black",
-        "drawer": "black",
-        "button": "black",
-        "led": "black",
-        "lightbulb": "black",
-    }
+    entity: dict[str, str] = field(
+        default_factory=lambda: {
+            "ee": "black",
+            "block_red": "tab:red",
+            "block_blue": "tab:blue",
+            "block_pink": "tab:pink",
+            "slide": "black",
+            "drawer": "black",
+            "button": "black",
+            "led": "black",
+            "lightbulb": "black",
+        }
+    )
 
 
 @dataclass

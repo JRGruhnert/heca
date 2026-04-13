@@ -7,7 +7,7 @@ from torch.distributions import Categorical
 from hoopgn.hardware import device
 from hoopgn.agents.agent import Agent, AgentConfig
 from hoopgn.buffer import Buffer, BufferConfig
-from hoopgn.storage import Storage
+from hoopgn.storage import Storage, StorageConfig
 from hoopgn.watcher import Watcher
 from hoopgn.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from hoopgn.networks.gnn import GraphNetwork, GraphNetworkConfig
@@ -22,6 +22,8 @@ from hoopgn.skills.skill import Skill
 @dataclass(kw_only=True)
 class PPOAgentConfig(AgentConfig):
     network: NetworkConfig
+    storage: StorageConfig
+    buffer: BufferConfig
     batch_size: int
     retrain: bool = False
     eval: bool = False
@@ -58,16 +60,12 @@ def select_network(config: NetworkConfig) -> Network:
 
 
 class PPOAgent(Agent):
-    def __init__(
-        self,
-        config: PPOAgentConfig,
-        storage: Storage,
-    ):
+    def __init__(self, config: PPOAgentConfig):
         ### Initialize hyperparameters
         self.config = config
         ### Initialize the agent
-        self.buffer = Buffer(BufferConfig(steps=config.batch_size))
-        self.storage = storage
+        self.buffer = Buffer(config.buffer)
+        self.storage = Storage(config.storage)
         self.mse_loss = nn.MSELoss()
         self.policy_new: Network = select_network(config.network).to(device)
         self.policy_old: Network = select_network(config.network).to(device)

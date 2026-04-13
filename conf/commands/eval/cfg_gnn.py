@@ -1,4 +1,4 @@
-from cli.commands.train import TrainerConfig
+from cli.cmd_train import TrainRunnerConfig
 from hoopgn.agents.ppo import PPOAgentConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
@@ -23,7 +23,7 @@ prefix = "d_blue"
 tag = f"{prefix}_{used_states}_{skills_eval_states}"
 wandb_tag = f"{network}_{tag}"
 
-config = TrainerConfig(
+config = TrainRunnerConfig(
     agent=PPOAgentConfig(
         network=GraphNetworkConfig(),
         batch_size=2048,
