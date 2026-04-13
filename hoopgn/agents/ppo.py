@@ -10,7 +10,7 @@ from hoopgn.buffer import Buffer, BufferConfig
 from hoopgn.storage import Storage, StorageConfig
 from hoopgn.watcher import Watcher
 from hoopgn.networks.baseline import BaselineNetwork, BaselineNetworkConfig
-from hoopgn.networks.gnn import GraphNetwork, GraphNetworkConfig
+from hoopgn.networks.hoopgnv1 import GraphNetwork, HoopgnV1Config
 from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn import logger
@@ -52,7 +52,7 @@ def select_network(config: NetworkConfig) -> Network:
     """Create network from config - simple factory function"""
     if isinstance(config, BaselineNetworkConfig):
         return BaselineNetwork(config)
-    elif isinstance(config, GraphNetworkConfig):
+    elif isinstance(config, HoopgnV1Config):
         return GraphNetwork(config)
     else:
         raise ValueError(f"Unknown network type: {type(config)}")

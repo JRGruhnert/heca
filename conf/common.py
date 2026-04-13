@@ -11,7 +11,7 @@ from hoopgn.logger import LogMode, LoggerConfig
 from hoopgn.storage import StorageConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.networks.baseline import BaselineNetworkConfig
-from hoopgn.networks.gnn import GraphNetworkConfig
+from hoopgn.networks.hoopgnv1 import HoopgnV1Config
 from hoopgn.networks.network import NetworkConfig
 
 
@@ -44,7 +44,7 @@ def experiment_config(
     evaluator_tag: str = "dense3",
 ) -> ExperimentConfig:
     return NoiseExperimentConfig(
-        p_empty=p_empty,
+        p_skip=p_empty,
         p_rand=p_rand,
         min_steps=min_steps,
         environment=environment_config(environment_tag),
@@ -109,7 +109,7 @@ def network_config(
         else None
     )
     return (
-        GraphNetworkConfig(
+        HoopgnV1Config(
             checkpoint_path=checkpoint_path,
             explain_mode=explain_mode,
             dim_skill=skill_count,

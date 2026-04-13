@@ -1,24 +1,33 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from hoopgn.skills.skill import Skill
+from hoopgn.skills.skill import Skill, SkillConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 
 
 @dataclass
 class SkillRunnerConfig(HoopGNRunnerConfig):
-    pass
+    skill: SkillConfig | None
 
 
 class SkillRunner(HoopGNRunner):
     def __init__(self, config: SkillRunnerConfig):
         super().__init__(config)
         self.config = config
+        self.skills = [Skill(skill_config) for skill_config in config.skills]
+        self.skill = Skill(config.skill) if config.skill else None
+        self.skills_by_name = {skill.config.label: skill for skill in self.skills}
 
-    def __call__(self):
-        for skill in self.config.skills:
-            self.run(Skill(skill))
+    def run(self):
+        if self.config.skill:
+            if self.skill:
+                self.skill_run(self.skill)
+            else:
+                raise ValueError(f"Skill '{self.config.skill}' not found in skills.")
+        else:
+            for skill in self.skills:
+                self.skill_run(skill)
 
     @abstractmethod
-    def run(self, skill: Skill):
+    def skill_run(self, skill: Skill):
         raise NotImplementedError()

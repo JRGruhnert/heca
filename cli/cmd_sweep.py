@@ -52,7 +52,7 @@ def entry_point():
             clip_value_loss=wandb.config["agent.clip_val_loss"],
         ),
         experiment=NoiseExperimentConfig(
-            p_empty=wandb.config["experiment.p_empty"],
+            p_skip=wandb.config["experiment.p_empty"],
             p_rand=wandb.config["experiment.p_rand"],
             environment=CalvinEnvironmentConfig(),
             evaluator=Dense3EvaluatorConfig(

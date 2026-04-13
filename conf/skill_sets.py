@@ -1,4 +1,5 @@
 from conf.entities.skills.tapas_skills import TapasSkillSet
+from hoopgn.skills.skill import SkillConfig
 
 
 BASE = [
@@ -39,7 +40,11 @@ BLUE = [
 ]
 
 
-SKILL_SETS = {
+def get_skill_set(tag: str) -> list[SkillConfig]:
+    return _SKILL_SETS[tag]  # type: ignore
+
+
+_SKILL_SETS = {
     "base": BASE,
     "slider": BASE + SLIDE,
     "red": BASE + RED,

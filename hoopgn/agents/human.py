@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from hoopgn.agents.agent import Agent, AgentConfig
-from hoopgn.buffer import Buffer
 from hoopgn.storage import Storage
 from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.skills.skill import Skill

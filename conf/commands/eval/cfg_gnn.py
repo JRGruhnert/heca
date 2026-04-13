@@ -5,7 +5,7 @@ from hoopgn.buffer import BufferConfig
 from hoopgn.logger import LogMode, LoggerConfig
 from hoopgn.storage import StorageConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.networks.gnn import GraphNetworkConfig
+from hoopgn.networks.hoopgnv1 import HoopgnV1Config
 
 mode = LogMode.TERMINAL
 render = False
@@ -25,7 +25,7 @@ wandb_tag = f"{network}_{tag}"
 
 config = TrainRunnerConfig(
     agent=PPOAgentConfig(
-        network=GraphNetworkConfig(),
+        network=HoopgnV1Config(),
         batch_size=2048,
         eval=eval,
         max_batches=1,
@@ -48,7 +48,7 @@ config = TrainRunnerConfig(
     ),
     experiment=NoiseExperimentConfig(
         environment=CalvinEnvironmentConfig(),
-        p_empty=0.0,
+        p_skip=0.0,
         p_rand=0.0,
     ),
 )

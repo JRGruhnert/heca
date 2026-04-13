@@ -1,4 +1,5 @@
 from conf.entities.properties.hoopgnv1 import PropertySet
+from hoopgn.properties.property import PropertyConfig
 
 BASE = [
     PropertySet.ee_position,
@@ -38,7 +39,12 @@ BLUE = [
     PropertySet.block_blue_scalar,
 ]
 
-OBJECT_SETS = {
+
+def get_property_set(tag: str) -> list[PropertyConfig]:
+    return _OBJECT_SETS[tag]  # type: ignore
+
+
+_OBJECT_SETS = {
     "base": BASE,
     "slider": BASE + SLIDE,
     "red": BASE + RED,

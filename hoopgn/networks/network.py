@@ -10,7 +10,7 @@ from hoopgn.networks.layers.encoder import (
 from hoopgn.observation.td_parameters import TDParameters
 from hoopgn.skills.skill import Skill
 from hoopgn.properties.property import Property
-from hoopgn import logger
+from hoopgn import hardware, logger
 
 
 @dataclass(kw_only=True)
@@ -30,13 +30,7 @@ class Network(torch.nn.Module, ABC):
     ):
         super().__init__()
         self.config = config
-        self.is_eval_mode = False
         self.registry = PropertyEncoderRegistry(config.registry)
-
-    def eval(self):
-        super().eval()  # Call PyTorch's nn.Module.eval() instead of iterating manually
-        self.is_eval_mode = True
-        logger.info("Network set to evaluation mode.")
 
     def register_encoder(self, states: list[Property]):
         for state in states:
@@ -114,4 +108,4 @@ class Network(torch.nn.Module, ABC):
         raise NotImplementedError("Subclasses must implement the _load method.")
 
     def _load_checkpoint(self, checkpoint_path: str) -> Any:
-        return torch.load(checkpoint_path, map_location=torch.device("cpu"))
+        return torch.load(checkpoint_path, map_location=hardware.device)

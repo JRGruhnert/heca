@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from dataclasses import dataclass
 
 from hoopgn import logger
@@ -7,21 +6,21 @@ from hoopgn.properties.property import Property, PropertyConfig
 import os
 
 
-def select_skills(configs: Sequence[SkillConfig]) -> list[Skill]:
+def select_skills(configs: list[SkillConfig]) -> list[Skill]:
     """Create skills from configs - simple factory function"""
     return [Skill(config) for config in configs]
 
 
-def select_properties(configs: Sequence[PropertyConfig]) -> list[Property]:
+def select_properties(configs: list[PropertyConfig]) -> list[Property]:
     """Create states from configs - simple factory function"""
     return [Property(config) for config in configs]
 
 
 @dataclass(kw_only=True)
 class StorageConfig:
-    skills: Sequence[SkillConfig]
-    states_network: Sequence[PropertyConfig]
-    states_eval: Sequence[PropertyConfig]
+    skills: list[SkillConfig]
+    states_network: list[PropertyConfig]
+    states_eval: list[PropertyConfig]
     tag: str = "untagged_run"
     storage_path: str = "data"
     results_path: str = "results"

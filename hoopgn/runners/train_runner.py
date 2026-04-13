@@ -14,6 +14,8 @@ class TrainRunnerConfig(HoopGNRunnerConfig):
 
 class TrainRunner(HoopGNRunner):
     def __init__(self, config: TrainRunnerConfig):
+        super().__init__(config)
+        self.config = config
         self.experiment = select_experiment(config.experiment)
         self.agent = PPOAgent(config.agent)
 

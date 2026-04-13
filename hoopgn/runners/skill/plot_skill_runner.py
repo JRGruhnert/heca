@@ -1,21 +1,26 @@
 from dataclasses import dataclass
 
-from hoopgn.plots.skill_plots.skill_plot import SkillPlot, SkillPlotConfig
+from hoopgn.plotters.skill_plotters import select_skill_plotter
+from hoopgn.plotters.skill_plotters.skill_plotter import (
+    SkillPlotter,
+    SkillPlotterConfig,
+)
 from hoopgn.runners.skill.skill_runner import SkillRunner, SkillRunnerConfig
-from hoopgn.skills.skill import Skill
+from hoopgn.skills.skill import Skill, SkillConfig
 
 
 @dataclass
 class SkillPlotRunnerConfig(SkillRunnerConfig):
-    plots: list[SkillPlotConfig]
+    plotters: list[SkillPlotterConfig]
+    skill: SkillConfig | None = None
 
 
 class SkillPlotRunner(SkillRunner):
     def __init__(self, config: SkillPlotRunnerConfig):
         super().__init__(config)
         self.config = config
-        self.plots = [SkillPlot(c) for c in config.plots]
+        self.plotters = [select_skill_plotter(c) for c in config.plotters]
 
-    def run(self, skill: Skill):
-        for plot in self.plots:
-            plot(skill)
+    def skill_run(self, skill: Skill):
+        for plotter in self.plotters:
+            plotter.plot_content(skill)
