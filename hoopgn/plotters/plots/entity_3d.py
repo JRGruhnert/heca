@@ -3,6 +3,7 @@ from enum import Enum
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 import numpy as np
+from hoopgn import logger
 from hoopgn.entities.entity import Entity
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.properties.states.area_state import AreaStateConfig
@@ -55,7 +56,7 @@ class Style3DConfig:
     red: str = "tab:red"
     blue: str = "tab:blue"
     pink: str = "tab:pink"
-    default: str = "white"
+    default: str = "tab:orange"
 
 
 STYLE_DICT = {
@@ -66,7 +67,7 @@ STYLE_DICT = {
     "red": "tab:red",
     "blue": "tab:blue",
     "pink": "tab:pink",
-    "default": "white",
+    "default": "tab:orange",
 }
 
 
@@ -94,10 +95,18 @@ class Entity3DHelper:
                 "blue": self.fig.add_subplot(132, projection="3d"),
                 "pink": self.fig.add_subplot(133, projection="3d"),
             }
+        elif self.config.mode == Entity3DMode.DELTAS:
+            self.fig = plt.figure(figsize=(16, 10))
+            self.axes = {
+                "precon": self.fig.add_subplot(121, projection="3d"),
+                "postcon": self.fig.add_subplot(122, projection="3d"),
+            }
         else:
+            logger.error(f"Unsupported mode: {self.config.mode}")
             raise ValueError(f"Unsupported mode: {self.config.mode}")
 
     def finish(self):
+        result_handles = None
         if self.config.mode == Entity3DMode.DIFFERENCE:
             sd_count = sum(e.solved and e.different for e in self.entities)
             ss_count = sum(e.solved and not e.different for e in self.entities)
@@ -131,8 +140,9 @@ class Entity3DHelper:
             ]
 
         elif self.config.mode == Entity3DMode.COLORS:
-            self.axes["precon"].set_title(f"Preconditions")
-            self.axes["postcon"].set_title(f"Postconditions")
+            self.axes["red"].set_title(f"Red")
+            self.axes["blue"].set_title(f"Blue")
+            self.axes["pink"].set_title(f"Pink")
             result_handles = [
                 Line2D(
                     [0],
@@ -175,6 +185,8 @@ class Entity3DHelper:
             raise ValueError(f"Unsupported mode: {self.config.mode}")
 
         for ax in self.axes.values():
+            if result_handles is None:
+                continue
             a = ax.legend(
                 handles=result_handles,
                 title="Result",
@@ -185,6 +197,7 @@ class Entity3DHelper:
             ax.set_xlabel("X")
             ax.set_ylabel("Y")
             ax.set_zlabel("Z")
+        logger.debug(f"Finished plotting entities {len(self.entities)}")
 
     def set_entity(
         self,
@@ -213,7 +226,7 @@ class Entity3DHelper:
             ry=entity.rotation[1].item(),
             rz=entity.rotation[2].item(),
             rw=entity.rotation[3].item(),
-            state=bool(entity.state[0].item()),
+            state=int(entity.state[0].item()),
         )
 
     def get_color(self, solved: bool) -> str:

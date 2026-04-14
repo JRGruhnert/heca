@@ -7,7 +7,7 @@ from hoopgn.properties.features.modifiers.modifier import (
     PropertyModifierConfig,
 )
 from hoopgn.properties.states import select_state_property
-from hoopgn.properties.state import StateConfig
+from conf.properties.v2.state import StateConfig
 
 
 @dataclass(kw_only=True)

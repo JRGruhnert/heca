@@ -69,7 +69,7 @@ class Property:
         """Measures the distance between two values."""
         return self.ruler(x, y)
 
-    def modify(self, x: torch.Tensor) -> torch.Tensor:
+    def postprocess(self, x: torch.Tensor) -> torch.Tensor:
         """Applies additional modifications to the given value."""
         return self.modifier(x)
 

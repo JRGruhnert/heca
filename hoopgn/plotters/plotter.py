@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patches as mpatches
 
+from hoopgn import logger
 from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property
 from hoopgn.skills.skill import Skill
@@ -226,21 +227,25 @@ class Plotter(ABC):
         self.properties: list[Property] = []
 
     @abstractmethod
-    def plot_content(self):
+    def plot_content(self, *args, **kwargs):
         raise NotImplementedError()
 
-    def plot(self):
-        self.plot_content()
+    @abstractmethod
+    def reset(self):
+        raise NotImplementedError()
+
+    def plot(self, *args, **kwargs):
+        self.plot_content(*args, **kwargs)
         plt.title(self.config.title)
         plt.tight_layout()
         if self.config.save:
-            save_dir = os.path.join(
-                self.config.rootdir, self.config.subdir, self.config.name
-            )
+            logger.info(f"Saving plot to {self.config.name} in {self.config.subdir}")
+            save_dir = os.path.join(self.config.rootdir, self.config.subdir)
             os.makedirs(save_dir, exist_ok=True)
             plot_path = os.path.join(save_dir, f"{self.config.name}_plot.png")
             plt.savefig(plot_path, dpi=300, bbox_inches="tight")
         if self.config.show:
+            logger.debug("Showing plot")
             plt.show()
         plt.close()
 

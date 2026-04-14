@@ -1,48 +1,41 @@
-from conf.entity_set import properties_to_entities
-from hoopgn.agents.ppo import PPOAgentConfig
+from conf.properties import get_property_set
+from conf.skills import get_skill_set
+from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
-from hoopgn.networks.hoopgnv1 import HoopgnV1Config
+from hoopgn.networks.v1 import HoopgnV1Config
 from hoopgn.storage import StorageConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from cli.cmd_train import TrainRunnerConfig
 
-from conf.property_sets import get_property_set
-from conf.skill_sets import get_skill_set
 
+SKILL_TAG = "blue"
+PROPERTY_TAG = "blue"
 
-SKILLS = "blue"
-PROPERTIES_EVAL = "blue"
-PROPERTIES_NETWORK = "blue"
-ENTITIES = "blue"
+checkpoint_path = "checkpoints/explain/blue/best.pt"
+skills = get_skill_set(SKILL_TAG)
 
-
-skills = get_skill_set(SKILLS)
-properties_eval = get_property_set(PROPERTIES_EVAL)
-properties_network = get_property_set(PROPERTIES_NETWORK)
-properties = properties_network
-entities = properties_to_entities(properties=properties)
+properties = get_property_set(PROPERTY_TAG)
 
 
 cfg = TrainRunnerConfig(
     skills=skills,
-    entities=entities,
     properties=properties,
-    agent=PPOAgentConfig(
+    skill=HoopGNSkillConfig(
         network=HoopgnV1Config(dim_skill=len(skills), dim_state=len(properties)),
         storage=StorageConfig(
             skills=skills,
-            states_eval=properties_eval,
-            states_network=properties_network,
+            states_eval=properties,
+            states_network=properties,
         ),
-        buffer=BufferConfig(steps=5),
+        buffer=BufferConfig(size=5),
     ),
     experiment=NoiseExperimentConfig(
         environment=CalvinEnvironmentConfig(),
         evaluator=Dense3EvaluatorConfig(
-            states_eval=properties_eval,
-            states_network=properties_network,
+            states_eval=properties,
+            states_network=properties,
         ),
         p_skip=0.0,
         p_rand=0.0,

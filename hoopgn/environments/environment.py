@@ -14,6 +14,7 @@ class StepFeedback(Enum):
 
 @dataclass(kw_only=True)
 class EnvironmentConfig:
+    label: str
     converters: list[ConverterConfig] = field(
         default_factory=lambda: [TapasConverterConfig()]
     )

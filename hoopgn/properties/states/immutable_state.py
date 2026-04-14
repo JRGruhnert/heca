@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import torch
 
-from hoopgn.properties.state import StateConfig, State
+from conf.properties.v2.state import StateConfig, State
 
 
 @dataclass(kw_only=True)

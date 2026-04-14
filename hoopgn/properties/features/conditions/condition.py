@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import torch
 
+from hoopgn import logger
+from hoopgn.observation.converters.converter import Converter
 from hoopgn.properties.features.parameters import select_property_parameter
 from hoopgn.properties.features.parameters.ignore_parameter import (
     IgnoreParameterConfig,
@@ -16,6 +18,7 @@ from hoopgn.properties.features.feature import (
     PropertyFeature,
     PropertyFeatureConfig,
 )
+from hoopgn.properties.property import PropertyConfig
 
 
 @dataclass(kw_only=True)
@@ -46,17 +49,19 @@ class PropertyCondition(PropertyFeature):
         )
 
     @classmethod
-    def from_demos(
-        cls, value: tuple, config: PropertyConditionConfig
+    def from_hoopgnv1_demos(
+        cls,
+        value: tuple,
+        config: PropertyConfig,
     ) -> "PropertyCondition":
-        instance = cls(config)
+        instance = cls(config.condition)
         start, end, reversed, selected_by_tapas = value
         tp = instance.parameter.hoopgnv1(start, end, reversed, selected_by_tapas)
-
         if tp is None:
             return PropertyCondition(IgnoreConditionConfig())
 
         instance.value = tp
+        logger.debug(f"Created {cls.__name__} from demos with value: {instance.value}.")
         return instance
 
 

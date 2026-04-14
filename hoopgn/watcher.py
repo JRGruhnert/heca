@@ -1,17 +1,18 @@
+from dataclasses import dataclass
+
+
+@dataclass(kw_only=True)
+class WatcherConfig:
+    patience: int = 5
+    ema_mode: bool = False
+    ema_smoothing_factor: float = 0.1
+    min_batches: int = 20
+    max_batches: int = 100
+
+
 class Watcher:
-    def __init__(
-        self,
-        patience: int,
-        min_batches: int,
-        max_batches: int,
-        use_ema: bool,
-        smoothing_factor: float = 0.1,
-    ):
-        self.patience = patience
-        self.min_batches = min_batches
-        self.max_batches = max_batches
-        self.use_ema = use_ema
-        self.smoothing_factor = smoothing_factor
+    def __init__(self, config: WatcherConfig):
+        self.config = config
         self.best_value = -float("inf")
         self.counter = 0
         self.ema = None
@@ -23,15 +24,15 @@ class Watcher:
             should_stop (bool): Whether early stopping should trigger.
             is_new_high (bool): Whether the current metric is a new high.
         """
-        if self.use_ema:
+        if self.config.ema_mode:
             should_stop = self._ema_check(metric)
         else:
             should_stop = self._metric_check(metric)
 
         # Enforce min and max batch constraints
-        if current_batch < self.min_batches:
+        if current_batch < self.config.min_batches:
             return False
-        elif current_batch >= self.max_batches:
+        elif current_batch >= self.config.max_batches:
             return True
         else:
             return should_stop
@@ -42,7 +43,8 @@ class Watcher:
             self.ema = metric  # Initialize EMA with the first metric value
         else:
             self.ema = (
-                self.smoothing_factor * metric + (1 - self.smoothing_factor) * self.ema
+                self.config.ema_smoothing_factor * metric
+                + (1 - self.config.ema_smoothing_factor) * self.ema
             )
 
         return self._metric_check(self.ema)
@@ -53,4 +55,4 @@ class Watcher:
             self.counter = 0
         else:
             self.counter += 1
-        return self.counter >= self.patience
+        return self.counter >= self.config.patience

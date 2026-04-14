@@ -1,4 +1,4 @@
-from hoopgn.plotters.skill_plotters.cnd_plotter import (
+from hoopgn.plotters.skill_plotters.condition_plotter import (
     SkillConditionsPlot,
     SkillConditionsPlotterConfig,
 )

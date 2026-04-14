@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import random
 from hoopgn import logger
 from hoopgn.environments import select_environment
-from hoopgn.environments.environment import EnvironmentConfig
+from hoopgn.environments.environment import Environment, EnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.observation.td_properties import TDProperties
@@ -13,7 +13,7 @@ import math
 
 @dataclass(kw_only=True)
 class ExperimentConfig:
-    environment: EnvironmentConfig
+    environments: list[EnvironmentConfig]
     evaluator: EvaluatorConfig
 
 
@@ -22,7 +22,10 @@ class Experiment(ABC):
         # We sort based on Id for the baseline network to be consistent
         self.config = config
         self.evaluator = select_evaluator(config.evaluator)
-        self.env = select_environment(config.environment)
+        self.environments: dict[str, Environment] = {
+            env_config.label: select_environment(env_config)
+            for env_config in config.environments
+        }
 
         self.current_step = 0
         self.max_allowed_steps = math.inf

@@ -1,17 +1,29 @@
 from dataclasses import dataclass
 import torch
+from hoopgn import logger
 from hoopgn.observation.td_properties import TDProperties
+from hoopgn.watcher import Watcher, WatcherConfig
 
 
 @dataclass(kw_only=True)
 class BufferConfig:
-    steps: int = 2048
+    watcher: WatcherConfig = WatcherConfig()
+    size: int = 2048
+    epoch: int = 0
+    highscore: float = 0.0
+    save_path: str = "data/buffer/"
 
 
 class Buffer:
     def __init__(self, config: BufferConfig):
         self.config = config
+        self.watcher = Watcher(config.watcher)
 
+        # Epoch tracking for saving
+        self.epoch = config.epoch
+        self.highscore = config.highscore
+        self.new_highscore = False
+        # We store lists of data for each episode, and ensure they are all the same length before saving.
         self.current: list[TDProperties] = []
         self.goal: list[TDProperties] = []
         self.actions: list[torch.Tensor] = []
@@ -21,15 +33,17 @@ class Buffer:
         self.success: list[bool] = []
         self.terminals: list[bool] = []
 
-    def clear(self):
-        self.current.clear()
-        self.goal.clear()
-        self.actions.clear()
-        self.logprobs.clear()
-        self.rewards.clear()
-        self.success.clear()
-        self.values.clear()
-        self.terminals.clear()
+    @property
+    def full(self) -> bool:
+        return len(self.actions) >= self.config.size
+
+    @property
+    def progress(self) -> float:
+        return float(self.epoch / self.config.watcher.max_batches)
+
+    @property
+    def reached_max_batches(self) -> bool:
+        return self.epoch >= self.config.watcher.max_batches
 
     def health(self):
         lengths = [
@@ -44,24 +58,30 @@ class Buffer:
         ]
         return all(l == lengths[0] for l in lengths)
 
-    def save(self, path: str, epoch: int) -> float:
-        """Saves the current batch to a file and returns the success rate of the batch."""
+    def save(self, tag: str):
         assert self.health(), "Buffer lengths are inconsistent!"
+        self.new_highscore = False
 
-        file_path = path + f"stats_epoch_{epoch}.pt"
-        data = {
-            "actions": torch.stack(self.actions),
-            "logprobs": torch.tensor(self.logprobs),
-            "values": torch.tensor(self.values),
-            "rewards": torch.tensor(self.rewards),
-            "success": torch.tensor(self.success),
-            "terminals": torch.tensor(self.terminals),
-        }
-        torch.save(data, file_path)
-        return self.success_rate()
-
-    def success_rate(self) -> float:
-        return self.success.count(True) / max(1, self.terminals.count(True))
+        logger.info(f"Saving {tag} buffer for {self.epoch}")
+        torch.save(
+            {
+                "actions": torch.stack(self.actions),
+                "logprobs": torch.tensor(self.logprobs),
+                "values": torch.tensor(self.values),
+                "rewards": torch.tensor(self.rewards),
+                "success": torch.tensor(self.success),
+                "terminals": torch.tensor(self.terminals),
+            },
+            self.config.save_path + "/" + tag + f"/epoch_data_{self.epoch}.pt",
+        )
+        self.current.clear()
+        self.goal.clear()
+        self.actions.clear()
+        self.logprobs.clear()
+        self.rewards.clear()
+        self.success.clear()
+        self.values.clear()
+        self.terminals.clear()
 
     def act_values(
         self,
@@ -93,13 +113,27 @@ class Buffer:
         self.rewards.append(reward)
         self.success.append(success)
         self.terminals.append(terminal)
-        assert self.health(), "Buffer lengths are inconsistent!"
-        return len(self.actions) == self.config.steps
+
+        if self.watcher.update(self.epoch_sr, self.epoch):
+            logger.info(
+                f"Early stopping after {self.epoch} epochs because of no improvement."
+            )
+            return True
+
+        self.epoch += 1
+        self.epoch_sr = sum(self.success) / len(self.success)
+        if self.highscore < self.epoch_sr:
+            self.highscore = self.epoch_sr
+            self.new_highscore = True
+            logger.info(f"New highscore: {self.highscore:.4f} at epoch {self.epoch}.")
+
+        return len(self.actions) == self.config.size
 
     def metrics(self) -> dict[str, float]:
         assert self.health(), "Buffer lengths are inconsistent!"
         return {
-            "stats/mean_reward": sum(self.rewards) / self.config.steps,
-            "stats/mean_length": self.config.steps / max(1, self.terminals.count(True)),
-            "stats/success_rate": self.success_rate(),
+            "stats/mean_episode_reward": sum(self.rewards) / self.config.size,
+            "stats/mean_episode_length": self.config.size
+            / max(1, self.terminals.count(True)),
+            "stats/highscore": self.highscore,
         }

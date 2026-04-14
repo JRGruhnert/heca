@@ -28,4 +28,5 @@ class SkillPlotRunner(SkillRunner):
     def skill_run(self, skill: Skill):
         for plotter in self.plotters:
             plotter.init(self.skills, self.entities, self.properties)
-            plotter.plot_content(skill)
+            plotter.plot(skill)
+            plotter.reset()

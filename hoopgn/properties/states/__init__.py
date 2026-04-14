@@ -3,7 +3,7 @@ from hoopgn.properties.states.binary_state import (
     BinaryState,
     BinaryStateConfig,
 )
-from hoopgn.properties.state import StateConfig, State
+from conf.properties.v2.state import StateConfig, State
 
 
 _STATE_PROPERTY_BUILDERS = {

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
+from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkill, HoopGNSkillConfig
 
 from hoopgn.experiments import select_experiment
 from hoopgn.experiments.experiment import ExperimentConfig
@@ -9,7 +9,7 @@ from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 
 @dataclass
 class ExplainRunnerConfig(HoopGNRunnerConfig):
-    agent: PPOAgentConfig
+    agent: HoopGNSkillConfig
     experiment: ExperimentConfig
 
 
@@ -18,13 +18,11 @@ class ExplainRunner(HoopGNRunner):
         super().__init__(config)
         self.config = config
         self.experiment = select_experiment(config.experiment)
-        self.agent = PPOAgent(config.agent)
+        self.agent = HoopGNSkill(config.agent)
 
     def run(self):
         obs, goal = self.experiment.sample_task()
         episode_ended = False
         while not episode_ended:
             skill = self.agent.act(obs, goal)
-            obs, reward, done, episode_ended = self.experiment.step(skill)
-            if self.agent.feedback(reward, done, episode_ended):
-                return True
+            actor_expl, critic_expl = self.agent.explain(obs, goal, skill)

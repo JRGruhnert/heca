@@ -4,7 +4,7 @@ from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
 from hoopgn.storage import StorageConfig
-from hoopgn.agents.ppo import PPOAgentConfig
+from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
 from cli.cmd_train import TrainRunnerConfig, TrainRunner
 
 import click
@@ -20,10 +20,9 @@ def entry_point():
 
     config = TrainRunnerConfig(
         skills=wandb.config["storage.used_skills"],
-        entities=[],
         properties=wandb.config["storage.used_states"],
-        agent=PPOAgentConfig(
-            buffer=BufferConfig(steps=wandb.config["agent.batch_size"]),
+        skill=HoopGNSkillConfig(
+            buffer=BufferConfig(size=wandb.config["agent.batch_size"]),
             storage=StorageConfig(
                 skills=wandb.config["storage.used_skills"],
                 states_network=wandb.config["storage.used_states"],

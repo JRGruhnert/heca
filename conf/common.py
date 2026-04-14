@@ -1,27 +1,22 @@
-from hoopgn.agents.ppo import PPOAgentConfig
+from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
 from hoopgn.buffer import BufferConfig
-from hoopgn.entities.entity import Entity, EntityConfig
+
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.environments.environment import EnvironmentConfig
 from hoopgn.environments.ogbench import OGBenchEnvironmentConfig
 from hoopgn.logger import LogMode, LoggerConfig
-from hoopgn.observation.td_entities import TDEntities
-from hoopgn.observation.td_properties import TDProperties
-from hoopgn.storage import StorageConfig
 from hoopgn.networks.baseline import BaselineNetworkConfig
-from hoopgn.networks.hoopgnv1 import HoopgnV1Config
+from hoopgn.networks.v1 import HoopgnV1Config
 from hoopgn.networks.network import NetworkConfig
 
 
 def ppo_default_config(
     network: NetworkConfig,
-    storage: StorageConfig,
     buffer: BufferConfig,
     eval: bool,
-) -> PPOAgentConfig:
-    return PPOAgentConfig(
+) -> HoopGNSkillConfig:
+    return HoopGNSkillConfig(
         network=network,
-        storage=storage,
         buffer=buffer,
         eval=eval,
         max_batches=750,

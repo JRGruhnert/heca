@@ -1,19 +1,17 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 
 import numpy as np
 import torch
 
-from hoopgn.properties.features.conditions.condition import (
-    PropertyCondition,
-    PropertyConditionConfig,
-)
+from hoopgn.properties.features.conditions.condition import PropertyCondition
+from hoopgn.properties.property import PropertyConfig
 
 
 @dataclass(kw_only=True)
 class SkillOperatorConfig:
-    conditions: dict[str, PropertyConditionConfig]
+    properties: list[PropertyConfig] = field(default_factory=list)
 
 
 class SkillOperator(ABC):
@@ -22,41 +20,35 @@ class SkillOperator(ABC):
 
     @abstractmethod
     def __call__(self, x) -> np.ndarray | None:
-        "TODO: implement"
         raise NotImplementedError()
 
     @abstractmethod
     def reset(self, goal):
-        "TODO: implement"
         raise NotImplementedError()
 
     @abstractmethod
-    def load_parameter_precons(self) -> dict[str, PropertyCondition]:
-        "TODO: implement"
+    def load_precons(self) -> dict[str, PropertyCondition]:
         raise NotImplementedError()
 
     @abstractmethod
-    def load_parameter_postcons(self) -> dict[str, PropertyCondition]:
-        "TODO: implement"
+    def load_postcons(self) -> dict[str, PropertyCondition]:
         raise NotImplementedError()
 
     @abstractmethod
     def load_demo_precons(self) -> dict[str, torch.Tensor]:
-        "TODO: implement"
         raise NotImplementedError()
 
     @abstractmethod
     def load_demo_postcons(self) -> dict[str, torch.Tensor]:
-        "TODO: implement"
         raise NotImplementedError()
 
     @cached_property
     def parameter_precons(self) -> dict[str, PropertyCondition]:
-        return self.load_parameter_precons()
+        return self.load_precons()
 
     @cached_property
     def parameter_postcons(self) -> dict[str, PropertyCondition]:
-        return self.load_parameter_postcons()
+        return self.load_postcons()
 
     @cached_property
     def demo_precons(self) -> dict[str, torch.Tensor]:

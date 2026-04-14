@@ -4,7 +4,12 @@ import numpy as np
 import torch
 from torch_geometric.data import Batch
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.skills import select_skill_networker, select_skill_operator
+from hoopgn.skills import (
+    select_skill_evaluator,
+    select_skill_networker,
+    select_skill_operator,
+)
+from hoopgn.skills.skill_evaluator import SkillEvaluatorConfig
 from hoopgn.skills.skill_networker import SkillNetworkerConfig
 from hoopgn.skills.skill_operator import SkillOperatorConfig
 from hoopgn.properties.features.conditions.condition import PropertyCondition
@@ -12,11 +17,11 @@ from hoopgn.properties.features.conditions.condition import PropertyCondition
 
 @dataclass(kw_only=True)
 class SkillConfig:
-    label: str
     id: int
-    childs: list[int]
+    label: str
     operator: SkillOperatorConfig
     networker: SkillNetworkerConfig
+    evaluator: SkillEvaluatorConfig
 
 
 class Skill:
@@ -24,12 +29,19 @@ class Skill:
         self.config = config
         self.operator = select_skill_operator(config.operator)
         self.networker = select_skill_networker(config.networker)
+        self.evaluator = select_skill_evaluator(config.evaluator)
 
     def reset(self, goal):
         self.operator.reset(goal)
         self.networker.reset(goal)
+        self.evaluator.reset(goal)
 
-    def build_network(self, x: TDProperties) -> Batch:
+    def solve(self, start):
+        raise NotImplementedError(
+            "TODO: implement skill solving logic using operator, networker and evaluator."
+        )
+
+    def graph(self, x: TDProperties) -> Batch:
         return self.networker(x)
 
     def predict(self, x: TDProperties) -> np.ndarray | None:
@@ -41,16 +53,8 @@ class Skill:
 
     @cached_property
     def precons(self) -> dict[str, PropertyCondition]:
-        return self.operator.load_parameter_precons()
+        return self.operator.load_precons()
 
     @cached_property
     def postcons(self) -> dict[str, PropertyCondition]:
-        return self.operator.load_parameter_postcons()
-
-    @cached_property
-    def demo_precons(self) -> dict[str, torch.Tensor]:
-        return self.operator.load_demo_precons()
-
-    @cached_property
-    def demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self.operator.load_demo_postcons()
+        return self.operator.load_postcons()

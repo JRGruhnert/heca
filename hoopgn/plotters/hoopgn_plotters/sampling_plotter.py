@@ -1,25 +1,26 @@
 from dataclasses import dataclass, field
 from tqdm import trange
 
-from conf.entities.properties.area import CalvinAreaConfig
-from conf.entity_set import properties_to_entities, tdp_to_tde
-from conf.property_sets import get_property_set
-from conf.skill_sets import get_skill_set
+from conf.properties import get_property_set
+from conf.properties.v1.area import CalvinAreaConfig
+from conf.entities import tdp_to_tde
+from conf.skills import get_skill_set
 from hoopgn.buffer import BufferConfig
+from hoopgn.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig
-from hoopgn.evaluators.set_evaluator import SetEvaluator, SetEvaluatorConfig
+from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.networks.hoopgnv1 import HoopgnV1Config
+from hoopgn.networks.v1 import HoopgnV1Config
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
 )
 from hoopgn.properties.states.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
-from hoopgn.agents.ppo import PPOAgent, PPOAgentConfig
+from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.plotters.plots.entity_3d import (
@@ -27,18 +28,11 @@ from hoopgn.plotters.plots.entity_3d import (
     Entity3DHelperConfig,
     Entity3DMode,
 )
-from hoopgn.storage import StorageConfig, select_entities
 
-SKILLS = "srpb"
-PROPERTIES_EVAL = "srpb"
-PROPERTIES_NETWORK = "srpb"
-checkpoint_path = "checkpoints/ppo_hoopgnv1_srpb.pt"
-skills = get_skill_set(SKILLS)
 
-properties_eval = get_property_set(PROPERTIES_EVAL)
-properties_network = get_property_set(PROPERTIES_NETWORK)
-properties = properties_network
-entities = properties_to_entities(properties=properties)
+skills = get_skill_set("srpb")
+properties = get_property_set("srpb")
+checkpoint_path = "checkpoints/explain/blue/best.pt"
 
 
 @dataclass
@@ -46,22 +40,21 @@ class SpawnAreaPlotterConfig(HoopGNPlotterConfig):
     title: str = "Spawn Area Plot"
     name: str = "spawn_area"
     subdir: str = "spawn_area"
-    entities: list = field(default_factory=lambda: entities)
-    agent: PPOAgentConfig = PPOAgentConfig(
-        network=HoopgnV1Config(dim_skill=len(skills), dim_state=len(properties)),
-        storage=StorageConfig(
-            skills=skills,
-            states_eval=properties_eval,
-            states_network=properties_network,
+    agent: HoopGNSkillConfig = HoopGNSkillConfig(
+        network=HoopgnV1Config(
+            dim_skill=len(skills),
+            dim_state=len(properties),
             checkpoint_path=checkpoint_path,
         ),
-        buffer=BufferConfig(steps=100),
+        properties=properties,
+        skills=skills,
+        buffer=BufferConfig(size=100),
     )
     experiment: ExperimentConfig = NoiseExperimentConfig(
         environment=CalvinEnvironmentConfig(),
         evaluator=Dense3EvaluatorConfig(
-            states_eval=properties_eval,
-            states_network=properties_network,
+            states_eval=properties,
+            states_network=properties,
         ),
         p_skip=0.0,
         p_rand=0.0,
@@ -69,8 +62,8 @@ class SpawnAreaPlotterConfig(HoopGNPlotterConfig):
     )
     evaluator: EvaluatorConfig = SetEvaluatorConfig(
         success_reward=1.0,
-        states_eval=properties_eval,
-        states_network=properties_network,
+        states_eval=properties,
+        states_network=properties,
     )
     area: AreaStateConfig = CalvinAreaConfig()
     entity3d: Entity3DHelperConfig = Entity3DHelperConfig(
@@ -84,7 +77,7 @@ class SpawnAreaPlotter(HoopGNPlot):
         self.experiment = select_experiment(config.experiment)
         self.evaluator = select_evaluator(config.evaluator)
         self.entities = select_entities(config.entities)
-        self.agent = PPOAgent(config.agent)
+        self.agent = HoopGNSkill(config.agent)
         self.entity3d = Entity3DHelper(config.entity3d)
 
     def is_different(self, current: TDProperties, goal: TDProperties):
@@ -104,7 +97,7 @@ class SpawnAreaPlotter(HoopGNPlot):
 
     def plot_content(self):
         for i in trange(
-            self.config.agent.buffer.steps,
+            self.config.agent.buffer.size,
             desc="Collecting samples for explanation",
         ):
             c, g = self.experiment.sample_task()

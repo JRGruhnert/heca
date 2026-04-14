@@ -18,3 +18,7 @@ class SkillPlotter(Plotter):
     @abstractmethod
     def plot_content(self, skill: Skill):
         raise NotImplementedError()
+
+    @abstractmethod
+    def reset(self):
+        raise NotImplementedError()
