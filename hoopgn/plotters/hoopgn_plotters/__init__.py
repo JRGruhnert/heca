@@ -1,20 +1,26 @@
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
-    HoopGNPlotConfig,
+    HoopGNPlotterConfig,
+)
+from hoopgn.plotters.hoopgn_plotters.sampling_plotter import (
+    SpawnAreaPlotter,
+    SpawnAreaPlotterConfig,
 )
 
 
-TRAININGS_PLOTS_BUILDERS = {}
+HOOPGN_PLOTS_BUILDERS = {
+    SpawnAreaPlotterConfig: lambda config: SpawnAreaPlotter(config),
+}
 
 
 def register_training_plot(config_type, builder):
-    TRAININGS_PLOTS_BUILDERS[config_type] = builder
+    HOOPGN_PLOTS_BUILDERS[config_type] = builder
 
 
-def select_training_plot(config: HoopGNPlotConfig) -> HoopGNPlot:
-    builder = TRAININGS_PLOTS_BUILDERS.get(type(config))
+def select_training_plot(config: HoopGNPlotterConfig) -> HoopGNPlot:
+    builder = HOOPGN_PLOTS_BUILDERS.get(type(config))  # type: ignore
     if builder is None:
-        for cfg_type, b in TRAININGS_PLOTS_BUILDERS.items():
+        for cfg_type, b in HOOPGN_PLOTS_BUILDERS.items():
             if isinstance(config, cfg_type):
                 builder = b
                 break
@@ -24,6 +30,6 @@ def select_training_plot(config: HoopGNPlotConfig) -> HoopGNPlot:
 
 
 def select_multiple_hoopgn_plotters(
-    configs: list[HoopGNPlotConfig],
+    configs: list[HoopGNPlotterConfig],
 ) -> list[HoopGNPlot]:
     return [select_training_plot(c) for c in configs]

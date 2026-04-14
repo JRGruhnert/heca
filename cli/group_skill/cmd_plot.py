@@ -7,18 +7,12 @@ from hoopgn.runners.skill.plot_skill_runner import (
 )
 import click
 
-from hoopgn.skills.skill import Skill, SkillConfig
-
 
 @click.command(help="Commands related to individual skills.")
 @click.pass_context
 def plot(ctx):
-    hoopgn_cfg = cast(
+    cfg = cast(
         SkillPlotRunnerConfig,
         config_handler(path=ctx.obj["hoopgn"], configtype=SkillPlotRunnerConfig),
     )
-    skill_cfg = cast(
-        SkillConfig,
-        config_handler(path=ctx.obj["skill"], configtype=SkillConfig),
-    )
-    SkillPlotRunner(hoopgn_cfg).run(Skill(skill_cfg))
+    SkillPlotRunner(cfg).run()

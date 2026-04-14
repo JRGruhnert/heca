@@ -1,6 +1,6 @@
 from hoopgn.plotters.skill_plotters.cnd_plotter import (
     SkillConditionsPlot,
-    SkillConditionsPlotConfig,
+    SkillConditionsPlotterConfig,
 )
 from hoopgn.plotters.skill_plotters.skill_plotter import (
     SkillPlotterConfig,
@@ -15,7 +15,7 @@ def select_multiple_skill_plotters(
 
 
 def select_skill_plotter(config: SkillPlotterConfig) -> SkillPlotter:
-    if isinstance(config, SkillConditionsPlotConfig):
+    if isinstance(config, SkillConditionsPlotterConfig):
         return SkillConditionsPlot(config)
     else:
         raise ValueError(f"Unknown SkillPlotterConfig type: {type(config)}")

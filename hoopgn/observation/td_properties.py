@@ -5,18 +5,18 @@ import torch
 from hoopgn.observation import empty_batchsize
 
 
-class TDParameters(TensorDict):
+class TDProperties(TensorDict):
     def __init__(self, parameters: dict[str, torch.Tensor]):
         super().__init__(parameters, batch_size=empty_batchsize)
 
     @classmethod
-    def from_numpy_dict(cls, data: dict[str, np.ndarray]) -> "TDParameters":
+    def from_numpy_dict(cls, data: dict[str, np.ndarray]) -> "TDProperties":
         return cls({k: torch.tensor(v, dtype=torch.float32) for k, v in data.items()})
 
-    def same_fields(self, other: "TDParameters") -> bool:
+    def same_fields(self, other: "TDProperties") -> bool:
         return set(self.keys()) == set(other.keys())  # type: ignore
 
-    def equal(self, other: "TDParameters") -> bool:
+    def equal(self, other: "TDProperties") -> bool:
         result = self == other
         if isinstance(result, bool):
             return result

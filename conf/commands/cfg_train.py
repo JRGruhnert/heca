@@ -1,4 +1,4 @@
-from conf.entity_set import get_entity_set
+from conf.entity_set import properties_to_entities
 from hoopgn.agents.ppo import PPOAgentConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
@@ -19,10 +19,10 @@ ENTITIES = "blue"
 
 
 skills = get_skill_set(SKILLS)
-entities = get_entity_set(ENTITIES)
 properties_eval = get_property_set(PROPERTIES_EVAL)
 properties_network = get_property_set(PROPERTIES_NETWORK)
-properties = properties_eval
+properties = properties_network
+entities = properties_to_entities(properties=properties)
 
 
 cfg = TrainRunnerConfig(

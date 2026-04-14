@@ -1,4 +1,7 @@
-from conf.entity_set import get_entity_set
+from conf.entity_set import properties_to_entities
+from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
+from hoopgn.plotters.hoopgn_plotters.sampling_plotter import SpawnAreaPlotterConfig
+from hoopgn.plotters.plotter import PlotterConfig
 from hoopgn.runners.plot_runner import PlotRunnerConfig
 
 
@@ -13,15 +16,17 @@ ENTITIES = "blue"
 
 
 skills = get_skill_set(SKILLS)
-entities = get_entity_set(ENTITIES)
 properties_eval = get_property_set(PROPERTIES_EVAL)
 properties_network = get_property_set(PROPERTIES_NETWORK)
-properties = properties_eval
-plots = []  # TODO: add plots
+properties = properties_network
+entities = properties_to_entities(properties=properties)
+
+plot1 = SpawnAreaPlotterConfig()
+plotters: list[HoopGNPlotterConfig] = [plot1]
 
 cfg = PlotRunnerConfig(
     skills=skills,
     entities=entities,
     properties=properties,
-    plots=plots,
+    plotters=plotters,
 )

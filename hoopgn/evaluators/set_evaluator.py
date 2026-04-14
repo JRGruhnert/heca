@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from hoopgn.evaluators.evaluator import EvaluatorConfig, Evaluator
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 
 
 @dataclass(kw_only=True)
@@ -13,5 +13,5 @@ class SetEvaluator(Evaluator):
         super().__init__(config)
         self.config = config
 
-    def step(self, current: TDParameters, goal: TDParameters) -> tuple[float, bool]:
+    def step(self, current: TDProperties, goal: TDProperties) -> tuple[float, bool]:
         raise NotImplementedError("This should never be called.")

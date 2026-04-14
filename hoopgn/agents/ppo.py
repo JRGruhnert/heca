@@ -11,7 +11,7 @@ from hoopgn.storage import Storage, StorageConfig
 from hoopgn.watcher import Watcher
 from hoopgn.networks.baseline import BaselineNetwork, BaselineNetworkConfig
 from hoopgn.networks.hoopgnv1 import GraphNetwork, HoopgnV1Config
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn import logger
 from thop import profile
@@ -92,8 +92,8 @@ class PPOAgent(Agent):
 
     def act(
         self,
-        obs: TDParameters,
-        goal: TDParameters,
+        obs: TDProperties,
+        goal: TDProperties,
     ) -> Skill:
         with torch.no_grad():
             batch = self.policy_old.to_encoded_batch(
@@ -107,10 +107,11 @@ class PPOAgent(Agent):
         assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
 
         dist = Categorical(logits=logits)
-        if self.policy_old.is_eval_mode:
-            action = logits.argmax(dim=-1)
-        else:
+        if self.policy_old.training:
             action = dist.sample()
+        else:
+            action = logits.argmax(dim=-1)
+
         logprob = dist.log_prob(action)
         self.buffer.act_values(
             obs, goal, action.detach(), logprob.detach(), value.detach()
@@ -119,8 +120,8 @@ class PPOAgent(Agent):
 
     def explain(
         self,
-        current: TDParameters,
-        goal: TDParameters,
+        current: TDProperties,
+        goal: TDProperties,
         skill: Skill,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
@@ -134,8 +135,8 @@ class PPOAgent(Agent):
 
     def evaluate(
         self,
-        obs: list[TDParameters],
-        goal: list[TDParameters],
+        obs: list[TDProperties],
+        goal: list[TDProperties],
         action: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
         assert len(obs) == len(goal), "Observation and Goal lists have different sizes."
@@ -458,7 +459,7 @@ class PPOAgent(Agent):
     def metrics(self) -> dict:
         return self._metrics
 
-    def measure_flops(self, obs: TDParameters, goal: TDParameters) -> tuple[int, int]:
+    def measure_flops(self, obs: TDProperties, goal: TDProperties) -> tuple[int, int]:
         """Measure FLOPs for a single forward pass through the policy network."""
         with torch.no_grad():
             obs_batch = [obs]

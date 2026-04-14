@@ -9,13 +9,13 @@ class TDEntity(TensorDict):
         self,
         position: torch.Tensor,
         rotation: torch.Tensor,
-        domain: torch.Tensor,
+        # domain: torch.Tensor,
         state: torch.Tensor,
     ):
         data = {
             "position": position,
             "rotation": rotation,
-            "domain": domain,
+            # "domain": domain,
             "state": state,
         }
         super().__init__(data, batch_size=empty_batchsize)
@@ -28,9 +28,9 @@ class TDEntity(TensorDict):
     def rotation(self) -> torch.Tensor:
         return self["rotation"]
 
-    @property
-    def domain(self) -> torch.Tensor:
-        return self["domain"]
+    # @property
+    # def domain(self) -> torch.Tensor:
+    #    return self["domain"]
 
     @property
     def state(self) -> torch.Tensor:

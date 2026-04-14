@@ -20,16 +20,6 @@ class ObjectDeltaPoint:
 
 
 @dataclass
-class ObjectLocationPoint:
-    x: float
-    y: float
-    z: float
-    rotation: float
-    state: int
-    label: str = ""
-
-
-@dataclass
 class EntityPoint:
     x: float
     y: float
@@ -38,7 +28,7 @@ class EntityPoint:
     ry: float
     rz: float
     rw: float
-    state: bool
+    state: int
 
 
 @dataclass
@@ -46,14 +36,14 @@ class EntityData:
     entity: Entity
     current: EntityPoint
     goal: EntityPoint
-    axes: str
     different: bool
     solved: bool
 
 
 class Entity3DMode(Enum):
-    DIFF = "diff"
+    DIFFERENCE = "diff"
     COLORS = "colors"
+    DELTAS = "deltas"
 
 
 @dataclass
@@ -65,11 +55,24 @@ class Style3DConfig:
     red: str = "tab:red"
     blue: str = "tab:blue"
     pink: str = "tab:pink"
+    default: str = "white"
+
+
+STYLE_DICT = {
+    "solved": "tab:green",
+    "unsolved": "black",
+    "true": "tab:yellow",
+    "false": "black",
+    "red": "tab:red",
+    "blue": "tab:blue",
+    "pink": "tab:pink",
+    "default": "white",
+}
 
 
 @dataclass
 class Entity3DHelperConfig:
-    mode: Entity3DMode = Entity3DMode.DIFF
+    mode: Entity3DMode = Entity3DMode.DIFFERENCE
     style: Style3DConfig = Style3DConfig()
 
 
@@ -78,7 +81,7 @@ class Entity3DHelper:
         self.config = config
         self.entities: list[EntityData] = []
 
-        if self.config.mode == Entity3DMode.DIFF:
+        if self.config.mode == Entity3DMode.DIFFERENCE:
             self.fig = plt.figure(figsize=(16, 10))
             self.axes = {
                 "different": self.fig.add_subplot(121, projection="3d"),
@@ -95,7 +98,7 @@ class Entity3DHelper:
             raise ValueError(f"Unsupported mode: {self.config.mode}")
 
     def finish(self):
-        if self.config.mode == Entity3DMode.DIFF:
+        if self.config.mode == Entity3DMode.DIFFERENCE:
             sd_count = sum(e.solved and e.different for e in self.entities)
             ss_count = sum(e.solved and not e.different for e in self.entities)
             d_count = sum(e.different for e in self.entities)
@@ -165,6 +168,9 @@ class Entity3DHelper:
                     label="Pink",
                 ),
             ]
+        elif self.config.mode == Entity3DMode.DELTAS:
+            self.axes["precon"].set_title(f"Preconditions")
+            self.axes["postcon"].set_title(f"Postconditions")
         else:
             raise ValueError(f"Unsupported mode: {self.config.mode}")
 
@@ -187,7 +193,6 @@ class Entity3DHelper:
         goal: TDEntity,
         different: bool,
         solved: bool,
-        axes: str,
     ):
         self.entities.append(
             EntityData(
@@ -196,7 +201,6 @@ class Entity3DHelper:
                 goal=self.get_entity_point(goal),
                 different=different,
                 solved=solved,
-                axes=axes,
             )
         )
 
@@ -215,24 +219,40 @@ class Entity3DHelper:
     def get_color(self, solved: bool) -> str:
         return self.config.style.solved if solved else self.config.style.unsolved
 
-    def get_axis(self, axes: str) -> Axes:
-        return self.axes[axes]
+    def get_axis(self, ed: EntityData) -> Axes | None:
+        if self.config.mode == Entity3DMode.DIFFERENCE:
+            return self.axes["different"] if ed.different else self.axes["same"]
+        elif self.config.mode == Entity3DMode.COLORS:
+            return self.axes.get(ed.entity.config.label, None)
+        else:
+            raise ValueError(f"Unsupported mode: {self.config.mode}")
 
     def show_entities(self):
         for ed in self.entities:
             ec = self.get_color(ed.solved)
-            ax = self.get_axis(ed.axes)
-            self.show_location(ax, ed.current, ec, ed.entity.config.label)
-            self.show_location(ax, ed.goal, ec, ed.entity.config.label)
-            self.show_rotation(ax, ed.current, ec)
-            self.show_rotation(ax, ed.goal, ec)
+            if self.config.mode == Entity3DMode.DELTAS:
+                ax_current = self.axes["precon"]
+                ax_goal = self.axes["postcon"]
+            else:
+                ax_current = self.get_axis(ed)
+                ax_goal = self.get_axis(ed)
 
-    def show_location(
-        self, axis: Axes, point: EntityPoint, edge_color: str, face_color: str
-    ):
-        axis.scatter(
-            point.x, point.y, point.z, c=face_color, edgecolors=edge_color, linewidths=1
-        )
+            if ax_current and ax_goal:
+                self.show_location(
+                    ax_current,
+                    ed.current,
+                    STYLE_DICT.get(ed.entity.config.label, STYLE_DICT["default"]),
+                )
+                self.show_location(
+                    ax_goal,
+                    ed.goal,
+                    STYLE_DICT.get(ed.entity.config.label, STYLE_DICT["default"]),
+                )
+                self.show_rotation(ax_current, ed.current, ec)
+                self.show_rotation(ax_goal, ed.goal, ec)
+
+    def show_location(self, axis: Axes, point: EntityPoint, color: str):
+        axis.scatter(point.x, point.y, point.z, c=color)
 
     def show_rotation(self, axis: Axes, point: EntityPoint, color: str):
         dir = R.from_quat([point.rx, point.ry, point.rz, point.rw]).apply([0.01, 0, 0])
@@ -252,15 +272,15 @@ class Entity3DHelper:
         for ed in self.entities:
             p1 = ed.current
             p2 = ed.goal
-            axes = ed.axes
             solved = ed.solved
-            ax = self.get_axis(axes)
-            ax.plot(
-                [p1.x, p2.x],
-                [p1.y, p2.y],
-                [p1.z, p2.z],
-                color=self.get_color(solved),
-            )
+            ax = self.get_axis(ed)
+            if ax is not None:
+                ax.plot(
+                    [p1.x, p2.x],
+                    [p1.y, p2.y],
+                    [p1.z, p2.z],
+                    color=self.get_color(solved),
+                )
 
     def show_areas(self, area: AreaStateConfig):
         for axis in self.axes.values():

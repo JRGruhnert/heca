@@ -6,7 +6,8 @@ def skill_config(func):
         "--skill",
         "-s",
         type=click.Path(exists=True),
-        required=True,
+        required=False,
+        default=None,
         help="Path to skill config file",
     )(func)
 
@@ -14,6 +15,6 @@ def skill_config(func):
 @click.group()
 @skill_config
 @click.pass_context
-def skill(ctx, cfg_path):
+def skill(ctx, skill):
     ctx.ensure_object(dict)
-    ctx.obj["skill"] = cfg_path
+    ctx.obj["skill"] = skill

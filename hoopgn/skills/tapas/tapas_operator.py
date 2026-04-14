@@ -22,7 +22,7 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from hoopgn.properties.property import Property
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
 from hoopgn.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
@@ -92,7 +92,7 @@ class TapasOperator(SkillOperator):
         self.first_prediction = True
         self.predictions: RobotTrajectory | None = None
         self.prediction = None
-        self.goal: TDParameters | None = None
+        self.goal: TDProperties | None = None
         self.pos_reg = re.compile(r"(.+?)_(?:position)")
         self.rot_reg = re.compile(r"(.+?)_(?:rotation)")
         self.scalar_reg = re.compile(r"(.+?)_(?:scalar)")
@@ -109,7 +109,7 @@ class TapasOperator(SkillOperator):
             )
             self.override = True
 
-    def __call__(self, x: TDParameters) -> np.ndarray | None:
+    def __call__(self, x: TDProperties) -> np.ndarray | None:
         assert self.goal is not None, "Goal must be set before prediction."
         assert "tapas" in x.keys(), "Tapas observation must be present in the input."
         if self.config.predict_as_batch:
@@ -150,7 +150,7 @@ class TapasOperator(SkillOperator):
                 return None
             return self._to_action(self.prediction)  # type: ignore
 
-    def reset(self, goal: TDParameters):
+    def reset(self, goal: TDProperties):
         self.policy.reset_episode()
         self.first_prediction = True
         self.predictions = None

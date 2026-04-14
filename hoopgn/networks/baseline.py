@@ -3,7 +3,7 @@ from typing import Any
 import torch
 import torch.nn as nn
 from hoopgn.networks.network import Network, NetworkConfig
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from collections import defaultdict
 
 from hoopgn.properties.property import Property
@@ -57,7 +57,7 @@ class BaselineNetwork(Network):
 
     def state_type_dict_values(
         self,
-        x: TDParameters,
+        x: TDProperties,
         states: list[Property],
     ) -> dict[str, torch.Tensor]:
         """Group state values by their type strings."""
@@ -71,7 +71,7 @@ class BaselineNetwork(Network):
         self,
         current: list[torch.Tensor],
         goal: list[torch.Tensor],
-        obs: list[TDParameters],
+        obs: list[TDProperties],
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return torch.stack(current, dim=0), torch.stack(goal, dim=0)
 

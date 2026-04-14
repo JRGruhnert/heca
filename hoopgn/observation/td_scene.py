@@ -2,12 +2,12 @@ from tensordict import TensorDict
 from typing import cast
 
 from hoopgn.observation.td_entities import TDEntities
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from hoopgn.observation import empty_batchsize
 
 
 class TDScene(TensorDict):
-    def __init__(self, entities, parameters: TDParameters):
+    def __init__(self, entities, parameters: TDProperties):
         data = {
             "entities": entities,
             "parameters": parameters,
@@ -19,5 +19,5 @@ class TDScene(TensorDict):
         return cast(TDEntities, self["entities"])
 
     @property
-    def parameters(self) -> TDParameters:
-        return cast(TDParameters, self["parameters"])
+    def parameters(self) -> TDProperties:
+        return cast(TDProperties, self["parameters"])

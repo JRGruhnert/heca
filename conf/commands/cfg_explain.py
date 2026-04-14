@@ -1,4 +1,4 @@
-from conf.entity_set import get_entity_set
+from conf.entity_set import properties_to_entities
 from conf.property_sets import get_property_set
 from conf.skill_sets import get_skill_set
 from hoopgn.agents.ppo import PPOAgentConfig
@@ -17,10 +17,11 @@ ENTITIES = "blue"
 
 
 skills = get_skill_set(SKILLS)
-entities = get_entity_set(ENTITIES)
+
 properties_eval = get_property_set(PROPERTIES_EVAL)
 properties_network = get_property_set(PROPERTIES_NETWORK)
-properties = properties_eval
+properties = properties_network
+entities = properties_to_entities(properties=properties)
 
 cfg = ExplainRunnerConfig(
     skills=skills,

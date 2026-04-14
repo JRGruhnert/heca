@@ -3,7 +3,7 @@ from functools import cached_property
 import numpy as np
 import torch
 from torch_geometric.data import Batch
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from hoopgn.skills import select_skill_networker, select_skill_operator
 from hoopgn.skills.skill_networker import SkillNetworkerConfig
 from hoopgn.skills.skill_operator import SkillOperatorConfig
@@ -29,10 +29,10 @@ class Skill:
         self.operator.reset(goal)
         self.networker.reset(goal)
 
-    def build_network(self, x: TDParameters) -> Batch:
+    def build_network(self, x: TDProperties) -> Batch:
         return self.networker(x)
 
-    def predict(self, x: TDParameters) -> np.ndarray | None:
+    def predict(self, x: TDProperties) -> np.ndarray | None:
         return self.operator(x)
 
     @cached_property

@@ -2,11 +2,13 @@ from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 import os
 
-from matplotlib import pyplot as plt
-from hoopgn import logger
 import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patches as mpatches
+
+from hoopgn.entities.entity import Entity
+from hoopgn.properties.property import Property
+from hoopgn.skills.skill import Skill
 
 # Sets a gloabal style. Every plot uses this still if this file is imported.
 plt.style.use("seaborn-v0_8")
@@ -219,6 +221,9 @@ class PlotterConfig:
 class Plotter(ABC):
     def __init__(self, config: PlotterConfig):
         self.config = config
+        self.skills: list[Skill] = []
+        self.entities: list[Entity] = []
+        self.properties: list[Property] = []
 
     @abstractmethod
     def plot_content(self):
@@ -229,7 +234,6 @@ class Plotter(ABC):
         plt.title(self.config.title)
         plt.tight_layout()
         if self.config.save:
-            logger.info(f"Saving Plot: {self.config.name}")
             save_dir = os.path.join(
                 self.config.rootdir, self.config.subdir, self.config.name
             )
@@ -239,3 +243,10 @@ class Plotter(ABC):
         if self.config.show:
             plt.show()
         plt.close()
+
+    def init(
+        self, skills: list[Skill], entities: list[Entity], properties: list[Property]
+    ):
+        self.skills = skills
+        self.entities = entities
+        self.properties = properties

@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from conf.entities.properties.position import PositionPropertyConfig
-from conf.entities.properties.quaternion import QuaternionPropertyConfig
 from hoopgn.properties.property import PropertyConfig
 
 
@@ -10,8 +8,8 @@ class EntityConfig:
     label: str
     # Properties
     # domain: DomainPropertyConfig
-    position: PositionPropertyConfig
-    rotation: QuaternionPropertyConfig
+    position: PropertyConfig
+    rotation: PropertyConfig
     state: PropertyConfig
     # Features
     # ruler: EntityRulerConfig

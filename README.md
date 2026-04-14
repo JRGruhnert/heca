@@ -5,6 +5,10 @@ python -m cli.hoopgn explain -c conf/explain/gnn.py
 ```
 
 ```bash
+hoopgn -c conf/commands/skill/cfg_plot.py skill plot
+```
+
+```bash
 hoopgn explain -c conf/explain/gnn.py
 ```
 

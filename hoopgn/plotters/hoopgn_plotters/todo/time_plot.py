@@ -7,12 +7,12 @@ from dataclasses import dataclass
 from hoopgn.data import TrainingRunData
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
-    HoopGNPlotConfig,
+    HoopGNPlotterConfig,
 )
 
 
 @dataclass
-class TTimePlotConfig(HoopGNPlotConfig):
+class TTimePlotConfig(HoopGNPlotterConfig):
     name: str = "comparison_all_time"
 
 

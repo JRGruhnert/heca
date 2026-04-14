@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from hoopgn.evaluators.evaluator import EvaluatorConfig, Evaluator
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 
 
 @dataclass(kw_only=True)
@@ -16,8 +16,8 @@ class DenseEvaluator(Evaluator):
 
     def step(
         self,
-        current: TDParameters,
-        goal: TDParameters,
+        current: TDProperties,
+        goal: TDProperties,
     ) -> tuple[float, bool]:
         prev_percentage_done = self.percentage_done
         if self.is_equal(current, goal):

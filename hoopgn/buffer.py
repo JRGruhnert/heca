@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import torch
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 
 
 @dataclass(kw_only=True)
@@ -12,8 +12,8 @@ class Buffer:
     def __init__(self, config: BufferConfig):
         self.config = config
 
-        self.current: list[TDParameters] = []
-        self.goal: list[TDParameters] = []
+        self.current: list[TDProperties] = []
+        self.goal: list[TDProperties] = []
         self.actions: list[torch.Tensor] = []
         self.logprobs: list[torch.Tensor] = []
         self.values: list[torch.Tensor] = []
@@ -65,8 +65,8 @@ class Buffer:
 
     def act_values(
         self,
-        current: TDParameters,
-        goal: TDParameters,
+        current: TDProperties,
+        goal: TDProperties,
         action: torch.Tensor,
         action_logprob: torch.Tensor,
         state_val: torch.Tensor,
@@ -79,8 +79,8 @@ class Buffer:
 
     def act_values_tree(
         self,
-        current: TDParameters,
-        goal: TDParameters,
+        current: TDProperties,
+        goal: TDProperties,
         action: int,
     ):
         self.current.append(current)

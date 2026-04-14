@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from hoopgn import logger
+from hoopgn.entities.entity import Entity, EntityConfig
 from hoopgn.skills.skill import Skill, SkillConfig
 from hoopgn.properties.property import Property, PropertyConfig
 import os
@@ -14,6 +15,11 @@ def select_skills(configs: list[SkillConfig]) -> list[Skill]:
 def select_properties(configs: list[PropertyConfig]) -> list[Property]:
     """Create states from configs - simple factory function"""
     return [Property(config) for config in configs]
+
+
+def select_entities(configs: list[EntityConfig]) -> list[Entity]:
+    """Create entities from configs - simple factory function"""
+    return [Entity(config) for config in configs]
 
 
 @dataclass(kw_only=True)

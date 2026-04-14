@@ -29,6 +29,6 @@ def hoopgn_config(func):
 @click.group()
 @hoopgn_config
 @click.pass_context
-def hoopgn(ctx, cfg_path):
+def hoopgn(ctx, config):
     ctx.ensure_object(dict)
-    ctx.obj["hoopgn"] = cfg_path
+    ctx.obj["hoopgn"] = config

@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 import numpy as np
 from torch._tensor import Tensor
-from hoopgn.observation.td_parameters import TDParameters
+from hoopgn.observation.td_properties import TDProperties
 from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
 from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
@@ -20,10 +20,10 @@ class SkipOperator(SkillOperator):
         super().__init__(config)
         self.config = config
 
-    def __call__(self, x: TDParameters) -> np.ndarray | None:
+    def __call__(self, x: TDProperties) -> np.ndarray | None:
         return None
 
-    def reset(self, goal: TDParameters):
+    def reset(self, goal: TDProperties):
         pass
 
     def load_parameter_precons(self) -> dict[str, PropertyCondition]:
