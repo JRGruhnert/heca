@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from hoopgn import logger
 from hoopgn.skills.skill import Skill, SkillConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
-from hoopgn.skills.leafs.tapas.tapas_operator import TapasOperator
+from hoopgn.operators.tapas_operator import TapasOperator
 
 
 @dataclass

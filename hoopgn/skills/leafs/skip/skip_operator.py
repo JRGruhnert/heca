@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from torch._tensor import Tensor
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
+from hoopgn.operators.skill_operator import SkillOperator, SkillOperatorConfig
 from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
     PropertyConditionConfig,

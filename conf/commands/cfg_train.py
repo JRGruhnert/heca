@@ -5,7 +5,6 @@ from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
 from hoopgn.networks.v1 import HoopgnV1Config
-from hoopgn.storage import StorageConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from cli.cmd_train import TrainRunnerConfig
 
@@ -24,15 +23,10 @@ cfg = TrainRunnerConfig(
     properties=properties,
     skill=HoopGNSkillConfig(
         network=HoopgnV1Config(dim_skill=len(skills), dim_state=len(properties)),
-        storage=StorageConfig(
-            skills=skills,
-            states_eval=properties,
-            states_network=properties,
-        ),
         buffer=BufferConfig(size=5),
     ),
     experiment=NoiseExperimentConfig(
-        environment=CalvinEnvironmentConfig(),
+        environments=[CalvinEnvironmentConfig()],
         evaluator=Dense3EvaluatorConfig(
             states_eval=properties,
             states_network=properties,

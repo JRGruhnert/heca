@@ -6,7 +6,7 @@ from hoopgn import logger
 from hoopgn.entities.entity import EntityConfig
 from hoopgn.properties.property import PropertyConfig
 from hoopgn.skills.skill import SkillConfig
-from hoopgn.skills.leafs.tapas.tapas_operator import TapasOperator
+from hoopgn.operators.tapas_operator import TapasOperator
 
 
 @dataclass

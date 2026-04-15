@@ -21,7 +21,7 @@ from tapas_gmm_modified.utils.robot_trajectory import (
 )
 from hoopgn.properties.property import Property, PropertyConfig
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.skills.skill_operator import SkillOperator, SkillOperatorConfig
+from hoopgn.operators.skill_operator import SkillOperator, SkillOperatorConfig
 from hoopgn.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
 )

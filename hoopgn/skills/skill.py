@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Type
 import numpy as np
-import torch
 from torch_geometric.data import Batch
 from hoopgn.observation.td_properties import TDProperties
+from hoopgn.registry import SKILL_REGISTRY, SkillIdent
 from hoopgn.skills import (
     select_skill_evaluator,
     select_skill_networker,
@@ -11,14 +12,13 @@ from hoopgn.skills import (
 )
 from hoopgn.skills.skill_evaluator import SkillEvaluatorConfig
 from hoopgn.skills.skill_networker import SkillNetworkerConfig
-from hoopgn.skills.skill_operator import SkillOperatorConfig
+from hoopgn.operators.skill_operator import SkillOperatorConfig
 from hoopgn.properties.features.conditions.condition import PropertyCondition
 
 
 @dataclass(kw_only=True)
 class SkillConfig:
-    id: int
-    label: str
+    ident: SkillIdent
     operator: SkillOperatorConfig
     networker: SkillNetworkerConfig
     evaluator: SkillEvaluatorConfig
@@ -26,6 +26,7 @@ class SkillConfig:
 
 class Skill:
     def __init__(self, config: SkillConfig):
+        SKILL_REGISTRY.register(config)
         self.config = config
         self.operator = select_skill_operator(config.operator)
         self.networker = select_skill_networker(config.networker)

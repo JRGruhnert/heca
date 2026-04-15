@@ -7,7 +7,6 @@ from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.networks.v1 import HoopgnV1Config
 from hoopgn.runners.explain_runner import ExplainRunnerConfig
-from hoopgn.storage import StorageConfig
 
 SKILL_TAG = "blue"
 PROPERTY_TAG = "blue"
@@ -26,17 +25,10 @@ cfg = ExplainRunnerConfig(
             dim_state=len(properties),
             explain_mode=True,
         ),
-        eval=True,
-        storage=StorageConfig(
-            skills=skills,
-            states_eval=properties,
-            states_network=properties,
-            checkpoint_path=checkpoint_path,
-        ),
         buffer=BufferConfig(size=5),
     ),
     experiment=NoiseExperimentConfig(
-        environment=CalvinEnvironmentConfig(),
+        environments=[CalvinEnvironmentConfig()],
         evaluator=Dense3EvaluatorConfig(
             states_eval=properties,
             states_network=properties,

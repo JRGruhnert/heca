@@ -4,11 +4,12 @@ from dataclasses import dataclass
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 import torch
 from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.td_properties import TDProperties, empty_batchsize
+from hoopgn.observation.td_properties import TDProperties
 
 
 @dataclass(kw_only=True)
 class CalvinEnvironmentConfig(EnvironmentConfig):
+    label: str = "calvin"
     calvin: CalvinConfig = CalvinConfig(
         task="Undefined",
         cameras=("wrist", "front"),
