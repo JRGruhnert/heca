@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from hoopgn.entities.entity import Entity
+from hoopgn.environments.entities.entity import Entity
 from hoopgn.observation.converters import select_observation_converter
 from hoopgn.observation.converters.converter import ConverterConfig
 from hoopgn.observation.converters.tapas_converter import TapasConverterConfig

@@ -4,7 +4,7 @@ from conf.properties.v1.flip import FlipPropertyConfig
 from conf.properties.v1.range import RangePropertyConfig
 from conf.properties.v1.position import PositionPropertyConfig
 from conf.properties.v1.quaternion import QuaternionPropertyConfig
-from hoopgn.properties.features.evaluators import PIgnoreEvaluatorConfig
+from hoopgn.environments.properties.features.evaluators import PIgnoreEvaluatorConfig
 
 
 ee_position: PositionPropertyConfig = PositionPropertyConfig(

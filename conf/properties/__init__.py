@@ -1,5 +1,5 @@
 from hoopgn import logger
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import PropertyConfig
 from conf.properties import v1
 
 

@@ -10,9 +10,11 @@ from hoopgn.explainer import HoopgnExplainer
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.network import Network, NetworkConfig
-from hoopgn.skills.skill import Skill
-from hoopgn.properties.features.conditions.condition import PropertyCondition
-from hoopgn.properties.property import Property
+from hoopgn.agents.agent import Skill
+from hoopgn.environments.properties.features.conditions.condition import (
+    PropertyCondition,
+)
+from hoopgn.environments.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import CaptumExplainer, HeteroExplanation
 
@@ -204,7 +206,7 @@ class HoopgnV1Network(Network):
         edge_list = []
         for task_idx, skill in enumerate(self.skills):
             for state_idx, state in enumerate(self.states):
-                if state.config.label in skill.precons.keys():
+                if state.cfg.label in skill.precons.keys():
                     edge_list.append((state_idx, task_idx))
         return torch.tensor(edge_list, dtype=torch.long).t()
 

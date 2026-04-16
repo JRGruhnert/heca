@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from hoopgn.experiments import select_experiment
-from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkill, HoopGNSkillConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 

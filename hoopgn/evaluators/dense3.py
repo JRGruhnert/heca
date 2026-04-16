@@ -18,13 +18,13 @@ class Dense3Evaluator(Evaluator):
         self.config = config
         self.max_percentage_done: float = 0.0
 
-    def evaluate_sample(
+    def is_sample(
         self,
         current: TDProperties,
         goal: TDProperties,
     ) -> bool:
-        valid = super().evaluate_sample(current, goal)
-        self.max_percentage_done = max(self.max_percentage_done, self.percentage_done)
+        valid = super().is_sample(current, goal)
+        self.max_percentage_done = max(self.max_percentage_done, self.progress)
         # print("Resetting")
         return valid
 
@@ -33,23 +33,23 @@ class Dense3Evaluator(Evaluator):
         current: TDProperties,
         goal: TDProperties,
     ) -> tuple[float, bool]:
-        prev_percentage_done = self.percentage_done
+        prev_percentage_done = self.progress
 
         if self.is_equal(current, goal):
             return self.config.success_reward, True
 
-        improvement = self.percentage_done - prev_percentage_done
+        improvement = self.progress - prev_percentage_done
         # print("improvement:", improvement)
         reward = max(0.0, improvement * self.config.max_progress_reward)
         # print("reward:", reward)
         if self.config.add_monotonic_reward:
             # print("max percentage done:", self.max_percentage_done)
             # print("current percentage done:", self.percentage_done)
-            if self.percentage_done > self.max_percentage_done:
+            if self.progress > self.max_percentage_done:
                 reward += (
-                    self.percentage_done - self.max_percentage_done
+                    self.progress - self.max_percentage_done
                 ) * self.config.max_progress_reward
-                self.max_percentage_done = self.percentage_done
+                self.max_percentage_done = self.progress
         # Add small step penalty
         reward += self.config.step_penalty
         # print("reward after step penalty:", reward)

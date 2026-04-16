@@ -1,7 +1,7 @@
-from hoopgn.entities.entity import Entity, EntityConfig
+from hoopgn.environments.entities.entity import Entity, EntityConfig
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import PropertyConfig
 
 _ENTITY_PROPERTY_MAPPING: dict[str, dict[str, str]] = {
     "red": {

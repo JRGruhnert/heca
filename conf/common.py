@@ -1,4 +1,4 @@
-from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from hoopgn.buffer import BufferConfig
 
 from hoopgn.environments.calvin import CalvinEnvironmentConfig

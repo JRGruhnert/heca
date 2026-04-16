@@ -3,10 +3,10 @@ from dataclasses import dataclass, field
 
 from conf.entities import properties_to_entities
 from hoopgn import logger
-from hoopgn.entities.entity import EntityConfig
-from hoopgn.properties.property import PropertyConfig
-from hoopgn.skills.skill import SkillConfig
-from hoopgn.operators.tapas_operator import TapasOperator
+from hoopgn.environments.entities.entity import EntityConfig
+from hoopgn.environments.properties.property import PropertyConfig
+from hoopgn.agents.agent import SkillConfig
+from hoopgn.policies.tapas_policy import TapasPolicy
 
 
 @dataclass
@@ -23,11 +23,11 @@ class HoopGNRunnerConfig:
         )
         self.entities = properties_to_entities(properties=self.properties)
         for skill in self.skills:
-            if isinstance(skill.operator, TapasOperator):
+            if isinstance(skill.policy, TapasPolicy):
                 logger.warning(
                     f"Skill '{skill.label}' is a Tapas skill. Performing automated property assignment."
                 )
-                skill.operator.config.properties = self.properties
+                skill.policy.config.properties = self.properties
 
 
 class HoopGNRunner(ABC):

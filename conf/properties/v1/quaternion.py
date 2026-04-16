@@ -1,27 +1,29 @@
 from dataclasses import dataclass
 
 from hoopgn.networks.layers.encoder import PropertyEncoderConfig
-from hoopgn.properties.features.evaluators.evaluator import (
+from hoopgn.environments.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
-from hoopgn.properties.features.evaluators.threshold_evaluator import (
+from hoopgn.environments.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
-from hoopgn.properties.features.conditions.condition import (
+from hoopgn.environments.properties.features.conditions.condition import (
     PropertyConditionConfig,
 )
 
-from hoopgn.properties.features.extractors.calvin_gt_extractor import (
+from hoopgn.environments.properties.features.extractors.calvin_gt_extractor import (
     CalvinGTExtractorConfig,
 )
-from hoopgn.properties.features.parameters.quaternion_parameter import (
+from hoopgn.environments.properties.features.parameters.quaternion_parameter import (
     QuaternionParameterConfig,
 )
-from hoopgn.properties.features.rulers.angular_ruler import AngularRulerConfig
-from hoopgn.properties.features.normalizers.quaternion_normalizer import (
+from hoopgn.environments.properties.features.rulers.angular_ruler import (
+    AngularRulerConfig,
+)
+from hoopgn.environments.properties.features.normalizers.quaternion_normalizer import (
     QuaternionNormalizerConfig,
 )
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import PropertyConfig
 
 
 @dataclass

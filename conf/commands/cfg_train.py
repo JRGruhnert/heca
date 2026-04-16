@@ -1,6 +1,6 @@
 from conf.properties import get_property_set
 from conf.skills import get_skill_set
-from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.buffer import BufferConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig

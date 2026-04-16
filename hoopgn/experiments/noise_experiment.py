@@ -3,10 +3,10 @@ import math
 import random
 
 from hoopgn import logger
-from hoopgn.skills.leafs.skip.skip_leaf import SkipConfig
+from hoopgn.agents.leafs.skip.skip_agent import SkipConfig
 from hoopgn.experiments.experiment import Experiment, ExperimentConfig
-from hoopgn.skills.skill import Skill, SkillConfig
-from hoopgn.storage import select_skills
+from hoopgn.agents.agent import Skill, SkillConfig
+from hoopgn.storages.storage import select_skills
 
 
 @dataclass(kw_only=True)

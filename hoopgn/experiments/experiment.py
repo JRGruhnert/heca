@@ -7,7 +7,7 @@ from hoopgn.environments.environment import Environment, EnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.skills.skill import Skill
+from hoopgn.agents.agent import Skill
 import math
 
 
@@ -52,7 +52,7 @@ class Experiment(ABC):
         self.current = self.env.reset()
         self.goal = self.env.reset()
         attempts = 0
-        while not self.evaluator.evaluate_sample(self.current, self.goal):
+        while not self.evaluator.is_sample(self.current, self.goal):
             attempts += 1
             if attempts % 5 == 0:
                 self.current = self.env.reset()

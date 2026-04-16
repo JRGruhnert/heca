@@ -19,13 +19,13 @@ class DenseEvaluator(Evaluator):
         current: TDProperties,
         goal: TDProperties,
     ) -> tuple[float, bool]:
-        prev_percentage_done = self.percentage_done
+        prev_percentage_done = self.progress
         if self.is_equal(current, goal):
             # Success reached
             return self.config.success_reward, True
         else:
             # Success not reached
-            if prev_percentage_done < self.percentage_done:
+            if prev_percentage_done < self.progress:
                 return self.config.positive_step_reward, False
             else:
                 return self.config.negative_step_reward, False

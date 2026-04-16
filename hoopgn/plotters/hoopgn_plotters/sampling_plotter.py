@@ -6,7 +6,7 @@ from conf.properties.v1.area import CalvinAreaConfig
 from conf.entities import tdp_to_tde
 from conf.skills import get_skill_set
 from hoopgn.buffer import BufferConfig
-from hoopgn.entities.entity import Entity
+from hoopgn.environments.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
@@ -18,9 +18,9 @@ from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
 )
-from hoopgn.properties.states.area_state import AreaStateConfig
+from hoopgn.environments.properties.states.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
-from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkill, HoopGNSkillConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.plotters.plots.entity_3d import (

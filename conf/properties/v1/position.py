@@ -1,32 +1,32 @@
 from dataclasses import dataclass
 
 from hoopgn.networks.layers.encoder import PropertyEncoderConfig
-from hoopgn.properties.features.evaluators.evaluator import (
+from hoopgn.environments.properties.features.evaluators.evaluator import (
     PropertyEvaluatorConfig,
 )
-from hoopgn.properties.features.evaluators.threshold_evaluator import (
+from hoopgn.environments.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluatorConfig,
 )
 
-from hoopgn.properties.features.extractors.calvin_gt_extractor import (
+from hoopgn.environments.properties.features.extractors.calvin_gt_extractor import (
     CalvinGTExtractorConfig,
 )
-from hoopgn.properties.features.parameters.euclidean_parameter import (
+from hoopgn.environments.properties.features.parameters.euclidean_parameter import (
     EuclideanParameterConfig,
 )
-from hoopgn.properties.features.rulers.euclidean_ruler import (
+from hoopgn.environments.properties.features.rulers.euclidean_ruler import (
     EuclideanRulerConfig,
 )
-from hoopgn.properties.features.normalizers.boundary_normalizer import (
+from hoopgn.environments.properties.features.normalizers.boundary_normalizer import (
     AreaNormalizerConfig,
 )
-from hoopgn.properties.features.conditions.condition import (
+from hoopgn.environments.properties.features.conditions.condition import (
     PropertyConditionConfig,
 )
-from hoopgn.properties.features.normalizers.normalizer import (
+from hoopgn.environments.properties.features.normalizers.normalizer import (
     PropertyNormalizerConfig,
 )
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import PropertyConfig
 
 
 @dataclass

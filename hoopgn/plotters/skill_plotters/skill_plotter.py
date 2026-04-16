@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 from hoopgn.plotters.plotter import Plotter, PlotterConfig
-from hoopgn.skills.skill import Skill
+from hoopgn.agents.agent import Skill
 
 
 @dataclass

@@ -16,9 +16,11 @@ from hoopgn.plotters.skill_plotters.skill_plotter import (
     SkillPlotter,
     SkillPlotterConfig,
 )
-from hoopgn.properties.features.conditions.condition import PropertyCondition
-from hoopgn.properties.states.area_state import AreaStateConfig
-from hoopgn.skills.skill import Skill
+from hoopgn.environments.properties.features.conditions.condition import (
+    PropertyCondition,
+)
+from hoopgn.environments.properties.states.area_state import AreaStateConfig
+from hoopgn.agents.agent import Skill
 
 
 @dataclass

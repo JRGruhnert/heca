@@ -3,8 +3,8 @@ from hoopgn.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
-from hoopgn.storage import StorageConfig
-from hoopgn.skills.branches.hoopgn.hoopgn_skill import HoopGNSkillConfig
+from hoopgn.storages.storage import StorageConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from cli.cmd_train import TrainRunnerConfig, TrainRunner
 
 import click

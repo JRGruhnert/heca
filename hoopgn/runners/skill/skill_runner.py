@@ -2,9 +2,9 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 from hoopgn import logger
-from hoopgn.skills.skill import Skill, SkillConfig
+from hoopgn.agents.agent import Skill, SkillConfig
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
-from hoopgn.operators.tapas_operator import TapasOperator
+from hoopgn.policies.tapas_policy import TapasPolicy
 
 
 @dataclass
@@ -16,8 +16,8 @@ class SkillRunnerConfig(HoopGNRunnerConfig):
             f"SkillRunner multiple version support should be removed in the future."
         )
         super().__post_init__()
-        if self.skill and isinstance(self.skill.operator, TapasOperator):
-            self.skill.operator.config.properties = self.properties
+        if self.skill and isinstance(self.skill.policy, TapasPolicy):
+            self.skill.policy.config.properties = self.properties
 
 
 class SkillRunner(HoopGNRunner):

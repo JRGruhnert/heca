@@ -7,9 +7,9 @@ import numpy as np
 import matplotlib.patches as mpatches
 
 from hoopgn import logger
-from hoopgn.entities.entity import Entity
-from hoopgn.properties.property import Property
-from hoopgn.skills.skill import Skill
+from hoopgn.environments.entities.entity import Entity
+from hoopgn.environments.properties.property import Property
+from hoopgn.agents.agent import Skill
 
 # Sets a gloabal style. Every plot uses this still if this file is imported.
 plt.style.use("seaborn-v0_8")

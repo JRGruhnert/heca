@@ -6,7 +6,7 @@ from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn.observation.td_properties import TDProperties
 from collections import defaultdict
 
-from hoopgn.properties.property import Property
+from hoopgn.environments.properties.property import Property
 
 
 @dataclass(kw_only=True)
@@ -63,8 +63,8 @@ class BaselineNetwork(Network):
         """Group state values by their type strings."""
         grouped = defaultdict(list)
         for state in states:
-            value = state.postprocess(x[state.config.label])
-            grouped[state.config.encoder.label].append(value)
+            value = state.postprocess(x[state.cfg.label])
+            grouped[state.cfg.encoder.label].append(value)
         return {k: torch.stack(v).float() for k, v in grouped.items()}
 
     def _to_batch(

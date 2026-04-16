@@ -1,73 +1,55 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from hoopgn import logger
-from hoopgn.storage import select_properties
-from hoopgn.properties.property import PropertyConfig
-from hoopgn.observation.td_properties import TDProperties
+from hoopgn.environments.entities.entity import Entity
+from hoopgn.environments.properties.property import Property
+from hoopgn.observation.td_scene import TDScene
 
 
 @dataclass(kw_only=True)
 class EvaluatorConfig:
     success_reward: float
-    states_eval: list[PropertyConfig]
-    states_network: list[PropertyConfig]
 
 
 class Evaluator(ABC):
     def __init__(self, config: EvaluatorConfig):
         self.config = config
-        self.states_eval = select_properties(config.states_eval)
-        self.states_network = select_properties(config.states_network)
+        self.properties: list[Property] = []
+        self.entities: list[Entity] = []
+        self.max = max(len(self.properties), 1)
 
-        self.percentage_done: float = 0.0
+        # State
+        self.progress: float = 0.0
+        self.goal: TDScene | None = None
 
-    def is_equal(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-    ) -> bool:
-        """Generic method to check if states match target conditions."""
-        finished = 0
-        for state in self.states_eval:
-            label = state.config.label
-            if label in current.keys():
-                if state.evaluate(current[label], goal[label]):
-                    logger.debug(f"State {label} is done.")
-                    finished += 1
-                else:
-                    logger.debug(f"State {label} is FAIL.")
+    def reset(self, goal: TDScene):
+        self.progress = 0.0
+        self.goal = goal
 
-        self.percentage_done = finished / max(len(self.states_eval), 1)
-        return finished == len(self.states_eval)
+    def is_equal(self, x: TDScene) -> bool:
+        assert self.goal is not None, "Goal must be set before calling is_equal"
+        results: list[bool] = []
+        for p in self.properties:
+            l = p.cfg.label
+            result = p.evaluate(x[l], self.goal[l])
+            results.append(result)
+        dones = results.count(True)
+        self.progress = dones / self.max
+        return all(results)
 
-    def evaluate_sample(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-    ) -> bool:
-        done = self.is_equal(current, goal)
-        valid = self.is_valid(current, goal)
-        return not done and valid
-
-    def is_valid(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-    ) -> bool:
-        """Special method to check wether the sampled states are buggy or not."""
-        for state in self.states_network:
-            if not state.validate(
-                current[state.config.label],
-                goal[state.config.label],
-            ):
+    def is_valid(self, x: TDScene) -> bool:
+        assert self.goal is not None, "Goal must be set before calling is_valid"
+        for p in self.properties:
+            l = p.cfg.label
+            if not p.validate(x[l], self.goal[l]):
                 return False
         return True
 
+    def is_sample(self, x: TDScene) -> bool:
+        done = self.is_equal(x)
+        valid = self.is_valid(x)
+        return not done and valid
+
     @abstractmethod
-    def step(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-    ) -> tuple[float, bool]:
+    def step(self, x: TDScene) -> tuple[float, bool]:
         "Returns the step reward and wether the step is a terminal step, cause some ending condition was met."
         raise NotImplementedError()

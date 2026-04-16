@@ -7,10 +7,10 @@ from hoopgn.observation import empty_batchsize
 
 
 class TDScene(TensorDict):
-    def __init__(self, entities, parameters: TDProperties):
+    def __init__(self, entities: TDEntities, properties: TDProperties):
         data = {
             "entities": entities,
-            "parameters": parameters,
+            "properties": properties,
         }
         super().__init__(data, batch_size=empty_batchsize)
 
@@ -19,5 +19,5 @@ class TDScene(TensorDict):
         return cast(TDEntities, self["entities"])
 
     @property
-    def parameters(self) -> TDProperties:
-        return cast(TDProperties, self["parameters"])
+    def properties(self) -> TDProperties:
+        return cast(TDProperties, self["properties"])

@@ -1,5 +1,5 @@
 from conf.properties.v1 import properties
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import PropertyConfig
 
 _base = [
     properties.ee_position,

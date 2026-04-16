@@ -8,8 +8,8 @@ from hoopgn.networks.layers.encoder import (
 )
 from torch.distributions import Categorical
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.skills.skill import Skill
-from hoopgn.properties.property import Property
+from hoopgn.agents.agent import Skill
+from hoopgn.environments.properties.property import Property
 from hoopgn import hardware, logger
 
 
@@ -47,7 +47,7 @@ class Network(torch.nn.Module, ABC):
     def register_encoder(self, properties: list[Property]):
         self.properties = properties
         for state in properties:
-            self.encoder.register(state.config.encoder)
+            self.encoder.register(state.cfg.encoder)
 
     def register_skills(self, skills: list[Skill]):
         self.skills = skills
@@ -96,8 +96,8 @@ class Network(torch.nn.Module, ABC):
     def _pre_encode_properties(self, x: TDProperties) -> torch.Tensor:
         temp = []
         for state in self.properties:
-            pre = state.postprocess(x[state.config.label])
-            enc = self._encode_properties(pre, state.config.encoder.label)
+            pre = state.postprocess(x[state.cfg.label])
+            enc = self._encode_properties(pre, state.cfg.encoder.label)
             temp.append(enc)
         return torch.stack(temp, dim=0)
 

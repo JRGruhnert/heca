@@ -1,5 +1,5 @@
 from hoopgn import logger
-from hoopgn.skills.skill import SkillConfig
+from hoopgn.agents.agent import SkillConfig
 from conf.skills import v1
 
 
