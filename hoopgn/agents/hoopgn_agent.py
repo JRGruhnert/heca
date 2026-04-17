@@ -2,6 +2,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
+from hoopgn.agents.branch_agent import Branch
 from hoopgn.hardware import device
 from hoopgn.buffer import Buffer, BufferConfig
 from hoopgn.networks import select_network
@@ -10,34 +11,36 @@ from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn import logger
 from thop import profile
 
-from hoopgn.agents.branches.branch_agent import Branch, BranchConfig
 from hoopgn.agents.agent import Skill
 
 
-@dataclass(kw_only=True)
-class HoopgnConfig(BranchConfig):
-    network: NetworkConfig
-    buffer: BufferConfig
-    saving_path: str = "results/checkpoints/hoopgn/"
-    saving_freq: int = 5  # Saving frequence of trained model
-
-    # PPO Hyperparameters
-    mini_batch_size: int = 64  # 64 # How many steps to use in each mini-batch
-    learning_epochs: int = 5  # How many passes over the collected batch per update
-    lr_annealing: bool = False
-    learning_rate: float = 0.0003  # Step size for actor optimizer
-    gamma: float = 0.99  # How much future rewards are worth today
-    gae_lambda: float = 0.95  # Bias/variance trade‑off in advantage estimation
-    eps_clip: float = 0.2  # How far the new policy is allowed to move from the old
-    entropy_coef: float = 0.02  # Weight on the entropy bonus to encourage exploration
-    critic_coef: float = 0.5  # Weight on the critic (value) loss vs. the policy loss
-    max_grad_norm: float = 0.5  # Threshold for clipping gradient norms
-    target_kl: float | None = 0.02  # (Optional) early stopping if KL
-    clip_value_loss: bool = True
-
-
 class HoopgnSkill(Branch):
-    def __init__(self, cfg: HoopgnConfig):
+    @dataclass(kw_only=True)
+    class Config(Branch.Config):
+        network: NetworkConfig
+        buffer: BufferConfig
+        saving_path: str = "results/checkpoints/hoopgn/"
+        saving_freq: int = 5  # Saving frequence of trained model
+
+        # PPO Hyperparameters
+        mini_batch_size: int = 64  # 64 # How many steps to use in each mini-batch
+        learning_epochs: int = 5  # How many passes over the collected batch per update
+        lr_annealing: bool = False
+        learning_rate: float = 0.0003  # Step size for actor optimizer
+        gamma: float = 0.99  # How much future rewards are worth today
+        gae_lambda: float = 0.95  # Bias/variance trade‑off in advantage estimation
+        eps_clip: float = 0.2  # How far the new policy is allowed to move from the old
+        entropy_coef: float = (
+            0.02  # Weight on the entropy bonus to encourage exploration
+        )
+        critic_coef: float = (
+            0.5  # Weight on the critic (value) loss vs. the policy loss
+        )
+        max_grad_norm: float = 0.5  # Threshold for clipping gradient norms
+        target_kl: float | None = 0.02  # (Optional) early stopping if KL
+        clip_value_loss: bool = True
+
+    def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
         ### Initialize the agent

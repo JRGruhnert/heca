@@ -3,36 +3,34 @@ from dataclasses import dataclass
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 import torch
-from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
+from hoopgn.environments.environment import Environment, StepFeedback
 from hoopgn.observation.td_properties import TDProperties
 
 
-@dataclass(kw_only=True)
-class CalvinEnvironmentConfig(EnvironmentConfig):
-    label: str = "calvin"
-    calvin: CalvinConfig = CalvinConfig(
-        task="Undefined",
-        cameras=("wrist", "front"),
-        camera_pose={},
-        image_size=(256, 256),
-        static=False,
-        headless=False,
-        scale_action=False,
-        delay_gripper=False,
-        gripper_plot=False,
-        postprocess_actions=False,
-        eval_mode=False,
-        real_time=False,
-        pybullet_vis=False,
-    )
-
-
 class CalvinEnvironment(Environment):
-    def __init__(self, config: CalvinEnvironmentConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(Environment.Config):
+        label: str = "calvin"
+        calvin: CalvinConfig = CalvinConfig(
+            task="Undefined",
+            cameras=("wrist", "front"),
+            camera_pose={},
+            image_size=(256, 256),
+            static=False,
+            headless=False,
+            scale_action=False,
+            delay_gripper=False,
+            gripper_plot=False,
+            postprocess_actions=False,
+            eval_mode=False,
+            real_time=False,
+            pybullet_vis=False,
+        )
 
-        self.env = Calvin(self.config.calvin)
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.env = Calvin(self.cfg.calvin)
 
     def close(self):
         self.env.close()

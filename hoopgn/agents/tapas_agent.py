@@ -1,23 +1,21 @@
 from dataclasses import dataclass, field
 
-from hoopgn.policies.branch_policy import BranchPolicyConfig
-from hoopgn.registry import SkillIdent
-from hoopgn.agents.leafs.leaf_agent import LeafConfig
-from hoopgn.policies.tapas_policy import TapasOperatorConfig
+from hoopgn.agents.agent import Skill, SkillInfo
+from hoopgn.policies.tapas_policy import TapasPolicy
 
 
 @dataclass(kw_only=True)
-class TapasSkillIdent(SkillIdent):
+class TapasSkillIdent(SkillInfo):
     overrides: list[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)
-class TapasConfig(LeafConfig):
+class TapasConfig(Skill.Config):
     ident: TapasSkillIdent
-    operator: BranchPolicyConfig = field(init=False)
+    operator: TapasPolicy.Config = field(init=False)
 
     def __post_init__(self):
-        self.operator = TapasOperatorConfig(
+        self.operator = TapasPolicy.Config(
             label=self.ident.label,
             reversed=len(self.ident.overrides) != 0,
             overrides=set(self.ident.overrides),

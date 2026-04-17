@@ -36,7 +36,7 @@ class NoiseExperiment(Experiment):
             + self.config.min_steps * self.config.p_rand
         )
         self.skills = select_skills(config.skills)
-        self.skip_skill = Skill(config=SkipConfig())
+        self.skip_skill = Skill(cfg=SkipConfig())
         logger.info(
             "Noise Experiment Values:\n"
             f"% Skip:      {self.config.p_skip}\n"

@@ -5,13 +5,13 @@ from conf.entities import properties_to_entities
 from hoopgn import logger
 from hoopgn.environments.entities.entity import EntityConfig
 from hoopgn.environments.properties.property import PropertyConfig
-from hoopgn.agents.agent import SkillConfig
+from hoopgn.agents.agent import Skill
 from hoopgn.policies.tapas_policy import TapasPolicy
 
 
 @dataclass
 class HoopGNRunnerConfig:
-    skills: list[SkillConfig]
+    skills: list[Skill.Config]
     properties: list[PropertyConfig]
     entities: list[EntityConfig] = field(init=False)
 
@@ -25,7 +25,7 @@ class HoopGNRunnerConfig:
         for skill in self.skills:
             if isinstance(skill.policy, TapasPolicy):
                 logger.warning(
-                    f"Skill '{skill.label}' is a Tapas skill. Performing automated property assignment."
+                    f"Skill '{skill.ident.label}' is a Tapas skill. Performing automated property assignment."
                 )
                 skill.policy.config.properties = self.properties
 

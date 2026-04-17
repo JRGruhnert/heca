@@ -1,23 +1,23 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 
 import numpy as np
 import torch
 
+from hoopgn.base import ConfigurableClass
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
 from hoopgn.environments.properties.property import PropertyConfig
 
 
-@dataclass(kw_only=True)
-class LeafPolicyConfig:
-    properties: list[PropertyConfig] = field(default_factory=list)
+class LeafPolicy(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        properties: list[PropertyConfig] = field(default_factory=list)
 
-
-class LeafPolicy(ABC):
-    def __init__(self, config: LeafPolicyConfig):
+    def __init__(self, config: Config):
         self.config = config
 
     @abstractmethod

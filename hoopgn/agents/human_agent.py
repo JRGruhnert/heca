@@ -1,15 +1,13 @@
 from dataclasses import dataclass
-from hoopgn.observation.td_properties import TDProperties
-from hoopgn.agents.agent import Skill, SkillConfig
+from hoopgn.observation import TDProperties
+from hoopgn.agents.agent import Skill
 import curses
 
 
-@dataclass(kw_only=True)
-class ManualSkillConfig(SkillConfig):
-    skills: list[SkillConfig]
-
-
 class ManualSkill(Skill):
+    @dataclass(kw_only=True)
+    class ManualSkillConfig(Skill.Config):
+        skills: list[Skill.Config]
 
     def __init__(
         self,
@@ -17,7 +15,7 @@ class ManualSkill(Skill):
     ):
         super().__init__(config)
         self.config = config
-        self.skills = [Skill(config=cfg) for cfg in config.skills]
+        self.skills = [Skill(cfg=cfg) for cfg in config.skills]
         self.do_reset = False
 
     def act(
@@ -65,7 +63,7 @@ class ManualSkill(Skill):
                 stdscr.clear()
                 stdscr.addstr(0, 0, "Select a skill (arrow keys, Enter):")
                 for idx, skill in enumerate(self.skills):
-                    label = f"{skill.config.label}: {skill.config.description}"
+                    label = f"{skill.cfg.ident.label}: {skill.cfg.ident.description}"
                     if idx == selected:
                         stdscr.addstr(idx + 2, 2, label, curses.A_REVERSE)
                     else:

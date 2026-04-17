@@ -1,26 +1,19 @@
 from dataclasses import dataclass
-from hoopgn.evaluators.evaluator import EvaluatorConfig, Evaluator
+from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.td_properties import TDProperties
 
 
-@dataclass(kw_only=True)
-class SparseEvaluatorConfig(EvaluatorConfig):
-    step_reward: float
-
-
 class SparseEvaluator(Evaluator):
-    def __init__(self, config: SparseEvaluatorConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(Evaluator.Config):
+        step_reward: float
 
-    def step(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-    ) -> tuple[float, bool]:
-        if self.is_equal(current, goal):
-            # Success reached
-            return self.config.success_reward, True
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+
+    def step(self, x: TDProperties) -> tuple[float, bool]:
+        if self.is_equal(x):
+            return self.cfg.success_reward, True
         else:
-            # Success not reached
-            return self.config.step_reward, False
+            return self.cfg.step_reward, False

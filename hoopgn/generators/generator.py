@@ -1,14 +1,15 @@
 from dataclasses import dataclass
 
-
-@dataclass(kw_only=True)
-class GeneratorConfig:
-    pass
+from hoopgn.base import ConfigurableClass
 
 
-class SkillGenerator:
-    def __init__(self, config: GeneratorConfig):
-        self.config = config
+class Hoopgn(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
 
     def reset(self, goal):
         pass

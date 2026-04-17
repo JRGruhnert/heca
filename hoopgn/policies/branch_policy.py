@@ -1,24 +1,24 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
 
 import numpy as np
 import torch
 
+from hoopgn.base import ConfigurableClass
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
 from hoopgn.environments.properties.property import PropertyConfig
 
 
-@dataclass(kw_only=True)
-class BranchPolicyConfig:
-    properties: list[PropertyConfig] = field(default_factory=list)
+class BranchPolicy(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        properties: list[PropertyConfig] = field(default_factory=list)
 
-
-class BranchPolicy(ABC):
-    def __init__(self, config: BranchPolicyConfig):
-        self.config = config
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
 
     @abstractmethod
     def __call__(self, x) -> np.ndarray | None:

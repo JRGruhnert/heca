@@ -45,7 +45,7 @@ class SkillConditionsPlot(SkillPlotter):
         self.entity3d = Entity3DHelper(self.config.entity3d)
 
     def plot_content(self, skill: Skill):
-        self.config.name = self.config.subdir + "_" + skill.config.label
+        self.config.name = self.config.subdir + "_" + skill.cfg.label
         for entity in self.entities:
             label = entity.config.label
             self.entity3d.set_entity(

@@ -1,40 +1,39 @@
 import numpy as np
 from dataclasses import dataclass
 
-from hoopgn.environments.environment import Environment, EnvironmentConfig, StepFeedback
-from hoopgn.observation.td_properties import TDProperties, empty_batchsize
+from hoopgn.environments.environment import Environment, StepFeedback
+from hoopgn.observation.td_properties import TDProperties
 import gymnasium as gym
 from ogbench import manipspace
 
 
-@dataclass(kw_only=True)
-class OGBenchEnvironmentConfig(EnvironmentConfig):
-    id: str = "cube-single-v0"
-    mode: str = "task"  #
-    ob_type: str = "states"  # states, pixels
-    width: int = 256
-    height: int = 256
-    terminate_at_goal: bool = True
-    success_timing: str = "post"  # pre, post
-    physics_timestep: float = 0.002
-    control_timestep: float = 0.05
-    visualize_info: bool = True
-
-
 class OGBenchEnvironment(Environment):
-    def __init__(self, config: OGBenchEnvironmentConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(Environment.Config):
+        id: str = "cube-single-v0"
+        mode: str = "task"  #
+        ob_type: str = "states"  # states, pixels
+        width: int = 256
+        height: int = 256
+        terminate_at_goal: bool = True
+        success_timing: str = "post"  # pre, post
+        physics_timestep: float = 0.002
+        control_timestep: float = 0.05
+        visualize_info: bool = True
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
         self.env = gym.make(
-            id=config.id,
-            ob_type=config.ob_type,
-            mode=config.mode,
-            terminate_at_goal=config.terminate_at_goal,
-            success_timing=config.success_timing,
-            physics_timestep=config.physics_timestep,
-            control_timestep=config.control_timestep,
-            visualize_info=config.visualize_info,
+            id=cfg.id,
+            ob_type=cfg.ob_type,
+            mode=cfg.mode,
+            terminate_at_goal=cfg.terminate_at_goal,
+            success_timing=cfg.success_timing,
+            physics_timestep=cfg.physics_timestep,
+            control_timestep=cfg.control_timestep,
+            visualize_info=cfg.visualize_info,
         )
 
     def close(self):

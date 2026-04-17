@@ -6,8 +6,8 @@ from hoopgn.observation import empty_batchsize
 
 
 class TDProperties(TensorDict):
-    def __init__(self, parameters: dict[str, torch.Tensor]):
-        super().__init__(parameters, batch_size=empty_batchsize)
+    def __init__(self, values: dict[str, torch.Tensor]):
+        super().__init__(values, batch_size=empty_batchsize)
 
     @classmethod
     def from_numpy_dict(cls, data: dict[str, np.ndarray]) -> "TDProperties":
@@ -22,7 +22,7 @@ class TDProperties(TensorDict):
             return result
         return bool(result.all())
 
-    def get_parameter(self, key: str) -> torch.Tensor:
-        if key not in self.keys():
+    def get_by_label(self, label: str) -> torch.Tensor:
+        if label not in self.keys():
             raise KeyError()
-        return self[key]
+        return self[label]

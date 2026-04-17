@@ -1,18 +1,18 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
+from hoopgn.base import ConfigurableClass
 from hoopgn.environments.entities.entity import Entity
 from hoopgn.environments.properties.property import Property
 from hoopgn.observation.td_scene import TDScene
 
 
-@dataclass(kw_only=True)
-class EvaluatorConfig:
-    success_reward: float
+class Evaluator(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        success_reward: float
 
-
-class Evaluator(ABC):
-    def __init__(self, config: EvaluatorConfig):
-        self.config = config
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
         self.properties: list[Property] = []
         self.entities: list[Entity] = []
         self.max = max(len(self.properties), 1)

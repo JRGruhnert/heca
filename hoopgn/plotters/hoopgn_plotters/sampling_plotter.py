@@ -9,7 +9,7 @@ from hoopgn.buffer import BufferConfig
 from hoopgn.environments.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators import select_evaluator
-from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
+from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig

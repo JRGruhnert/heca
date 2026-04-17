@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from hoopgn.base import ConfigurableClass
 from hoopgn.environments.entities.entity import Entity
 from hoopgn.observation.converters import select_observation_converter
 from hoopgn.observation.converters.converter import ConverterConfig
@@ -13,20 +14,17 @@ class StepFeedback(Enum):
     ERROR = 1
 
 
-@dataclass(kw_only=True)
-class EnvironmentConfig:
-    label: str
-    converters: list[ConverterConfig] = field(
-        default_factory=lambda: [TapasConverterConfig()]
-    )
+class Environment(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        label: str
+        converters: list[ConverterConfig] = field(
+            default_factory=lambda: [TapasConverterConfig()]
+        )
 
-
-class Environment(ABC):
-    def __init__(self, config: EnvironmentConfig):
-        self.config = config
-        self.converters = [
-            select_observation_converter(config) for config in config.converters
-        ]
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.converters = [select_observation_converter(cfg) for cfg in cfg.converters]
 
     def reset(self) -> TDScene:
         self._reset()

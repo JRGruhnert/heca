@@ -3,7 +3,7 @@ from conf.skills import get_skill_set
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from hoopgn.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.evaluators.dense3 import Dense3EvaluatorConfig
+from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.networks.v1 import HoopgnV1Config
 from hoopgn.runners.explain_runner import ExplainRunnerConfig

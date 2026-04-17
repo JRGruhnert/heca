@@ -2,14 +2,14 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 from hoopgn import logger
-from hoopgn.agents.agent import Skill, SkillConfig
+from hoopgn.agents.agent import Skill
 from hoopgn.runners.runner import HoopGNRunner, HoopGNRunnerConfig
 from hoopgn.policies.tapas_policy import TapasPolicy
 
 
 @dataclass
 class SkillRunnerConfig(HoopGNRunnerConfig):
-    skill: SkillConfig | None
+    skill: Skill.Config | None
 
     def __post_init__(self):
         logger.warning(
@@ -27,7 +27,7 @@ class SkillRunner(HoopGNRunner):
         self.skills = [Skill(cfg) for cfg in config.skills]
 
         self.skill = Skill(config.skill) if config.skill else None
-        self.skills_by_name = {skill.config.label: skill for skill in self.skills}
+        self.skills_by_name = {skill.cfg.ident.label: skill for skill in self.skills}
 
     def run(self):
         if self.config.skill:

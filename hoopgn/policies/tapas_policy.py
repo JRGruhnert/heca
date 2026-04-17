@@ -27,66 +27,65 @@ from hoopgn.environments.properties.features.evaluators.area_evaluator import (
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.policies.leaf_policy import LeafPolicy, LeafPolicyConfig
+from hoopgn.policies.leaf_policy import LeafPolicy
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
-@dataclass(kw_only=True)
-class TapasPolicyConfig(LeafPolicyConfig):
-    label: str
-    reversed: bool
-    overrides: set[str]
-    pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
-    rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
-    scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
-    properties: list[PropertyConfig] = field(default_factory=list)  # type: ignore
-    policy: GMMPolicyConfig = GMMPolicyConfig(
-        suffix="release",
-        model=AutoTPGMMConfig(
-            tpgmm=TPGMMConfig(
-                n_components=20,
-                model_type=ModelType.HMM,
-                use_riemann=True,
-                add_time_component=True,
-                add_action_component=False,
-                position_only=False,
-                add_gripper_action=True,
-                reg_shrink=1e-2,
-                reg_diag=2e-4,
-                reg_diag_gripper=2e-2,
-                reg_em_finish_shrink=1e-2,
-                reg_em_finish_diag=2e-4,
-                reg_em_finish_diag_gripper=2e-2,
-                trans_cov_mask_t_pos_corr=False,
-                em_steps=1,
-                fix_first_component=True,
-                fix_last_component=True,
-                reg_init_diag=5e-4,  # 5
-                heal_time_variance=False,
+class TapasPolicy(LeafPolicy):
+    @dataclass(kw_only=True)
+    class Config(LeafPolicy.Config):
+        label: str
+        reversed: bool
+        overrides: set[str]
+        pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
+        rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
+        scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
+        properties: list[PropertyConfig] = field(default_factory=list)  # type: ignore
+        policy: GMMPolicyConfig = GMMPolicyConfig(
+            suffix="release",
+            model=AutoTPGMMConfig(
+                tpgmm=TPGMMConfig(
+                    n_components=20,
+                    model_type=ModelType.HMM,
+                    use_riemann=True,
+                    add_time_component=True,
+                    add_action_component=False,
+                    position_only=False,
+                    add_gripper_action=True,
+                    reg_shrink=1e-2,
+                    reg_diag=2e-4,
+                    reg_diag_gripper=2e-2,
+                    reg_em_finish_shrink=1e-2,
+                    reg_em_finish_diag=2e-4,
+                    reg_em_finish_diag_gripper=2e-2,
+                    trans_cov_mask_t_pos_corr=False,
+                    em_steps=1,
+                    fix_first_component=True,
+                    fix_last_component=True,
+                    reg_init_diag=5e-4,  # 5
+                    heal_time_variance=False,
+                ),
             ),
-        ),
-        time_based=True,
-        predict_dx_in_xdx_models=False,
-        binary_gripper_action=True,
-        binary_gripper_closed_threshold=0.95,
-        dbg_prediction=False,
-        # the kinematics model in RLBench is just to unreliable -> leads to mistakes
-        topp_in_t_models=False,
-        force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
-        time_scale=1.0,
-        postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
-    )
-
-    def __post_init__(self):
-        self.policy.invert_prediction_batch = self.reversed
-        self.checkpoint_path = (
-            "data/skills/tapas/" + self.label + "/demos_gmm_policy-release.pt"
+            time_based=True,
+            predict_dx_in_xdx_models=False,
+            binary_gripper_action=True,
+            binary_gripper_closed_threshold=0.95,
+            dbg_prediction=False,
+            # the kinematics model in RLBench is just to unreliable -> leads to mistakes
+            topp_in_t_models=False,
+            force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
+            time_scale=1.0,
+            postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
         )
 
+        def __post_init__(self):
+            self.policy.invert_prediction_batch = self.reversed
+            self.checkpoint_path = (
+                "data/skills/tapas/" + self.label + "/demos_gmm_policy-release.pt"
+            )
 
-class TapasPolicy(LeafPolicy):
-    def __init__(self, config: TapasPolicyConfig):
+    def __init__(self, config: Config):
         super().__init__(config)
         self.config = config
         self.properties = {
