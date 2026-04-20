@@ -2,28 +2,25 @@ from dataclasses import dataclass
 from typing import Any
 import torch
 import torch.nn as nn
-from hoopgn.networks.network import Network, NetworkConfig
+from hoopgn import hardware, logger
+from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.observation.td_properties import TDProperties
 from collections import defaultdict
 
 from hoopgn.environments.properties.property import Property
 
 
-@dataclass(kw_only=True)
-class BaselineNetworkConfig(NetworkConfig):
-    label: str = "baseline"
+class MPBaseline(MPNetwork):
+    @dataclass(kw_only=True)
+    class Config(MPNetwork.Config):
+        label: str = "baseline"
 
-
-class BaselineNetwork(Network):
-
-    def __init__(
-        self,
-        config: BaselineNetworkConfig,
-    ):
-        super().__init__(config)
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
         self.combined_feature_dim = (
-            self.config.registry.dim_encoder * self.config.dim_state * 2
+            self.cfg.registry.dim_encoder * self.cfg.dim_state * 2
         )
 
         h_dim1 = self.combined_feature_dim // 2
@@ -33,7 +30,7 @@ class BaselineNetwork(Network):
             nn.ReLU(),
             nn.Linear(h_dim1, h_dim2),
             nn.ReLU(),
-            nn.Linear(h_dim2, self.config.dim_skill),
+            nn.Linear(h_dim2, self.cfg.dim_skill),
         )
         # critic
         self.critic = nn.Sequential(
@@ -75,7 +72,13 @@ class BaselineNetwork(Network):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         return torch.stack(current, dim=0), torch.stack(goal, dim=0)
 
-    def _load(self, checkpoint: Any):
+    def load(self):
+        logger.info(f"Loading MP Baseline Network: {self.cfg.label}.")
+        assert (
+            self.cfg.checkpoint_path is not None
+        ), "Checkpoint path must be provided to load the model."
+        checkpoint = torch.load(self.cfg.checkpoint_path, map_location=hardware.device)
+
         old_state_dict: dict[str, torch.Tensor] = (
             checkpoint["model_state"] if "model_state" in checkpoint else checkpoint
         )

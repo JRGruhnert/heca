@@ -1,11 +1,9 @@
 from abc import abstractmethod
-from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
-from hoopgn.base import ConfigurableClass, RegisterableClass
+from hoopgn.base import RegisterableClass
 from hoopgn.environments.entities.entity import Entity
-from hoopgn.observation.converters.converter import Converter
-from hoopgn.observation.converters.tapas_converter import TapasConverterConfig
+from hoopgn.environments.properties.property import Property
 from hoopgn.observation.td_scene import TDScene
 
 
@@ -15,24 +13,15 @@ class StepFeedback(Enum):
 
 
 class Environment(RegisterableClass):
-    @dataclass(kw_only=True)
-    class Signature(RegisterableClass.Signature):
-        label: str
-
-    @dataclass(kw_only=True)
-    class Config(RegisterableClass.Config):
-        pass
-
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
-
-    def reset(self) -> TDScene:
-        self._reset()
-        return self.observation
 
     @cached_property
     @abstractmethod
     def entities(self) -> list[Entity]:
+        raise NotImplementedError()
+
+    @cached_property
+    @abstractmethod
+    def properties(self) -> list[Property]:
         raise NotImplementedError()
 
     @property
@@ -41,17 +30,17 @@ class Environment(RegisterableClass):
         raise NotImplementedError()
 
     @abstractmethod
-    def _reset(self) -> TDScene:
-        raise NotImplementedError("Internal reset method not implemented yet.")
+    def sample(self) -> TDScene:
+        raise NotImplementedError()
 
     @abstractmethod
     def step(self, action) -> StepFeedback:
-        raise NotImplementedError("Step method not implemented yet.")
+        raise NotImplementedError()
 
     @abstractmethod
     def render(self):
-        raise NotImplementedError("Render method not implemented yet.")
+        raise NotImplementedError()
 
     @abstractmethod
     def close(self):
-        raise NotImplementedError("Close method not implemented yet.")
+        raise NotImplementedError()

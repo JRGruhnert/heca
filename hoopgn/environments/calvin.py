@@ -33,14 +33,13 @@ class CalvinEnvironment(Environment):
         )
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.env = Calvin(self.cfg.cc)
 
     def close(self):
         self.env.close()
 
-    def _reset(self):
+    def sample(self):
         self.calvin_obs = self.env.reset(settle_time=50)[0]
 
     def step(
@@ -54,12 +53,7 @@ class CalvinEnvironment(Environment):
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
 
-    def _get_entities(self, properties: TDProperties) -> TDEntities:
-        # NOTE: This is a placeholder implementation. In the future, we can extract entities from the properties if needed.
-        return TDEntities({})
-
-    @property
-    def observation(self) -> TDScene:
+    def _get_v1(self) -> TDProperties:
         state_dict = {}
         state_dict["ee_position"] = torch.tensor(
             self.calvin_obs.ee_pose[:3], dtype=torch.float32
@@ -82,10 +76,21 @@ class CalvinEnvironment(Environment):
                 np.array([value]), dtype=torch.float32
             )
 
-        for converter in self.converters:
-            state_dict[converter.cfg.label] = converter(self.calvin_obs)
+        return TDProperties(state_dict)
 
-        return TDScene(
-            v1=TDProperties(state_dict),
-            v2=self._get_entities(TDProperties(state_dict)),
-        )
+    def _get_v2(self) -> TDEntities:
+        return TDEntities({})
+
+    @property
+    def observation(self) -> TDScene:
+        # Prepare base fields
+        scene_kwargs = {
+            "v1": self._get_v1(),
+            "v2": self._get_v2(),
+        }
+        # Add per-converter fields
+        for converter in getattr(self, "converters", []):
+            label = getattr(converter.cfg, "label", None)
+            if label is not None:
+                scene_kwargs[label] = converter(self.calvin_obs)
+        return TDScene(**scene_kwargs)

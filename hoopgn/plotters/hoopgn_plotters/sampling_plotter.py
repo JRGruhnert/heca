@@ -4,7 +4,7 @@ from tqdm import trange
 from conf.properties import get_property_set
 from conf.properties.v1.area import CalvinAreaConfig
 from conf.entities import tdp_to_tde
-from conf.skills import get_skill_set
+from conf.agents import get_skill_set
 from hoopgn.buffer import BufferConfig
 from hoopgn.environments.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
@@ -13,7 +13,7 @@ from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.networks.v1 import HoopgnV1Config
+from hoopgn.networks.mp_gnn import MPGNNConfig
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
@@ -41,7 +41,7 @@ class SpawnAreaPlotterConfig(HoopGNPlotterConfig):
     name: str = "spawn_area"
     subdir: str = "spawn_area"
     agent: HoopGNSkillConfig = HoopGNSkillConfig(
-        network=HoopgnV1Config(
+        network=MPGNNConfig(
             dim_skill=len(skills),
             dim_state=len(properties),
             checkpoint_path=checkpoint_path,

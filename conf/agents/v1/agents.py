@@ -1,4 +1,4 @@
-from hoopgn.agents.leafs.tapas.tapas import TapasConfig
+from hoopgn.agents.tapas_agent import TapasConfig
 
 
 close_drawer = TapasConfig(

@@ -6,10 +6,11 @@ import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
+from hoopgn import hardware, logger
 from hoopgn.explainer import HoopgnExplainer
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
-from hoopgn.networks.network import Network, NetworkConfig
+from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.agents.agent import Agent
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
@@ -125,24 +126,18 @@ class CriticReadoutNetwork(ReadoutNetwork):
         return value.squeeze(-1)
 
 
-@dataclass(kw_only=True)
-class HoopgnV1Config(NetworkConfig):
-    explain_mode: bool = False
-    label: str = "gnn"
+class MPGnn(MPNetwork):
+    @dataclass(kw_only=True)
+    class Config(MPNetwork.Config):
+        explain_mode: bool = False
+        label: str = "gnn"
 
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
-class HoopgnV1Network(Network):
-
-    def __init__(
-        self,
-        config: HoopgnV1Config,
-    ):
-        super().__init__(config)
-
-        self.actor = ActorReadoutNetwork(dim_features=self.config.registry.dim_encoder)
-        self.critic = CriticReadoutNetwork(
-            dim_features=self.config.registry.dim_encoder
-        )
+        self.actor = ActorReadoutNetwork(dim_features=self.cfg.registry.dim_encoder)
+        self.critic = CriticReadoutNetwork(dim_features=self.cfg.registry.dim_encoder)
         self.actor_explainer = HoopgnExplainer(
             self.actor,
             algorithm=CaptumExplainer("Saliency"),
@@ -172,33 +167,33 @@ class HoopgnV1Network(Network):
     @cached_property
     def state_state_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.config.dim_state)
+            torch.arange(self.cfg.dim_state)
             .unsqueeze(1)
-            .repeat(1, self.config.dim_state)
+            .repeat(1, self.cfg.dim_state)
             .flatten()
         )
-        dst = torch.arange(self.config.dim_state).repeat(self.config.dim_state)
+        dst = torch.arange(self.cfg.dim_state).repeat(self.cfg.dim_state)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_skill_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.config.dim_state)
+            torch.arange(self.cfg.dim_state)
             .unsqueeze(1)
-            .repeat(1, self.config.dim_skill)
+            .repeat(1, self.cfg.dim_skill)
             .flatten()
         )
-        dst = torch.arange(self.config.dim_skill).repeat(self.config.dim_state)
+        dst = torch.arange(self.cfg.dim_skill).repeat(self.cfg.dim_state)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_state_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_state)
+        indices = torch.arange(self.cfg.dim_state)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
     def skill_skill_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_skill)
+        indices = torch.arange(self.cfg.dim_skill)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
@@ -212,22 +207,22 @@ class HoopgnV1Network(Network):
 
     @cached_property
     def skill_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_skill)
+        indices = torch.arange(self.cfg.dim_skill)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_skill(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_skill)
+        indices = torch.arange(self.cfg.dim_skill)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
     def state_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_state)
+        indices = torch.arange(self.cfg.dim_state)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_state(self) -> torch.Tensor:
-        indices = torch.arange(self.config.dim_state)
+        indices = torch.arange(self.cfg.dim_state)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
@@ -241,12 +236,9 @@ class HoopgnV1Network(Network):
     @cached_property
     def state_skill_01_attr(self) -> torch.Tensor:
         sparse = (
-            self.state_skill_sparse[0] * self.config.dim_skill
-            + self.state_skill_sparse[1]
+            self.state_skill_sparse[0] * self.cfg.dim_skill + self.state_skill_sparse[1]
         )
-        full = (
-            self.state_skill_full[0] * self.config.dim_skill + self.state_skill_full[1]
-        )
+        full = self.state_skill_full[0] * self.cfg.dim_skill + self.state_skill_full[1]
         return torch.isin(full, sparse).float().unsqueeze(-1)
 
     def forward(
@@ -297,9 +289,9 @@ class HoopgnV1Network(Network):
             data["goal"].x = g
             data["obs"].x = c
             data["task"].x = torch.zeros(
-                self.config.dim_skill, self.config.registry.dim_encoder
+                self.cfg.dim_skill, self.cfg.registry.dim_encoder
             )
-            data["actor"].x = torch.zeros(self.config.dim_skill, 1)
+            data["actor"].x = torch.zeros(self.cfg.dim_skill, 1)
             data["critic"].x = torch.zeros(1, 1)
 
             data[("goal", "goal-obs", "obs")].edge_index = self.state_state_sparse
@@ -374,7 +366,10 @@ class HoopgnV1Network(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any, skills: list[Agent], states: list[Property]):
-        self.skills = skills
-        self.states = states
+    def load(self):
+        logger.info(f"Loading MP GNN Network: {self.cfg.label}.")
+        assert (
+            self.cfg.checkpoint_path is not None
+        ), "Checkpoint path must be provided to load the model."
+        checkpoint = torch.load(self.cfg.checkpoint_path, map_location=hardware.device)
         self.load_state_dict(checkpoint["model_state"], strict=False)

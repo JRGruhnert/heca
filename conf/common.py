@@ -1,21 +1,21 @@
-from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
+from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill
 from hoopgn.buffer import BufferConfig
 
-from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.environments.environment import EnvironmentConfig
-from hoopgn.environments.ogbench import OGBenchEnvironmentConfig
+from hoopgn.environments.calvin import CalvinEnvironment
+from hoopgn.environments.environment import Environment
+from hoopgn.environments.ogbench import OGBenchEnvironment
 from hoopgn.logger import LogMode, LoggerConfig
-from hoopgn.networks.baseline import BaselineNetworkConfig
-from hoopgn.networks.v1 import HoopgnV1Config
-from hoopgn.networks.network import NetworkConfig
+from hoopgn.networks.mp_baseline import MPBaseline
+from hoopgn.networks.mp_gnn import MPGnn
+from hoopgn.networks.mp_final import MPNetwork
 
 
 def ppo_default_config(
-    network: NetworkConfig,
+    network: MPNetwork.Config,
     buffer: BufferConfig,
     eval: bool,
-) -> HoopGNSkillConfig:
-    return HoopGNSkillConfig(
+) -> HoopGNSkill.Config:
+    return HoopGNSkill.Config(
         network=network,
         buffer=buffer,
         eval=eval,
@@ -45,7 +45,7 @@ def network_config(
     explain_mode: bool,
     skill_count: int,
     state_count: int,
-) -> NetworkConfig:
+) -> MPNetwork.Config:
     network_name = "gnn" if is_gnn else "baseline"
     checkpoint_path = (
         f"results/{network_name}/{checkpoint_name}/model_cp_best.pth"
@@ -53,25 +53,14 @@ def network_config(
         else None
     )
     return (
-        HoopgnV1Config(
+        MPGnn.Config(
+            environment=CalvinEnvironment.Signature(),
             checkpoint_path=checkpoint_path,
             explain_mode=explain_mode,
-            dim_skill=skill_count,
-            dim_state=state_count,
         )
         if is_gnn
-        else BaselineNetworkConfig(
+        else MPBaseline.Config(
+            environment=CalvinEnvironment.Signature(),
             checkpoint_path=checkpoint_path,
-            dim_skill=skill_count,
-            dim_state=state_count,
         )
     )
-
-
-def environment_config(tag="calvin") -> EnvironmentConfig:
-    if tag == "calvin":
-        return CalvinEnvironmentConfig()
-    elif tag == "ogbench":
-        return OGBenchEnvironmentConfig()
-    else:
-        raise ValueError(f"Unknown environment tag: {tag}")

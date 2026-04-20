@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from tensordict import TensorDictBase
+from tensordict import TensorDict
 
 from hoopgn.base import ConfigurableClass
 
@@ -12,7 +12,7 @@ class Converter(ConfigurableClass):
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def __call__(self, observation) -> TensorDictBase:
+    def __call__(self, observation) -> TensorDict:
         raise NotImplementedError(
             "ObservationConverter __call__ method not implemented yet."
         )

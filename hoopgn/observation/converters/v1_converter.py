@@ -20,10 +20,10 @@ from hoopgn.observation.converters.converter import (
 )
 
 
-class TapasConverter(Converter):
+class V1Converter(Converter):
     @dataclass(kw_only=True)
     class Config(Converter.Config):
-        label: str = "tapas"
+        label: str = "v1"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

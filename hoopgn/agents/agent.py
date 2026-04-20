@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from functools import cached_property
 import numpy as np
 from torch_geometric.data import Batch
-from hoopgn import logger
-from hoopgn.base import ConfigurableClass, RegisterableClass
+from hoopgn.base import RegisterableClass
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
 from hoopgn.observation.td_scene import TDScene
@@ -13,17 +12,13 @@ from hoopgn.environments.properties.features.conditions.condition import (
 )
 
 
-@dataclass(kw_only=True)
-class SkillInfo:
-    id: int
-    label: str
-    description: str
-
-
 class Agent(RegisterableClass):
+    # @dataclass(kw_only=True)
+    # class Signature(RegisterableClass.Signature):
+    #    label: str # does currently not add to the default signature
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
-        ident: SkillInfo
+    class Config(RegisterableClass.Config):
+        description: str
         hoopgn: Hoopgn.Config
         evaluator: Evaluator.Config
         train: bool = False

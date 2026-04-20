@@ -64,3 +64,7 @@ class RegisterableClass(ConfigurableClass):
         else:
 
             cls._registry[cfg.signature] = cls.from_config(cfg)
+
+    @classmethod
+    def count(cls) -> int:
+        return len(cls._registry)

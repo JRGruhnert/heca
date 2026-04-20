@@ -1,5 +1,5 @@
 from conf.properties import get_property_set
-from conf.skills import get_skill_set
+from conf.agents import get_skill_set
 from hoopgn.plotters.skill_plotters.condition_plotter import (
     SkillConditionsPlotterConfig,
 )

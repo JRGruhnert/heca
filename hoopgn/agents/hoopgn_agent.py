@@ -5,9 +5,8 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from hoopgn.agents.branch_agent import BranchAgent
 from hoopgn.hardware import device
 from hoopgn.buffer import Buffer, BufferConfig
-from hoopgn.networks import select_network
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.networks.network import Network, NetworkConfig
+from hoopgn.networks.mp_final import MPNetwork
 from hoopgn import logger
 from thop import profile
 
@@ -17,7 +16,7 @@ from hoopgn.agents.agent import Agent
 class HoopgnAgent(BranchAgent):
     @dataclass(kw_only=True)
     class Config(BranchAgent.Config):
-        network: NetworkConfig
+        network: MPNetwork.Config
         buffer: BufferConfig
         saving_path: str = "results/checkpoints/hoopgn/"
         saving_freq: int = 5  # Saving frequence of trained model
@@ -46,8 +45,8 @@ class HoopgnAgent(BranchAgent):
         ### Initialize the agent
         self.buffer = Buffer(cfg.buffer)
         self.mse_loss = nn.MSELoss()
-        self.policy_new: Network = select_network(cfg.network).to(device)
-        self.policy_old: Network = select_network(cfg.network).to(device)
+        self.policy_new: MPNetwork = MPNetwork.from_config(cfg.network)
+        self.policy_old: MPNetwork = MPNetwork.from_config(cfg.network)
         self.optimizer = torch.optim.AdamW(
             self.policy_new.parameters(),
             lr=self.cfg.learning_rate,
@@ -112,7 +111,7 @@ class HoopgnAgent(BranchAgent):
         if self.buffer.epoch % self.cfg.saving_freq == 0 and self.buffer.epoch != 0:
             self.save(highscore=False)
 
-        self.buffer.save(self.cfg.ident.label)
+        self.buffer.save(self.cfg.signature.label)
 
         return self.buffer.reached_max_batches
 

@@ -1,6 +1,6 @@
 from hoopgn import logger
 from hoopgn.agents.agent import SkillConfig
-from conf.skills import v1
+from conf.agents import v1
 
 
 def get_skill_set(
