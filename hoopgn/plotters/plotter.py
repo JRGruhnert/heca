@@ -9,7 +9,7 @@ import matplotlib.patches as mpatches
 from hoopgn import logger
 from hoopgn.environments.entities.entity import Entity
 from hoopgn.environments.properties.property import Property
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 
 # Sets a gloabal style. Every plot uses this still if this file is imported.
 plt.style.use("seaborn-v0_8")
@@ -222,7 +222,7 @@ class PlotterConfig:
 class Plotter(ABC):
     def __init__(self, config: PlotterConfig):
         self.config = config
-        self.skills: list[Skill] = []
+        self.skills: list[Agent] = []
         self.entities: list[Entity] = []
         self.properties: list[Property] = []
 
@@ -250,7 +250,7 @@ class Plotter(ABC):
         plt.close()
 
     def init(
-        self, skills: list[Skill], entities: list[Entity], properties: list[Property]
+        self, skills: list[Agent], entities: list[Entity], properties: list[Property]
     ):
         self.skills = skills
         self.entities = entities

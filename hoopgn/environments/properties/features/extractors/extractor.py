@@ -1,22 +1,15 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 import torch
-from hoopgn.environments.properties.features.feature import (
-    PropertyFeature,
-    PropertyFeatureConfig,
-)
-
-
-@dataclass(kw_only=True)
-class PropertyExtractorConfig(PropertyFeatureConfig):
-    pass
+from hoopgn.environments.properties.features.feature import PropertyFeature
 
 
 class PropertyExtractor(PropertyFeature):
-    def __init__(
-        self,
-        config: PropertyExtractorConfig,
-    ):
+    @dataclass(kw_only=True)
+    class Config(PropertyFeature.Config):
+        pass
+
+    def __init__(self, config: Config):
         super().__init__(config)
         self.config = config
 

@@ -1,32 +1,29 @@
 from dataclasses import dataclass
+from hoopgn.agents.branch_agent import BranchAgent
 from hoopgn.observation import TDProperties
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 import curses
 
 
-class ManualSkill(Skill):
+class HumanAgent(BranchAgent):
     @dataclass(kw_only=True)
-    class ManualSkillConfig(Skill.Config):
-        skills: list[Skill.Config]
+    class Config(BranchAgent.Config):
+        pass
 
-    def __init__(
-        self,
-        config: ManualSkillConfig,
-    ):
-        super().__init__(config)
-        self.config = config
-        self.skills = [Skill(cfg=cfg) for cfg in config.skills]
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
         self.do_reset = False
 
     def act(
         self,
         obs: TDProperties,
         goal: TDProperties,
-    ) -> Skill | None:
+    ) -> Agent | None:
         choice = self.select_skill_tui()
-        return self.skills[choice]
+        return self.agents[choice]
 
-    def explain(self, current: TDProperties, goal: TDProperties, skill: Skill) -> str:
+    def explain(self, current: TDProperties, goal: TDProperties, skill: Agent) -> str:
         raise NotImplementedError("")
 
     def feedback(self, reward: float, success: bool, terminal: bool) -> bool:
@@ -58,12 +55,14 @@ class ManualSkill(Skill):
     def select_skill_tui(self):
         def tui(stdscr):
             curses.curs_set(0)
+            keys = list(self.agents.keys())
             selected = 0
             while True:
                 stdscr.clear()
                 stdscr.addstr(0, 0, "Select a skill (arrow keys, Enter):")
-                for idx, skill in enumerate(self.skills):
-                    label = f"{skill.cfg.ident.label}: {skill.cfg.ident.description}"
+                for idx, key in enumerate(keys):
+                    agent = self.agents[key]
+                    label = f"{agent.cfg.ident.label}: {agent.cfg.ident.description}"
                     if idx == selected:
                         stdscr.addstr(idx + 2, 2, label, curses.A_REVERSE)
                     else:
@@ -71,9 +70,9 @@ class ManualSkill(Skill):
                 key = stdscr.getch()
                 if key == curses.KEY_UP and selected > 0:
                     selected -= 1
-                elif key == curses.KEY_DOWN and selected < len(skills) - 1:
+                elif key == curses.KEY_DOWN and selected < len(keys) - 1:
                     selected += 1
                 elif key in [curses.KEY_ENTER, 10, 13]:
-                    return selected
+                    return keys[selected]
 
         return curses.wrapper(tui)

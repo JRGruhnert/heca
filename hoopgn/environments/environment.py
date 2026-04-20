@@ -1,10 +1,10 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from hoopgn.base import ConfigurableClass
+from functools import cached_property
+from hoopgn.base import ConfigurableClass, RegisterableClass
 from hoopgn.environments.entities.entity import Entity
-from hoopgn.observation.converters import select_observation_converter
-from hoopgn.observation.converters.converter import ConverterConfig
+from hoopgn.observation.converters.converter import Converter
 from hoopgn.observation.converters.tapas_converter import TapasConverterConfig
 from hoopgn.observation.td_scene import TDScene
 
@@ -14,29 +14,31 @@ class StepFeedback(Enum):
     ERROR = 1
 
 
-class Environment(ConfigurableClass):
+class Environment(RegisterableClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Signature(RegisterableClass.Signature):
         label: str
-        converters: list[ConverterConfig] = field(
-            default_factory=lambda: [TapasConverterConfig()]
-        )
+
+    @dataclass(kw_only=True)
+    class Config(RegisterableClass.Config):
+        pass
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.converters = [select_observation_converter(cfg) for cfg in cfg.converters]
 
     def reset(self) -> TDScene:
         self._reset()
-        return self.get_observation()
+        return self.observation
 
-    @property
+    @cached_property
+    @abstractmethod
     def entities(self) -> list[Entity]:
-        return self.get_observation().entities
+        raise NotImplementedError()
 
     @property
-    def properties(self) -> list[str]:
-        return self.get_observation().properties
+    @abstractmethod
+    def observation(self) -> TDScene:
+        raise NotImplementedError()
 
     @abstractmethod
     def _reset(self) -> TDScene:
@@ -49,10 +51,6 @@ class Environment(ConfigurableClass):
     @abstractmethod
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
-
-    @abstractmethod
-    def get_observation(self) -> TDScene:
-        raise NotImplementedError("Get observation method not implemented yet.")
 
     @abstractmethod
     def close(self):

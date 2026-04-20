@@ -3,36 +3,33 @@ from dataclasses import dataclass
 import random
 from hoopgn import logger
 from hoopgn.environments import select_environment
-from hoopgn.environments.environment import Environment, EnvironmentConfig
+from hoopgn.environments.environment import Environment
 from hoopgn.evaluators import select_evaluator
-from hoopgn.evaluators.evaluator import EvaluatorConfig
+from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 import math
 
 
 @dataclass(kw_only=True)
 class ExperimentConfig:
-    environments: list[EnvironmentConfig]
-    evaluator: EvaluatorConfig
+    environments: list[Environment.Config]
+    evaluator: Evaluator.Config
 
 
 class Experiment(ABC):
-    def __init__(self, config: ExperimentConfig):
+    def __init__(self, cfg: ExperimentConfig):
         # We sort based on Id for the baseline network to be consistent
-        self.config = config
-        self.evaluator = select_evaluator(config.evaluator)
-        self.environments: dict[str, Environment] = {
-            env_config.label: select_environment(env_config)
-            for env_config in config.environments
-        }
+        self.cfg = cfg
+        self.evaluator = select_evaluator(cfg.evaluator)
+        self.environments = Environment.build_registry(cfg.environments)
 
         self.current_step = 0
         self.max_allowed_steps = math.inf
         self.current = self.env.reset()
         self.goal = self.env.reset()
 
-    def step(self, skill: Skill) -> tuple[TDProperties, float, bool, bool]:
+    def step(self, skill: Agent) -> tuple[TDProperties, float, bool, bool]:
         selected_skill = self.modify(skill)
         selected_skill.reset(self.goal)
         while (action := selected_skill.predict(self.current)) is not None:
@@ -60,7 +57,7 @@ class Experiment(ABC):
         return self.current, self.goal
 
     @abstractmethod
-    def modify(self, skill: Skill) -> Skill:
+    def modify(self, skill: Agent) -> Agent:
         """Modify the skill before taking a step in the experiment."""
         raise NotImplementedError("Modify method not implemented yet.")
 

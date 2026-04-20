@@ -4,16 +4,14 @@ import torch
 
 from hoopgn.environments.properties.features.rulers.ruler import (
     PropertyRuler,
-    PropertyRulerConfig,
 )
 
 
-@dataclass(kw_only=True)
-class BinaryRulerConfig(PropertyRulerConfig):
-    pass
-
-
 class BinaryRuler(PropertyRuler):
+    @dataclass(kw_only=True)
+    class Config(PropertyRuler.Config):
+        pass
+
     def distance(
         self,
         current: torch.Tensor,

@@ -8,21 +8,20 @@ from hoopgn.environments.properties.features.normalizers.boundary_normalizer imp
 )
 
 
-@dataclass(kw_only=True)
-class BoundaryThresholdConfig:
-    boundary: BoundaryNormalizerConfig
-    threshold: float = 0.05
-
-
 class BoundaryThreshold:
+    @dataclass(kw_only=True)
+    class Config:
+        boundary: BoundaryNormalizerConfig
+        threshold: float = 0.05
+
     def __init__(
         self,
-        config: BoundaryThresholdConfig,
+        cfg: Config,
     ):
-        self.config = config
-        self.boundary = BoundaryNormalizer(config.boundary)
+        self.cfg = cfg
+        self.boundary = BoundaryNormalizer(cfg.boundary)
 
     @cached_property
     def relative(self) -> torch.Tensor:
         """Returns the relative threshold for the state."""
-        return self.config.threshold * (self.boundary.lower - self.boundary.upper)
+        return self.cfg.threshold * (self.boundary.lower - self.boundary.upper)

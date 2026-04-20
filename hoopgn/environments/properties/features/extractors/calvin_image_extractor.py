@@ -4,18 +4,17 @@ from dataclasses import dataclass
 
 from hoopgn.environments.properties.features.extractors.extractor import (
     PropertyExtractor,
-    PropertyExtractorConfig,
 )
 
 
-@dataclass(kw_only=True)
-class CalvinImageExtractorConfig(PropertyExtractorConfig):
-    pass
-
-
 class CalvinImageExtractor(PropertyExtractor):
-    def __init__(self, config: CalvinImageExtractorConfig):
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyExtractor.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     def __call__(self, observation) -> torch.Tensor:
         # TODO: add image preprocessing here

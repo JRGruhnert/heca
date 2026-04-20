@@ -19,7 +19,7 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )
-from hoopgn.environments.properties.property import Property, PropertyConfig
+from hoopgn.environments.properties.property import Property
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.environments.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
@@ -27,22 +27,21 @@ from hoopgn.environments.properties.features.evaluators.area_evaluator import (
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.policies.leaf_policy import LeafPolicy
+from hoopgn.policies.policy import Policy
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
-class TapasPolicy(LeafPolicy):
+class TapasPolicy(Policy):
     @dataclass(kw_only=True)
-    class Config(LeafPolicy.Config):
-        label: str
+    class Config(Policy.Config):
         reversed: bool
         overrides: set[str]
         pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
         rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
         scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
-        properties: list[PropertyConfig] = field(default_factory=list)  # type: ignore
-        policy: GMMPolicyConfig = GMMPolicyConfig(
+        properties: list[Property.Config] = field(default_factory=list[Property.Config])  # type: ignore
+        tapas: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
                 tpgmm=TPGMMConfig(
@@ -80,45 +79,43 @@ class TapasPolicy(LeafPolicy):
         )
 
         def __post_init__(self):
-            self.policy.invert_prediction_batch = self.reversed
+            self.tapas.invert_prediction_batch = self.reversed
             self.checkpoint_path = (
                 "data/skills/tapas/" + self.label + "/demos_gmm_policy-release.pt"
             )
 
-    def __init__(self, config: Config):
-        super().__init__(config)
-        self.config = config
-        self.properties = {
-            config.label: Property(config=config) for config in self.config.properties
-        }
-        self.new_task = False
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.properties = Property.build_registry(cfg.properties)
         self.predictions: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
 
     def __call__(self, x: TDProperties) -> np.ndarray | None:
-        assert self.goal is not None, "Goal must be set before prediction."
-        assert "tapas" in x.keys(), "Tapas observation must be present in the input."
-        if self.new_task:
-            try:
-                if self.config.reversed:
-                    value = self._hacky_postprocess(x["tapas"])
-                else:
-                    value = x["tapas"]
-                self.predictions, _ = self.policy.predict(value)  # type: ignore
-            except FloatingPointError as e:
-                logger.error(f"Numerical error in prediction: {e}")
-                return None
-            except Exception as e:
-                logger.error(f"General error in prediction: {e}")
-                return None
-            self.new_task = False
         if self.predictions is None or self.predictions.is_finished:
+            self.make_prediction(x)
+        if self.predictions is None:
             return None
         return self._to_action(self.predictions.step())
 
+    def make_prediction(self, x: TDProperties) -> RobotTrajectory | None:
+        assert self.goal is not None, "Goal must be set before prediction."
+        assert "tapas" in x.keys(), "Tapas observation must be present in the input."
+        try:
+            if self.cfg.reversed:
+                value = self._hacky_postprocess(x["tapas"])
+            else:
+                value = x["tapas"]
+            self.predictions, _ = self.policy.predict(value)  # type: ignore
+        except FloatingPointError as e:
+            logger.error(f"Numerical error in prediction: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"General error in prediction: {e}")
+            return None
+
     def reset(self, goal: TDProperties):
         self.policy.reset_episode()
-        self.new_task = True
         self.predictions = None
         self.goal = goal
 
@@ -135,9 +132,9 @@ class TapasPolicy(LeafPolicy):
     def _hacky_postprocess(self, tapas: SceneObservation) -> SceneObservation:  # type: ignore
         assert self.goal is not None, "Goal must be set for hacky postprocess."
         for label, condition in self.overrides.items():
-            pos = self.config.pos_reg.search(label)
-            rot = self.config.rot_reg.search(label)
-            scalar = self.config.scalar_reg.search(label)
+            pos = self.cfg.pos_reg.search(label)
+            rot = self.cfg.rot_reg.search(label)
+            scalar = self.cfg.scalar_reg.search(label)
             if label == "ee_position":
                 tapas.ee_pose = torch.cat(
                     [
@@ -206,13 +203,13 @@ class TapasPolicy(LeafPolicy):
         return self._load_overrides_conditions()
 
     def _load_overrides_conditions(self) -> dict[str, PropertyCondition]:
-        return self._load_conditions(not self.config.reversed, self.config.overrides)
+        return self._load_conditions(not self.cfg.reversed, self.cfg.overrides)
 
     def load_precons(self) -> dict[str, PropertyCondition]:
-        return self._load_conditions(self.config.reversed)
+        return self._load_conditions(self.cfg.reversed)
 
     def load_postcons(self) -> dict[str, PropertyCondition]:
-        return self._load_conditions(not self.config.reversed)
+        return self._load_conditions(not self.cfg.reversed)
 
     def _load_conditions(
         self,
@@ -224,9 +221,9 @@ class TapasPolicy(LeafPolicy):
         )
         result = {}
         logger.debug(
-            f"Extracting Conditions from {len(self.config.properties)} properties."
+            f"Extracting Conditions from {len(self.cfg.properties)} properties."
         )
-        for config in self.config.properties:
+        for config in self.cfg.properties:
             result[config.label] = PropertyCondition.from_hoopgnv1_demos(
                 value=(
                     self.demo_precons[config.label],
@@ -239,10 +236,10 @@ class TapasPolicy(LeafPolicy):
         return result
 
     def load_demo_precons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(self.config.reversed)
+        return self._load_demo_cons(self.cfg.reversed)
 
     def load_demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self._load_demo_cons(not self.config.reversed)
+        return self._load_demo_cons(not self.cfg.reversed)
 
     def _load_demo_cons(self, reversed: bool) -> dict[str, torch.Tensor]:
         if reversed:
@@ -252,10 +249,10 @@ class TapasPolicy(LeafPolicy):
 
     @cached_property
     def policy(self) -> GMMPolicy:
-        logger.info(f"Loading tapas operator from: {self.config.checkpoint_path}")
-        temp = GMMPolicy(self.config.policy)
+        logger.info(f"Loading tapas operator from: {self.cfg.checkpoint_path}")
+        temp = GMMPolicy(self.cfg.tapas)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
-        temp.from_disk(self.config.checkpoint_path)
+        temp.from_disk(self.cfg.checkpoint_path)
         temp.eval()
         return temp.to(device)
 

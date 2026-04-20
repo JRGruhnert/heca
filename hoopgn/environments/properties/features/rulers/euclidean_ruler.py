@@ -4,19 +4,17 @@ import torch
 
 from hoopgn.environments.properties.features.rulers.ruler import (
     PropertyRuler,
-    PropertyRulerConfig,
 )
 
 
-@dataclass(kw_only=True)
-class EuclideanRulerConfig(PropertyRulerConfig):
-    pass
-
-
 class EuclideanRuler(PropertyRuler):
-    def __init__(self, config: EuclideanRulerConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyRuler.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
         self.max_dist = math.sqrt(3)
 
     def distance(

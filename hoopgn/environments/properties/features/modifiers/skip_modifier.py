@@ -2,24 +2,18 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.environments.properties.features.modifiers.modifier import (
-    PropertyModifier,
-    PropertyModifierConfig,
-)
+from hoopgn.environments.properties.features.modifiers.modifier import PropertyModifier
 
 
-@dataclass(kw_only=True)
-class SkipModifierConfig(PropertyModifierConfig):
-    pass
+class DefaultModifier(PropertyModifier):
+    @dataclass(kw_only=True)
+    class Config(PropertyModifier.Config):
+        label: str = "default"
 
-
-class SkipModifier(PropertyModifier):
-    def __init__(
-        self,
-        config: SkipModifierConfig,
-    ):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
+        """A default modifier that returns the input tensor unchanged"""
         return x

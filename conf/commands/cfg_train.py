@@ -21,7 +21,7 @@ properties = get_property_set(PROPERTY_TAG)
 cfg = TrainRunnerConfig(
     skills=skills,
     properties=properties,
-    skill=HoopGNSkillConfig(
+    agent=HoopGNSkillConfig(
         network=HoopgnV1Config(dim_skill=len(skills), dim_state=len(properties)),
         buffer=BufferConfig(size=5),
     ),

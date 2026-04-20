@@ -3,18 +3,16 @@ from dataclasses import dataclass
 
 from hoopgn.environments.properties.features.extractors.extractor import (
     PropertyExtractor,
-    PropertyExtractorConfig,
 )
 
 
-@dataclass(kw_only=True)
-class CalvinGTExtractorConfig(PropertyExtractorConfig):
-    label: str
-
-
 class CalvinGTExtractor(PropertyExtractor):
-    def __init__(self, config: CalvinGTExtractorConfig):
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyExtractor.Config):
+        label: str
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
 
     def __call__(self, observation) -> torch.Tensor:
-        return torch.tensor(observation[self.config.label])
+        return torch.tensor(observation[self.cfg.label])

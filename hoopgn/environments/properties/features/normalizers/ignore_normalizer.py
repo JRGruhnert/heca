@@ -4,15 +4,17 @@ import torch
 
 from hoopgn.environments.properties.features.normalizers.normalizer import (
     PropertyNormalizer,
-    PropertyNormalizerConfig,
 )
 
 
-@dataclass(kw_only=True)
-class IgnoreNormalizerConfig(PropertyNormalizerConfig):
-    pass
-
-
 class IgnoreNormalizer(PropertyNormalizer):
+    @dataclass(kw_only=True)
+    class Config(PropertyNormalizer.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         return x

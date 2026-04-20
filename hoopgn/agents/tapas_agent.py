@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from hoopgn.agents.agent import Skill, SkillInfo
+from hoopgn.agents.agent import Agent, SkillInfo
 from hoopgn.policies.tapas_policy import TapasPolicy
 
 
@@ -10,7 +10,7 @@ class TapasSkillIdent(SkillInfo):
 
 
 @dataclass(kw_only=True)
-class TapasConfig(Skill.Config):
+class TapasConfig(Agent.Config):
     ident: TapasSkillIdent
     operator: TapasPolicy.Config = field(init=False)
 

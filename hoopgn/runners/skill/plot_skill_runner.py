@@ -8,7 +8,7 @@ from hoopgn.plotters.skill_plotters.skill_plotter import (
     SkillPlotterConfig,
 )
 from hoopgn.runners.skill.skill_runner import SkillRunner, SkillRunnerConfig
-from hoopgn.agents.agent import Skill, SkillConfig
+from hoopgn.agents.agent import Agent, SkillConfig
 
 
 @dataclass
@@ -25,8 +25,8 @@ class SkillPlotRunner(SkillRunner):
         self.entities = [Entity(e) for e in config.entities]
         self.properties = [Property(p) for p in config.properties]
 
-    def skill_run(self, skill: Skill):
+    def skill_run(self, skill: Agent):
         for plotter in self.plotters:
-            plotter.init(self.skills, self.entities, self.properties)
+            plotter.init(self.agents, self.entities, self.properties)
             plotter.plot(skill)
             plotter.reset()

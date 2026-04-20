@@ -5,19 +5,17 @@ import torch
 from hoopgn.environments.properties.features.quaternion import Quaternion
 from hoopgn.environments.properties.features.parameters.parameter import (
     PropertyParameter,
-    PropertyParameterConfig,
 )
 
 
-@dataclass(kw_only=True)
-class QuaternionParameterConfig(PropertyParameterConfig):
-    pass
-
-
 class QuaternionParameter(PropertyParameter):
-    def __init__(self, config: QuaternionParameterConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyParameter.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
         self.rotation = Quaternion()
 
     def hoopgnv1(

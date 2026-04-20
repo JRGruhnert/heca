@@ -4,24 +4,21 @@ import torch
 
 from hoopgn.environments.properties.features.parameters.parameter import (
     PropertyParameter,
-    PropertyParameterConfig,
 )
 from hoopgn.environments.properties.features.threshold_boundary import (
-    BoundaryThresholdConfig,
     BoundaryThreshold,
 )
 
 
-@dataclass(kw_only=True)
-class ScalarParameterConfig(PropertyParameterConfig):
-    threshold: BoundaryThresholdConfig
-
-
 class ScalarParameter(PropertyParameter):
-    def __init__(self, config: ScalarParameterConfig):
-        super().__init__(config)
-        self.config = config
-        self.threshold = BoundaryThreshold(config.threshold)
+    @dataclass(kw_only=True)
+    class Config(PropertyParameter.Config):
+        threshold: BoundaryThreshold.Config
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.threshold = BoundaryThreshold(cfg.threshold)
 
     def hoopgnv1(
         self,

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from hoopgn.agents.branch_agent import Branch
+from hoopgn.agents.branch_agent import BranchAgent
 from hoopgn.hardware import device
 from hoopgn.buffer import Buffer, BufferConfig
 from hoopgn.networks import select_network
@@ -11,12 +11,12 @@ from hoopgn.networks.network import Network, NetworkConfig
 from hoopgn import logger
 from thop import profile
 
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 
 
-class HoopgnSkill(Branch):
+class HoopgnAgent(BranchAgent):
     @dataclass(kw_only=True)
-    class Config(Branch.Config):
+    class Config(BranchAgent.Config):
         network: NetworkConfig
         buffer: BufferConfig
         saving_path: str = "results/checkpoints/hoopgn/"
@@ -53,7 +53,7 @@ class HoopgnSkill(Branch):
             lr=self.cfg.learning_rate,
         )
 
-    def act(self, obs: TDProperties, goal: TDProperties) -> Skill:
+    def act(self, obs: TDProperties, goal: TDProperties) -> Agent:
         return self.policy_old.predict(obs, goal)
 
     def explain(

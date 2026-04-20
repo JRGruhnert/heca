@@ -1,22 +1,20 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 
 import torch
 from hoopgn.environments.properties.features.feature import (
     PropertyFeature,
-    PropertyFeatureConfig,
 )
 
 
-@dataclass(kw_only=True)
-class PropertyParameterConfig(PropertyFeatureConfig):
-    pass
-
-
 class PropertyParameter(PropertyFeature):
-    def __init__(self, config: PropertyParameterConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyFeature.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     # TODO: This whole file is just there for legacy code.
     # Remove it as soon as starting with master

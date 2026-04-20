@@ -1,8 +1,9 @@
 from abc import ABC, ABCMeta
 from dataclasses import dataclass
-from typing import TypeVar, Type, cast
+from typing import Sequence, TypeVar, Type, cast
 
 T = TypeVar("T", bound="ConfigurableClass")
+S = TypeVar("S", bound="RegisterableClass")
 
 
 class ConfigurableMeta(ABCMeta):
@@ -29,5 +30,37 @@ class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
         pass
 
     @classmethod
-    def from_config(cls: Type[T], cfg: Config) -> T:
+    def from_config(cls: Type[T], cfg: "ConfigurableClass.Config") -> T:
         return cast(T, ConfigurableMeta.from_config(cfg))
+
+
+class RegisterableClass(ConfigurableClass):
+    _registry: dict["RegisterableClass.Signature", "RegisterableClass"] = {}
+
+    @dataclass(kw_only=True)
+    class Signature:
+        label: str
+
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        signature: "RegisterableClass.Signature"
+
+    @classmethod
+    def get(cls: Type[S], signature: "RegisterableClass.Signature") -> S:
+        assert isinstance(
+            signature, cls.Signature
+        ), f"Signature must be of type {cls.Signature}"
+        assert signature in cls._registry, f"Label '{signature}' not found in registry"
+        return cast(S, cls._registry[signature])
+
+    @classmethod
+    def load(
+        cls: Type[S],
+        cfg: "RegisterableClass.Config" | Sequence["RegisterableClass.Config"],
+    ):
+        if isinstance(cfg, Sequence):
+            for single_cfg in cfg:
+                cls.load(single_cfg)
+        else:
+
+            cls._registry[cfg.signature] = cls.from_config(cfg)

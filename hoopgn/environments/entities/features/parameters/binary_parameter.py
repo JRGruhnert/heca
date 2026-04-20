@@ -4,24 +4,21 @@ import torch
 
 from hoopgn.environments.properties.features.parameters.parameter import (
     PropertyParameter,
-    PropertyParameterConfig,
 )
-from hoopgn.environments.properties.states.binary_state import (
+from hoopgn.environments.properties.v1.binary_state import (
     BinaryState,
-    BinaryStateConfig,
 )
-
-
-@dataclass(kw_only=True)
-class BinaryParameterConfig(PropertyParameterConfig):
-    binary: BinaryStateConfig = BinaryStateConfig()
 
 
 class BinaryParameter(PropertyParameter):
-    def __init__(self, config: BinaryParameterConfig):
-        super().__init__(config)
-        self.config = config
-        self.binary = BinaryState(config.binary)
+    @dataclass(kw_only=True)
+    class Config(PropertyParameter.Config):
+        binary: BinaryState.Config = BinaryState.Config()
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.binary = BinaryState(cfg.binary)
 
     def hoopgnv1(
         self,

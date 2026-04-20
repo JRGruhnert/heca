@@ -1,14 +1,13 @@
 from dataclasses import dataclass
 
-from hoopgn.environments.environment import Environment
 from hoopgn.observation.td_scene import TDScene
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 
 
-class Branch(Skill):
+class BranchAgent(Agent):
     @dataclass(kw_only=True)
-    class Config(Skill.Config):
-        environment: Environment.Config
+    class Config(Agent.Config):
+        agents: set[Agent.Signature]
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)

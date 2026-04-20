@@ -4,25 +4,19 @@ import torch
 
 from hoopgn.environments.properties.features.modifiers.modifier import (
     PropertyModifier,
-    PropertyModifierConfig,
 )
-from hoopgn.environments.properties.states import select_state_property
-from conf.properties.v2.state import StateConfig
-
-
-@dataclass(kw_only=True)
-class OneHotModifierConfig(PropertyModifierConfig):
-    state: StateConfig
+from hoopgn.environments.properties.state import State
 
 
 class OneHotModifier(PropertyModifier):
-    def __init__(
-        self,
-        config: OneHotModifierConfig,
-    ):
-        super().__init__(config)
-        self.config = config
-        self.state = select_state_property(config.state)
+    @dataclass(kw_only=True)
+    class Config(PropertyModifier.Config):
+        state: State.Config
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.state = State.from_config(cfg.state)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         lx = self.state(x)

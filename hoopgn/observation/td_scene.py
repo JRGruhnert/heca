@@ -7,10 +7,10 @@ from hoopgn.observation import empty_batchsize
 
 
 class TDScene(TensorDict):
-    def __init__(self, entities: TDEntities, properties: TDProperties):
+    def __init__(self, v2: TDEntities, v1: TDProperties):
         data = {
-            "entities": entities,
-            "properties": properties,
+            "entities": v2,
+            "properties": v1,
         }
         super().__init__(data, batch_size=empty_batchsize)
 

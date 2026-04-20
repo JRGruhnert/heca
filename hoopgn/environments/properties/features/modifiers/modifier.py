@@ -1,21 +1,18 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 import torch
-from hoopgn.environments.properties.features.feature import (
-    PropertyFeature,
-    PropertyFeatureConfig,
-)
-
-
-@dataclass(kw_only=True)
-class PropertyModifierConfig(PropertyFeatureConfig):
-    pass
+from triton import Config
+from hoopgn.environments.properties.features.feature import PropertyFeature
 
 
 class PropertyModifier(PropertyFeature):
-    def __init__(self, config: PropertyModifierConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyFeature.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     @abstractmethod
     def __call__(self, *args, **kwargs) -> torch.Tensor:

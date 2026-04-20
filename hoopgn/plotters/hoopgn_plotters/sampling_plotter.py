@@ -18,7 +18,7 @@ from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
 )
-from hoopgn.environments.properties.states.area_state import AreaStateConfig
+from hoopgn.environments.properties.v1.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig

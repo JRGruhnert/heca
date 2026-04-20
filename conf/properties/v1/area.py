@@ -1,52 +1,53 @@
 from dataclasses import dataclass, field
 
-from hoopgn.networks.layers.encoder import PropertyEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoder
 
 from hoopgn.environments.properties.features.evaluators.area_evaluator import (
-    AreaEvaluatorConfig,
+    AreaEvaluator,
 )
 from hoopgn.environments.properties.features.extractors.calvin_gt_extractor import (
-    CalvinGTExtractorConfig,
+    CalvinGTExtractor,
 )
 
 from hoopgn.environments.properties.features.modifiers.modifier import (
-    PropertyModifierConfig,
+    PropertyModifier,
 )
 from hoopgn.environments.properties.features.modifiers.one_hot_modifier import (
-    OneHotModifierConfig,
+    OneHotModifier,
 )
 from hoopgn.environments.properties.features.validators.validator import (
-    PropertyValidatorConfig,
+    PropertyValidator,
 )
 from hoopgn.environments.properties.features.evaluators.evaluator import (
-    PropertyEvaluatorConfig,
+    PropertyEvaluator,
 )
 from hoopgn.environments.properties.features.parameters.euclidean_parameter import (
-    EuclideanParameterConfig,
+    EuclideanParameter,
 )
 from hoopgn.environments.properties.features.rulers.euclidean_ruler import (
-    EuclideanRulerConfig,
+    EuclideanRuler,
 )
 from hoopgn.environments.properties.features.normalizers.boundary_normalizer import (
     AreaNormalizerConfig,
 )
 
 from hoopgn.environments.properties.features.normalizers.normalizer import (
-    PropertyNormalizerConfig,
+    PropertyNormalizer,
 )
 from hoopgn.environments.properties.features.validators.area_validator import (
+    AreaValidator,
     AreaValidatorConfig,
 )
 
-from hoopgn.environments.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import Property
 from hoopgn.environments.properties.features.conditions.condition import (
-    PropertyConditionConfig,
+    PropertyCondition,
 )
-from hoopgn.environments.properties.states.area_state import AreaStateConfig
+from hoopgn.environments.properties.v1.area_state import AreaState
 
 
 @dataclass
-class CalvinAreaConfig(AreaStateConfig):
+class CalvinAreaConfig(AreaState.Config):
     label: str = "Area"
     values: set[str] = field(
         default_factory=lambda: {"table", "drawer_open", "drawer_closed"}
@@ -68,26 +69,27 @@ class CalvinAreaConfig(AreaStateConfig):
 
 
 @dataclass
-class AreaPropertyConfig(PropertyConfig):
-    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
+class AreaPropertyConfig(Property.Config):
+    encoder: PropertyEncoder.Config = PropertyEncoder.Config(
         label="AreaEuler",
         dim_input=6,
     )
-    normalizer: PropertyNormalizerConfig = AreaNormalizerConfig()
-    ruler: EuclideanRulerConfig = EuclideanRulerConfig()
-    evaluator: PropertyEvaluatorConfig = AreaEvaluatorConfig(
+    normalizer: PropertyNormalizer.Config = AreaNormalizer.Config()
+    ruler: EuclideanRuler.Config = EuclideanRuler.Config()
+    evaluator: PropertyEvaluator.Config = AreaEvaluator.Config(
+        label="AreaEvaluator",
         area=CalvinAreaConfig(),
     )
-    condition: PropertyConditionConfig = PropertyConditionConfig(
-        ruler=EuclideanRulerConfig(),
-        parameter=EuclideanParameterConfig(),
+    condition: PropertyCondition.Config = PropertyCondition.Config(
+        ruler=EuclideanRuler.Config(),
+        parameter=EuclideanParameter.Config(),
     )
-    validator: PropertyValidatorConfig = AreaValidatorConfig(
-        area=CalvinAreaConfig(),
+    validator: PropertyValidator.Config = AreaValidator.Config(
+        area=CalvinArea.Config(),
     )
-    modifier: PropertyModifierConfig = OneHotModifierConfig(
-        state=CalvinAreaConfig(),
+    modifier: PropertyModifier.Config = OneHotModifier.Config(
+        state=CalvinArea.Config(),
     )
 
     def __post_init__(self):
-        self.extractor = CalvinGTExtractorConfig(label=self.label)
+        self.extractor = CalvinGTExtractor.Config(label=self.label)

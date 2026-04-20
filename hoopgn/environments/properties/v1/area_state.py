@@ -3,24 +3,20 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from conf.properties.v2.state import StateConfig, State
-
-
-@dataclass(kw_only=True)
-class AreaStateConfig(StateConfig):
-    spawn_surfaces: dict[str, list[list[float]]]
-    eval_surfaces: dict[str, list[list[float]]]
+from hoopgn.environments.properties.state import State
 
 
 class AreaState(State):
-    def __init__(
-        self,
-        config: AreaStateConfig,
-    ):
-        super().__init__(config)
-        self.config = config
-        self.spawn_surfaces = self._make_surfaces(config.spawn_surfaces)
-        self.eval_surfaces = self._make_surfaces(config.eval_surfaces)
+    @dataclass(kw_only=True)
+    class Config(State.Config):
+        spawn_surfaces: dict[str, list[list[float]]]
+        eval_surfaces: dict[str, list[list[float]]]
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.spawn_surfaces = self._make_surfaces(cfg.spawn_surfaces)
+        self.eval_surfaces = self._make_surfaces(cfg.eval_surfaces)
 
     def label(self, x: torch.Tensor) -> str | None:
         return self.check_eval_area(x)

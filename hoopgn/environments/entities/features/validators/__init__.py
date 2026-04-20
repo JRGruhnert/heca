@@ -3,14 +3,14 @@ from hoopgn.environments.properties.features.validators.area_validator import (
     AreaValidatorConfig,
 )
 from hoopgn.environments.properties.features.validators.skip_validator import (
-    SkipValidator,
+    DefaultValidator,
     SkipValidatorConfig,
 )
 
 
 _PROPERTY_VALIDATOR_BUILDERS = {
     AreaValidatorConfig: lambda config: AreaValidator(config),
-    SkipValidatorConfig: lambda config: SkipValidator(config),
+    SkipValidatorConfig: lambda config: DefaultValidator(config),
 }
 
 

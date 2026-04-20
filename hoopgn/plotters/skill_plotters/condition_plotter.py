@@ -19,8 +19,8 @@ from hoopgn.plotters.skill_plotters.skill_plotter import (
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.environments.properties.states.area_state import AreaStateConfig
-from hoopgn.agents.agent import Skill
+from hoopgn.environments.properties.v1.area_state import AreaStateConfig
+from hoopgn.agents.agent import Agent
 
 
 @dataclass
@@ -44,7 +44,7 @@ class SkillConditionsPlot(SkillPlotter):
     def reset(self):
         self.entity3d = Entity3DHelper(self.config.entity3d)
 
-    def plot_content(self, skill: Skill):
+    def plot_content(self, skill: Agent):
         self.config.name = self.config.subdir + "_" + skill.cfg.label
         for entity in self.entities:
             label = entity.config.label

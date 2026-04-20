@@ -1,52 +1,52 @@
 from dataclasses import dataclass
 
-from hoopgn.networks.layers.encoder import PropertyEncoderConfig
+from hoopgn.networks.layers.encoder import PropertyEncoder
 from hoopgn.environments.properties.features.evaluators.evaluator import (
-    PropertyEvaluatorConfig,
+    PropertyEvaluator,
 )
 from hoopgn.environments.properties.features.evaluators.threshold_evaluator import (
-    ThresholdEvaluatorConfig,
+    ThresholdEvaluator,
 )
 
 from hoopgn.environments.properties.features.extractors.calvin_gt_extractor import (
-    CalvinGTExtractorConfig,
+    CalvinGTExtractor,
 )
 from hoopgn.environments.properties.features.parameters.binary_parameter import (
-    BinaryParameterConfig,
+    BinaryParameter,
 )
 from hoopgn.environments.properties.features.rulers.binary_ruler import (
-    BinaryRulerConfig,
+    BinaryRuler,
 )
-from hoopgn.environments.properties.features.rulers.ruler import PropertyRulerConfig
+from hoopgn.environments.properties.features.rulers.ruler import PropertyRuler
 
 from hoopgn.environments.properties.features.normalizers.ignore_normalizer import (
-    IgnoreNormalizerConfig,
+    IgnoreNormalizer,
 )
 from hoopgn.environments.properties.features.normalizers.normalizer import (
-    PropertyNormalizerConfig,
+    PropertyNormalizer,
 )
-from hoopgn.environments.properties.property import PropertyConfig
+from hoopgn.environments.properties.property import Property
 from hoopgn.environments.properties.features.conditions.condition import (
-    PropertyConditionConfig,
+    PropertyCondition,
 )
 
 
 @dataclass
-class BoolPropertyConfig(PropertyConfig):
-    encoder: PropertyEncoderConfig = PropertyEncoderConfig(
+class BoolPropertyConfig(Property.Config):
+    encoder: PropertyEncoder.Config = PropertyEncoder.Config(
         label="Bool",
         dim_input=1,
         middle_dim=8,
     )
-    normalizer: PropertyNormalizerConfig = IgnoreNormalizerConfig()
-    ruler: PropertyRulerConfig = BinaryRulerConfig()
-    evaluator: PropertyEvaluatorConfig = ThresholdEvaluatorConfig(
-        ruler=BinaryRulerConfig(),
+    normalizer: PropertyNormalizer.Config = IgnoreNormalizer.Config()
+    ruler: PropertyRuler.Config = BinaryRuler.Config()
+    evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config(
+        ruler=BinaryRuler.Config(),
     )
-    condition: PropertyConditionConfig = PropertyConditionConfig(
-        ruler=BinaryRulerConfig(),
-        parameter=BinaryParameterConfig(),
+    condition: PropertyCondition.Config = PropertyCondition.Config(
+        ruler=BinaryRuler.Config(),
+        parameter=BinaryParameter.Config(),
     )
 
     def __post_init__(self):
-        self.extractor = CalvinGTExtractorConfig(label=self.label)
+        self.extractor = CalvinGTExtractor.Config(label=self.label)

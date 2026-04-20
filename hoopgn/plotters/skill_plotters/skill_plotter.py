@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 from hoopgn.plotters.plotter import Plotter, PlotterConfig
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 
 
 @dataclass
@@ -16,7 +16,7 @@ class SkillPlotter(Plotter):
         self.config = config
 
     @abstractmethod
-    def plot_content(self, skill: Skill):
+    def plot_content(self, skill: Agent):
         raise NotImplementedError()
 
     @abstractmethod

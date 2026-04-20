@@ -1,19 +1,19 @@
 from dataclasses import dataclass, field
-import math
+
 import torch
 
-from conf.properties.v2.state import StateConfig, State
-
-
-@dataclass(kw_only=True)
-class BinaryStateConfig(StateConfig):
-    values: set[str] = field(default_factory=lambda: {"False", "True"})
+from hoopgn.environments.properties.state import State
 
 
 class BinaryState(State):
-    def __init__(self, config: BinaryStateConfig):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(State.Config):
+        label: str = "binary"
+        values: set[str] = field(default_factory=lambda: {"False", "True"})
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     def label(self, x: torch.Tensor) -> str:
         if self.is_binary(x):

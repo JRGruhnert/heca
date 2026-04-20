@@ -4,20 +4,17 @@ import torch
 
 from hoopgn.environments.properties.features.parameters.parameter import (
     PropertyParameter,
-    PropertyParameterConfig,
 )
 
 
-@dataclass(kw_only=True)
-class EuclideanParameterConfig(PropertyParameterConfig):
-    pass
-
-
 class EuclideanParameter(PropertyParameter):
+    @dataclass(kw_only=True)
+    class Config(PropertyParameter.Config):
+        pass
 
-    def __init__(self, config: EuclideanParameterConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     def hoopgnv1(
         self,

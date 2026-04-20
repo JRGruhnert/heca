@@ -5,7 +5,7 @@ import random
 from hoopgn import logger
 from hoopgn.agents.leafs.skip.skip_agent import SkipConfig
 from hoopgn.experiments.experiment import Experiment, ExperimentConfig
-from hoopgn.agents.agent import Skill, SkillConfig
+from hoopgn.agents.agent import Agent, SkillConfig
 from hoopgn.storages.storage import select_skills
 
 
@@ -36,14 +36,14 @@ class NoiseExperiment(Experiment):
             + self.config.min_steps * self.config.p_rand
         )
         self.skills = select_skills(config.skills)
-        self.skip_skill = Skill(cfg=SkipConfig())
+        self.skip_skill = Agent(cfg=SkipConfig())
         logger.info(
             "Noise Experiment Values:\n"
             f"% Skip:      {self.config.p_skip}\n"
             f"% Random:    {self.config.p_rand}\n"
         )
 
-    def modify(self, skill: Skill) -> Skill:
+    def modify(self, skill: Agent) -> Agent:
         sample = random.random()
         if sample < self.config.p_skip:
             selected_skill = self.skip_skill

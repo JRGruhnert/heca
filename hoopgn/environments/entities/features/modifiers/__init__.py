@@ -3,13 +3,13 @@ from hoopgn.environments.properties.features.modifiers.one_hot_modifier import (
     OneHotModifierConfig,
 )
 from hoopgn.environments.properties.features.modifiers.skip_modifier import (
-    SkipModifier,
+    DefaultModifier,
     SkipModifierConfig,
 )
 
 
 _PROPERTY_MODIFIER_BUILDERS = {
-    SkipModifierConfig: lambda config: SkipModifier(config),
+    SkipModifierConfig: lambda config: DefaultModifier(config),
     OneHotModifierConfig: lambda config: OneHotModifier(config),
 }
 

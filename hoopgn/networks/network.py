@@ -8,7 +8,7 @@ from hoopgn.networks.layers.encoder import (
 )
 from torch.distributions import Categorical
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 from hoopgn.environments.properties.property import Property
 from hoopgn import hardware, logger
 
@@ -32,7 +32,7 @@ class Network(torch.nn.Module, ABC):
         super().__init__()
         self.config = config
         self.encoder = PropertyEncoderRegistry(config.registry)
-        self.skills: list[Skill] = []
+        self.skills: list[Agent] = []
         self.properties: list[Property] = []
 
         # Load checkpoint if path is provided in config
@@ -49,14 +49,10 @@ class Network(torch.nn.Module, ABC):
         for state in properties:
             self.encoder.register(state.cfg.encoder)
 
-    def register_skills(self, skills: list[Skill]):
+    def register_skills(self, skills: list[Agent]):
         self.skills = skills
 
-    def predict(
-        self,
-        obs: TDProperties,
-        goal: TDProperties,
-    ) -> Skill:
+    def predict(self, obs: TDProperties, goal: TDProperties) -> Agent:
         with torch.no_grad():
             batch = self.to_encoded_batch(obs, goal)
             logits, value = self.forward(batch)
@@ -79,11 +75,7 @@ class Network(torch.nn.Module, ABC):
         return self.skills[int(action.item())]
 
     @abstractmethod
-    def forward(
-        self,
-        *args,
-        **kwargs,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, *args, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError("Subclasses must implement the forward method.")
 
     @abstractmethod
@@ -109,14 +101,11 @@ class Network(torch.nn.Module, ABC):
 
     @abstractmethod
     def _to_batch(
-        self,
-        current: list[torch.Tensor],
-        goal: list[torch.Tensor],
-        obs: list[TDProperties],
+        self, x: list[torch.Tensor], y: list[torch.Tensor], obs: list[TDProperties]
     ) -> torch.Tensor:
         raise NotImplementedError("Subclasses must implement the _to_batch method.")
 
-    def load(self, skills: list[Skill], states: list[Property]):
+    def load(self, skills: list[Agent], states: list[Property]):
         self.register_encoder(states)
         self.register_skills(skills)
         if self.config.checkpoint_path:
@@ -128,7 +117,7 @@ class Network(torch.nn.Module, ABC):
             logger.warning("No checkpoint provided. Starting with untrained network.")
 
     @abstractmethod
-    def _load(self, checkpoint: Any, skills: list[Skill], states: list[Property]):
+    def _load(self, checkpoint: Any, skills: list[Agent], states: list[Property]):
         raise NotImplementedError("Subclasses must implement the _load method.")
 
     def _load_checkpoint(self, checkpoint_path: str) -> Any:

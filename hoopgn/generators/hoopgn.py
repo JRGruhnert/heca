@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from hoopgn.base import ConfigurableClass
+from hoopgn.observation.td_scene import TDScene
 
 
 class Hoopgn(ConfigurableClass):
@@ -11,8 +12,8 @@ class Hoopgn(ConfigurableClass):
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def reset(self, goal):
+    def reset(self, goal: TDScene):
         pass
 
-    def __call__(self, x):
+    def __call__(self, x: TDScene) -> TDScene:
         raise NotImplementedError

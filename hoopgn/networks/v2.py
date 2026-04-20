@@ -10,7 +10,7 @@ from hoopgn.explainer import HoopgnExplainer
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.network import Network, NetworkConfig
-from hoopgn.agents.agent import Skill
+from hoopgn.agents.agent import Agent
 from hoopgn.environments.properties.features.conditions.condition import (
     PropertyCondition,
 )
@@ -259,7 +259,7 @@ class GraphNetwork(Network):
         self,
         current: TDProperties,
         goal: TDProperties,
-        skill: Skill,
+        skill: Agent,
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
         if isinstance(current, TDProperties):
             current = [current]
@@ -370,7 +370,7 @@ class GraphNetwork(Network):
         ]  # [E, 2]
         return edge_attr
 
-    def _load(self, checkpoint: Any, skills: list[Skill], states: list[Property]):
+    def _load(self, checkpoint: Any, skills: list[Agent], states: list[Property]):
         self.skills = skills
         self.states = states
         self.load_state_dict(checkpoint["model_state"], strict=False)

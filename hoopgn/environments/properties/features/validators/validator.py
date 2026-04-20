@@ -1,25 +1,18 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 import torch
 
-from hoopgn.environments.properties.features.feature import (
-    PropertyFeature,
-    PropertyFeatureConfig,
-)
-
-
-@dataclass(kw_only=True)
-class PropertyValidatorConfig(PropertyFeatureConfig):
-    pass
+from hoopgn.environments.properties.features.feature import PropertyFeature
 
 
 class PropertyValidator(PropertyFeature):
-    def __init__(
-        self,
-        config: PropertyValidatorConfig,
-    ):
-        super().__init__(config)
-        self.config = config
+    @dataclass(kw_only=True)
+    class Config(PropertyFeature.Config):
+        pass
+
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     @abstractmethod
     def __call__(self, x: torch.Tensor, y: torch.Tensor) -> bool:

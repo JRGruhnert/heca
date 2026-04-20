@@ -1,16 +1,17 @@
 from dataclasses import dataclass
 import torch
 
-from hoopgn.environments.properties.states.area_state import AreaState, AreaStateConfig
+from hoopgn.environments.properties.v1.area_state import (
+    AreaState,
+)
 from hoopgn.environments.properties.features.validators.validator import (
     PropertyValidator,
-    PropertyValidatorConfig,
 )
 
 
 @dataclass(kw_only=True)
-class AreaValidatorConfig(PropertyValidatorConfig):
-    area: AreaStateConfig
+class AreaValidatorConfig(PropertyValidator.Config):
+    area: AreaState.Config
 
 
 class AreaValidator(PropertyValidator):

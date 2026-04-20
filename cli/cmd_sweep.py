@@ -21,7 +21,7 @@ def entry_point():
     config = TrainRunnerConfig(
         skills=wandb.config["storage.used_skills"],
         properties=wandb.config["storage.used_states"],
-        skill=HoopGNSkillConfig(
+        agent=HoopGNSkillConfig(
             buffer=BufferConfig(size=wandb.config["agent.batch_size"]),
             storage=StorageConfig(
                 skills=wandb.config["storage.used_skills"],

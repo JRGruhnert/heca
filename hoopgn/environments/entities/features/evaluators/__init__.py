@@ -6,9 +6,9 @@ from hoopgn.environments.properties.features.evaluators.evaluator import (
     PropertyEvaluator,
     PropertyEvaluatorConfig,
 )
-from hoopgn.environments.properties.features.evaluators.skip_evaluator import (
+from hoopgn.environments.properties.features.evaluators.default_evaluator import (
     PIgnoreEvaluator,
-    PIgnoreEvaluatorConfig,
+    DefaultEvaluatorConfig,
 )
 from hoopgn.environments.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluator,
@@ -18,7 +18,7 @@ from hoopgn.environments.properties.features.evaluators.threshold_evaluator impo
 
 _PROPERTY_EVALUATOR_BUILDERS = {
     AreaEvaluatorConfig: lambda config: AreaEvaluator(config),
-    PIgnoreEvaluatorConfig: lambda config: PIgnoreEvaluator(config),
+    DefaultEvaluatorConfig: lambda config: PIgnoreEvaluator(config),
     ThresholdEvaluatorConfig: lambda config: ThresholdEvaluator(config),
 }
 

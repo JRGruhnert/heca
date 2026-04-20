@@ -3,19 +3,18 @@ import torch
 
 from hoopgn.environments.properties.features.validators.validator import (
     PropertyValidator,
-    PropertyValidatorConfig,
 )
 
 
-@dataclass(kw_only=True)
-class SkipValidatorConfig(PropertyValidatorConfig):
-    default: float = 0.0
+class DefaultValidator(PropertyValidator):
+    @dataclass(kw_only=True)
+    class Config(PropertyValidator.Config):
+        label: str = "default"
 
-
-class SkipValidator(PropertyValidator):
-    def __init__(self, config: SkipValidatorConfig):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
 
     def __call__(self, x: torch.Tensor, y: torch.Tensor) -> bool:
+        """A default validator that always returns True"""
         return True

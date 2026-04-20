@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 from tensordict import TensorDictBase
 
-
-@dataclass(kw_only=True)
-class ConverterConfig:
-    label: str
+from hoopgn.base import ConfigurableClass
 
 
-class Converter:
-    def __init__(self, config: ConverterConfig):
-        self.config = config
+class Converter(ConfigurableClass):
+    @dataclass(kw_only=True)
+    class Config(ConfigurableClass.Config):
+        label: str
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
 
     def __call__(self, observation) -> TensorDictBase:
         raise NotImplementedError(
