@@ -48,7 +48,7 @@ def network_config(
 ) -> MPNetwork.Config:
     network_name = "gnn" if is_gnn else "baseline"
     checkpoint_path = (
-        f"results/{network_name}/{checkpoint_name}/model_cp_best.pth"
+        f"results/{network_name}/{checkpoint_name}/model_cp_best.pt"
         if checkpoint_name
         else None
     )

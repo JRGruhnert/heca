@@ -7,7 +7,7 @@ from hoopgn.base import RegisterableClass
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
 from hoopgn.observation.td_scene import TDScene
-from hoopgn.environments.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
 

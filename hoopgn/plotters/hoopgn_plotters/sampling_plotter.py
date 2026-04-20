@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from tqdm import trange
 
 from conf.properties import get_property_set
-from conf.properties.v1.area import CalvinAreaConfig
-from conf.entities import tdp_to_tde
+from hoopgn.properties.v1.area import CalvinAreaConfig
+from hoopgn.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from hoopgn.buffer import BufferConfig
-from hoopgn.environments.entities.entity import Entity
+from hoopgn.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.dense import Dense3EvaluatorConfig
@@ -18,7 +18,7 @@ from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
 )
-from hoopgn.environments.properties.v1.area_state import AreaStateConfig
+from hoopgn.properties.states.area_state import AreaStateConfig
 from hoopgn.experiments import select_experiment
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig

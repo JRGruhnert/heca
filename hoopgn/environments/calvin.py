@@ -1,12 +1,14 @@
 import numpy as np
 from dataclasses import dataclass
 
-from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 import torch
-from hoopgn.environments.environment import Environment, StepFeedback
+from hoopgn import logger
+from hoopgn.environments.environment import Environment
 from hoopgn.observation.td_entities import TDEntities
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.observation.td_scene import TDScene
+
+from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 
 
 class CalvinEnvironment(Environment):
@@ -39,16 +41,12 @@ class CalvinEnvironment(Environment):
     def close(self):
         self.env.close()
 
-    def sample(self):
-        self.calvin_obs = self.env.reset(settle_time=50)[0]
+    def _sample(self):
+        self.calvin_obs = self.env.reset()[0]
 
-    def step(
-        self,
-        action: np.ndarray,
-    ) -> StepFeedback:
+    def _step(self, action: np.ndarray) -> TDScene:
         self.calvin_obs = self.env.step(action, render=False)[0]
-        # TODO: In Future implement error detection and return other Codes
-        return StepFeedback.OKAY
+        return self.observation()
 
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
@@ -81,7 +79,6 @@ class CalvinEnvironment(Environment):
     def _get_v2(self) -> TDEntities:
         return TDEntities({})
 
-    @property
     def observation(self) -> TDScene:
         # Prepare base fields
         scene_kwargs = {

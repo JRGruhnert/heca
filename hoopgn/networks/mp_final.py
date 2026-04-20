@@ -1,16 +1,16 @@
 from dataclasses import dataclass, field
 import torch
 from abc import abstractmethod
+from hoopgn.agents.leaf_agent import LeafAgent
 from hoopgn.base import ConfigurableClass
 from hoopgn.environments.environment import Environment
-from hoopgn.networks.layers.encoder import (
-    PropertyEncoderRegistry,
-    PropertyEncoderRegistryConfig,
+from hoopgn.networks.layers.property_encoder import (
+    PropertyEncoder
 )
 from torch.distributions import Categorical
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.agents.agent import Agent
-from hoopgn.environments.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn import hardware, logger
 
 
@@ -21,14 +21,15 @@ class MPNetwork(ConfigurableClass, torch.nn.Module):
         label: str = field(init=False)
         checkpoint_path: str | None = None
         eval_mode: bool = False
-        registry: PropertyEncoderRegistryConfig = PropertyEncoderRegistryConfig()
 
     def __init__(self, cfg: Config):
         super().__init__()
         self.cfg = cfg
-        self.encoder = PropertyEncoderRegistry(cfg.registry)
-        self.dim_state = Environment.get(cfg.environment).v
-        self.dim_skill = Agent.count()
+        self.encoder = PropertyEncoder.
+        self.dim_state = len(Environment.get(cfg.environment).properties)
+        self.dim_skill = sum(
+            LeafAgent.get(a). for e, a in [Environment.registry, Agent.registry]
+        )
 
         if self.cfg.checkpoint_path:
             self.load()

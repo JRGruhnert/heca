@@ -250,9 +250,7 @@ class HoopgnAgent(BranchAgent):
         else:
             tag = "checkpoint"
 
-        ckpt_path = (
-            self.cfg.saving_path + tag + "_epoch{}.pth".format(self.buffer.epoch)
-        )
+        ckpt_path = self.cfg.saving_path + tag + "_epoch{}.pt".format(self.buffer.epoch)
 
         logger.info(f"Saving weights to: {ckpt_path} at epoch {self.buffer.epoch}")
         torch.save(

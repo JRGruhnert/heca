@@ -49,7 +49,7 @@ class Experiment(ABC):
         self.current = self.env.reset()
         self.goal = self.env.reset()
         attempts = 0
-        while not self.evaluator.is_sample(self.current, self.goal):
+        while not self.evaluator.check_sample(self.current, self.goal):
             attempts += 1
             if attempts % 5 == 0:
                 self.current = self.env.reset()

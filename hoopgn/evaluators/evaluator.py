@@ -1,8 +1,8 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from hoopgn.base import ConfigurableClass
-from hoopgn.environments.entities.entity import Entity
-from hoopgn.environments.properties.property import Property
+from hoopgn.entities.entity import Entity
+from hoopgn.properties.property import Property
 from hoopgn.observation.td_scene import TDScene
 
 
@@ -44,7 +44,8 @@ class Evaluator(ConfigurableClass):
                 return False
         return True
 
-    def is_sample(self, x: TDScene) -> bool:
+    def check_sample(self, x: TDScene, y: TDScene) -> bool:
+        self.reset(y)
         done = self.is_equal(x)
         valid = self.is_valid(x)
         return not done and valid

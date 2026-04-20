@@ -1,0 +1,108 @@
+from hoopgn.properties.v1.area import AreaPropertyConfig
+from hoopgn.properties.v1.bool import BoolPropertyConfig
+from hoopgn.properties.v1.flip import FlipPropertyConfig
+from hoopgn.properties.v1.range import RangePropertyConfig
+from hoopgn.properties.positions.position import PositionConfig
+from hoopgn.properties.rotations.rotation_property import RotationConfig
+from hoopgn.properties.features.evaluators import PIgnoreEvaluatorConfig
+
+
+ee_position: PositionConfig = PositionConfig(
+    label="ee_position",
+    id=0,
+)
+ee_rotation: RotationConfig = RotationConfig(
+    label="ee_rotation",
+    id=1,
+)
+ee_scalar: BoolPropertyConfig = BoolPropertyConfig(
+    label="ee_scalar",
+    id=2,
+)
+slide_position: PositionConfig = PositionConfig(
+    label="slide_position",
+    id=3,
+)
+slide_rotation: RotationConfig = RotationConfig(
+    label="slide_rotation",
+    id=4,
+)
+slide_scalar: RangePropertyConfig = RangePropertyConfig(
+    label="slide_scalar",
+    id=5,
+    low=0.0,
+    high=0.28,
+)
+drawer_position: PositionConfig = PositionConfig(
+    label="drawer_position",
+    id=6,
+)
+drawer_rotation: RotationConfig = RotationConfig(
+    label="drawer_rotation",
+    id=7,
+)
+drawer_scalar: RangePropertyConfig = RangePropertyConfig(
+    label="drawer_scalar",
+    id=8,
+    low=0.0,
+    high=0.22,
+)
+button_position: PositionConfig = PositionConfig(
+    label="button_position",
+    id=9,
+)
+button_rotation: RotationConfig = RotationConfig(
+    label="button_rotation",
+    id=10,
+)
+button_scalar: FlipPropertyConfig = FlipPropertyConfig(
+    label="button_scalar",
+    id=11,
+)
+led_position: PositionConfig = PositionConfig(
+    label="led_position",
+    id=12,
+)
+led_rotation: RotationConfig = RotationConfig(
+    label="led_rotation",
+    id=13,
+)
+block_red_position: AreaPropertyConfig = AreaPropertyConfig(
+    label="block_red_position",
+    id=14,
+)
+block_red_rotation: RotationConfig = RotationConfig(
+    label="block_red_rotation",
+    id=15,
+    evaluator=PIgnoreEvaluatorConfig(),
+)
+block_red_scalar: BoolPropertyConfig = BoolPropertyConfig(
+    label="block_red_scalar",
+    id=16,
+)
+block_blue_position: AreaPropertyConfig = AreaPropertyConfig(
+    label="block_blue_position",
+    id=17,
+)
+block_blue_rotation: RotationConfig = RotationConfig(
+    label="block_blue_rotation",
+    id=18,
+    evaluator=PIgnoreEvaluatorConfig(),
+)
+block_blue_scalar: BoolPropertyConfig = BoolPropertyConfig(
+    label="block_blue_scalar",
+    id=19,
+)
+block_pink_position: AreaPropertyConfig = AreaPropertyConfig(
+    label="block_pink_position",
+    id=20,
+)
+block_pink_rotation: RotationConfig = RotationConfig(
+    label="block_pink_rotation",
+    id=21,
+    evaluator=PIgnoreEvaluatorConfig(),
+)
+block_pink_scalar: BoolPropertyConfig = BoolPropertyConfig(
+    label="block_pink_scalar",
+    id=22,
+)

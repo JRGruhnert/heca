@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from conf.properties.v1.area import CalvinAreaConfig
+from hoopgn.properties.v1.area import CalvinAreaConfig
 from hoopgn import logger
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.plotters.plots.entity_3d import (
@@ -16,10 +16,10 @@ from hoopgn.plotters.skill_plotters.skill_plotter import (
     SkillPlotter,
     SkillPlotterConfig,
 )
-from hoopgn.environments.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.environments.properties.v1.area_state import AreaState
+from hoopgn.properties.states.area_state import AreaState
 from hoopgn.agents.agent import Agent
 
 

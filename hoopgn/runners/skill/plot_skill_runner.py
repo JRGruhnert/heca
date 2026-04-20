@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 
-from hoopgn.environments.properties.property import Property
-from hoopgn.environments.entities.entity import Entity
+from hoopgn.properties.property import Property
+from hoopgn.entities.entity import Entity
 from hoopgn.plotters.skill_plotters import select_skill_plotter
 from hoopgn.plotters.skill_plotters.skill_plotter import (
     SkillPlotter,

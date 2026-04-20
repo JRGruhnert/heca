@@ -1,18 +1,29 @@
 from abc import abstractmethod
-from enum import Enum
+from dataclasses import dataclass
 from functools import cached_property
+
+import numpy as np
+from hoopgn import logger
 from hoopgn.base import RegisterableClass
-from hoopgn.environments.entities.entity import Entity
-from hoopgn.environments.properties.property import Property
+from hoopgn.entities.entity import Entity
+from hoopgn.properties.property import Property
+from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.td_scene import TDScene
 
 
-class StepFeedback(Enum):
-    OKAY = 0
-    ERROR = 1
-
-
 class Environment(RegisterableClass):
+
+    @dataclass(kw_only=True)
+    class Config(RegisterableClass.Config):
+        evaluator: Evaluator.Config
+        max_allowed_steps: int
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.evaluator = Evaluator.from_config(self.cfg.evaluator)
+
+        # Internal state
+        self.step_counter = 0
 
     @cached_property
     @abstractmethod
@@ -24,17 +35,37 @@ class Environment(RegisterableClass):
     def properties(self) -> list[Property]:
         raise NotImplementedError()
 
-    @property
     @abstractmethod
     def observation(self) -> TDScene:
         raise NotImplementedError()
 
-    @abstractmethod
+    def sample_task(self) -> tuple[TDScene, TDScene]:
+        logger.info("Sampling new calvin task...")
+        self.step_counter = 0
+        self.current = self.sample()
+        self.goal = self.sample()
+        attempts = 0
+        while not self.evaluator.check_sample(self.current, self.goal):
+            attempts += 1
+            if attempts % 5 == 0:
+                self.current = self.sample()
+            self.goal = self.sample()
+        return self.current, self.goal
+
     def sample(self) -> TDScene:
-        raise NotImplementedError()
+        self._sample()
+        return self.observation()
 
     @abstractmethod
-    def step(self, action) -> StepFeedback:
+    def _sample(self):
+        raise NotImplementedError()
+
+    def step(self, action: np.ndarray) -> tuple[TDScene, float, bool]:
+        obs = self._step(action)
+        reward, done = self.evaluator.step(self.current)
+        return obs, reward, done
+
+    def _step(self, action: np.ndarray) -> TDScene:
         raise NotImplementedError()
 
     @abstractmethod
@@ -44,3 +75,75 @@ class Environment(RegisterableClass):
     @abstractmethod
     def close(self):
         raise NotImplementedError()
+
+    def step1(self, skill: Agent) -> tuple[TDProperties, float, bool, bool]:
+        selected_skill = self.modify(skill)
+        selected_skill.reset(self.goal)
+        while (action := selected_skill.predict(self.current)) is not None:
+            feedback = self.env.step(action)  # TODO: feedback unused currently
+            self.current = self.env.get_observation()
+        reward, done = self.evaluator.step(self.current, self.goal)
+        self.current_step += 1
+        terminal = True if self.current_step >= self.max_allowed_steps else done
+        logger.info(
+            f"Step {self.current_step}: Reward={reward}, Done={done}, Terminal={terminal}"
+        )
+        return self.current, reward, done, terminal
+
+
+from hoopgn.properties.v1 import properties
+from hoopgn.properties.property import PropertyConfig
+
+_base = [
+    properties.ee_position,
+    properties.ee_rotation,
+    properties.ee_scalar,
+    properties.drawer_position,
+    properties.drawer_rotation,
+    properties.drawer_scalar,
+    properties.button_position,
+    properties.button_rotation,
+    properties.button_scalar,
+    properties.led_position,
+    properties.led_rotation,
+]
+
+_slide_base = [
+    properties.slide_position,
+    properties.slide_rotation,
+    properties.slide_scalar,
+]
+
+_red_base = [
+    properties.block_red_position,
+    properties.block_red_rotation,
+    properties.block_red_scalar,
+]
+
+_pink_base = [
+    properties.block_pink_position,
+    properties.block_pink_rotation,
+    properties.block_pink_scalar,
+]
+
+_blue_base = [
+    properties.block_blue_position,
+    properties.block_blue_rotation,
+    properties.block_blue_scalar,
+]
+
+_sets = {
+    "base": _base,
+    "slider": _base + _slide_base,
+    "red": _base + _red_base,
+    "pink": _base + _pink_base,
+    "blue": _base + _blue_base,
+    "sr": _base + _slide_base + _red_base,
+    "srp": _base + _slide_base + _red_base + _pink_base,
+    "srpb": _base + _slide_base + _red_base + _pink_base + _blue_base,
+}
+
+
+def get_set(tag: str) -> list[PropertyConfig]:
+    assert tag in _sets, f"Unsupported property set tag: {tag}"
+    return _sets[tag]  # type: ignore

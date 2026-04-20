@@ -12,10 +12,10 @@ from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.agents.agent import Agent
-from hoopgn.environments.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.environments.properties.property import Property
+from hoopgn.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import CaptumExplainer, HeteroExplanation
 

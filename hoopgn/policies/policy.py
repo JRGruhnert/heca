@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from hoopgn.base import ConfigurableClass
-from hoopgn.environments.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
 

@@ -19,12 +19,12 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     RobotTrajectory,
     TrajectoryPoint,
 )
-from hoopgn.environments.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.environments.properties.features.evaluators.area_evaluator import (
+from hoopgn.properties.features.evaluators.area_evaluator import (
     AreaEvaluator,
 )
-from hoopgn.environments.properties.features.conditions.condition import (
+from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
 from hoopgn.policies.policy import Policy
@@ -81,13 +81,13 @@ class TapasPolicy(Policy):
         def __post_init__(self):
             self.tapas.invert_prediction_batch = self.reversed
             self.checkpoint_path = (
-                "data/skills/tapas/" + self.label + "/demos_gmm_policy-release.pt"
+                "data/agents/" + self.label + "/demos_gmm_policy-release.pt"
             )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.properties = Property.build_registry(cfg.properties)
+        self.properties = Property.from_configs(cfg.properties)
         self.predictions: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
 

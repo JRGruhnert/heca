@@ -7,7 +7,7 @@ from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.observation.td_properties import TDProperties
 from collections import defaultdict
 
-from hoopgn.environments.properties.property import Property
+from hoopgn.properties.property import Property
 
 
 class MPBaseline(MPNetwork):

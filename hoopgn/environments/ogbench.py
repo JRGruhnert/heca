@@ -39,7 +39,7 @@ class OGBenchEnvironment(Environment):
     def close(self):
         self.env.close()
 
-    def sample(self):
+    def sample_task(self):
         self.og_obs, self.info = self.env.reset()
 
     def step(

@@ -35,7 +35,7 @@ class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
 
 
 class RegisterableClass(ConfigurableClass):
-    _registry: dict["RegisterableClass.Signature", "RegisterableClass"] = {}
+    _registry: dict["RegisterableClass.Config", "RegisterableClass"] = {}
 
     @dataclass(kw_only=True)
     class Signature:
@@ -47,9 +47,7 @@ class RegisterableClass(ConfigurableClass):
 
     @classmethod
     def get(cls: Type[S], signature: "RegisterableClass.Signature") -> S:
-        assert isinstance(
-            signature, cls.Signature
-        ), f"Signature must be of type {cls.Signature}"
+        assert isinstance(signature, cls.Signature), f"Must be of type {cls.Signature}"
         assert signature in cls._registry, f"Label '{signature}' not found in registry"
         return cast(S, cls._registry[signature])
 
@@ -63,8 +61,10 @@ class RegisterableClass(ConfigurableClass):
                 cls.load(single_cfg)
         else:
 
-            cls._registry[cfg.signature] = cls.from_config(cfg)
+            cls._registry[cfg] = cls.from_config(cfg)
 
     @classmethod
-    def count(cls) -> int:
-        return len(cls._registry)
+    def count(cls, label: str | None = None) -> int:
+        if label is None:
+            return len(cls._registry)
+        return sum(1 for sig in cls._registry if sig.signature.label == label)

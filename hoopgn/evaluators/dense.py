@@ -21,8 +21,8 @@ class DenseEvaluator(Evaluator):
         super().reset(goal)
         self.max_percentage_done = 0.0
 
-    def is_sample(self, x: TDProperties) -> bool:
-        valid = super().is_sample(x)
+    def check_sample(self, x: TDProperties) -> bool:
+        valid = super().check_sample(x)
         self.max_percentage_done = max(self.max_percentage_done, self.progress)
         return valid
 
