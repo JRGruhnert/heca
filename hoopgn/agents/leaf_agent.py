@@ -7,6 +7,7 @@ from hoopgn import logger
 from hoopgn.agents.agent import Agent
 from hoopgn.environments.environment import Environment
 
+from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.converters.converter import Converter
 from hoopgn.observation.td_scene import TDScene
 from hoopgn.policies.policy import Policy
@@ -33,20 +34,16 @@ class LeafAgent(Agent):
         self.v1 = Converter.from_config(self.cfg.v1)
         self.v2 = Converter.from_config(self.cfg.v2)
 
-    @classmethod
-    def count_by_environment(cls, label: str | None = None) -> int:
-        if label is None:
-            return len(cls.registry)
-        return sum(1 for c in cls.registry if c.signature.environment.label == label)
-
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:
         env = Environment.get(self.cfg.sig.environment)
+        self.evaluator.reset(y.leaf)
         # self.modify()
-        self.policy.reset(y)
+        self.policy.reset(y.leaf)
 
         while (action := self.policy(x.leaf)) is not None:
-            feedback = env.step(action)
+            z, reward, done = env.step(action)
             c = env.observation()
+            self.policy.convert
             x = self.convert(c)
         reward, done = self.evaluator.step(self.current, self.goal)
         self.current_step += 1
@@ -72,3 +69,17 @@ class LeafAgent(Agent):
             "v1": self.v1(obs),
             "v2": self.v2(obs),
         }
+
+    def sample_task(self) -> tuple[TDScene, TDScene]:
+        env = Environment.get(self.cfg.sig.environment)
+        logger.info("Sampling new Task...")
+        self.step_counter = 0
+        self.current = env.sample()
+        self.goal = env.sample()
+        attempts = 0
+        while not self.evaluator.check_sample(self.current, self.goal):
+            attempts += 1
+            if attempts % 5 == 0:
+                self.current = env.sample()
+            self.goal = env.sample()
+        return self.current, self.goal

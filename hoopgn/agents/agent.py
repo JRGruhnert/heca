@@ -26,17 +26,19 @@ class Agent(RegisterableClass):
         self.hoopgn = Hoopgn.from_config(cfg.hoopgn)
         self.evaluator = Evaluator.from_config(cfg.evaluator)
 
-    def reset(self, goal: TDScene):
-        self.hoopgn.reset(goal)
-        self.evaluator.reset(goal)
-
     def graph(self, x: TDScene, y: TDScene) -> Batch:
         return self.hoopgn(x)
 
+    @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:
         raise NotImplementedError()
 
+    @abstractmethod
     def predict(self, x: TDScene) -> np.ndarray | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def sample_task(self) -> tuple[TDScene, TDScene]:
         raise NotImplementedError()
 
     @cached_property

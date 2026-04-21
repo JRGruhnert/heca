@@ -13,16 +13,18 @@ class Evaluator(ConfigurableClass):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.properties: list[Property] = []
-        self.entities: list[Entity] = []
-        self.max = max(len(self.properties), 1)
 
         # State
         self.progress: float = 0.0
+        self.max: float = 0.0
         self.goal: TDScene | None = None
 
-    def reset(self, goal: TDScene):
+    def setup(self, goal: TDScene):
+        self.reset(goal)
+
+    def reset(self, start: TDScene, goal: TDScene):
         self.progress = 0.0
+        self.max = len(goal)
         self.goal = goal
 
     def is_equal(self, x: TDScene) -> bool:

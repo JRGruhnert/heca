@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from hoopgn import logger
@@ -23,23 +24,10 @@ class Environment(RegisterableClass):
         self.step_counter = 0
 
     @abstractmethod
-    def observation(self) -> TDScene:
+    def observation(self) -> Any:
         raise NotImplementedError()
 
-    def sample_task(self) -> tuple[TDScene, TDScene]:
-        logger.info("Sampling new calvin task...")
-        self.step_counter = 0
-        self.current = self.sample()
-        self.goal = self.sample()
-        attempts = 0
-        while not self.evaluator.check_sample(self.current, self.goal):
-            attempts += 1
-            if attempts % 5 == 0:
-                self.current = self.sample()
-            self.goal = self.sample()
-        return self.current, self.goal
-
-    def sample(self) -> TDScene:
+    def sample(self) -> Any:
         self._sample()
         return self.observation()
 
