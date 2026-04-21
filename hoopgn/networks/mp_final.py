@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
-from torch import nn
 from abc import abstractmethod
-
+from torch import nn
 import torch
-from hoopgn.agents.leaf_agent import LeafAgent
+from torch.distributions import Categorical
 from hoopgn.base import ConfigurableClass
 from hoopgn.environments.environment import Environment
-from torch.distributions import Categorical
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.agents.agent import Agent
 
@@ -31,17 +29,12 @@ class MPNetwork(ConfigurableClass, nn.Module):
             self.eval()
 
     @property
-    def dim_state(self) -> int:
-        return len(Environment.get(self.cfg.environment).properties)
+    def dim_property(self) -> int:
+        raise NotImplementedError()
 
     @property
-    def dim_skill(self) -> int:
-        skills = set()
-        for _, leaf_agent in LeafAgent.registry.items():
-            leaf_agent = LeafAgent.get(leaf_agent.signature)
-            if leaf_agent.cfg.sig.environment == self.cfg.environment:
-                skills.add(leaf_agent.cfg.sig)
-        return len(skills)
+    def dim_agent(self) -> int:
+        raise NotImplementedError()
 
     def predict(self, obs: TDProperties, goal: TDProperties) -> Agent:
         with torch.no_grad():
@@ -49,8 +42,8 @@ class MPNetwork(ConfigurableClass, nn.Module):
             logits, value = self.forward(batch)
         assert logits.shape == (
             1,
-            self.dim_skill,
-        ), f"Expected logits shape (1, {self.dim_skill}), got {logits.shape}"
+            self.dim_agent,
+        ), f"Expected logits shape (1, {self.dim_agent}), got {logits.shape}"
         assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
 
         dist = Categorical(logits=logits)
