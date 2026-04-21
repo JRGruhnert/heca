@@ -6,6 +6,7 @@ import numpy as np
 import torch
 
 from hoopgn.base import ConfigurableClass
+from hoopgn.entities.features.conditions.condition import EntityCondition
 from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
@@ -28,33 +29,17 @@ class Policy(ConfigurableClass):
         raise NotImplementedError()
 
     @abstractmethod
-    def load_precons(self) -> dict[str, PropertyCondition]:
+    def load_precons(self) -> dict[str, EntityCondition | PropertyCondition]:
         raise NotImplementedError()
 
     @abstractmethod
-    def load_postcons(self) -> dict[str, PropertyCondition]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def load_demo_precons(self) -> dict[str, torch.Tensor]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def load_demo_postcons(self) -> dict[str, torch.Tensor]:
+    def load_postcons(self) -> dict[str, EntityCondition | PropertyCondition]:
         raise NotImplementedError()
 
     @cached_property
-    def parameter_precons(self) -> dict[str, PropertyCondition]:
+    def precons(self) -> dict[str, EntityCondition | PropertyCondition]:
         return self.load_precons()
 
     @cached_property
-    def parameter_postcons(self) -> dict[str, PropertyCondition]:
+    def postcons(self) -> dict[str, EntityCondition | PropertyCondition]:
         return self.load_postcons()
-
-    @cached_property
-    def demo_precons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_precons()
-
-    @cached_property
-    def demo_postcons(self) -> dict[str, torch.Tensor]:
-        return self.load_demo_postcons()

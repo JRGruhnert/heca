@@ -3,7 +3,7 @@ from hoopgn.properties.v1.bool import BoolPropertyConfig
 from hoopgn.properties.v1.flip import FlipPropertyConfig
 from hoopgn.properties.v1.range import RangePropertyConfig
 from hoopgn.properties.positions.position import PositionConfig
-from hoopgn.properties.rotations.rotation_property import RotationConfig
+from hoopgn.properties.rotations.rotation import RotationConfig
 from hoopgn.properties.features.evaluators import PIgnoreEvaluatorConfig
 
 

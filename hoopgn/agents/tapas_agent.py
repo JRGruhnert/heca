@@ -15,7 +15,7 @@ class TapasAgent(LeafAgent):
 
         def __post_init__(self):
             self.policy = TapasPolicy.Config(
-                label=self.signature.label,
+                label=self.sig.label,
                 reversed=len(self.overrides) != 0,
                 overrides=set(self.overrides),
             )

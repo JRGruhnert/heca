@@ -7,7 +7,7 @@ from hoopgn.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from hoopgn.buffer import BufferConfig
 from hoopgn.entities.entity import Entity
-from hoopgn.environments.calvin import CalvinEnvironmentConfig
+from hoopgn.environments.calvins.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators import select_evaluator
 from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig

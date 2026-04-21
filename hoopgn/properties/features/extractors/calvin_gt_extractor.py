@@ -9,10 +9,10 @@ from hoopgn.properties.features.extractors.extractor import (
 class CalvinGTExtractor(PropertyExtractor):
     @dataclass(kw_only=True)
     class Config(PropertyExtractor.Config):
-        label: str
+        field_name: str
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
     def __call__(self, observation) -> torch.Tensor:
-        return torch.tensor(observation[self.cfg.label])
+        return torch.tensor(observation[self.cfg.field_name])

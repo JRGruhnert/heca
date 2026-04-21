@@ -4,12 +4,10 @@ from functools import cached_property
 import numpy as np
 from torch_geometric.data import Batch
 from hoopgn.base import RegisterableClass
+from hoopgn.entities.features.conditions.condition import EntityCondition
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
 from hoopgn.observation.td_scene import TDScene
-from hoopgn.properties.features.conditions.condition import (
-    PropertyCondition,
-)
 
 
 class Agent(RegisterableClass):
@@ -32,26 +30,23 @@ class Agent(RegisterableClass):
         self.hoopgn.reset(goal)
         self.evaluator.reset(goal)
 
-    def graph(self, x: TDScene) -> Batch:
+    def graph(self, x: TDScene, y: TDScene) -> Batch:
         return self.hoopgn(x)
+
+    def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:
+        raise NotImplementedError()
 
     def predict(self, x: TDScene) -> np.ndarray | None:
-        return self.hoopgn(x)
-
-    @cached_property
-    @abstractmethod
-    def property_labels(self) -> set[str]:
         raise NotImplementedError()
-        # return set(self.precons.keys()) | set(self.postcons.keys())
 
     @cached_property
     @abstractmethod
-    def precons(self) -> dict[str, PropertyCondition]:
+    def precons(self) -> dict[str, EntityCondition]:
         raise NotImplementedError()
         # return self.policy.load_precons()
 
     @cached_property
     @abstractmethod
-    def postcons(self) -> dict[str, PropertyCondition]:
+    def postcons(self) -> dict[str, EntityCondition]:
         raise NotImplementedError()
         # return self.policy.load_postcons()

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.properties.features.quaternion import Quaternion
+from hoopgn.properties.rotations.quaternion import Quaternion
 from hoopgn.properties.features.parameters.parameter import (
     PropertyParameter,
 )

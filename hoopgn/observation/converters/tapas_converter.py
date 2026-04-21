@@ -29,7 +29,6 @@ class TapasConverter(Converter):
         self.cfg = cfg
 
     def __call__(self, obs: CalvinEnvObservation) -> TensorDict:
-
         if obs.action is None:
             action = None
         else:

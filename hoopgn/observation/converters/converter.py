@@ -1,7 +1,11 @@
+from abc import abstractmethod
 from dataclasses import dataclass
+from functools import cached_property
 from tensordict import TensorDict
 
 from hoopgn.base import ConfigurableClass
+from hoopgn.entities.entity import Entity
+from hoopgn.properties.property import Property
 
 
 class Converter(ConfigurableClass):
@@ -16,3 +20,13 @@ class Converter(ConfigurableClass):
         raise NotImplementedError(
             "ObservationConverter __call__ method not implemented yet."
         )
+
+    @cached_property
+    @abstractmethod
+    def entities(self) -> list[Entity]:
+        raise NotImplementedError()
+
+    @cached_property
+    @abstractmethod
+    def properties(self) -> list[Property]:
+        raise NotImplementedError()

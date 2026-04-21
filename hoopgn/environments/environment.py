@@ -1,12 +1,9 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from functools import cached_property
 
 import numpy as np
 from hoopgn import logger
 from hoopgn.base import RegisterableClass
-from hoopgn.entities.entity import Entity
-from hoopgn.properties.property import Property
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.td_scene import TDScene
 
@@ -24,16 +21,6 @@ class Environment(RegisterableClass):
 
         # Internal state
         self.step_counter = 0
-
-    @cached_property
-    @abstractmethod
-    def entities(self) -> list[Entity]:
-        raise NotImplementedError()
-
-    @cached_property
-    @abstractmethod
-    def properties(self) -> list[Property]:
-        raise NotImplementedError()
 
     @abstractmethod
     def observation(self) -> TDScene:
@@ -76,23 +63,9 @@ class Environment(RegisterableClass):
     def close(self):
         raise NotImplementedError()
 
-    def step1(self, skill: Agent) -> tuple[TDProperties, float, bool, bool]:
-        selected_skill = self.modify(skill)
-        selected_skill.reset(self.goal)
-        while (action := selected_skill.predict(self.current)) is not None:
-            feedback = self.env.step(action)  # TODO: feedback unused currently
-            self.current = self.env.get_observation()
-        reward, done = self.evaluator.step(self.current, self.goal)
-        self.current_step += 1
-        terminal = True if self.current_step >= self.max_allowed_steps else done
-        logger.info(
-            f"Step {self.current_step}: Reward={reward}, Done={done}, Terminal={terminal}"
-        )
-        return self.current, reward, done, terminal
-
 
 from hoopgn.properties.v1 import properties
-from hoopgn.properties.property import PropertyConfig
+from hoopgn.properties.property import Property
 
 _base = [
     properties.ee_position,
@@ -144,6 +117,6 @@ _sets = {
 }
 
 
-def get_set(tag: str) -> list[PropertyConfig]:
+def get_set(tag: str) -> list[Property.Config]:
     assert tag in _sets, f"Unsupported property set tag: {tag}"
     return _sets[tag]  # type: ignore

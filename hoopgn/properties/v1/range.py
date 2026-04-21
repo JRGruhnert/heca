@@ -58,4 +58,4 @@ class RangePropertyConfig(Property.Config):
             ruler=EuclideanRuler.Config(),
             parameter=EuclideanParameter.Config(),
         )
-        self.extractor = CalvinGTExtractor.Config(label=self.label)
+        self.extractor = CalvinGTExtractor.Config(field_name=self.label)

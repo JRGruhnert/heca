@@ -4,20 +4,16 @@ import torch
 
 from hoopgn.properties.features.normalizers.boundary_normalizer import (
     BoundaryNormalizer,
-    BoundaryNormalizerConfig,
 )
 
 
 class BoundaryThreshold:
     @dataclass(kw_only=True)
     class Config:
-        boundary: BoundaryNormalizerConfig
+        boundary: BoundaryNormalizer.Config
         threshold: float = 0.05
 
-    def __init__(
-        self,
-        cfg: Config,
-    ):
+    def __init__(self, cfg: Config):
         self.cfg = cfg
         self.boundary = BoundaryNormalizer(cfg.boundary)
 

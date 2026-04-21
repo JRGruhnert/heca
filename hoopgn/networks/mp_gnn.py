@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Union, cast
+from typing import Union, cast
 import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData

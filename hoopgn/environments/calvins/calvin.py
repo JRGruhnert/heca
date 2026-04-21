@@ -1,11 +1,7 @@
 import numpy as np
 from dataclasses import dataclass
 
-import torch
-from hoopgn import logger
 from hoopgn.environments.environment import Environment
-from hoopgn.observation.td_entities import TDEntities
-from hoopgn.observation.td_properties import TDProperties
 from hoopgn.observation.td_scene import TDScene
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -50,34 +46,6 @@ class CalvinEnvironment(Environment):
 
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
-
-    def _get_v1(self) -> TDProperties:
-        state_dict = {}
-        state_dict["ee_position"] = torch.tensor(
-            self.calvin_obs.ee_pose[:3], dtype=torch.float32
-        )
-        state_dict["ee_rotation"] = torch.tensor(
-            self.calvin_obs.ee_pose[-4:], dtype=torch.float32
-        )
-        state_dict["ee_scalar"] = torch.tensor(
-            np.array([self.calvin_obs.ee_state]), dtype=torch.float32
-        )
-
-        for label, value in self.calvin_obs.object_poses.items():
-            k = label.removeprefix("base__")
-            state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
-            state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
-
-        for label, value in self.calvin_obs.object_states.items():
-            k = label.removeprefix("base__")
-            state_dict[f"{k}_scalar"] = torch.tensor(
-                np.array([value]), dtype=torch.float32
-            )
-
-        return TDProperties(state_dict)
-
-    def _get_v2(self) -> TDEntities:
-        return TDEntities({})
 
     def observation(self) -> TDScene:
         # Prepare base fields

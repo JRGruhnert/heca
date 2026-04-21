@@ -7,7 +7,7 @@ S = TypeVar("S", bound="RegisterableClass")
 
 
 class ConfigurableMeta(ABCMeta):
-    registry: dict[type, type] = {}
+    config_class_registry: dict[type, type] = {}
 
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
@@ -15,11 +15,11 @@ class ConfigurableMeta(ABCMeta):
             # Ensure each subclass defines its own Config class
             config_cls = attrs.get("Config", None)
             assert config_cls is not None, f"{cls.__name__} must define a Config class"
-            ConfigurableMeta.registry[config_cls] = cls
+            ConfigurableMeta.config_class_registry[config_cls] = cls
 
     @staticmethod
     def from_config(cfg: "ConfigurableClass.Config") -> "ConfigurableClass":
-        subclass = ConfigurableMeta.registry.get(type(cfg))
+        subclass = ConfigurableMeta.config_class_registry.get(type(cfg))
         assert subclass is not None
         return subclass(cfg)
 
@@ -35,7 +35,7 @@ class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
 
 
 class RegisterableClass(ConfigurableClass):
-    _registry: dict["RegisterableClass.Config", "RegisterableClass"] = {}
+    registry: dict["RegisterableClass.Config", "RegisterableClass"] = {}
 
     @dataclass(kw_only=True)
     class Signature:
@@ -48,8 +48,8 @@ class RegisterableClass(ConfigurableClass):
     @classmethod
     def get(cls: Type[S], signature: "RegisterableClass.Signature") -> S:
         assert isinstance(signature, cls.Signature), f"Must be of type {cls.Signature}"
-        assert signature in cls._registry, f"Label '{signature}' not found in registry"
-        return cast(S, cls._registry[signature])
+        assert signature in cls.registry, f"Label '{signature}' not found in registry"
+        return cast(S, cls.registry[signature])
 
     @classmethod
     def load(
@@ -61,10 +61,4 @@ class RegisterableClass(ConfigurableClass):
                 cls.load(single_cfg)
         else:
 
-            cls._registry[cfg] = cls.from_config(cfg)
-
-    @classmethod
-    def count(cls, label: str | None = None) -> int:
-        if label is None:
-            return len(cls._registry)
-        return sum(1 for sig in cls._registry if sig.signature.label == label)
+            cls.registry[cfg] = cls.from_config(cfg)

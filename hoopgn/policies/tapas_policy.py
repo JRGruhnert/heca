@@ -40,7 +40,6 @@ class TapasPolicy(Policy):
         pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
         rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
         scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
-        properties: list[Property.Config] = field(default_factory=list[Property.Config])  # type: ignore
         tapas: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
@@ -87,7 +86,6 @@ class TapasPolicy(Policy):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.properties = Property.from_configs(cfg.properties)
         self.predictions: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
 
@@ -174,18 +172,18 @@ class TapasPolicy(Policy):
 
         return tapas
 
-    def _hacky_position(self, label: str) -> np.ndarray:
+    def _hacky_position(self, signature: Property.Signature) -> np.ndarray:
         assert self.goal is not None, "Goal must be set for hacky position."
-        evaluator = self.properties[label].evaluator
+        evaluator = Property.get(signature).evaluator
         if isinstance(evaluator, AreaEvaluator):
-            area = evaluator.area.check_eval_area(self.goal[label])
-            pos = self.goal[label].clone()
+            area = evaluator.area.check_eval_area(self.goal[signature.label])
+            pos = self.goal[signature.label].clone()
             if (
                 area == "drawer_closed"
             ):  # NOTE: This is a hardcoded fix for the drawer, since the position of the drawer in the reversed trajectory is in the closed position but the model expects it to be in the open position. This is because the model was trained with the open position as precondition and the closed position as postcondition, so when we reverse it, we need to also reverse the positions.
                 pos[1] -= 0.17  # Drawer Offset
         else:
-            pos = self.goal[label]
+            pos = self.goal[signature.label]
         return pos.numpy()
 
     @cached_property
@@ -220,10 +218,7 @@ class TapasPolicy(Policy):
             f"Loading conditions with reversed={reversed} and labels={labels}."
         )
         result = {}
-        logger.debug(
-            f"Extracting Conditions from {len(self.cfg.properties)} properties."
-        )
-        for config in self.cfg.properties:
+        for config in Property.registry.values():
             result[config.label] = PropertyCondition.from_hoopgnv1_demos(
                 value=(
                     self.demo_precons[config.label],
@@ -261,3 +256,11 @@ class TapasPolicy(Policy):
         temp = self.policy.model
         assert isinstance(temp, AutoTPGMM), "Model must be an AutoTPGMM."
         return temp
+
+    @cached_property
+    def demo_precons(self) -> dict[str, torch.Tensor]:
+        return self.load_demo_precons()
+
+    @cached_property
+    def demo_postcons(self) -> dict[str, torch.Tensor]:
+        return self.load_demo_postcons()

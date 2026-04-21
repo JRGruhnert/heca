@@ -1,35 +1,28 @@
 from dataclasses import dataclass, field
-import torch
+from torch import nn
 from abc import abstractmethod
+
+import torch
 from hoopgn.agents.leaf_agent import LeafAgent
 from hoopgn.base import ConfigurableClass
 from hoopgn.environments.environment import Environment
-from hoopgn.networks.layers.property_encoder import (
-    PropertyEncoder
-)
 from torch.distributions import Categorical
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.agents.agent import Agent
-from hoopgn.properties.property import Property
-from hoopgn import hardware, logger
 
 
-class MPNetwork(ConfigurableClass, torch.nn.Module):
+class MPNetwork(ConfigurableClass, nn.Module):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         environment: Environment.Signature
+
         label: str = field(init=False)
         checkpoint_path: str | None = None
         eval_mode: bool = False
 
     def __init__(self, cfg: Config):
-        super().__init__()
+        nn.Module.__init__(self)
         self.cfg = cfg
-        self.encoder = PropertyEncoder.
-        self.dim_state = len(Environment.get(cfg.environment).properties)
-        self.dim_skill = sum(
-            LeafAgent.get(a). for e, a in [Environment.registry, Agent.registry]
-        )
 
         if self.cfg.checkpoint_path:
             self.load()
@@ -37,14 +30,27 @@ class MPNetwork(ConfigurableClass, torch.nn.Module):
         if self.cfg.eval_mode:
             self.eval()
 
+    @property
+    def dim_state(self) -> int:
+        return len(Environment.get(self.cfg.environment).properties)
+
+    @property
+    def dim_skill(self) -> int:
+        skills = set()
+        for _, leaf_agent in LeafAgent.registry.items():
+            leaf_agent = LeafAgent.get(leaf_agent.signature)
+            if leaf_agent.cfg.sig.environment == self.cfg.environment:
+                skills.add(leaf_agent.cfg.sig)
+        return len(skills)
+
     def predict(self, obs: TDProperties, goal: TDProperties) -> Agent:
         with torch.no_grad():
             batch = self.to_encoded_batch(obs, goal)
             logits, value = self.forward(batch)
         assert logits.shape == (
             1,
-            self.cfg.dim_skill,
-        ), f"Expected logits shape (1, {self.cfg.dim_skill}), got {logits.shape}"
+            self.dim_skill,
+        ), f"Expected logits shape (1, {self.dim_skill}), got {logits.shape}"
         assert value.shape == (1,), f"Expected value shape ({1},), got {value.shape}"
 
         dist = Categorical(logits=logits)

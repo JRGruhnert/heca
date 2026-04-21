@@ -46,4 +46,4 @@ class PositionConfig(Property.Config):
     )
 
     def __post_init__(self):
-        self.extractor = CalvinGTExtractor.Config(label=self.label)
+        self.extractor = CalvinGTExtractor.Config(field_name=self.label)
