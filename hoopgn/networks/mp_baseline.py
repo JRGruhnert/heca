@@ -19,9 +19,7 @@ class MPBaseline(MPNetwork):
         super().__init__(cfg)
         self.cfg = cfg
 
-        self.combined_feature_dim = (
-            self.cfg.registry.dim_encoder * self.cfg.dim_state * 2
-        )
+        self.combined_feature_dim = self.cfg.dim_encoder * self.dim_property * 2
 
         h_dim1 = self.combined_feature_dim // 2
         h_dim2 = h_dim1 // 2
@@ -30,7 +28,7 @@ class MPBaseline(MPNetwork):
             nn.ReLU(),
             nn.Linear(h_dim1, h_dim2),
             nn.ReLU(),
-            nn.Linear(h_dim2, self.cfg.dim_skill),
+            nn.Linear(h_dim2, self.dim_agent),
         )
         # critic
         self.critic = nn.Sequential(
@@ -51,18 +49,6 @@ class MPBaseline(MPNetwork):
         logits = self.actor(x)
         value = self.critic(x).squeeze(-1)  # shape: [B]
         return logits, value
-
-    def state_type_dict_values(
-        self,
-        x: TDProperties,
-        states: list[Property],
-    ) -> dict[str, torch.Tensor]:
-        """Group state values by their type strings."""
-        grouped = defaultdict(list)
-        for state in states:
-            value = state.postprocess(x[state.cfg.label])
-            grouped[state.cfg.encoder.label].append(value)
-        return {k: torch.stack(v).float() for k, v in grouped.items()}
 
     def _to_batch(
         self,

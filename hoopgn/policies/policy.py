@@ -8,11 +8,7 @@ import torch
 
 from hoopgn.base import ConfigurableClass
 from hoopgn.entities.entity import Entity
-from hoopgn.entities.features.conditions.condition import EntityCondition
 from hoopgn.observation.td_entity import TDEntity
-from hoopgn.properties.features.conditions.condition import (
-    PropertyCondition,
-)
 from hoopgn.properties.property import Property
 
 

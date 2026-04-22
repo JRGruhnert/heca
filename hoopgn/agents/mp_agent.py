@@ -22,21 +22,17 @@ class HoopgnAgent(BranchAgent):
         saving_freq: int = 5  # Saving frequence of trained model
 
         # PPO Hyperparameters
-        mini_batch_size: int = 64  # 64 # How many steps to use in each mini-batch
-        learning_epochs: int = 5  # How many passes over the collected batch per update
+        mini_batch_size: int = 64
+        learning_epochs: int = 5
         lr_annealing: bool = False
-        learning_rate: float = 0.0003  # Step size for actor optimizer
-        gamma: float = 0.99  # How much future rewards are worth today
-        gae_lambda: float = 0.95  # Bias/variance trade‑off in advantage estimation
-        eps_clip: float = 0.2  # How far the new policy is allowed to move from the old
-        entropy_coef: float = (
-            0.02  # Weight on the entropy bonus to encourage exploration
-        )
-        critic_coef: float = (
-            0.5  # Weight on the critic (value) loss vs. the policy loss
-        )
-        max_grad_norm: float = 0.5  # Threshold for clipping gradient norms
-        target_kl: float | None = 0.02  # (Optional) early stopping if KL
+        learning_rate: float = 0.0003
+        gamma: float = 0.99
+        gae_lambda: float = 0.95
+        eps_clip: float = 0.2
+        entropy_coef: float = 0.02
+        critic_coef: float = 0.5
+        max_grad_norm: float = 0.5
+        target_kl: float | None = 0.02
         clip_value_loss: bool = True
 
     def __init__(self, cfg: Config):

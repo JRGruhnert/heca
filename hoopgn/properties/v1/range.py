@@ -16,6 +16,7 @@ from hoopgn.properties.features.parameters.euclidean_parameter import (
 )
 from hoopgn.properties.features.parameters.parameter import PropertyParameter
 
+from hoopgn.properties.features.parameters.range_parameter import RangeParameter
 from hoopgn.properties.features.rulers.euclidean_ruler import (
     EuclideanRuler,
 )
@@ -46,12 +47,16 @@ class RangePropertyConfig(Property.Config):
     ruler: PropertyRuler.Config = EuclideanRuler.Config()
     encoder: PropertyEncoder.Config = RangeEncoderConfig()
     evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
-    parameter: PropertyParameter.Config = EuclideanParameter.Config()
     extractor: PropertyExtractor.Config = CGTExtractor.Config(field_name="Range")
     normalizer: PropertyNormalizer.Config = field(init=False)
+    parameter: PropertyParameter.Config = field(init=False)
 
     def __post_init__(self):
         self.normalizer = BoundaryNormalizer.Config(
             lower=[self.low],
             upper=[self.high],
+        )
+        self.parameter = RangeParameter.Config(
+            normalizer=self.normalizer,
+            threshold=0.05,
         )

@@ -6,13 +6,13 @@ import torch
 from hoopgn import logger, observation
 from hoopgn.agents.agent import Agent
 from hoopgn.entities.entity import Entity
+from hoopgn.properties.property import Property
 from hoopgn.environments.environment import Environment
 from hoopgn.observation.converters.calvin_td_converter import LeafConverter
 from hoopgn.observation.converters.converter import Converter
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
 from hoopgn.policies.policy import Policy
-from hoopgn.properties.property import Property
 
 
 class LeafAgent(Agent):

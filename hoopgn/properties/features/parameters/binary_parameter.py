@@ -5,20 +5,17 @@ import torch
 from hoopgn.properties.features.parameters.parameter import (
     PropertyParameter,
 )
-from hoopgn.properties.states.binary_state import (
-    BinaryState,
-)
+from hoopgn.properties.logic.binary import Binary
 
 
 class BinaryParameter(PropertyParameter):
     @dataclass(kw_only=True)
     class Config(PropertyParameter.Config):
-        binary: BinaryState.Config = BinaryState.Config()
+        pass
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.binary = BinaryState(cfg.binary)
 
     def hoopgnv1(
         self,
@@ -28,7 +25,7 @@ class BinaryParameter(PropertyParameter):
     ) -> torch.Tensor | None:
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
-        if self.binary.is_binary(start) and self.binary.is_binary(end):
-            if self.binary.is_always_same(start, end):
+        if Binary.is_binary(start) and Binary.is_binary(end):
+            if Binary.is_always_same(start, end):
                 return start.mean(dim=0)
         return None  # Not constant enough

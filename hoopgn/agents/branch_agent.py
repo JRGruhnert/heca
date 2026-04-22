@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from hoopgn.domains.domain import Domain
-from hoopgn.entities.features.conditions.condition import EntityCondition
+from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
 from hoopgn.agents.agent import Agent
 
@@ -27,11 +27,11 @@ class BranchAgent(Agent):
         raise NotImplementedError()
 
     @cached_property
-    def precons(self) -> dict[str, EntityCondition]:
+    def precons(self) -> dict[str, TDEntity]:
         raise NotImplementedError()
         # return self.policy.load_precons()
 
     @cached_property
-    def postcons(self) -> dict[str, EntityCondition]:
+    def postcons(self) -> dict[str, TDEntity]:
         raise NotImplementedError()
         # return self.policy.load_postcons()

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import torch
 from hoopgn.base import RegisterableClass
 
@@ -30,8 +30,8 @@ class Property(RegisterableClass):
         encoder: PropertyEncoder.Config
         parameter: PropertyParameter.Config
         evaluator: PropertyEvaluator.Config
+        extractor: PropertyExtractor.Config
         normalizer: PropertyNormalizer.Config
-        extractor: PropertyExtractor.Config = field(init=False)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

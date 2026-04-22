@@ -4,9 +4,9 @@ from functools import cached_property
 import numpy as np
 from torch_geometric.data import Batch
 from hoopgn.base import RegisterableClass
-from hoopgn.entities.features.conditions.condition import EntityCondition
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
+from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
 
 
@@ -18,7 +18,6 @@ class Agent(RegisterableClass):
 
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
-        description: str
         hoopgn: Hoopgn.Config
         evaluator: Evaluator.Config
         train: bool = False
@@ -45,12 +44,12 @@ class Agent(RegisterableClass):
 
     @cached_property
     @abstractmethod
-    def precons(self) -> dict[str, EntityCondition]:
+    def precons(self) -> dict[str, TDEntity]:
         raise NotImplementedError()
         # return self.policy.load_precons()
 
     @cached_property
     @abstractmethod
-    def postcons(self) -> dict[str, EntityCondition]:
+    def postcons(self) -> dict[str, TDEntity]:
         raise NotImplementedError()
         # return self.policy.load_postcons()

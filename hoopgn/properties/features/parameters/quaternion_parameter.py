@@ -2,10 +2,10 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.properties.rotations.quaternion import Quaternion
 from hoopgn.properties.features.parameters.parameter import (
     PropertyParameter,
 )
+from hoopgn.properties.logic.quaternion import Quaternion
 
 
 class QuaternionParameter(PropertyParameter):
@@ -16,7 +16,6 @@ class QuaternionParameter(PropertyParameter):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.rotation = Quaternion()
 
     def hoopgnv1(
         self,
@@ -27,5 +26,5 @@ class QuaternionParameter(PropertyParameter):
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
         if selected_by_tapas:
-            return self.rotation.mean(start)
+            return Quaternion.mean(start)
         return None

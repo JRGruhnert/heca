@@ -3,6 +3,7 @@ import torch
 
 
 class Quaternion:
+
     @staticmethod
     def normalize_quat(x: torch.Tensor) -> torch.Tensor:
         """Normalize quaternion and ensure positive w component."""

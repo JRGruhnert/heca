@@ -12,10 +12,6 @@ from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.agents.agent import Agent
-from hoopgn.properties.features.conditions.condition import (
-    PropertyCondition,
-)
-from hoopgn.properties.property import Property
 from torch_geometric.data import HeteroData
 from torch_geometric.explain import CaptumExplainer, HeteroExplanation
 
@@ -136,8 +132,8 @@ class MPGnn(MPNetwork):
         super().__init__(cfg)
         self.cfg = cfg
 
-        self.actor = ActorReadoutNetwork(dim_features=self.cfg.registry.dim_encoder)
-        self.critic = CriticReadoutNetwork(dim_features=self.cfg.registry.dim_encoder)
+        self.actor = ActorReadoutNetwork(dim_features=self.cfg.dim_encoder)
+        self.critic = CriticReadoutNetwork(dim_features=self.cfg.dim_encoder)
         self.actor_explainer = HoopgnExplainer(
             self.actor,
             algorithm=CaptumExplainer("Saliency"),
@@ -167,33 +163,33 @@ class MPGnn(MPNetwork):
     @cached_property
     def state_state_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.cfg.dim_state)
+            torch.arange(self.dim_property)
             .unsqueeze(1)
-            .repeat(1, self.cfg.dim_state)
+            .repeat(1, self.dim_property)
             .flatten()
         )
-        dst = torch.arange(self.cfg.dim_state).repeat(self.cfg.dim_state)
+        dst = torch.arange(self.dim_property).repeat(self.dim_property)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_skill_full(self) -> torch.Tensor:
         src = (
-            torch.arange(self.cfg.dim_state)
+            torch.arange(self.dim_property)
             .unsqueeze(1)
-            .repeat(1, self.cfg.dim_skill)
+            .repeat(1, self.dim_agent)
             .flatten()
         )
-        dst = torch.arange(self.cfg.dim_skill).repeat(self.cfg.dim_state)
+        dst = torch.arange(self.dim_agent).repeat(self.dim_property)
         return torch.stack([src, dst], dim=0)
 
     @cached_property
     def state_state_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_state)
+        indices = torch.arange(self.dim_property)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
     def skill_skill_sparse(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_skill)
+        indices = torch.arange(self.dim_agent)
         return torch.stack([indices, indices], dim=0)
 
     @cached_property
@@ -207,22 +203,22 @@ class MPGnn(MPNetwork):
 
     @cached_property
     def skill_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_skill)
+        indices = torch.arange(self.dim_agent)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_skill(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_skill)
+        indices = torch.arange(self.dim_agent)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
     def state_to_single(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_state)
+        indices = torch.arange(self.dim_property)
         return torch.stack([indices, torch.zeros_like(indices)], dim=0)
 
     @cached_property
     def single_to_state(self) -> torch.Tensor:
-        indices = torch.arange(self.cfg.dim_state)
+        indices = torch.arange(self.dim_property)
         return torch.stack([torch.zeros_like(indices), indices], dim=0)
 
     @cached_property
@@ -236,9 +232,9 @@ class MPGnn(MPNetwork):
     @cached_property
     def state_skill_01_attr(self) -> torch.Tensor:
         sparse = (
-            self.state_skill_sparse[0] * self.cfg.dim_skill + self.state_skill_sparse[1]
+            self.state_skill_sparse[0] * self.dim_agent + self.state_skill_sparse[1]
         )
-        full = self.state_skill_full[0] * self.cfg.dim_skill + self.state_skill_full[1]
+        full = self.state_skill_full[0] * self.dim_agent + self.state_skill_full[1]
         return torch.isin(full, sparse).float().unsqueeze(-1)
 
     def forward(
@@ -288,10 +284,8 @@ class MPGnn(MPNetwork):
             data = HeteroData()
             data["goal"].x = g
             data["obs"].x = c
-            data["task"].x = torch.zeros(
-                self.cfg.dim_skill, self.cfg.registry.dim_encoder
-            )
-            data["actor"].x = torch.zeros(self.cfg.dim_skill, 1)
+            data["task"].x = torch.zeros(self.dim_agent, self.cfg.dim_encoder)
+            data["actor"].x = torch.zeros(self.dim_agent, 1)
             data["critic"].x = torch.zeros(1, 1)
 
             data[("goal", "goal-obs", "obs")].edge_index = self.state_state_sparse
@@ -320,16 +314,15 @@ class MPGnn(MPNetwork):
     def distances(
         self,
         obs: TDProperties,
-        precons: dict[str, PropertyCondition],
+        precons: dict[str, torch.Tensor],
         pad: bool = False,
         sparse: bool = False,
     ) -> torch.Tensor:
         task_features: list[torch.Tensor] = []
         for state in obs.keys():  # type: ignore
-            cnd = precons.get(str(state), None)
-            if cnd:
-                value = cnd(obs[state])
-                value = torch.tensor([value, 0.0]) if pad else torch.tensor([value])
+            pre = precons.get(str(state), None)
+            if pre:
+                value = torch.tensor([pre, 0.0]) if pad else torch.tensor([pre])
             else:
                 nv = -1.0 if sparse else 0.0  # For Identification in filtering
                 value = torch.tensor([nv, 1.0]) if pad else torch.tensor([nv])

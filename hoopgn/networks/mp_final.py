@@ -17,6 +17,7 @@ class MPNetwork(ConfigurableClass, nn.Module):
         label: str = field(init=False)
         checkpoint_path: str | None = None
         eval_mode: bool = False
+        dim_encoder: int = 32
 
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)
