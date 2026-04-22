@@ -15,5 +15,10 @@ class DefaultEvaluator(PropertyEvaluator):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def __call__(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
+    def __call__(
+        self,
+        current: torch.Tensor,
+        goal: torch.Tensor,
+        distance: float,
+    ) -> bool:
         return True

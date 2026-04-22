@@ -8,14 +8,14 @@ from hoopgn.properties.features.evaluators.threshold_evaluator import (
 )
 
 from hoopgn.properties.features.extractors.c_gt_extractor import (
-    CGTExtractor,
+    CalvinGTExtractor,
 )
-from hoopgn.properties.features.extractors.extractor import PropertyExtractor
 from hoopgn.properties.features.parameters.euclidean_parameter import (
     EuclideanParameter,
 )
-from hoopgn.properties.features.parameters.parameter import PropertyParameter
-
+from hoopgn.properties.features.rulers.binary_ruler import (
+    BinaryRuler,
+)
 from hoopgn.properties.features.rulers.euclidean_ruler import (
     EuclideanRuler,
 )
@@ -23,35 +23,39 @@ from hoopgn.properties.features.rulers.ruler import PropertyRuler
 from hoopgn.properties.features.normalizers.boundary_normalizer import (
     BoundaryNormalizer,
 )
-
+from hoopgn.properties.features.conditions.condition import (
+    PropertyCondition,
+)
 from hoopgn.properties.features.normalizers.normalizer import (
     PropertyNormalizer,
 )
 from hoopgn.properties.property import Property
 
 
-@dataclass(kw_only=True)
-class RangeEncoderConfig(PropertyEncoder.Config):
-    sig: PropertyEncoder.Signature = PropertyEncoder.Signature(
-        label="Range",
-    )
-    dim_input: int = 1
-    middle_dim: int = 8
-
-
-@dataclass(kw_only=True)
+@dataclass
 class RangePropertyConfig(Property.Config):
-    low: float
-    high: float
-    ruler: PropertyRuler.Config = EuclideanRuler.Config()
-    encoder: PropertyEncoder.Config = RangeEncoderConfig()
-    evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
-    parameter: PropertyParameter.Config = EuclideanParameter.Config()
-    extractor: PropertyExtractor.Config = CGTExtractor.Config(field_name="Range")
+    low: float = 0.0
+    high: float = 1.0
+    encoder: PropertyEncoder.Config = PropertyEncoder.Config(
+        label="Range",
+        dim_input=1,
+        middle_dim=8,
+    )
+    ruler: PropertyRuler.Config = BinaryRuler.Config()
+    evaluator: PropertyEvaluator.Config = field(init=False)
     normalizer: PropertyNormalizer.Config = field(init=False)
+    condition: PropertyCondition.Config = field(init=False)
 
     def __post_init__(self):
+        self.evaluator = ThresholdEvaluator.Config(
+            ruler=BinaryRuler.Config(),
+        )
         self.normalizer = BoundaryNormalizer.Config(
             lower=[self.low],
             upper=[self.high],
         )
+        self.condition = PropertyCondition.Config(
+            ruler=EuclideanRuler.Config(),
+            parameter=EuclideanParameter.Config(),
+        )
+        self.extractor = CalvinGTExtractor.Config(label=self.label)

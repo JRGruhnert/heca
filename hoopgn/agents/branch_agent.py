@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import cached_property
 
+from hoopgn.domains.domain import Domain
 from hoopgn.entities.features.conditions.condition import EntityCondition
 from hoopgn.observation.td_scene import TDScene
 from hoopgn.agents.agent import Agent
@@ -9,6 +10,7 @@ from hoopgn.agents.agent import Agent
 class BranchAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
+        domains: set[Domain.Signature]
         agents: set[Agent.Signature]
 
     def __init__(self, cfg: Config):

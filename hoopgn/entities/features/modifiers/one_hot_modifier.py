@@ -5,7 +5,7 @@ import torch
 from hoopgn.properties.features.modifiers.modifier import (
     PropertyModifier,
 )
-from hoopgn.properties.states.state import State
+from hoopgn.properties.logic.state import State
 
 
 class OneHotModifier(PropertyModifier):

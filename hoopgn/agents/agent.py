@@ -12,8 +12,10 @@ from hoopgn.observation.td_scene import TDScene
 
 class Agent(RegisterableClass):
     # @dataclass(kw_only=True)
-    # class Signature(RegisterableClass.Signature):
-    #    label: str # does currently not add to the default signature
+    class Signature(RegisterableClass.Signature):
+        label: str  # does currently not add to the default signature
+        description: str
+
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
         description: str

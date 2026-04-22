@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.properties.states.area_state import AreaState
+from hoopgn.properties.states.area import Area
 from hoopgn.properties.features.evaluators.evaluator import (
     PropertyEvaluator,
 )
@@ -11,14 +11,19 @@ from hoopgn.properties.features.evaluators.evaluator import (
 class AreaEvaluator(PropertyEvaluator):
     @dataclass(kw_only=True)
     class Config(PropertyEvaluator.Config):
-        area: AreaState.Config
+        area: Area.Config
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.area = AreaState.from_config(cfg.area)
+        self.area = Area.from_config(cfg.area)
 
-    def __call__(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
+    def __call__(
+        self,
+        current: torch.Tensor,
+        goal: torch.Tensor,
+        distance: float,
+    ) -> bool:
         return self.area.check_area_similarity(current, goal)
 
     def is_in_area(self, value: torch.Tensor) -> bool:

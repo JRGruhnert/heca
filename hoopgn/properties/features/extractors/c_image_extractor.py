@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from dataclasses import dataclass
 
@@ -7,7 +6,7 @@ from hoopgn.properties.features.extractors.extractor import (
 )
 
 
-class CalvinImageExtractor(PropertyExtractor):
+class CImageExtractor(PropertyExtractor):
     @dataclass(kw_only=True)
     class Config(PropertyExtractor.Config):
         pass
@@ -18,4 +17,4 @@ class CalvinImageExtractor(PropertyExtractor):
 
     def __call__(self, observation) -> torch.Tensor:
         # TODO: add image preprocessing here
-        raise NotImplementedError("CalvinImageExtractor is not implemented yet.")
+        raise NotImplementedError()

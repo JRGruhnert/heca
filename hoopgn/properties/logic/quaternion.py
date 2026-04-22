@@ -1,35 +1,8 @@
 import math
 import torch
 
-from hoopgn.networks.layers.property_encoder import PropertyEncoder
-from hoopgn.properties.features.conditions.condition import PropertyCondition
-from hoopgn.properties.features.evaluators.evaluator import PropertyEvaluator
-from hoopgn.properties.features.evaluators.threshold_evaluator import ThresholdEvaluator
-from hoopgn.properties.features.extractors.calvin_gt_extractor import CalvinGTExtractor
-from hoopgn.properties.features.extractors.extractor import PropertyExtractor
-from hoopgn.properties.features.normalizers.quaternion_normalizer import (
-    QuaternionNormalizer,
-)
-from hoopgn.properties.features.parameters.quaternion_parameter import (
-    QuaternionParameter,
-)
-from hoopgn.properties.features.rulers.angular_ruler import AngularRuler
-
 
 class Quaternion:
-    label: str = "Quat"
-    ruler: AngularRuler.Config = AngularRuler.Config()
-    encoder: PropertyEncoder.Config = PropertyEncoder.Config(dim_input=4)
-    evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config(
-        ruler=AngularRuler.Config(),
-    )
-    condition: PropertyCondition.Config = PropertyCondition.Config(
-        ruler=AngularRuler.Config(),
-        parameter=QuaternionParameter.Config(),
-    )
-    normalizer: QuaternionNormalizer.Config = QuaternionNormalizer.Config()
-    extractor: PropertyExtractor.Config
-
     @staticmethod
     def normalize_quat(x: torch.Tensor) -> torch.Tensor:
         """Normalize quaternion and ensure positive w component."""

@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from hoopgn.properties.features.extractors.extractor import (
     PropertyExtractor,
 )
+from hoopgn.properties.v1.area import CalvinAreaConfig
 
 
-class CalvinGTExtractor(PropertyExtractor):
+class CGTAreaExtractor(PropertyExtractor):
     @dataclass(kw_only=True)
     class Config(PropertyExtractor.Config):
         field_name: str

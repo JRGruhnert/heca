@@ -25,15 +25,3 @@ class BoundaryNormalizer(PropertyNormalizer):
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         cx = torch.clamp(x, self.lower, self.upper)
         return (cx - self.lower) / (self.upper - self.lower)
-
-
-@dataclass(kw_only=True)
-class AreaNormalizerConfig(BoundaryNormalizer.Config):
-    lower: list[float] = field(default_factory=lambda: [-1.0, -1.0, -1.0])
-    upper: list[float] = field(default_factory=lambda: [1.0, 1.0, 1.0])
-
-
-@dataclass(kw_only=True)
-class BoolNormalizerConfig(BoundaryNormalizer.Config):
-    lower: list[float] = field(default_factory=lambda: [0.0])
-    upper: list[float] = field(default_factory=lambda: [1.0])

@@ -21,6 +21,10 @@ from hoopgn.properties.features.normalizers.normalizer import (
 
 class Property(RegisterableClass):
     @dataclass(kw_only=True)
+    class Signature(RegisterableClass.Signature):
+        id: int
+
+    @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
         ruler: PropertyRuler.Config
         encoder: PropertyEncoder.Config
@@ -38,7 +42,7 @@ class Property(RegisterableClass):
         self.extractor = PropertyExtractor.from_config(cfg.extractor)
         self.normalizer = PropertyNormalizer.from_config(cfg.normalizer)
 
-    def extract(self, x: torch.Tensor) -> torch.Tensor:
+    def read(self, x: torch.Tensor) -> torch.Tensor:
         """Extracts the property value from the given modality."""
         ex = self.extractor(x)
         return self.normalizer(ex)
@@ -49,7 +53,8 @@ class Property(RegisterableClass):
 
     def evaluate(self, x: torch.Tensor, y: torch.Tensor) -> bool:
         """Evaluates whether given values are similar."""
-        return self.evaluator(x, y)
+        m = self.ruler(x, y)
+        return self.evaluator(x, y, m)
 
     def extract_condition(
         self, x: torch.Tensor, y: torch.Tensor, by_policy: bool

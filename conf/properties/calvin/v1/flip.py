@@ -8,17 +8,19 @@ from hoopgn.properties.features.evaluators.threshold_evaluator import (
     ThresholdEvaluator,
 )
 
-from hoopgn.properties.features.extractors.calvin_gt_extractor import (
+from hoopgn.properties.features.extractors.c_gt_extractor import (
     CalvinGTExtractor,
 )
-from hoopgn.properties.features.parameters.euclidean_parameter import (
-    EuclideanParameter,
+from hoopgn.properties.features.parameters.flip_parameter import (
+    FlipParameter,
 )
-from hoopgn.properties.features.rulers.euclidean_ruler import (
-    EuclideanRuler,
+from hoopgn.properties.features.rulers.binary_ruler import (
+    BinaryRuler,
 )
+from hoopgn.properties.features.rulers.flip_ruler import FlipRuler
+from hoopgn.properties.features.rulers.ruler import PropertyRuler
 from hoopgn.properties.features.normalizers.boundary_normalizer import (
-    AreaNormalizerConfig,
+    BoolNormalizerConfig,
 )
 from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
@@ -30,20 +32,21 @@ from hoopgn.properties.property import Property
 
 
 @dataclass
-class PositionConfig(Property.Config):
+class FlipPropertyConfig(Property.Config):
     encoder: PropertyEncoder.Config = PropertyEncoder.Config(
-        label="EulerPrecise",
-        dim_input=3,
+        label="Flip",
+        dim_input=1,
+        middle_dim=8,
     )
-    ruler: EuclideanRuler.Config = EuclideanRuler.Config()
+    normalizer: PropertyNormalizer.Config = BoolNormalizerConfig()
+    ruler: PropertyRuler.Config = BinaryRuler.Config()
     evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config(
-        ruler=EuclideanRuler.Config(),
+        ruler=BinaryRuler.Config(),
     )
-    normalizer: PropertyNormalizer.Config = AreaNormalizerConfig()
     condition: PropertyCondition.Config = PropertyCondition.Config(
-        ruler=EuclideanRuler.Config(),
-        parameter=EuclideanParameter.Config(),
+        ruler=FlipRuler.Config(),
+        parameter=FlipParameter.Config(),
     )
 
     def __post_init__(self):
-        self.extractor = CalvinGTExtractor.Config(field_name=self.label)
+        self.extractor = CalvinGTExtractor.Config(label=self.label)

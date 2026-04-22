@@ -21,7 +21,7 @@ class HumanAgent(BranchAgent):
         goal: TDProperties,
     ) -> Agent | None:
         choice = self.select_skill_tui()
-        return self.agents[choice]
+        return Agent.get(choice)
 
     def explain(self, current: TDProperties, goal: TDProperties, skill: Agent) -> str:
         raise NotImplementedError("")
@@ -53,16 +53,14 @@ class HumanAgent(BranchAgent):
         return {}
 
     def select_skill_tui(self):
-        def tui(stdscr):
+        def tui(stdscr) -> Agent.Signature:
             curses.curs_set(0)
-            keys = list(self.agents.keys())
             selected = 0
             while True:
                 stdscr.clear()
                 stdscr.addstr(0, 0, "Select a skill (arrow keys, Enter):")
-                for idx, key in enumerate(keys):
-                    agent = self.agents[key]
-                    label = f"{agent.cfg.ident.label}: {agent.cfg.ident.description}"
+                for idx, agent in enumerate(list(self.cfg.agents)):
+                    label = f"{agent.label}: {agent.description}"
                     if idx == selected:
                         stdscr.addstr(idx + 2, 2, label, curses.A_REVERSE)
                     else:
@@ -70,9 +68,9 @@ class HumanAgent(BranchAgent):
                 key = stdscr.getch()
                 if key == curses.KEY_UP and selected > 0:
                     selected -= 1
-                elif key == curses.KEY_DOWN and selected < len(keys) - 1:
+                elif key == curses.KEY_DOWN and selected < len(self.cfg.agents) - 1:
                     selected += 1
                 elif key in [curses.KEY_ENTER, 10, 13]:
-                    return keys[selected]
+                    return list(self.cfg.agents)[selected]
 
         return curses.wrapper(tui)

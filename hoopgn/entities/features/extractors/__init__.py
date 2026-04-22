@@ -1,8 +1,8 @@
-from hoopgn.properties.features.extractors.calvin_gt_extractor import (
+from hoopgn.properties.features.extractors.c_gt_extractor import (
     CalvinGTExtractor,
     CalvinGTExtractorConfig,
 )
-from hoopgn.properties.features.extractors.calvin_image_extractor import (
+from hoopgn.properties.features.extractors.c_image_extractor import (
     CalvinImageExtractor,
     CalvinImageExtractorConfig,
 )

@@ -1,4 +1,4 @@
-from hoopgn.entities.entity import Entity, EntityConfig
+from hoopgn.entities.entity import Entity
 
 from hoopgn.entities.entity import Entity
 from hoopgn.observation.td_entity import TDEntity

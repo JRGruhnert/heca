@@ -6,7 +6,7 @@ import numpy as np
 from hoopgn import logger
 from hoopgn.entities.entity import Entity
 from hoopgn.observation.td_entity import TDEntity
-from hoopgn.properties.states.area_state import AreaStateConfig
+from hoopgn.properties.states.area import AreaStateConfig
 from scipy.spatial.transform import Rotation as R
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from matplotlib.lines import Line2D

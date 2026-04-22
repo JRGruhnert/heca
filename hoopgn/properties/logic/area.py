@@ -3,17 +3,26 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from hoopgn.properties.states.state import State
+from hoopgn.base import ConfigurableClass
 
 
-class AreaState(State):
+class Area(ConfigurableClass):
     @dataclass(kw_only=True)
-    class Config(State.Config):
+    class Config(ConfigurableClass.Config):
+        labels: set[str]
         spawn_surfaces: dict[str, list[list[float]]]
         eval_surfaces: dict[str, list[list[float]]]
 
+        def __post_init__(self):
+            assert len(self.labels) > 0, "At least one label must be defined."
+            assert self.labels == set(
+                self.spawn_surfaces.keys()
+            ), "Labels must match spawn surfaces."
+            assert self.labels == set(
+                self.eval_surfaces.keys()
+            ), "Labels must match eval surfaces."
+
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.spawn_surfaces = self._make_surfaces(cfg.spawn_surfaces)
         self.eval_surfaces = self._make_surfaces(cfg.eval_surfaces)

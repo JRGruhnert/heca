@@ -19,7 +19,7 @@ from hoopgn.plotters.skill_plotters.skill_plotter import (
 from hoopgn.properties.features.conditions.condition import (
     PropertyCondition,
 )
-from hoopgn.properties.states.area_state import AreaState
+from hoopgn.properties.states.area import Area
 from hoopgn.agents.agent import Agent
 
 
@@ -31,7 +31,7 @@ class SkillConditionsPlotterConfig(SkillPlotterConfig):
     entity3d: Entity3DHelperConfig = Entity3DHelperConfig(
         mode=Entity3DMode.DELTAS,
     )
-    area: AreaState.Config = CalvinAreaConfig()
+    area: Area.Config = CalvinAreaConfig()
 
 
 class SkillConditionsPlot(SkillPlotter):

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import torch
 
 from hoopgn.base import ConfigurableClass
+from hoopgn.properties.logic.area import Area
 
 
 class State(ConfigurableClass):
@@ -42,3 +43,9 @@ class State(ConfigurableClass):
         index = list(self.cfg.values).index(label)
         one_hot[index] = 1.0
         return one_hot
+
+    @classmethod
+    def from_area_config(cls, area_cfg: Area.Config) -> "State":
+        return cls(
+            cls.Config(values=area_cfg.labels),
+        )

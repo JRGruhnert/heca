@@ -1,21 +1,23 @@
 from dataclasses import dataclass
+
+from hoopgn.agents.leaf_agent import LeafAgent
 from hoopgn.base import RegisterableClass
-from hoopgn.properties.v1.position import PositionConfig
+from hoopgn.entities.entity import Entity
+from hoopgn.environments.environment import Environment
 from hoopgn.properties.property import Property
 
 
-class Entity(RegisterableClass):
+class Domain(RegisterableClass):
     @dataclass(kw_only=True)
     class Signature(RegisterableClass.Signature):
-        id: int
         label: str
 
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
-        domain: Property.Config
-        position: PositionConfig
-        rotation: Property.Config
-        state: Property.Config
+        environment: Environment.Config
+        agents: set[LeafAgent.Signature]
+        entities: set[Entity.Config]
+        properties: set[Property.Config]
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

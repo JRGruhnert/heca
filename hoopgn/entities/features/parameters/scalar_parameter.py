@@ -5,7 +5,7 @@ import torch
 from hoopgn.properties.features.parameters.parameter import (
     PropertyParameter,
 )
-from hoopgn.properties.positions.threshold_boundary import (
+from hoopgn.properties.logic.threshold_boundary import (
     BoundaryThreshold,
 )
 

@@ -14,5 +14,10 @@ class PropertyEvaluator(PropertyFeature):
         self.cfg = cfg
 
     @abstractmethod
-    def __call__(self, current: torch.Tensor, goal: torch.Tensor) -> bool:
+    def __call__(
+        self,
+        current: torch.Tensor,
+        goal: torch.Tensor,
+        distance: float,
+    ) -> bool:
         raise NotImplementedError("Subclasses must implement the __call__ method.")
