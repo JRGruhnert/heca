@@ -111,7 +111,7 @@ class HoopgnAgent(BranchAgent):
         if self.buffer.epoch % self.cfg.saving_freq == 0 and self.buffer.epoch != 0:
             self.save(highscore=False)
 
-        self.buffer.save(self.cfg.signature.label)
+        self.buffer.save(self.cfg.sig.label)
 
         return self.buffer.reached_max_batches
 

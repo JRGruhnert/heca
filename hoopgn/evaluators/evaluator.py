@@ -19,9 +19,6 @@ class Evaluator(ConfigurableClass):
         self.max: float = 0.0
         self.goal: TDScene | None = None
 
-    def setup(self, goal: TDScene):
-        self.reset(goal)
-
     def reset(self, start: TDScene, goal: TDScene):
         self.progress = 0.0
         self.max = len(goal)
@@ -47,12 +44,11 @@ class Evaluator(ConfigurableClass):
         return True
 
     def check_sample(self, x: TDScene, y: TDScene) -> bool:
-        self.reset(y)
+        self.reset(x, y)
         done = self.is_equal(x)
         valid = self.is_valid(x)
         return not done and valid
 
     @abstractmethod
     def step(self, x: TDScene) -> tuple[float, bool]:
-        "Returns the step reward and wether the step is a terminal step, cause some ending condition was met."
         raise NotImplementedError()

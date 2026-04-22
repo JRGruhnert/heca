@@ -2,18 +2,12 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn import logger
-from hoopgn.properties.features.parameters.ignore_parameter import (
-    IgnoreParameter,
-)
 from hoopgn.properties.features.parameters.parameter import (
     PropertyParameter,
 )
 
-from hoopgn.properties.features.rulers.ignore_ruler import IgnoreRuler
 from hoopgn.properties.features.rulers.ruler import PropertyRuler
 from hoopgn.properties.features.feature import PropertyFeature
-from hoopgn.properties.property import Property
 
 
 class PropertyCondition(PropertyFeature):
@@ -41,26 +35,3 @@ class PropertyCondition(PropertyFeature):
         return torch.tensor(
             [self.ruler(a, b), self.cfg.last_digit], dtype=torch.float32
         )
-
-    @classmethod
-    def from_hoopgnv1_demos(
-        cls,
-        value: tuple,
-        config: Property.Config,
-    ) -> "PropertyCondition":
-        instance = cls(config.condition)
-        start, end, reversed, selected_by_tapas = value
-        tp = instance.parameter.hoopgnv1(start, end, reversed, selected_by_tapas)
-        if tp is None:
-            return PropertyCondition(
-                PropertyCondition.Config(
-                    ruler=IgnoreRuler.Config(),
-                    parameter=IgnoreParameter.Config(),
-                    value=None,
-                    last_digit=1,
-                )
-            )
-
-        instance.value = tp
-        logger.debug(f"Created {cls.__name__} from demos with value: {instance.value}.")
-        return instance

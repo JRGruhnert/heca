@@ -236,7 +236,7 @@ class Entity3DHelper:
         if self.config.mode == Entity3DMode.DIFFERENCE:
             return self.axes["different"] if ed.different else self.axes["same"]
         elif self.config.mode == Entity3DMode.COLORS:
-            return self.axes.get(ed.entity.config.label, None)
+            return self.axes.get(ed.entity.cfg.label, None)
         else:
             raise ValueError(f"Unsupported mode: {self.config.mode}")
 
@@ -254,12 +254,12 @@ class Entity3DHelper:
                 self.show_location(
                     ax_current,
                     ed.current,
-                    STYLE_DICT.get(ed.entity.config.label, STYLE_DICT["default"]),
+                    STYLE_DICT.get(ed.entity.cfg.label, STYLE_DICT["default"]),
                 )
                 self.show_location(
                     ax_goal,
                     ed.goal,
-                    STYLE_DICT.get(ed.entity.config.label, STYLE_DICT["default"]),
+                    STYLE_DICT.get(ed.entity.cfg.label, STYLE_DICT["default"]),
                 )
                 self.show_rotation(ax_current, ed.current, ec)
                 self.show_rotation(ax_goal, ed.goal, ec)

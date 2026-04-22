@@ -43,7 +43,7 @@ class RegisterableClass(ConfigurableClass):
 
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
-        signature: "RegisterableClass.Signature"
+        sig: "RegisterableClass.Signature"
 
     @classmethod
     def get(cls: Type[S], signature: "RegisterableClass.Signature") -> S:

@@ -1,16 +1,18 @@
 from dataclasses import dataclass
 
-import numpy as np
 from tensordict import TensorDict
+import torch
 
-from hoopgn import logger
+from hoopgn import logger, observation
 from hoopgn.agents.agent import Agent
+from hoopgn.entities.entity import Entity
 from hoopgn.environments.environment import Environment
-
-from hoopgn.evaluators.evaluator import Evaluator
+from hoopgn.observation.converters.calvin_td_converter import LeafConverter
 from hoopgn.observation.converters.converter import Converter
+from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
 from hoopgn.policies.policy import Policy
+from hoopgn.properties.property import Property
 
 
 class LeafAgent(Agent):
@@ -24,51 +26,32 @@ class LeafAgent(Agent):
         sig: "LeafAgent.Signature"
         policy: Policy.Config
 
-        v1: Converter.Config
-        v2: Converter.Config
+        leaf_cv: LeafConverter.Config
+        env_cv: Converter.Config
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
         self.policy = Policy.from_config(self.cfg.policy)
-        self.v1 = Converter.from_config(self.cfg.v1)
-        self.v2 = Converter.from_config(self.cfg.v2)
+        self.leaf_cv = LeafConverter.from_config(self.cfg.leaf_cv)
+        self.env_cv = Converter.from_config(self.cfg.env_cv)
 
-    def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:
-        env = Environment.get(self.cfg.sig.environment)
-        self.evaluator.reset(y.leaf)
-        # self.modify()
-        self.policy.reset(y.leaf)
+        # Loading #TODO: correct path
+        self.policy.from_disk(f"data/policies/{self.cfg.sig.label}.json")
 
-        while (action := self.policy(x.leaf)) is not None:
-            z, reward, done = env.step(action)
-            c = env.observation()
-            self.policy.convert
-            x = self.convert(c)
-        reward, done = self.evaluator.step(self.current, self.goal)
-        self.current_step += 1
-        terminal = True if self.current_step >= self.max_allowed_steps else done
-        logger.info(
-            f"Step {self.current_step}: Reward={reward}, Done={done}, Terminal={terminal}"
+    def get_agent_td(self, x: TDScene) -> TDScene:
+        return x.policies.get(self.cfg.sig.environment.label)
+
+    def make_td_scene(self, ax: TensorDict) -> TDScene:
+        v1, v2 = self.leaf_cv(self.current)
+        return TDScene(
+            v1=v1,
+            v2=v2,
+            policies=TensorDict(
+                {self.cfg.sig.environment.label: ax},
+                observation.empty_batchsize,
+            ),
         )
-        return self.current, reward, done, terminal
-        raise NotImplementedError()
-        # return self.policy(x, y)
-
-    def predict(self, x: TDScene) -> np.ndarray | None:
-        return self.policy(x)
-
-    def convert(self, obs) -> TDScene:
-        return {
-            "v1": self.v1(obs),
-            "v2": self.v2(obs),
-        }
-
-    def convert_leaf(self, obs) -> TensorDict:
-        return {
-            "v1": self.v1(obs),
-            "v2": self.v2(obs),
-        }
 
     def sample_task(self) -> tuple[TDScene, TDScene]:
         env = Environment.get(self.cfg.sig.environment)
@@ -83,3 +66,38 @@ class LeafAgent(Agent):
                 self.current = env.sample()
             self.goal = env.sample()
         return self.current, self.goal
+
+    def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, float, bool]:
+        env = Environment.get(self.cfg.sig.environment)
+        ax = self.get_agent_td(x)
+        ay = self.get_agent_td(y)
+
+        # Policy loop
+        while (action := self.policy(ax, ay)) is not None:
+            self.current = env.step(action)
+            ax = self.env_cv(self.current)
+
+        scene = self.make_td_scene(ax)
+        reward, done = self.evaluator.step(scene)
+        logger.debug(f"Step {self.step_counter}: Reward={reward}, Done={done}")
+        return scene, reward, done
+
+    @property
+    def ppre(self) -> dict[Property.Signature, torch.Tensor]:
+        # TODO: Cluster from previous layer
+        return self.policy.ppre
+
+    @property
+    def ppost(self) -> dict[Property.Signature, torch.Tensor]:
+        # TODO: Cluster from previous layer
+        return self.policy.ppost
+
+    @property
+    def epre(self) -> dict[Entity.Signature, TDEntity]:
+        # TODO: Cluster from previous layer
+        return self.policy.epre
+
+    @property
+    def epost(self) -> dict[Entity.Signature, TDEntity]:
+        # TODO: Cluster from previous layer
+        return self.policy.epost

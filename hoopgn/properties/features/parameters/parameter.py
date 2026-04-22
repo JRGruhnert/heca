@@ -33,7 +33,6 @@ class PropertyParameter(PropertyFeature):
         self,
         start: torch.Tensor,
         end: torch.Tensor,
-        reversed: bool,
         selected_by_tapas: bool = False,
     ) -> torch.Tensor | None:
         raise NotImplementedError("Subclasses must implement this method.")

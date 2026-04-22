@@ -68,9 +68,9 @@ def properties_to_entities(properties: list[Property.Config]) -> list[Entity.Con
 
 def tdp_to_tde(properties: TDProperties, entity: Entity) -> TDEntity:
     return TDEntity(
-        position=properties[entity.config.position.label],
-        rotation=properties[entity.config.rotation.label],
-        state=properties[entity.config.state.label],
+        position=properties[entity.cfg.position.label],
+        rotation=properties[entity.cfg.rotation.label],
+        state=properties[entity.cfg.state.label],
     )
 
 

@@ -20,7 +20,6 @@ class IgnoreParameter(PropertyParameter):
         self,
         start: torch.Tensor,
         end: torch.Tensor,
-        reversed: bool,
         selected_by_tapas: bool = False,
     ) -> torch.Tensor | None:
         return None

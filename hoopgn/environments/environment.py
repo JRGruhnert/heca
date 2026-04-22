@@ -3,44 +3,23 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from hoopgn import logger
 from hoopgn.base import RegisterableClass
-from hoopgn.evaluators.evaluator import Evaluator
-from hoopgn.observation.td_scene import TDScene
 
 
 class Environment(RegisterableClass):
-
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
-        evaluator: Evaluator.Config
-        max_allowed_steps: int
+        pass
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.evaluator = Evaluator.from_config(self.cfg.evaluator)
-
-        # Internal state
-        self.step_counter = 0
 
     @abstractmethod
-    def observation(self) -> Any:
-        raise NotImplementedError()
-
     def sample(self) -> Any:
-        self._sample()
-        return self.observation()
-
-    @abstractmethod
-    def _sample(self):
         raise NotImplementedError()
 
-    def step(self, action: np.ndarray) -> tuple[TDScene, float, bool]:
-        obs = self._step(action)
-        reward, done = self.evaluator.step(self.current)
-        return obs, reward, done
-
-    def _step(self, action: np.ndarray) -> TDScene:
+    @abstractmethod
+    def step(self, action: np.ndarray) -> Any:
         raise NotImplementedError()
 
     @abstractmethod

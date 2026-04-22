@@ -1,8 +1,9 @@
+from typing import Any
+
 import numpy as np
 from dataclasses import dataclass
 
 from hoopgn.environments.environment import Environment
-from hoopgn.observation.td_scene import TDScene
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 
@@ -37,25 +38,11 @@ class CalvinEnvironment(Environment):
     def close(self):
         self.env.close()
 
-    def _sample(self):
-        self.calvin_obs = self.env.reset()[0]
+    def sample(self) -> Any:
+        return self.env.reset()[0]
 
-    def _step(self, action: np.ndarray) -> TDScene:
-        self.calvin_obs = self.env.step(action, render=False)[0]
-        return self.observation()
+    def step(self, action: np.ndarray) -> Any:
+        return self.env.step(action, render=False)[0]
 
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")
-
-    def observation(self) -> TDScene:
-        # Prepare base fields
-        scene_kwargs = {
-            "v1": self._get_v1(),
-            "v2": self._get_v2(),
-        }
-        # Add per-converter fields
-        for converter in getattr(self, "converters", []):
-            label = getattr(converter.cfg, "label", None)
-            if label is not None:
-                scene_kwargs[label] = converter(self.calvin_obs)
-        return TDScene(**scene_kwargs)

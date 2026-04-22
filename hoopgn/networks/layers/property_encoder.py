@@ -7,11 +7,11 @@ from hoopgn.base import RegisterableClass
 
 class PropertyEncoder(RegisterableClass, nn.Module):
     @dataclass(kw_only=True)
-    class Signature:
+    class Signature(RegisterableClass.Signature):
         label: str
 
     @dataclass(kw_only=True)
-    class Config:
+    class Config(RegisterableClass.Config):
         dim_input: int
         middle_dim: int = 16
         dim_encoder: int = 32

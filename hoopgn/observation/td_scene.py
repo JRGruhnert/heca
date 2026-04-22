@@ -2,6 +2,7 @@ from tensordict import TensorDict
 from typing import cast
 
 from hoopgn.observation.td_entities import TDEntities
+from hoopgn.observation.td_policies import TDPolicies
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.observation import empty_batchsize
 
@@ -11,12 +12,12 @@ class TDScene(TensorDict):
         self,
         v1: TDProperties,
         v2: TDEntities,
-        leaf: TensorDict,
+        policies: TDPolicies,
     ):
         data = {
             "v1": v1,
             "v2": v2,
-            "leaf": leaf,
+            "policies": policies,
         }
         super().__init__(data, batch_size=empty_batchsize)
 
@@ -29,5 +30,5 @@ class TDScene(TensorDict):
         return cast(TDEntities, self["v2"])
 
     @property
-    def leaf(self) -> TensorDict:
-        return cast(TensorDict, self["leaf"])
+    def policies(self) -> TDPolicies:
+        return cast(TDPolicies, self["policies"])

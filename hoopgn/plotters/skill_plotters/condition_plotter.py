@@ -38,7 +38,7 @@ class SkillConditionsPlot(SkillPlotter):
     def __init__(self, config: SkillConditionsPlotterConfig):
         super().__init__(config)
         self.config = config
-        self.entity_dict = {e.config.label: e for e in self.entities}
+        self.entity_dict = {e.cfg.label: e for e in self.entities}
         self.entity3d = Entity3DHelper(config.entity3d)
 
     def reset(self):
@@ -47,7 +47,7 @@ class SkillConditionsPlot(SkillPlotter):
     def plot_content(self, skill: Agent):
         self.config.name = self.config.subdir + "_" + skill.cfg.label
         for entity in self.entities:
-            label = entity.config.label
+            label = entity.cfg.label
             self.entity3d.set_entity(
                 entity=entity,
                 current=self.make_td_entity(label, skill.precons),

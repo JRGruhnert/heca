@@ -13,6 +13,7 @@ from hoopgn.properties.features.extractors.calvin_gt_extractor import (
 from hoopgn.properties.features.parameters.euclidean_parameter import (
     EuclideanParameter,
 )
+from hoopgn.properties.features.parameters.parameter import PropertyParameter
 from hoopgn.properties.features.rulers.binary_ruler import (
     BinaryRuler,
 )
@@ -41,21 +42,19 @@ class RangePropertyConfig(Property.Config):
         dim_input=1,
         middle_dim=8,
     )
-    ruler: PropertyRuler.Config = BinaryRuler.Config()
-    evaluator: PropertyEvaluator.Config = field(init=False)
+    ruler: PropertyRuler.Config = EuclideanRuler.Config()
+    evaluator = ThresholdEvaluator.Config(
+        ruler=EuclideanRuler.Config(),
+    )
+    parameter: PropertyParameter.Config = EuclideanParameter.Config()
     normalizer: PropertyNormalizer.Config = field(init=False)
-    condition: PropertyCondition.Config = field(init=False)
 
     def __post_init__(self):
         self.evaluator = ThresholdEvaluator.Config(
-            ruler=BinaryRuler.Config(),
+            ruler=EuclideanRuler.Config(),
         )
         self.normalizer = BoundaryNormalizer.Config(
             lower=[self.low],
             upper=[self.high],
-        )
-        self.condition = PropertyCondition.Config(
-            ruler=EuclideanRuler.Config(),
-            parameter=EuclideanParameter.Config(),
         )
         self.extractor = CalvinGTExtractor.Config(field_name=self.label)
