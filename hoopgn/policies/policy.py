@@ -1,15 +1,14 @@
+import torch
+import numpy as np
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-
-import numpy as np
 from tensordict import TensorDict
-import torch
 
 from hoopgn.base import ConfigurableClass
 from hoopgn.entities.entity import Entity
-from hoopgn.observation.td_entity import TDEntity
 from hoopgn.properties.property import Property
+from hoopgn.observation.td_entity import TDEntity
 
 
 class Policy(ConfigurableClass):

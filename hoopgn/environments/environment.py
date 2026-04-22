@@ -31,7 +31,7 @@ class Environment(RegisterableClass):
         raise NotImplementedError()
 
 
-from hoopgn.properties.v1 import properties
+from hoopgn.domains.calvins import properties
 from hoopgn.properties.property import Property
 
 _base = [

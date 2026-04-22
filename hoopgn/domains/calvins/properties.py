@@ -1,4 +1,3 @@
-from hoopgn.networks.layers.property_encoder import PropertyEncoder
 from hoopgn.properties.property import Property
 from hoopgn.properties.v1.area import CalvinAreaPropertyConfig
 from hoopgn.properties.v1.bool import BoolPropertyConfig

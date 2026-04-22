@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
 import sys
-from hoopgn.hardware import device
-from hoopgn import logger
 import numpy as np
 import torch
 import tapas_gmm_modified
@@ -18,9 +16,10 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from hoopgn.observation.td_properties import TDProperties
-
 from hoopgn.policies.policy import Policy
 from hoopgn.properties.property import Property
+from hoopgn.hardware import device
+from hoopgn import logger
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
@@ -28,7 +27,6 @@ sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkp
 class TapasPolicy(Policy):
     @dataclass(kw_only=True)
     class Config(Policy.Config):
-        properties: list[Property.Config]
         tapas: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
@@ -77,6 +75,7 @@ class TapasPolicy(Policy):
         self.cfg = cfg
         self.prds: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
+        self.properties: list[Property.Config] = []  # TODO: find a way to get that
 
     def __call__(self, x: TDProperties, y: TDProperties) -> np.ndarray | None:
         if self.prds is None or self.prds.is_finished:
@@ -125,7 +124,7 @@ class TapasPolicy(Policy):
             postcon = self.demo_precons
 
         result = {}
-        for cfg in self.cfg.properties:
+        for cfg in self.properties:
             con = Property.get(cfg.sig).extract_condition(
                 precon[cfg.sig.label],
                 postcon[cfg.sig.label],

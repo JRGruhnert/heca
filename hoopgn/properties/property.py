@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import torch
+from dataclasses import dataclass
 from hoopgn.base import RegisterableClass
 
 from hoopgn.networks.layers.property_encoder import PropertyEncoder
