@@ -24,7 +24,7 @@ class DomainEncoderConfig(PropertyEncoder.Config):
 
 
 @dataclass(kw_only=True)
-class DomainPropertyConfig(Property.Config):
+class DomainConfig(Property.Config):
     ruler: PropertyRuler.Config = DomainRuler.Config()
     encoder: PropertyEncoder.Config = DomainEncoderConfig()
     normalizer: PropertyNormalizer.Config = DomainNormalizer.Config()

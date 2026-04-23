@@ -12,9 +12,10 @@ from hoopgn.observation.td_entity import TDEntity
 
 
 class Policy(ConfigurableClass):
+
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
-        label: str
+        pass
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

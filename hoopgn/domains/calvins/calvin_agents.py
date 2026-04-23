@@ -2,8 +2,10 @@ from hoopgn.policies.tapas_policy import TapasPolicy
 from hoopgn.policies.rtapas_policy import RTapasPolicy
 
 close_drawer = TapasPolicy.Config(
-    label="CloseDrawer",
-    id=0,
+    sig=TapasPolicy.Signature(
+        label="CloseDrawer",
+        id=0,
+    ),
 )
 close_drawer_back = RTapasPolicy.Config(
     label="CloseDrawerBack",

@@ -62,13 +62,8 @@ class TapasPolicy(Policy):
             force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
             time_scale=1.0,
             postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
+            invert_prediction_batch=False,
         )
-
-        def __post_init__(self):
-            self.tapas.invert_prediction_batch = False
-            self.checkpoint_path = (
-                "data/agents/" + self.label + "/demos_gmm_policy-release.pt"
-            )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -134,9 +129,11 @@ class TapasPolicy(Policy):
                 result[cfg.sig] = con
         return result
 
+    def from_disk(self, path: str):
+        logger.info(f"Loading tapas policy from: {path}")
+
     @cached_property
     def tapas(self) -> GMMPolicy:
-        logger.info(f"Loading tapas operator from: {self.cfg.checkpoint_path}")
         temp = GMMPolicy(self.cfg.tapas)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         temp.from_disk(self.cfg.checkpoint_path)

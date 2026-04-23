@@ -69,13 +69,8 @@ class RTapasPolicy(TapasPolicy):
             force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
             time_scale=1.0,
             postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
+            invert_prediction_batch=True,
         )
-
-        def __post_init__(self):
-            self.tapas.invert_prediction_batch = True
-            self.checkpoint_path = (
-                "data/agents/" + self.label + "/demos_gmm_policy-release.pt"
-            )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
