@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import hoopgn.plotters.helper.helper as helper
-from hoopgn.data import TrainingRunData, RunDataCollection
+from hoopgn.misc.data import TrainingRunData, RunDataCollection
 
 
 def plot(collection: RunDataCollection):

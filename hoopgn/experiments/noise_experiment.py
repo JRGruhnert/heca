@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import math
 import random
 
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.agents.leafs.skip.skip_agent import SkipConfig
 from hoopgn.experiments.experiment import Experiment, ExperimentConfig
 from hoopgn.agents.agent import Agent, SkillConfig

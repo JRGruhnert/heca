@@ -3,7 +3,7 @@ from enum import Enum
 from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 import numpy as np
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.entities.entity import Entity
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.properties.states.area import AreaStateConfig

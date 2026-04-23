@@ -1,10 +1,10 @@
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill
-from hoopgn.buffer import BufferConfig
+from hoopgn.misc.buffer import BufferConfig
 
 from hoopgn.environments.calvin import CalvinEnvironment
 from hoopgn.environments.environment import Environment
 from hoopgn.environments.ogbench import OGBenchEnvironment
-from hoopgn.logger import LogMode, LoggerConfig
+from hoopgn.misc.logger import LogMode, LoggerConfig
 from hoopgn.networks.mp_baseline import MPBaseline
 from hoopgn.networks.mp_gnn import MPGnn
 from hoopgn.networks.mp_final import MPNetwork

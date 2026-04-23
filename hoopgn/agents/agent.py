@@ -6,7 +6,7 @@ from torch_geometric.data import Batch
 
 from hoopgn.classes import RegisterableClass
 from hoopgn.agents.evaluators.evaluator import Evaluator
-from hoopgn.generators.hoopgn import Hoopgn
+from hoopgn.policies.policy import Policy
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
 
@@ -19,17 +19,17 @@ class Agent(RegisterableClass):
 
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):
-        hoopgn: Hoopgn.Config
+        policy: Policy.Config
         evaluator: Evaluator.Config
         train: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.hoopgn = Hoopgn.from_config(cfg.hoopgn)
+        self.policy = Policy.from_config(cfg.policy)
         self.evaluator = Evaluator.from_config(cfg.evaluator)
 
     def graph(self, x: TDScene, y: TDScene) -> Batch:
-        return self.hoopgn(x, y)
+        return self.policy(x, y)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:

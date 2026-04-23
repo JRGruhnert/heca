@@ -1,5 +1,5 @@
 import wandb
-from hoopgn.buffer import BufferConfig
+from hoopgn.misc.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.agents.evaluators.dense import Dense3EvaluatorConfig

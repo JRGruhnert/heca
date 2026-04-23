@@ -3,17 +3,17 @@ import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from hoopgn.agents.branch import BranchAgent
-from hoopgn.hardware import device
-from hoopgn.buffer import Buffer, BufferConfig
+from hoopgn.misc.hardware import device
+from hoopgn.misc.buffer import Buffer, BufferConfig
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.mp_final import MPNetwork
-from hoopgn import logger
+from hoopgn.misc import logger
 from thop import profile
 
 from hoopgn.agents.agent import Agent
 
 
-class HoopgnAgent(BranchAgent):
+class PPOAgent(BranchAgent):
     @dataclass(kw_only=True)
     class Config(BranchAgent.Config):
         network: MPNetwork.Config
@@ -48,8 +48,8 @@ class HoopgnAgent(BranchAgent):
             lr=self.cfg.learning_rate,
         )
 
-    def act(self, obs: TDProperties, goal: TDProperties) -> Agent:
-        return self.policy_old.predict(obs, goal)
+    def act(self, x: TDProperties, y: TDProperties) -> Agent:
+        return self.policy_old.predict(x, y)
 
     def explain(
         self, current: TDProperties, goal: TDProperties
@@ -81,10 +81,8 @@ class HoopgnAgent(BranchAgent):
         returns = [adv + val for adv, val in zip(advantages, values[:-1])]
         adv_tensor = torch.tensor(advantages, dtype=torch.float32)
         rtn_tensor = torch.tensor(returns, dtype=torch.float32)
-        assert (
-            adv_tensor.shape[0] == self.buffer.config.size
-        ), "Advantages shape mismatch"
-        assert rtn_tensor.shape[0] == self.buffer.config.size, "Returns shape mismatch"
+        assert adv_tensor.shape[0] == self.buffer.cfg.size, "Advantages shape mismatch"
+        assert rtn_tensor.shape[0] == self.buffer.cfg.size, "Returns shape mismatch"
 
         return adv_tensor.to(device), rtn_tensor.to(device)
 
@@ -135,11 +133,11 @@ class HoopgnAgent(BranchAgent):
         kl_divergence_stop = False
         for epoch in range(self.cfg.learning_epochs):
             # Shuffle indices for minibatch
-            indices = torch.randperm(self.buffer.config.size)
+            indices = torch.randperm(self.buffer.cfg.size)
 
             for start in range(
                 0,
-                self.buffer.config.size,
+                self.buffer.cfg.size,
                 self.cfg.mini_batch_size,
             ):
                 end = start + self.cfg.mini_batch_size

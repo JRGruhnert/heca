@@ -2,7 +2,7 @@ from conf.properties import get_property_set
 from conf.agents import get_skill_set
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.buffer import BufferConfig
+from hoopgn.misc.buffer import BufferConfig
 from hoopgn.agents.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.networks.mp_gnn import MPGNNConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig

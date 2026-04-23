@@ -1,10 +1,10 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.agents.agent import Agent
 from hoopgn.runners.runner import HoopGNRunner
-from hoopgn.policies.tapas_policy import TapasPolicy
+from hoopgn.policies.leafs.tapas_policy import TapasPolicy
 
 
 class SkillRunner(HoopGNRunner):

@@ -6,8 +6,9 @@ import torch
 from torch import Tensor, nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
-from hoopgn import hardware, logger
-from hoopgn.explainer import HoopgnExplainer
+from hoopgn.misc import hardware
+from hoopgn.misc.explainer import HoopgnExplainer
+from hoopgn.misc import logger
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from hoopgn.networks.mp_final import MPNetwork

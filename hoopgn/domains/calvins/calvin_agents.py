@@ -1,5 +1,5 @@
-from hoopgn.policies.tapas_policy import TapasPolicy
-from hoopgn.policies.rtapas_policy import RTapasPolicy
+from hoopgn.policies.leafs.tapas_policy import TapasPolicy
+from hoopgn.policies.leafs.rtapas_policy import RTapasPolicy
 
 close_drawer = TapasPolicy.Config(
     sig=TapasPolicy.Signature(

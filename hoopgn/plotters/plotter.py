@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import matplotlib.patches as mpatches
 
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property
 from hoopgn.agents.agent import Agent

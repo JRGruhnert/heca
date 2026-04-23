@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.agents.leaf_agent import LeafAgent
+from hoopgn.agents.leaf import LeafAgent
 from hoopgn.classes import RegisterableClass
 from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property

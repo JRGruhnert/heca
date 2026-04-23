@@ -2,13 +2,13 @@ from abc import abstractmethod
 from dataclasses import dataclass, field
 
 from hoopgn.entities.entities import properties_to_entities
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
 from hoopgn.environments.environment import Environment
 from hoopgn.properties.property import Property
 from hoopgn.agents.agent import Agent
-from hoopgn.policies.tapas_policy import TapasPolicy
+from hoopgn.policies.leafs.tapas_policy import TapasPolicy
 
 
 class HoopGNRunner(ConfigurableClass):

@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from hoopgn.data import TrainingRunData
+from hoopgn.misc.data import TrainingRunData
 from hoopgn.plotters.helper.helper import *
 from dataclasses import dataclass
 
-from hoopgn.data import TrainingRunData
+from hoopgn.misc.data import TrainingRunData
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,

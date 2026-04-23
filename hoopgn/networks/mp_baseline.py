@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from typing import Any
 import torch
 import torch.nn as nn
-from hoopgn import hardware, logger
+from hoopgn.misc import hardware
+from hoopgn.misc import logger
 from hoopgn.networks.mp_final import MPNetwork
 from hoopgn.observation.td_properties import TDProperties
 from collections import defaultdict

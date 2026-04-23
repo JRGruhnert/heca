@@ -1,9 +1,9 @@
+from typing import Any
+
 import torch
-import numpy as np
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from tensordict import TensorDict
 
 from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
@@ -11,7 +11,7 @@ from hoopgn.properties.property import Property
 from hoopgn.observation.td_entity import TDEntity
 
 
-class LeafPolicy(ConfigurableClass):
+class Policy(ConfigurableClass):
 
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
@@ -21,7 +21,7 @@ class LeafPolicy(ConfigurableClass):
         self.cfg = cfg
 
     @abstractmethod
-    def __call__(self, x: TensorDict, y: TensorDict) -> np.ndarray | None:
+    def __call__(self, x: TDEntity, y: TDEntity) -> Any:
         raise NotImplementedError()
 
     @abstractmethod
@@ -29,17 +29,21 @@ class LeafPolicy(ConfigurableClass):
         raise NotImplementedError()
 
     @cached_property
+    @abstractmethod
     def ppre(self) -> dict[Property.Signature, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property
+    @abstractmethod
     def ppost(self) -> dict[Property.Signature, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property
+    @abstractmethod
     def epre(self) -> dict[Entity.Signature, TDEntity]:
         raise NotImplementedError()
 
     @cached_property
+    @abstractmethod
     def epost(self) -> dict[Entity.Signature, TDEntity]:
         raise NotImplementedError()

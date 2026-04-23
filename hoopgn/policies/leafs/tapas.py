@@ -16,10 +16,10 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.policies.policy import LeafPolicy
+from hoopgn.policies.leafs.leaf import LeafPolicy
 from hoopgn.properties.property import Property
-from hoopgn.hardware import device
-from hoopgn import logger
+from hoopgn.misc.hardware import device
+from hoopgn.misc import logger
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 

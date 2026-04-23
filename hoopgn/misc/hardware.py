@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 import torch
-from hoopgn import logger
+from hoopgn.misc import logger
 
 # NOTE: copied from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 # for full control over hardware selection

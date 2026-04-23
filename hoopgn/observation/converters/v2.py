@@ -1,8 +1,5 @@
 from dataclasses import dataclass
 
-import numpy as np
-import torch
-
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from hoopgn.observation.converters.converter import Converter
 from hoopgn.observation.td_entities import TDEntities

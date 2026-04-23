@@ -5,7 +5,7 @@ from conf.properties import get_property_set
 from hoopgn.properties.default.v1.area import CalvinAreaConfig
 from hoopgn.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
-from hoopgn.buffer import BufferConfig
+from hoopgn.misc.buffer import BufferConfig
 from hoopgn.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.agents.evaluators import select_evaluator

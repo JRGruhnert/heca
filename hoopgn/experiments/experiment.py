@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import random
-from hoopgn import logger
+from hoopgn.misc import logger
 from hoopgn.environments import select_environment
 from hoopgn.environments.environment import Environment
 from hoopgn.agents.evaluators import select_evaluator

@@ -3,23 +3,18 @@ from functools import cached_property
 import re
 import sys
 
-from hoopgn import logger
+from hoopgn.misc import logger
 import numpy as np
 import torch
-import tapas_gmm_modified
-from tapas_gmm_modified.policy.gmm import GMMPolicyConfig
-from tapas_gmm_modified.policy.models.tpgmm import (
-    AutoTPGMMConfig,
-    ModelType,
-    TPGMMConfig,
-)
-from tapas_gmm_modified.utils.observation import SceneObservation
 
-from hoopgn.policies.tapas_policy import TapasPolicy
+from hoopgn.policies.leafs.tapas import TapasPolicy
 from hoopgn.properties.property import Property
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.properties.evaluators.area import AreaEvaluator
 from hoopgn.properties.default.v1.area import CalvinAreaConfig
+
+import tapas_gmm_modified
+from tapas_gmm_modified.utils.observation import SceneObservation
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
@@ -31,43 +26,9 @@ class RTapasPolicy(TapasPolicy):
         pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
         rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
         scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
-        tapas: GMMPolicyConfig = GMMPolicyConfig(
-            suffix="release",
-            model=AutoTPGMMConfig(
-                tpgmm=TPGMMConfig(
-                    n_components=20,
-                    model_type=ModelType.HMM,
-                    use_riemann=True,
-                    add_time_component=True,
-                    add_action_component=False,
-                    position_only=False,
-                    add_gripper_action=True,
-                    reg_shrink=1e-2,
-                    reg_diag=2e-4,
-                    reg_diag_gripper=2e-2,
-                    reg_em_finish_shrink=1e-2,
-                    reg_em_finish_diag=2e-4,
-                    reg_em_finish_diag_gripper=2e-2,
-                    trans_cov_mask_t_pos_corr=False,
-                    em_steps=1,
-                    fix_first_component=True,
-                    fix_last_component=True,
-                    reg_init_diag=5e-4,  # 5
-                    heal_time_variance=False,
-                ),
-            ),
-            time_based=True,
-            predict_dx_in_xdx_models=False,
-            binary_gripper_action=True,
-            binary_gripper_closed_threshold=0.95,
-            dbg_prediction=False,
-            # the kinematics model in RLBench is just to unreliable -> leads to mistakes
-            topp_in_t_models=False,
-            force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
-            time_scale=1.0,
-            postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
-            invert_prediction_batch=True,
-        )
+
+        def __post_init__(self):
+            self.tapas.invert_prediction_batch = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)

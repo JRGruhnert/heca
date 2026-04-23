@@ -1,31 +1,29 @@
 from dataclasses import dataclass
 import torch
-from hoopgn import logger
+from hoopgn.classes import StoragableClass
+from hoopgn.misc import logger
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.watcher import Watcher, WatcherConfig
+from hoopgn.observation.td_scene import TDScene
+from hoopgn.misc.watcher import Watcher, WatcherConfig
 
 
-@dataclass(kw_only=True)
-class BufferConfig:
-    watcher: WatcherConfig = WatcherConfig()
-    size: int = 2048
-    epoch: int = 0
-    highscore: float = 0.0
-    save_path: str = "data/buffer/"
+class Buffer(StoragableClass):
+    @dataclass(kw_only=True)
+    class Config:
+        watcher: WatcherConfig = WatcherConfig()
+        epoch: int = 0
 
-
-class Buffer:
-    def __init__(self, config: BufferConfig):
-        self.config = config
-        self.watcher = Watcher(config.watcher)
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.watcher = Watcher(cfg.watcher)
 
         # Epoch tracking for saving
-        self.epoch = config.epoch
-        self.highscore = config.highscore
+        self.epoch = cfg.epoch
+        self.highscore = 0.0
         self.new_highscore = False
         # We store lists of data for each episode, and ensure they are all the same length before saving.
-        self.current: list[TDProperties] = []
-        self.goal: list[TDProperties] = []
+        self.current: list[TDScene] = []
+        self.goal: list[TDScene] = []
         self.actions: list[torch.Tensor] = []
         self.logprobs: list[torch.Tensor] = []
         self.values: list[torch.Tensor] = []
@@ -35,15 +33,15 @@ class Buffer:
 
     @property
     def full(self) -> bool:
-        return len(self.actions) >= self.config.size
+        return len(self.actions) >= self.cfg.size
 
     @property
     def progress(self) -> float:
-        return float(self.epoch / self.config.watcher.max_batches)
+        return float(self.epoch / self.cfg.watcher.max_batches)
 
     @property
     def reached_max_batches(self) -> bool:
-        return self.epoch >= self.config.watcher.max_batches
+        return self.epoch >= self.cfg.watcher.max_batches
 
     def health(self):
         lengths = [
@@ -58,10 +56,8 @@ class Buffer:
         ]
         return all(l == lengths[0] for l in lengths)
 
-    def save(self, tag: str):
+    def to_disk(self, tag: str):
         assert self.health(), "Buffer lengths are inconsistent!"
-        self.new_highscore = False
-
         logger.info(f"Saving {tag} buffer for {self.epoch}")
         torch.save(
             {
@@ -72,7 +68,7 @@ class Buffer:
                 "success": torch.tensor(self.success),
                 "terminals": torch.tensor(self.terminals),
             },
-            self.config.save_path + "/" + tag + f"/epoch_data_{self.epoch}.pt",
+            self.cfg.save_path + "/" + tag + f"/epoch_data_{self.epoch}.pt",
         )
         self.current.clear()
         self.goal.clear()
@@ -127,13 +123,13 @@ class Buffer:
             self.new_highscore = True
             logger.info(f"New highscore: {self.highscore:.4f} at epoch {self.epoch}.")
 
-        return len(self.actions) == self.config.size
+        return len(self.actions) == self.cfg.size
 
     def metrics(self) -> dict[str, float]:
         assert self.health(), "Buffer lengths are inconsistent!"
         return {
-            "stats/mean_episode_reward": sum(self.rewards) / self.config.size,
-            "stats/mean_episode_length": self.config.size
+            "stats/mean_episode_reward": sum(self.rewards) / self.cfg.size,
+            "stats/mean_episode_length": self.cfg.size
             / max(1, self.terminals.count(True)),
             "stats/highscore": self.highscore,
         }

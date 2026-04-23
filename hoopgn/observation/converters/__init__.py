@@ -1,5 +1,5 @@
 from hoopgn.observation.converters.converter import Converter
-from hoopgn.observation.converters.tapas_converter import (
+from hoopgn.observation.converters.tapas import (
     TapasConverter,
     TapasConverterConfig,
 )
