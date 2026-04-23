@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.properties.features.normalizers.boundary_normalizer import (
     BoundaryNormalizer,
 )

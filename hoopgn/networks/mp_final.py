@@ -3,7 +3,7 @@ from abc import abstractmethod
 from torch import nn
 import torch
 from torch.distributions import Categorical
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.environments.environment import Environment
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.agents.agent import Agent

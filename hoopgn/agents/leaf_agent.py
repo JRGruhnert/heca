@@ -12,7 +12,7 @@ from hoopgn.observation.converters.calvin_td_converter import LeafConverter
 from hoopgn.observation.converters.converter import Converter
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
-from hoopgn.policies.policy import Policy
+from hoopgn.policies.policy import LeafPolicy
 
 
 class LeafAgent(Agent):
@@ -24,7 +24,7 @@ class LeafAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         sig: "LeafAgent.Signature"
-        policy: Policy.Config
+        policy: LeafPolicy.Config
 
         leaf_cv: LeafConverter.Config
         env_cv: Converter.Config
@@ -32,7 +32,7 @@ class LeafAgent(Agent):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.policy = Policy.from_config(self.cfg.policy)
+        self.policy = LeafPolicy.from_config(self.cfg.policy)
         self.leaf_cv = LeafConverter.from_config(self.cfg.leaf_cv)
         self.env_cv = Converter.from_config(self.cfg.env_cv)
 

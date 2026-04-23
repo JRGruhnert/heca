@@ -1,9 +1,12 @@
-from abc import ABC, ABCMeta
+from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
 from typing import Sequence, TypeVar, Type, cast
 
 T = TypeVar("T", bound="ConfigurableClass")
 S = TypeVar("S", bound="RegisterableClass")
+V = TypeVar("V", bound="StoragableClass")
 
 
 class ConfigurableMeta(ABCMeta):
@@ -60,5 +63,54 @@ class RegisterableClass(ConfigurableClass):
             for single_cfg in cfg:
                 cls.load(single_cfg)
         else:
-
             cls.registry[cfg] = cls.from_config(cfg)
+
+
+class StoragableClass(RegisterableClass):
+    registry: dict["StoragableClass.Config", "StoragableClass"] = {}
+
+    @dataclass(kw_only=True)
+    class Signature(RegisterableClass.Signature):
+        label: str
+
+    @dataclass(kw_only=True)
+    class Config(RegisterableClass.Config):
+        sig: "StoragableClass.Signature"
+
+    @classmethod
+    def get(cls: Type[V], sig: "StoragableClass.Signature") -> V:
+        assert isinstance(sig, cls.Signature), f"Must be of type {cls.Signature}"
+        assert sig in cls.registry, f"Label '{sig}' not found in registry"
+        return cast(V, cls.registry[sig])
+
+    @classmethod
+    def load(
+        cls: Type[V],
+        cfg: "StoragableClass.Config" | Sequence["StoragableClass.Config"],
+    ):
+        if isinstance(cfg, Sequence):
+            for c in cfg:
+                cls.load(c)
+        else:
+            cls.registry[cfg] = cls.from_config(cfg)
+
+    @classmethod
+    def path(cls, sig: "StoragableClass.Signature") -> Path:
+        raise NotImplementedError()
+
+    @classmethod
+    def from_disk(cls: Type[V], path: str) -> V:
+        # Implement loading from disk logic here
+        raise NotImplementedError()
+
+    @classmethod
+    def to_disk(cls, path: str):
+        # Implement saving to disk logic here
+        raise NotImplementedError()
+
+    @property
+    def storage_path(self) -> Path:
+        if isinstance(self.parent, StoragableClass):
+            return self.parent.storage_path / self.storage_name
+        else:
+            return Path(self.storage_name)

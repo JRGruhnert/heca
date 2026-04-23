@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from functools import cached_property
 from tensordict import TensorDict
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property
 

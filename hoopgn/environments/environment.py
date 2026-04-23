@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from hoopgn.base import RegisterableClass
+from hoopgn.classes import RegisterableClass
 
 
 class Environment(RegisterableClass):

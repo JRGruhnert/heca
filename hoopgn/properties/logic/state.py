@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.properties.logic.area import Area
 
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.observation.td_scene import TDScene
 
 

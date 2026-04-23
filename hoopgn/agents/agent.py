@@ -3,7 +3,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from torch_geometric.data import Batch
-from hoopgn.base import RegisterableClass
+from hoopgn.classes import RegisterableClass
 from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
 from hoopgn.observation.td_entity import TDEntity

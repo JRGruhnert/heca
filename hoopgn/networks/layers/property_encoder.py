@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch.nn as nn
 
-from hoopgn.base import RegisterableClass
+from hoopgn.classes import RegisterableClass
 
 
 class PropertyEncoder(RegisterableClass, nn.Module):

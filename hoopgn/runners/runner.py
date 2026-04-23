@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 from hoopgn.entities.entities import properties_to_entities
 from hoopgn import logger
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
 from hoopgn.environments.environment import Environment
 from hoopgn.properties.property import Property

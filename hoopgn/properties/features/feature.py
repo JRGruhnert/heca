@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 
 
 class PropertyFeature(ConfigurableClass):

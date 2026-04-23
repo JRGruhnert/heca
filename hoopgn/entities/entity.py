@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.base import RegisterableClass
+from hoopgn.classes import RegisterableClass
 from hoopgn.properties.v2.domain import DomainConfig
 from hoopgn.properties.v2.position import PositionConfig
 from hoopgn.properties.v2.rotation import RotationConfig

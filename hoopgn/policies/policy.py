@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from functools import cached_property
 from tensordict import TensorDict
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property
 from hoopgn.observation.td_entity import TDEntity
 
 
-class Policy(ConfigurableClass):
+class LeafPolicy(ConfigurableClass):
 
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):

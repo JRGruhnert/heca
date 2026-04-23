@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from hoopgn.base import ConfigurableClass
+from hoopgn.classes import ConfigurableClass
 
 
 class Area(ConfigurableClass):

@@ -16,7 +16,7 @@ from tapas_gmm_modified.utils.robot_trajectory import (
     TrajectoryPoint,
 )
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.policies.policy import Policy
+from hoopgn.policies.policy import LeafPolicy
 from hoopgn.properties.property import Property
 from hoopgn.hardware import device
 from hoopgn import logger
@@ -24,9 +24,9 @@ from hoopgn import logger
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
-class TapasPolicy(Policy):
+class TapasPolicy(LeafPolicy):
     @dataclass(kw_only=True)
-    class Config(Policy.Config):
+    class Config(LeafPolicy.Config):
         tapas: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
@@ -131,14 +131,11 @@ class TapasPolicy(Policy):
 
     def from_disk(self, path: str):
         logger.info(f"Loading tapas policy from: {path}")
-
-    @cached_property
-    def tapas(self) -> GMMPolicy:
         temp = GMMPolicy(self.cfg.tapas)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
-        temp.from_disk(self.cfg.checkpoint_path)
+        temp.from_disk(path)
         temp.eval()
-        return temp.to(device)
+        self.tapas = temp.to(device)
 
     @cached_property
     def model(self) -> AutoTPGMM:
