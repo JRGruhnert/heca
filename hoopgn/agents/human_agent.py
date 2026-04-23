@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from hoopgn.agents.branch_agent import BranchAgent
+from hoopgn.agents.branch import BranchAgent
 from hoopgn.observation import TDProperties
 from hoopgn.agents.agent import Agent
 import curses

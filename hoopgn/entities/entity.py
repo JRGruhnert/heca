@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
 from hoopgn.classes import RegisterableClass
-from hoopgn.properties.v2.domain import DomainConfig
-from hoopgn.properties.v2.position import PositionConfig
-from hoopgn.properties.v2.rotation import RotationConfig
-from hoopgn.properties.v2.state import StateConfig
+from hoopgn.properties.default.v2.domain import DomainConfig
+from hoopgn.properties.default.v2.position import PositionConfig
+from hoopgn.properties.default.v2.rotation import RotationConfig
+from hoopgn.properties.default.v2.state import StateConfig
 
 
 class Entity(RegisterableClass):

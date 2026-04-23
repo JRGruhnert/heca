@@ -18,11 +18,8 @@ from tapas_gmm_modified.utils.observation import SceneObservation
 from hoopgn.policies.tapas_policy import TapasPolicy
 from hoopgn.properties.property import Property
 from hoopgn.observation.td_properties import TDProperties
-from hoopgn.properties.features.evaluators.area_evaluator import (
-    AreaEvaluator,
-)
-
-from hoopgn.properties.v1.area import CalvinAreaConfig
+from hoopgn.properties.evaluators.area import AreaEvaluator
+from hoopgn.properties.default.v1.area import CalvinAreaConfig
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 

@@ -3,18 +3,18 @@ from dataclasses import dataclass
 from hoopgn.classes import RegisterableClass
 
 from hoopgn.networks.layers.property_encoder import PropertyEncoder
-from hoopgn.properties.features.extractors.extractor import (
+from hoopgn.properties.extractors.extractor import (
     PropertyExtractor,
 )
 
-from hoopgn.properties.features.evaluators.evaluator import (
+from hoopgn.properties.evaluators.evaluator import (
     PropertyEvaluator,
 )
 
-from hoopgn.properties.features.parameters.parameter import PropertyParameter
-from hoopgn.properties.features.rulers.ruler import PropertyRuler
+from hoopgn.properties.parameters.parameter import PropertyParameter
+from hoopgn.properties.rulers.ruler import PropertyRuler
 
-from hoopgn.properties.features.normalizers.normalizer import (
+from hoopgn.properties.normalizers.normalizer import (
     PropertyNormalizer,
 )
 
@@ -22,7 +22,7 @@ from hoopgn.properties.features.normalizers.normalizer import (
 class Property(RegisterableClass):
     @dataclass(kw_only=True)
     class Signature(RegisterableClass.Signature):
-        id: int
+        pass
 
     @dataclass(kw_only=True)
     class Config(RegisterableClass.Config):

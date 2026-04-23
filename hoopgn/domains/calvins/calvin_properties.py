@@ -1,11 +1,11 @@
 from hoopgn.properties.property import Property
-from hoopgn.properties.v1.area import CalvinAreaPropertyConfig
-from hoopgn.properties.v1.bool import BoolPropertyConfig
-from hoopgn.properties.v1.flip import FlipPropertyConfig
-from hoopgn.properties.v1.position import PositionConfig
-from hoopgn.properties.v1.range import RangePropertyConfig
-from hoopgn.properties.v1.rotation import RotationConfig
-from hoopgn.properties.features.evaluators.default_evaluator import DefaultEvaluator
+from hoopgn.properties.default.v1.area import CalvinAreaPropertyConfig
+from hoopgn.properties.default.v1.bool import BoolPropertyConfig
+from hoopgn.properties.default.v1.flip import FlipPropertyConfig
+from hoopgn.properties.default.v1.position import PositionConfig
+from hoopgn.properties.default.v1.range import RangePropertyConfig
+from hoopgn.properties.default.v1.rotation import RotationConfig
+from hoopgn.properties.features.evaluators.default import DefaultEvaluator
 
 
 ee_position = PositionConfig(

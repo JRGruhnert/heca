@@ -2,15 +2,15 @@ from dataclasses import dataclass, field
 from tqdm import trange
 
 from conf.properties import get_property_set
-from hoopgn.properties.v1.area import CalvinAreaConfig
+from hoopgn.properties.default.v1.area import CalvinAreaConfig
 from hoopgn.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from hoopgn.buffer import BufferConfig
 from hoopgn.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.evaluators import select_evaluator
-from hoopgn.evaluators.dense import Dense3EvaluatorConfig
-from hoopgn.evaluators.evaluator import EvaluatorConfig
+from hoopgn.agents.evaluators import select_evaluator
+from hoopgn.agents.evaluators.dense import Dense3EvaluatorConfig
+from hoopgn.agents.evaluators.evaluator import EvaluatorConfig
 from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
 from hoopgn.networks.mp_gnn import MPGNNConfig

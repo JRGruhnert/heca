@@ -1,10 +1,11 @@
+from abc import abstractmethod
 from dataclasses import dataclass
+import torch
 
 from hoopgn.classes import ConfigurableClass
-from hoopgn.observation.td_scene import TDScene
 
 
-class Hoopgn(ConfigurableClass):
+class PropertyEvaluator(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         pass
@@ -12,5 +13,6 @@ class Hoopgn(ConfigurableClass):
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def __call__(self, x: TDScene, y: TDScene) -> TDScene:
-        raise NotImplementedError
+    @abstractmethod
+    def __call__(self, x: torch.Tensor, y: torch.Tensor, distance: float) -> bool:
+        raise NotImplementedError()

@@ -3,8 +3,9 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from torch_geometric.data import Batch
+
 from hoopgn.classes import RegisterableClass
-from hoopgn.evaluators.evaluator import Evaluator
+from hoopgn.agents.evaluators.evaluator import Evaluator
 from hoopgn.generators.hoopgn import Hoopgn
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.observation.td_scene import TDScene
@@ -28,7 +29,7 @@ class Agent(RegisterableClass):
         self.evaluator = Evaluator.from_config(cfg.evaluator)
 
     def graph(self, x: TDScene, y: TDScene) -> Batch:
-        return self.hoopgn(x)
+        return self.hoopgn(x, y)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:

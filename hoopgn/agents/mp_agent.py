@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from hoopgn.agents.branch_agent import BranchAgent
+from hoopgn.agents.branch import BranchAgent
 from hoopgn.hardware import device
 from hoopgn.buffer import Buffer, BufferConfig
 from hoopgn.observation.td_properties import TDProperties

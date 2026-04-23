@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.agents.branch_agent import BranchAgent
+from hoopgn.agents.branch import BranchAgent
 from hoopgn.experiments import select_experiment
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.runners.runner import HoopGNRunner
