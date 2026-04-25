@@ -1,14 +1,13 @@
 from dataclasses import dataclass
-from hoopgn.agents.hoop import BranchAgent
-from hoopgn.observation import TDProperties
+from hoopgn.misc.td import TDProperties
 from hoopgn.agents.agent import Agent
 import curses
 
 
-class HumanAgent(BranchAgent):
+class HumanAgent(Agent):
     @dataclass(kw_only=True)
-    class Config(BranchAgent.Config):
-        pass
+    class Config(Agent.Config):
+        agents: list[Agent.Query]
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -53,18 +52,17 @@ class HumanAgent(BranchAgent):
         return {}
 
     def select_skill_tui(self):
-        def tui(stdscr) -> Agent.Signature:
+        def tui(stdscr) -> Agent.Query:
             curses.curs_set(0)
             selected = 0
             while True:
                 stdscr.clear()
                 stdscr.addstr(0, 0, "Select a skill (arrow keys, Enter):")
                 for idx, agent in enumerate(list(self.cfg.agents)):
-                    label = f"{agent.label}: {agent.description}"
                     if idx == selected:
-                        stdscr.addstr(idx + 2, 2, label, curses.A_REVERSE)
+                        stdscr.addstr(idx + 2, 2, agent.label, curses.A_REVERSE)
                     else:
-                        stdscr.addstr(idx + 2, 2, label)
+                        stdscr.addstr(idx + 2, 2, agent.label)
                 key = stdscr.getch()
                 if key == curses.KEY_UP and selected > 0:
                     selected -= 1

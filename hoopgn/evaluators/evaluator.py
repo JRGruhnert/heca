@@ -1,12 +1,10 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from hoopgn.classes import ConfigurableClass
-from hoopgn.entities.entity import Entity
-from hoopgn.entities.properties.property import Property
-from hoopgn.observation.td_scene import TDScene
+from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.td import TDScene
 
 
-class Evaluator(ConfigurableClass):
+class SceneEvaluator(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         success_reward: float
@@ -19,10 +17,10 @@ class Evaluator(ConfigurableClass):
         self.max: float = 0.0
         self.goal: TDScene | None = None
 
-    def reset(self, start: TDScene, goal: TDScene):
+    def reset(self, x: TDScene, y: TDScene):
         self.progress = 0.0
-        self.max = len(goal)
-        self.goal = goal
+        self.max = len(y)
+        self.goal = y
 
     def is_equal(self, x: TDScene) -> bool:
         assert self.goal is not None, "Goal must be set before calling is_equal"

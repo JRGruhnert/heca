@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from abc import abstractmethod
 from tensordict import TensorDict
 from torch import nn, Tensor
-from hoopgn.classes import StoragableClass
-from hoopgn.agents.agent import Agent
+from torch_geometric.data import Batch
+from hoopgn.misc.classes import StoragableClass
 from hoopgn.misc.td import TDScene
 from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
 
@@ -38,11 +38,9 @@ class Hoop(StoragableClass, nn.Module):
         return x, y
 
     @abstractmethod
-    def forward(
-        self, x: list[tuple[Agent.Query, TDScene, TDScene]]
-    ) -> tuple[Tensor, Tensor]:
+    def forward(self, x: Batch) -> tuple[Tensor, Tensor]:
         raise NotImplementedError()
 
     @abstractmethod
-    def explain(self, batch, index: int) -> tuple:
+    def explain(self, batch: Batch) -> tuple:
         raise NotImplementedError("This network does not support explanations.")

@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 import torch
-from hoopgn.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigurableClass
 
 
 class PropertyExtractor(ConfigurableClass):

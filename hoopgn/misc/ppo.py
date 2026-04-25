@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from hoopgn.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.hardware import device
 from hoopgn.hoops.hoop import Hoop
 from hoopgn.misc import logger

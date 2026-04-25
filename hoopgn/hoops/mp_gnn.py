@@ -14,7 +14,6 @@ from hoopgn.misc import logger
 from hoopgn.misc.explainer import HoopgnExplainer
 from hoopgn.misc.td import TDScene
 from hoopgn.misc.mlp import GinStandardMLP, UnactivatedMLP
-from hoopgn.agents.agent import Agent
 from hoopgn.hoops.mp import MPNetwork
 
 
@@ -244,11 +243,9 @@ class MPGnn(MPNetwork):
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
     def explain(
-        self, x: TDScene, y: TDScene
+        self, batch: Batch
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
-        batch = self.to_batch(x, y)
         d: HeteroData = batch.get_example(0)  # type: ignore
-        # print(batch)
         actor_explanation = self.actor_explainer(
             d.x_dict,
             d.edge_index_dict,

@@ -1,6 +1,5 @@
 from abc import ABC, ABCMeta, abstractmethod
-from dataclasses import dataclass
-from functools import cached_property
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, TypeVar, Type, cast
 
@@ -44,6 +43,11 @@ class SearchableClass(ConfigurableClass):
     class Query(ConfigurableClass.Config):
         label: str
 
+        def __eq__(self, other):
+            if not isinstance(other, SearchableClass.Query):
+                return NotImplemented
+            return self.label == other.label
+
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         query: "SearchableClass.Query"
@@ -51,9 +55,14 @@ class SearchableClass(ConfigurableClass):
     @classmethod
     def search(cls: Type[S], query: "SearchableClass.Query") -> S:
         if query not in cls.registry:
-            cfg = cls.Config(query=query)
-            assert cfg is not None
-            cls.registry[query] = cls.from_config(cfg)
+            choice = None
+            for cfg in cls.config_class_registry:
+                if isinstance(cfg, "SearchableClass.Config"):
+                    if cfg.query == query:
+                        choice = cfg
+
+            assert choice is not None
+            cls.registry[query] = cls.from_config(choice)
         assert query in cls.registry
         return cast(S, cls.registry[query])
 
@@ -61,7 +70,19 @@ class SearchableClass(ConfigurableClass):
 class StoragableClass(SearchableClass):
     @dataclass(kw_only=True)
     class Query(SearchableClass.Query):
-        parent: "SearchableClass.Query | str" = "data"
+        parent: "SearchableClass.Query | str"
+        path: Path = field(init=False)
+
+        def __post_init__(self):
+            if isinstance(self.parent, str):
+                self.path = Path(self.parent)
+            elif isinstance(self.parent, SearchableClass.Query):
+                if isinstance(self.parent, StoragableClass.Query):
+                    self.path = self.parent.path
+                else:
+                    self.path = Path(self.parent.label)
+            else:
+                raise ValueError(f"Invalid parent type: {type(self.parent)}")
 
     @dataclass(kw_only=True)
     class Config(SearchableClass.Config):
@@ -69,22 +90,6 @@ class StoragableClass(SearchableClass):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-
-    @cached_property
-    def path(self) -> Path:
-        query = self.cfg.query
-        if isinstance(query, StoragableClass.Query):
-            if isinstance(query.parent, str):
-                parent_path = Path(query.parent)
-            elif isinstance(query.parent, SearchableClass.Query):
-                parent_path = StoragableClass.search(query.parent).path
-            else:
-                raise ValueError(f"Invalid parent type: {type(query.parent)}")
-        elif isinstance(query, SearchableClass.Query):
-            parent_path = Path(query.label)
-        else:
-            raise ValueError(f"Invalid query type: {type(query)}")
-        return parent_path / Path(query.label)
 
     @abstractmethod
     def from_disk(self) -> Any:

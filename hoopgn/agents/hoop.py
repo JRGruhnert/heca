@@ -18,18 +18,19 @@ class HoopAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         hoop: Hoop.Config
-        agents: list[Agent.Query]
         generator: Generator.Config
         reinforcement: PPO.Config
+        agents: set[Agent.Query]
         environments: set[Environment.Query] = field(init=False)
         training: bool = False
+        max_steps: int = 10
 
         def __post_init__(self):
             temp = set()
             for query in self.agents:
                 agent = Agent.search(query)
                 if isinstance(agent, LeafAgent):
-                    temp.add(agent.cfg.environment)
+                    temp.add(agent.cfg.query.parent)
                 elif isinstance(agent, HoopAgent):
                     temp.update(agent.cfg.environments)
                 else:
@@ -53,46 +54,48 @@ class HoopAgent(Agent):
         return reward, done, terminal
 
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:
-        if self.cfg.training:
-            with torch.no_grad():
+        for step in range(self.cfg.max_steps):
+            if self.cfg.training:
+                with torch.no_grad():
+                    variants, logits, value = self.predict(x, y)
+                    dist = Categorical(logits=logits)
+                    action = dist.sample()
+            else:
                 variants, logits, value = self.predict(x, y)
-        else:
-            variants, logits, value = self.predict(x, y)
+                action = logits.argmax(dim=-1)
 
-        if self.cfg.training:
-            dist = Categorical(logits=logits)
-            action = dist.sample()
-        else:
-            action = logits.argmax(dim=-1)
+            reward, done, terminal = self.execute_variant(variants[action])
 
-        reward, done, terminal = self.execute_variant(variants[action])
+            if self.cfg.training:
+                logprob: torch.Tensor = dist.log_prob(action)
+                full = self.reinforcement.append(
+                    x,
+                    y,
+                    action.detach(),
+                    logprob.detach(),
+                    value.detach(),
+                    reward,
+                    done,
+                    terminal,
+                )
+                if full:
+                    state_dict = self.reinforcement.learn()
+                    self.hoop.load_state_dict(state_dict)
 
-        if self.cfg.training:
-            logprob: torch.Tensor = dist.log_prob(action)
-            full = self.reinforcement.append(
-                x,
-                y,
-                action.detach(),
-                logprob.detach(),
-                value.detach(),
-                reward,
-                done,
-                terminal,
-            )
-            if full:
-                state_dict = self.reinforcement.learn()
-                self.hoop.load_state_dict(state_dict)
+
 
         return reward, done, terminal
 
     def predict(
         self, x: TDScene, y: TDScene
     ) -> tuple[list[tuple[Agent.Query, TDScene, TDScene]], torch.Tensor, torch.Tensor]:
-        x, y = self.hoop.encode(x, y)
-        options, batch = self.generator(x, y)
-        logits, value = self.hoop.forward(batch)
-        return options, logits, value
-
+        if self.cfg.training:
+            x, y = self.hoop.encode(x, y)
+            options, batch = self.generator(x, y)
+            logits, value = self.hoop.forward(batch)
+            return options, logits, value
+        
+    def step(self, x: TDScene, y: TDScene) -> tuple[float, bool]:
     def sample_task(self) -> tuple[TDScene, TDScene]:
         x_values = dict()
         y_values = dict()
@@ -130,14 +133,12 @@ class HoopAgent(Agent):
                     f"Epoch {epoch}: Reward={reward:.4f}, Done={done}, Terminal={terminal}"
                 )
 
-    def explain(self) -> tuple[str, str]:
+    def explain(self):
         x, y = self.sample_task()
-        variants, logits, value = self.predict(x, y)
-        action = logits.argmax(dim=-1)
-        query = variants[action][0]
-        reward, done, terminal = agent.act(variant[1], variant[2])
-        actor_expl, critic_expl = agent.explain(x, y, skill)
-        return reward, done, terminal
+        x, y = self.hoop.encode(x, y)
+        options, batch = self.generator(x, y)
+        actor_expl, critic_expl = self.hoop.explain(batch)
+        # TODO: visualize
 
     @cached_property
     def precons(self) -> dict[str, TDEntity]:

@@ -1,6 +1,6 @@
 import torch
 from dataclasses import dataclass
-from hoopgn.classes import SearchableClass
+from hoopgn.misc.classes import SearchableClass
 
 from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
 from hoopgn.entities.properties.extractors.extractor import (

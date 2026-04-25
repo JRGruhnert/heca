@@ -2,9 +2,9 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
-from hoopgn.classes import StoragableClass
+from hoopgn.misc.classes import StoragableClass
 from hoopgn.entities.entity import Entity
-from hoopgn.evaluators.evaluator import Evaluator
+from hoopgn.evaluators.evaluator import SceneEvaluator
 from hoopgn.misc.td import TDEntity, TDScene
 
 
@@ -15,11 +15,11 @@ class Agent(StoragableClass):
 
     @dataclass(kw_only=True)
     class Config(StoragableClass.Config):
-        evaluator: Evaluator.Config
+        evaluator: SceneEvaluator.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.evaluator = Evaluator.from_config(cfg.evaluator)
+        self.evaluator = SceneEvaluator.from_config(cfg.evaluator)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[float, bool, bool]:

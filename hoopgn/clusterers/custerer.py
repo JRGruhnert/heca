@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
 
 

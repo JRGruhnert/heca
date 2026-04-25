@@ -18,12 +18,12 @@ from hoopgn.misc.td import TDScene, TDEntity
 class LeafAgent(Agent):
     @dataclass(kw_only=True)
     class Query(Agent.Query):
+        parent: Environment.Query
         label: str
 
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        environment: Environment.Query
-        converter: Converter.Config
+        query: "LeafAgent.Query"
         clusterer: Clusterer.Config
 
     def __init__(self, cfg: Config):
@@ -32,7 +32,7 @@ class LeafAgent(Agent):
         self.step_counter = 0
 
     def sample_task(self) -> tuple[TDScene, TDScene]:
-        env = Environment.search(self.cfg.environment)
+        env = Environment.search(self.cfg.query.parent)
         logger.info("Sampling new Task...")
         self.step_counter = 0
         x = env.sample()
@@ -51,7 +51,7 @@ class LeafAgent(Agent):
         return z, reward, done
 
     def get_observation(self, x: TDScene) -> TensorDict:
-        return x.get(self.cfg.environment.label)
+        return x.get(self.cfg.query.parent.label)
 
     @abstractmethod
     def execute(self, x: TDScene, y: TDScene) -> TDScene:

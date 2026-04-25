@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
 from abc import abstractmethod
 from pathlib import Path
-from torch import nn, Tensor
+from torch import nn
 import torch
 from hoopgn.environments.environment import Environment
 from hoopgn.misc import logger
 from hoopgn.hoops.hoop import Hoop
-from hoopgn.misc.td import TDScene
 
 
 class MPNetwork(Hoop):

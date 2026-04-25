@@ -128,3 +128,6 @@ class TDWorld(TensorDict):
     @property
     def ogbench(self) -> TDScene:
         return self.get("ogbench")
+
+    def __len__(self):
+        return len(self.keys())

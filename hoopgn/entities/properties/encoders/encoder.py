@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from torch import nn
 
-from hoopgn.classes import StoragableClass
+from hoopgn.misc.classes import StoragableClass
 from hoopgn.misc.mlp import StandardMLP
 from hoopgn.misc.td import TDEntity
 

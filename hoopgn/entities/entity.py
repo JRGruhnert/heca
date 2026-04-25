@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.classes import SearchableClass
+from hoopgn.misc.classes import SearchableClass
 from hoopgn.entities.properties.default.v2.domain import DomainConfig
 from hoopgn.entities.properties.default.v2.position import PositionConfig
 from hoopgn.entities.properties.default.v2.rotation import RotationConfig

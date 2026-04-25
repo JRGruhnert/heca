@@ -1,7 +1,8 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from hoopgn.classes import ConfigurableClass
+from hoopgn.agents.hoop import HoopAgent
+from hoopgn.misc.classes import ConfigurableClass
 
 from hoopgn.agents.agent import Agent
 from hoopgn.plotters.hoopgn_plotters import select_multiple_hoopgn_plotters
@@ -21,7 +22,7 @@ class HoopGNRunner(ConfigurableClass):
         self.plotters = select_multiple_hoopgn_plotters(cfg.plotters)
 
     def train(self):
-        assert isinstance(self.agent, BranchAgent)
+        assert isinstance(self.agent, HoopAgent)
         self.agent.train(10)
 
     def plot(self):
@@ -29,8 +30,8 @@ class HoopGNRunner(ConfigurableClass):
             plotter.plot()
 
     def explain(self):
-        obs, goal = self.experiment.sample_task()
+        assert isinstance(self.agent, HoopAgent)
+        obs, goal = self.agent.sample_task()
         episode_ended = False
         while not episode_ended:
-            skill = self.agent.act(obs, goal)
-            actor_expl, critic_expl = self.agent.explain(obs, goal, skill)
+            self.agent.explain()

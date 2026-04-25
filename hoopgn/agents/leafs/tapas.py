@@ -81,7 +81,7 @@ class TapasAgent(LeafAgent):
         return self._to_action(self.prds.step())
 
     def execute(self, x: TDScene, y: TDScene) -> TDScene:
-        env = Environment.search(self.cfg.environment)
+        env = Environment.search(self.cfg.query.parent)
         z = x
         while (action := self.predict(z, y)) is not None:
             z = env.step(action)

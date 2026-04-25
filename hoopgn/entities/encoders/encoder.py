@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from hoopgn.classes import StoragableClass
+from hoopgn.misc.classes import StoragableClass
 from hoopgn.misc.td import TDEntity
 from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
 from hoopgn.entities.properties.encoders.v2.domain import DomainEncoderConfig

@@ -18,7 +18,7 @@ from tapas_gmm_modified.utils.observation import SceneObservation
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
-class RTapasPolicy(TapasAgent):
+class RTapasAgent(TapasAgent):
     @dataclass(kw_only=True)
     class Config(TapasAgent.Config):
         overrides: set[Property.Query]

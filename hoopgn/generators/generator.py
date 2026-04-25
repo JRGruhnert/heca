@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from hoopgn.agents.agent import Agent
-from hoopgn.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
 from torch_geometric.data import Batch
 
