@@ -2,102 +2,148 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from hoopgn.classes import ConfigurableClass
+from hoopgn.agents.branches.branch import BranchAgent
 from hoopgn.misc.hardware import device
-from hoopgn.hoops.hoop import Hoop
+from hoopgn.misc.buffer import Buffer, BufferConfig
+from hoopgn.observation.td_properties import TDProperties
+from hoopgn.policies.branches.mp import MPNetwork
 from hoopgn.misc import logger
 from thop import profile
 
-from hoopgn.misc.td import TDScene, TDProperties
+from hoopgn.agents.agent import Agent
 
 
-@dataclass(kw_only=True)
-class AnnealingConfig:
-    lr_annealing: bool = False
-    learning_rate: float = 0.0003
-    max_epochs: int = 1000
-
-
-class PPO(ConfigurableClass):
+class HoopgnAgent(BranchAgent):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
-        # PPO Hyperparameters
+    class Config(BranchAgent.Config):
+        network: MPNetwork.Config
+        buffer: BufferConfig
+        saving_path: str = "results/checkpoints/hoopgn/"
+        saving_freq: int = 5  # Saving frequence of trained model
 
-        batch_size: int = 2048
-        mini_batch_size: int = 64
-        learning_epochs: int = 5
-        lr: float = 0.0003
+        # PPO Hyperparameters
+        mini_batch_size: int = 64  # 64 # How many steps to use in each mini-batch
+        learning_epochs: int = 5  # How many passes over the collected batch per update
         lr_annealing: bool = False
-        gamma: float = 0.99
-        gae_lambda: float = 0.95
-        eps_clip: float = 0.2
-        entropy_coef: float = 0.02
-        critic_coef: float = 0.5
-        max_grad_norm: float = 0.5
-        target_kl: float | None = 0.02
+        learning_rate: float = 0.0003  # Step size for actor optimizer
+        gamma: float = 0.99  # How much future rewards are worth today
+        gae_lambda: float = 0.95  # Bias/variance trade‑off in advantage estimation
+        eps_clip: float = 0.2  # How far the new policy is allowed to move from the old
+        entropy_coef: float = (
+            0.02  # Weight on the entropy bonus to encourage exploration
+        )
+        critic_coef: float = (
+            0.5  # Weight on the critic (value) loss vs. the policy loss
+        )
+        max_grad_norm: float = 0.5  # Threshold for clipping gradient norms
+        target_kl: float | None = 0.02  # (Optional) early stopping if KL
         clip_value_loss: bool = True
 
     def __init__(self, cfg: Config):
+        super().__init__(cfg)
         self.cfg = cfg
-
+        ### Initialize the agent
+        self.buffer = Buffer(cfg.buffer)
         self.mse_loss = nn.MSELoss()
-        self.hoop: Hoop | None = None
-        self.optimizer: torch.optim.Optimizer | None = None
-
-        self.current: list[TDScene] = []
-        self.goal: list[TDScene] = []
-        self.actions: list[torch.Tensor] = []
-        self.logprobs: list[torch.Tensor] = []
-        self.values: list[torch.Tensor] = []
-        self.rewards: list[float] = []
-        self.success: list[bool] = []
-        self.terminals: list[bool] = []
-
-    def set_hoop(self, hoop: Hoop):
-        self.hoop = hoop
+        self.policy_new: MPNetwork = MPNetwork.from_config(cfg.network)
+        self.policy_old: MPNetwork = MPNetwork.from_config(cfg.network)
         self.optimizer = torch.optim.AdamW(
-            self.hoop.parameters(),
-            lr=self.cfg.lr,
+            self.policy_new.parameters(),
+            lr=self.cfg.learning_rate,
         )
 
-    def learn(self, progress: float | None = None) -> dict:
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
+    def act(self, obs: TDProperties, goal: TDProperties) -> Agent:
+        return self.policy_old.predict(obs, goal)
+
+    def explain(
+        self, current: TDProperties, goal: TDProperties
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.policy_old.explain(current, goal)
+
+    def feedback(self, reward: float, success: bool, terminal: bool) -> bool:
+        return self.buffer.feedback(reward, success, terminal)
+
+    def _compute_gae(
+        self,
+        rewards: list[float],
+        values: list[torch.Tensor],
+        is_terminals: list[bool],
+    ):
+        advantages = []
+        gae = 0
+        values = values + [torch.tensor(0.0, device=device)]  # add dummy for V(s_{T+1})
+        # TODO: What is that dummy value for? Should it be 0 or something else? Does it matter? Maybe we can just not add it and handle the edge case in the loop?
+        for step in reversed(range(len(rewards))):
+            terminal = float(is_terminals[step])
+            delta = (
+                rewards[step]
+                + self.cfg.gamma * values[step + 1] * (1 - terminal)
+                - values[step]
+            )
+            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * (1 - terminal) * gae
+            advantages.insert(0, gae)
+        returns = [adv + val for adv, val in zip(advantages, values[:-1])]
+        adv_tensor = torch.tensor(advantages, dtype=torch.float32)
+        rtn_tensor = torch.tensor(returns, dtype=torch.float32)
+        assert adv_tensor.shape[0] == self.buffer.cfg.size, "Advantages shape mismatch"
+        assert rtn_tensor.shape[0] == self.buffer.cfg.size, "Returns shape mismatch"
+
+        return adv_tensor.to(device), rtn_tensor.to(device)
+
+    def learn(self) -> bool:
+        assert self.buffer.full, "Buffer must be full before learning!"
+
+        if self.buffer.new_highscore:
+            self.save(highscore=True)
+
         # Main PPO update loop
         self.mini_batch_loop()
 
-        # Update learning rate with linear annealing
         if self.cfg.lr_annealing:
-            assert (
-                progress is not None
-            ), "Progress must be provided for learning rate annealing"
-            lr = self.cfg.lr * (1.0 - progress)
+            lr = self.cfg.learning_rate * (1.0 - self.buffer.progress)
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
-        # Return new weights
-        return self.hoop.state_dict()
+        self.update_network()
 
-    def mini_batch_loop(self):
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
+        if self.buffer.epoch % self.cfg.saving_freq == 0 and self.buffer.epoch != 0:
+            self.save(highscore=False)
 
+        self.buffer.save(self.cfg.query.label)
+
+        return self.buffer.reached_max_batches
+
+    def update_network(self):
+        self.policy_old.load_state_dict(self.policy_new.state_dict())
+
+    def mini_batch_loop(
+        self,
+    ):
         adv, rtn = self._compute_gae(
-            self.rewards,
-            self.values,
-            self.terminals,
+            self.buffer.rewards,
+            self.buffer.values,
+            self.buffer.terminals,
         )
 
-        old_obs = self.current
-        old_goal = self.goal
-        old_actions = torch.stack(self.actions, dim=0).detach().to(device).squeeze(-1)
-        old_logprobs = torch.stack(self.logprobs, dim=0).detach().to(device).squeeze(-1)
+        old_obs = self.buffer.current
+        old_goal = self.buffer.goal
+        old_actions = (
+            torch.stack(self.buffer.actions, dim=0).detach().to(device).squeeze(-1)
+        )
+        old_logprobs = (
+            torch.stack(self.buffer.logprobs, dim=0).detach().to(device).squeeze(-1)
+        )
         ### Training loop for network
         kl_divergence_stop = False
         for epoch in range(self.cfg.learning_epochs):
             # Shuffle indices for minibatch
-            indices = torch.randperm(self.cfg.batch_size)
-            for start in range(0, self.cfg.batch_size, self.cfg.mini_batch_size):
+            indices = torch.randperm(self.buffer.cfg.size)
+
+            for start in range(
+                0,
+                self.buffer.cfg.size,
+                self.cfg.mini_batch_size,
+            ):
                 end = start + self.cfg.mini_batch_size
                 mb_idx = indices[start:end]
                 mb_idx_list = mb_idx.tolist()  # turn Tensor → Python list of ints
@@ -114,7 +160,7 @@ class PPO(ConfigurableClass):
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                 # Evaluate policy
-                logprobs, state_values, dist_new = self.hoop.evaluate(
+                logprobs, state_values, dist_new = self.policy_new.evaluate(
                     mb_obs, mb_goal, mb_actions
                 )
 
@@ -142,7 +188,7 @@ class PPO(ConfigurableClass):
                 # Value loss (with optional clipping)
                 if self.cfg.clip_value_loss:
                     mb_old_values = (
-                        torch.stack([self.values[i] for i in mb_idx_list])
+                        torch.stack([self.buffer.values[i] for i in mb_idx_list])
                         .squeeze()
                         .to(device)
                     )
@@ -165,7 +211,7 @@ class PPO(ConfigurableClass):
                 ### Update gradients on mini-batch
                 self.optimizer.zero_grad()
                 loss.mean().backward()
-                clip_grad_norm_(self.hoop.parameters(), self.cfg.max_grad_norm)
+                clip_grad_norm_(self.policy_new.parameters(), self.cfg.max_grad_norm)
                 self.optimizer.step()
 
                 # Collect metrics (will keep last minibatch values)
@@ -196,37 +242,30 @@ class PPO(ConfigurableClass):
             if kl_divergence_stop:
                 break
 
-    def _compute_gae(
-        self, rewards: list[float], values: list[torch.Tensor], terminals: list[bool]
-    ):
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
+    def save(self, highscore: bool):
+        if highscore:
+            tag = "highscore"
+        else:
+            tag = "checkpoint"
 
-        advantages = []
-        gae = 0
-        values = values + [torch.tensor(0.0, device=device)]  # add dummy for V(s_{T+1})
-        # TODO: What is that dummy value for? Should it be 0 or something else? Does it matter? Maybe we can just not add it and handle the edge case in the loop?
-        for step in reversed(range(len(rewards))):
-            terminal = float(terminals[step])
-            delta = (
-                rewards[step]
-                + self.cfg.gamma * values[step + 1] * (1 - terminal)
-                - values[step]
-            )
-            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * (1 - terminal) * gae
-            advantages.insert(0, gae)
-        returns = [adv + val for adv, val in zip(advantages, values[:-1])]
-        adv_tensor = torch.tensor(advantages, dtype=torch.float32)
-        rtn_tensor = torch.tensor(returns, dtype=torch.float32)
-        assert adv_tensor.shape[0] == rtn_tensor.shape[0], "Advantages shape mismatch"
-        return adv_tensor.to(device), rtn_tensor.to(device)
+        ckpt_path = self.cfg.saving_path + tag + "_epoch{}.pt".format(self.buffer.epoch)
+
+        logger.info(f"Saving weights to: {ckpt_path} at epoch {self.buffer.epoch}")
+        torch.save(
+            {
+                "model_state": self.policy_old.state_dict(),
+                "optimizer_state": self.optimizer.state_dict(),
+                "epoch": self.buffer.epoch,
+            },
+            ckpt_path,
+        )
 
     def metadata(self) -> dict:
         return {
             "mini_batch_size": self.cfg.mini_batch_size,
             "learning_epochs": self.cfg.learning_epochs,
             "lr_annealing": self.cfg.lr_annealing,
-            "learning_rate": self.cfg.lr,
+            "learning_rate": self.cfg.learning_rate,
             "gamma": self.cfg.gamma,
             "gae_lambda": self.cfg.gae_lambda,
             "eps_clip": self.cfg.eps_clip,
@@ -242,56 +281,11 @@ class PPO(ConfigurableClass):
         }
 
     def measure_flops(self, obs: TDProperties, goal: TDProperties) -> tuple[int, int]:
-        assert self.hoop is not None, "Hoop must be set before measuring FLOPs"
+        """Measure FLOPs for a single forward pass through the policy network."""
         with torch.no_grad():
             obs_batch = [obs]
             goal_batch = [goal]
-            result = profile(self.hoop, inputs=(obs_batch, goal_batch), verbose=False)
+            result = profile(
+                self.policy_new, inputs=(obs_batch, goal_batch), verbose=False
+            )
             return int(result[0]), int(result[1])
-
-    def flush(self):
-        self.current.clear()
-        self.goal.clear()
-        self.actions.clear()
-        self.logprobs.clear()
-        self.rewards.clear()
-        self.success.clear()
-        self.values.clear()
-        self.terminals.clear()
-
-    def to_disk(self, tag: str):
-        assert self.optimizer is not None, "Optimizer must be set before saving"
-        logger.info(f"Saving {tag} buffer")
-        torch.save(
-            {
-                "actions": torch.stack(self.actions),
-                "logprobs": torch.tensor(self.logprobs),
-                "values": torch.tensor(self.values),
-                "rewards": torch.tensor(self.rewards),
-                "success": torch.tensor(self.success),
-                "terminals": torch.tensor(self.terminals),
-                "optimizer_state": self.optimizer.state_dict(),
-            },
-            # TODO: storage path
-            "data/" + tag + f"/epoch_data_{0}.pt",
-        )
-
-    def append(
-        self,
-        current: TDProperties,
-        goal: TDProperties,
-        action: torch.Tensor,
-        logprob: torch.Tensor,
-        value: torch.Tensor,
-        reward: float,
-        success: bool,
-        terminal: bool,
-    ):
-        self.current.append(current)
-        self.goal.append(goal)
-        self.actions.append(action)
-        self.logprobs.append(logprob)
-        self.values.append(value)
-        self.rewards.append(reward)
-        self.success.append(success)
-        self.terminals.append(terminal)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
-from hoopgn.networks.layers.property_encoder import PropertyEncoder
+from hoopgn.properties.encoders.encoder import PropertyEncoder
+from hoopgn.properties.encoders.v2.state import StateEncoderConfig
 from hoopgn.properties.evaluators.domain import DomainEvaluator
 from hoopgn.properties.evaluators.evaluator import PropertyEvaluator
 from hoopgn.properties.extractors.c_gt import CGTExtractor
@@ -12,15 +13,6 @@ from hoopgn.properties.parameters.parameter import PropertyParameter
 from hoopgn.properties.rulers.domain import DomainRuler
 from hoopgn.properties.rulers.ruler import PropertyRuler
 from hoopgn.properties.property import Property
-
-
-@dataclass(kw_only=True)
-class StateEncoderConfig(PropertyEncoder.Config):
-    sig: PropertyEncoder.Signature = PropertyEncoder.Signature(
-        label="State",
-    )
-    dim_input: int = 1
-    middle_dim: int = 8
 
 
 @dataclass(kw_only=True)

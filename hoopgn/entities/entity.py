@@ -1,20 +1,20 @@
 from dataclasses import dataclass
 
-from hoopgn.classes import RegisterableClass
+from hoopgn.classes import SearchableClass
 from hoopgn.properties.default.v2.domain import DomainConfig
 from hoopgn.properties.default.v2.position import PositionConfig
 from hoopgn.properties.default.v2.rotation import RotationConfig
 from hoopgn.properties.default.v2.state import StateConfig
 
 
-class Entity(RegisterableClass):
+class Entity(SearchableClass):
     @dataclass(kw_only=True)
-    class Signature(RegisterableClass.Signature):
+    class Query(SearchableClass.Query):
         label: str
         id: int
 
     @dataclass(kw_only=True)
-    class Config(RegisterableClass.Config):
+    class Config(SearchableClass.Config):
         state: StateConfig
         domain: DomainConfig
         position: PositionConfig

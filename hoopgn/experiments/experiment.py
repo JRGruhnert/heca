@@ -4,8 +4,8 @@ import random
 from hoopgn.misc import logger
 from hoopgn.environments import select_environment
 from hoopgn.environments.environment import Environment
-from hoopgn.agents.evaluators import select_evaluator
-from hoopgn.agents.evaluators.evaluator import Evaluator
+from hoopgn.evaluators import select_evaluator
+from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.agents.agent import Agent
 import math

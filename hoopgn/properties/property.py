@@ -1,8 +1,8 @@
 import torch
 from dataclasses import dataclass
-from hoopgn.classes import RegisterableClass
+from hoopgn.classes import SearchableClass
 
-from hoopgn.networks.layers.property_encoder import PropertyEncoder
+from hoopgn.properties.encoders.encoder import PropertyEncoder
 from hoopgn.properties.extractors.extractor import (
     PropertyExtractor,
 )
@@ -19,13 +19,13 @@ from hoopgn.properties.normalizers.normalizer import (
 )
 
 
-class Property(RegisterableClass):
+class Property(SearchableClass):
     @dataclass(kw_only=True)
-    class Signature(RegisterableClass.Signature):
+    class Query(SearchableClass.Query):
         pass
 
     @dataclass(kw_only=True)
-    class Config(RegisterableClass.Config):
+    class Config(SearchableClass.Config):
         ruler: PropertyRuler.Config
         encoder: PropertyEncoder.Config
         parameter: PropertyParameter.Config

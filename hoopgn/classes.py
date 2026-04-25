@@ -2,10 +2,10 @@ from abc import ABC, ABCMeta, abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Sequence, TypeVar, Type, cast
+from typing import Any, TypeVar, Type, cast
 
 T = TypeVar("T", bound="ConfigurableClass")
-S = TypeVar("S", bound="RegisterableClass")
+S = TypeVar("S", bound="SearchableClass")
 V = TypeVar("V", bound="StoragableClass")
 
 
@@ -37,80 +37,59 @@ class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
         return cast(T, ConfigurableMeta.from_config(cfg))
 
 
-class RegisterableClass(ConfigurableClass):
-    registry: dict["RegisterableClass.Config", "RegisterableClass"] = {}
+class SearchableClass(ConfigurableClass):
+    registry: dict["SearchableClass.Query", "SearchableClass"] = {}
 
     @dataclass(kw_only=True)
-    class Signature:
+    class Query(ConfigurableClass.Config):
         label: str
 
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
-        sig: "RegisterableClass.Signature"
+        query: "SearchableClass.Query"
 
     @classmethod
-    def get(cls: Type[S], signature: "RegisterableClass.Signature") -> S:
-        assert isinstance(signature, cls.Signature), f"Must be of type {cls.Signature}"
-        assert signature in cls.registry, f"Label '{signature}' not found in registry"
-        return cast(S, cls.registry[signature])
-
-    @classmethod
-    def load(
-        cls: Type[S],
-        cfg: "RegisterableClass.Config" | Sequence["RegisterableClass.Config"],
-    ):
-        if isinstance(cfg, Sequence):
-            for single_cfg in cfg:
-                cls.load(single_cfg)
-        else:
-            cls.registry[cfg] = cls.from_config(cfg)
+    def search(cls: Type[S], query: "SearchableClass.Query") -> S:
+        if query not in cls.registry:
+            cfg = cls.Config(query=query)
+            assert cfg is not None
+            cls.registry[query] = cls.from_config(cfg)
+        assert query in cls.registry
+        return cast(S, cls.registry[query])
 
 
-class StoragableClass(RegisterableClass):
-    registry: dict["StoragableClass.Config", "StoragableClass"] = {}
+class StoragableClass(SearchableClass):
+    @dataclass(kw_only=True)
+    class Query(SearchableClass.Query):
+        parent: "SearchableClass.Query | str" = "data"
 
     @dataclass(kw_only=True)
-    class Signature(RegisterableClass.Signature):
-        label: str
+    class Config(SearchableClass.Config):
+        pass
 
-    @dataclass(kw_only=True)
-    class Config(RegisterableClass.Config):
-        sig: "StoragableClass.Signature"
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
 
-    @classmethod
-    def get(cls: Type[V], sig: "StoragableClass.Signature") -> V:
-        assert isinstance(sig, cls.Signature), f"Must be of type {cls.Signature}"
-        assert sig in cls.registry, f"Label '{sig}' not found in registry"
-        return cast(V, cls.registry[sig])
-
-    @classmethod
-    def load(
-        cls: Type[V],
-        cfg: "StoragableClass.Config" | Sequence["StoragableClass.Config"],
-    ):
-        if isinstance(cfg, Sequence):
-            for c in cfg:
-                cls.load(c)
+    @cached_property
+    def path(self) -> Path:
+        query = self.cfg.query
+        if isinstance(query, StoragableClass.Query):
+            if isinstance(query.parent, str):
+                parent_path = Path(query.parent)
+            elif isinstance(query.parent, SearchableClass.Query):
+                parent_path = StoragableClass.search(query.parent).path
+            else:
+                raise ValueError(f"Invalid parent type: {type(query.parent)}")
+        elif isinstance(query, SearchableClass.Query):
+            parent_path = Path(query.label)
         else:
-            cls.registry[cfg] = cls.from_config(cfg)
+            raise ValueError(f"Invalid query type: {type(query)}")
+        return parent_path / Path(query.label)
 
-    @classmethod
-    def path(cls, sig: "StoragableClass.Signature") -> Path:
+    @abstractmethod
+    def from_disk(self) -> Any:
         raise NotImplementedError()
 
-    @classmethod
-    def from_disk(cls: Type[V], path: str) -> V:
-        # Implement loading from disk logic here
+    @abstractmethod
+    def to_disk(self):
         raise NotImplementedError()
-
-    @classmethod
-    def to_disk(cls, path: str):
-        # Implement saving to disk logic here
-        raise NotImplementedError()
-
-    @property
-    def storage_path(self) -> Path:
-        if isinstance(self.parent, StoragableClass):
-            return self.parent.storage_path / self.storage_name
-        else:
-            return Path(self.storage_name)

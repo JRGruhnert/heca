@@ -1,13 +1,7 @@
-from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill
-from hoopgn.misc.buffer import BufferConfig
-
 from hoopgn.environments.calvin import CalvinEnvironment
-from hoopgn.environments.environment import Environment
-from hoopgn.environments.ogbench import OGBenchEnvironment
+
 from hoopgn.misc.logger import LogMode, LoggerConfig
-from hoopgn.networks.mp_baseline import MPBaseline
-from hoopgn.networks.mp_gnn import MPGnn
-from hoopgn.networks.mp_final import MPNetwork
+from hoopgn.hoops.mp_gnn import MPGnn
 
 
 def ppo_default_config(
@@ -54,13 +48,13 @@ def network_config(
     )
     return (
         MPGnn.Config(
-            environment=CalvinEnvironment.Signature(),
+            environment=CalvinEnvironment.Query(),
             checkpoint_path=checkpoint_path,
             explain_mode=explain_mode,
         )
         if is_gnn
         else MPBaseline.Config(
-            environment=CalvinEnvironment.Signature(),
+            environment=CalvinEnvironment.Query(),
             checkpoint_path=checkpoint_path,
         )
     )

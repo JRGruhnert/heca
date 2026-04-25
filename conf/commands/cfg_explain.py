@@ -3,9 +3,9 @@ from conf.agents import get_skill_set
 from hoopgn.agents.branches.hoopgn_agent import HoopGNSkillConfig
 from hoopgn.misc.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.agents.evaluators.dense import Dense3EvaluatorConfig
+from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.networks.mp_gnn import MPGNNConfig
+from hoopgn.hoops.mp_gnn import MPGNNConfig
 from hoopgn.runners.explain_runner import ExplainRunnerConfig
 
 SKILL_TAG = "blue"

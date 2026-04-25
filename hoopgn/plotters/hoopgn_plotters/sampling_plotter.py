@@ -8,12 +8,12 @@ from conf.agents import get_skill_set
 from hoopgn.misc.buffer import BufferConfig
 from hoopgn.entities.entity import Entity
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.agents.evaluators import select_evaluator
-from hoopgn.agents.evaluators.dense import Dense3EvaluatorConfig
-from hoopgn.agents.evaluators.evaluator import EvaluatorConfig
+from hoopgn.evaluators import select_evaluator
+from hoopgn.evaluators.dense import Dense3EvaluatorConfig
+from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.networks.mp_gnn import MPGNNConfig
+from hoopgn.hoops.mp_gnn import MPGNNConfig
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,
