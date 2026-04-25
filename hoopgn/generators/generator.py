@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from hoopgn.agents.agent import Agent
 from hoopgn.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
+from torch_geometric.data import Batch
 
 
 class Generator(ConfigurableClass):
@@ -15,5 +16,5 @@ class Generator(ConfigurableClass):
 
     def __call__(
         self, x: TDScene, y: TDScene
-    ) -> list[tuple[Agent.Query, TDScene, TDScene]]:
+    ) -> tuple[list[tuple[Agent.Query, TDScene, TDScene]], Batch]:
         raise NotImplementedError()

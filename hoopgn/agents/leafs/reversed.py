@@ -8,9 +8,9 @@ from tensordict import TensorDict
 
 from hoopgn.misc import logger
 from hoopgn.agents.leafs.tapas import TapasAgent
-from hoopgn.properties.property import Property
-from hoopgn.properties.evaluators.area import AreaEvaluator
-from hoopgn.properties.default.v1.area import CalvinAreaConfig
+from hoopgn.entities.properties.property import Property
+from hoopgn.entities.properties.evaluators.area import AreaEvaluator
+from hoopgn.entities.properties.default.v1.area import CalvinAreaConfig
 
 import tapas_gmm_modified
 from tapas_gmm_modified.utils.observation import SceneObservation

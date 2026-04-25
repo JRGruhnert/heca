@@ -5,7 +5,7 @@ from tensordict import TensorDict
 
 from hoopgn.classes import ConfigurableClass
 from hoopgn.entities.entity import Entity
-from hoopgn.properties.property import Property
+from hoopgn.entities.properties.property import Property
 
 
 class Converter(ConfigurableClass):

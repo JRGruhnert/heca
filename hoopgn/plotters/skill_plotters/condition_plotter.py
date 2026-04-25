@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from hoopgn.properties.default.v1.area import CalvinAreaConfig
+from hoopgn.entities.properties.default.v1.area import CalvinAreaConfig
 from hoopgn.misc import logger
 from hoopgn.observation.td_entity import TDEntity
 from hoopgn.plotters.plots.entity_3d import (

@@ -2,11 +2,11 @@ from dataclasses import dataclass
 
 from hoopgn.classes import StoragableClass
 from hoopgn.misc.td import TDEntity
-from hoopgn.properties.encoders.encoder import PropertyEncoder
-from hoopgn.properties.encoders.v2.domain import DomainEncoderConfig
-from hoopgn.properties.encoders.v2.position import PositionEncoderConfig
-from hoopgn.properties.encoders.v2.rotation import QuaternionEncoderConfig
-from hoopgn.properties.encoders.v2.state import StateEncoderConfig
+from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
+from hoopgn.entities.properties.encoders.v2.domain import DomainEncoderConfig
+from hoopgn.entities.properties.encoders.v2.position import PositionEncoderConfig
+from hoopgn.entities.properties.encoders.v2.rotation import QuaternionEncoderConfig
+from hoopgn.entities.properties.encoders.v2.state import StateEncoderConfig
 
 
 class EntityEncoder(StoragableClass):

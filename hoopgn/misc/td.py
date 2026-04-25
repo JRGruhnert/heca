@@ -7,16 +7,6 @@ import torch
 empty_batchsize = torch.Size([])
 
 
-class TDScene(TensorDict):
-    def __init__(self, data: dict[str, TensorDict]):
-        super().__init__(data, batch_size=empty_batchsize)
-
-    def get(self, label: str) -> TensorDict:
-        if label in self:
-            return cast(TensorDict, self[label])
-        assert False, f"Scene with label '{label}' not found."
-
-
 class TDEntity(TensorDict):
 
     def __init__(
@@ -98,3 +88,43 @@ class TDEntities(TensorDict):
         if key not in self.keys():
             raise KeyError(f"Entity '{key}' not found in TDEntities.")
         return cast(TDEntity, self[key])
+
+
+class TDScene(TensorDict):
+    def __init__(self, data: dict[str, TensorDict]):
+        super().__init__(data, batch_size=empty_batchsize)
+
+    def get(self, label: str) -> TensorDict:
+        if label in self:
+            return cast(TensorDict, self[label])
+        assert False, f"Scene with label '{label}' not found."
+
+    @property
+    def v1(self) -> TDProperties:
+        return self.get("v1")
+
+    @property
+    def v2(self) -> TDEntities:
+        return self.get("v2")
+
+    @property
+    def tapas(self) -> TensorDict:
+        return self.get("tapas")
+
+
+class TDWorld(TensorDict):
+    def __init__(self, data: dict[str, TDScene]):
+        super().__init__(data, batch_size=empty_batchsize)
+
+    def get(self, label: str) -> TensorDict:
+        if label in self:
+            return cast(TensorDict, self[label])
+        assert False, f"World with label '{label}' not found."
+
+    @property
+    def calvin(self) -> TDScene:
+        return self.get("calvin")
+
+    @property
+    def ogbench(self) -> TDScene:
+        return self.get("ogbench")

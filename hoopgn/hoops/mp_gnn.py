@@ -244,16 +244,8 @@ class MPGnn(MPNetwork):
         return self.actor(batch), self.critic(batch)  # Logits, Value
 
     def explain(
-        self, current: TDScene, goal: TDScene, agent: Agent
+        self, x: TDScene, y: TDScene
     ) -> tuple[Union[HeteroExplanation, None], Union[HeteroExplanation, None]]:
-        if isinstance(current, TDScene):
-            x = [current]
-        else:
-            x = current
-        if isinstance(goal, TDScene):
-            y = [goal]
-        else:
-            y = goal
         batch = self.to_batch(x, y)
         d: HeteroData = batch.get_example(0)  # type: ignore
         # print(batch)
@@ -274,13 +266,13 @@ class MPGnn(MPNetwork):
         return actor_explanation, critic_explanation
 
     def _to_batch(
-        self, x: list[TDScene], y: list[TDScene], obs: list[TDScene]
+        self, x_values: list[TDScene], y_values: list[TDScene], obs: list[TDScene]
     ) -> Batch:
         batch_data = []
-        for c, g, o in zip(x, y, obs):
+        for x, y, o in zip(x_values, y_values, obs):
             data = HeteroData()
-            data["goal"].x = g
-            data["obs"].x = c
+            data["obs"].x = x.v1
+            data["goal"].x = y.v1
             data["task"].x = torch.zeros(self.dim_agent, self.cfg.dim_encoder)
             data["actor"].x = torch.zeros(self.dim_agent, 1)
             data["critic"].x = torch.zeros(1, 1)

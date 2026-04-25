@@ -5,7 +5,7 @@ from torch import nn, Tensor
 from hoopgn.classes import StoragableClass
 from hoopgn.agents.agent import Agent
 from hoopgn.misc.td import TDScene
-from hoopgn.properties.encoders.encoder import PropertyEncoder
+from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
 
 
 class Hoop(StoragableClass, nn.Module):
@@ -42,3 +42,7 @@ class Hoop(StoragableClass, nn.Module):
         self, x: list[tuple[Agent.Query, TDScene, TDScene]]
     ) -> tuple[Tensor, Tensor]:
         raise NotImplementedError()
+
+    @abstractmethod
+    def explain(self, batch, index: int) -> tuple:
+        raise NotImplementedError("This network does not support explanations.")

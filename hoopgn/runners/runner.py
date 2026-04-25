@@ -1,41 +1,36 @@
 from abc import abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from hoopgn.entities.entities import properties_to_entities
-from hoopgn.misc import logger
 from hoopgn.classes import ConfigurableClass
-from hoopgn.entities.entity import Entity
-from hoopgn.environments.environment import Environment
-from hoopgn.properties.property import Property
+
 from hoopgn.agents.agent import Agent
-from hoopgn.policies.leafs.tapas_policy import TapasPolicy
+from hoopgn.plotters.hoopgn_plotters import select_multiple_hoopgn_plotters
+from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
 
 
 class HoopGNRunner(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
-        agents: list[Agent.Config]
-        environments: list[Environment.Config]
-        properties: list[Property.Config]
-        entities: list[Entity.Config] = field(init=False)
-
-        def __post_init__(self):
-            assert len(self.agents) > 0, "At least one skill must be provided."
-            assert len(self.properties) > 0, "At least one property must be provided."
-            logger.warning(
-                f"HoopGN multiple version support should be removed in the future."
-            )
-            self.entities = properties_to_entities(properties=self.properties)
-            for agent in self.agents:
-                if isinstance(agent.policy, TapasPolicy):
-                    logger.warning(
-                        f"Agent '{agent.ident.label}' is a Tapas agent. Performing automated property assignment."
-                    )
-                    agent.policy.cfg.properties = self.properties
+        agent: Agent.Config
+        plotters: list[HoopGNPlotterConfig]
+        epochs: int = 100
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+        self.agent = Agent.from_config(cfg.agent)
+        self.plotters = select_multiple_hoopgn_plotters(cfg.plotters)
 
-    @abstractmethod
-    def run(self):
-        raise NotImplementedError()
+    def train(self):
+        assert isinstance(self.agent, BranchAgent)
+        self.agent.train(10)
+
+    def plot(self):
+        for plotter in self.plotters:
+            plotter.plot()
+
+    def explain(self):
+        obs, goal = self.experiment.sample_task()
+        episode_ended = False
+        while not episode_ended:
+            skill = self.agent.act(obs, goal)
+            actor_expl, critic_expl = self.agent.explain(obs, goal, skill)

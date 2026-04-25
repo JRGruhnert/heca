@@ -15,7 +15,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
 )
 from hoopgn.agents.leafs.leaf import LeafAgent
 from hoopgn.environments.environment import Environment
-from hoopgn.properties.property import Property
+from hoopgn.entities.properties.property import Property
 from hoopgn.misc.td import TDScene, TDProperties
 from hoopgn.misc.hardware import device
 from hoopgn.misc import logger

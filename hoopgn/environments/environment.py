@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import numpy as np
 from hoopgn.classes import SearchableClass
 from hoopgn.misc.td import TDScene
-from hoopgn.properties.property import Property
+from hoopgn.entities.properties.property import Property
 from hoopgn.converters.tapas import TapasConverter
 from hoopgn.converters.v1 import V1Converter
 from hoopgn.converters.v2 import V2Converter
