@@ -78,6 +78,14 @@ class CalvinEnvironment(Environment):
         ax = self.area.label(x)
         return ax is not None
 
+    def is_valid(self, x: TDScene) -> bool:
+        assert self.goal is not None, "Goal must be set before calling is_valid"
+        for p in self.properties:
+            l = p.cfg.label
+            if not p.validate(x[l], self.goal[l]):
+                return False
+        return True
+
     def sample(self) -> TDScene:
         x = self.reset()
         while not self.validate(x):

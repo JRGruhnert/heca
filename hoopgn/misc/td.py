@@ -111,6 +111,21 @@ class TDScene(TensorDict):
     def tapas(self) -> TensorDict:
         return self.get("tapas")
 
+    @property
+    def v1_length(self) -> int:
+        return len(self.v1.keys())
+
+    @property
+    def v2_length(self) -> int:
+        keys = self.v2.keys()
+        count = 0
+        for key in keys:
+            entity = self.v2[key]
+            if isinstance(entity, TDEntity):
+                for _ in entity.keys():
+                    count += 1
+        return count
+
 
 class TDWorld(TensorDict):
     def __init__(self, data: dict[str, TDScene]):

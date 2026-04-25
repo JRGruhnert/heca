@@ -5,7 +5,7 @@ from hoopgn.misc.buffer import BufferConfig
 from hoopgn.environments.calvin import CalvinEnvironmentConfig
 from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.hoops.mp_gnn import MPGNNConfig
+from hoopgn.hoops.v1 import MPGNNConfig
 from hoopgn.runners.explainer import ExplainRunnerConfig
 
 SKILL_TAG = "blue"

@@ -31,7 +31,7 @@ class HoopGNRunner(ConfigurableClass):
 
     def explain(self):
         assert isinstance(self.agent, HoopAgent)
-        obs, goal = self.agent.sample_task()
+        obs, goal = self.agent.sample()
         episode_ended = False
         while not episode_ended:
             self.agent.explain()

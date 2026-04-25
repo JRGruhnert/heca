@@ -13,7 +13,7 @@ from hoopgn.evaluators.dense import Dense3EvaluatorConfig
 from hoopgn.evaluators.evaluator import EvaluatorConfig
 from hoopgn.evaluators.set_evaluator import SetEvaluatorConfig
 from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.hoops.mp_gnn import MPGNNConfig
+from hoopgn.hoops.v1 import MPGNNConfig
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
     HoopGNPlotterConfig,

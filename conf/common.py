@@ -1,7 +1,7 @@
 from hoopgn.environments.calvin import CalvinEnvironment
 
 from hoopgn.misc.logger import LogMode, LoggerConfig
-from hoopgn.hoops.mp_gnn import MPGnn
+from hoopgn.hoops.v1 import MPGnn
 
 
 def ppo_default_config(
