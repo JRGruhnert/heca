@@ -4,7 +4,6 @@ from functools import cached_property
 
 from hoopgn.misc.classes import StoragableClass
 from hoopgn.entities.entity import Entity
-from hoopgn.evaluators.evaluator import Evaluator
 from hoopgn.misc.td import TDEntity, TDScene
 
 
@@ -15,17 +14,6 @@ class AgentFeedback:
 
 
 class Agent(StoragableClass):
-    @dataclass(kw_only=True)
-    class Query(StoragableClass.Query):
-        label: str
-
-    @dataclass(kw_only=True)
-    class Config(StoragableClass.Config):
-        evaluator: Evaluator.Config
-
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
-        self.evaluator = Evaluator.from_config(cfg.evaluator)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:

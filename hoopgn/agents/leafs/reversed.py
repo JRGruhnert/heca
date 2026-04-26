@@ -6,22 +6,99 @@ from dataclasses import dataclass
 from functools import cached_property
 from tensordict import TensorDict
 
-from hoopgn.misc import logger
+from hoopgn.properties.v1 import PropertyV1
 from hoopgn.agents.leafs.tapas import TapasAgent
-from hoopgn.entities.properties.property import Property
-from hoopgn.entities.properties.evaluators.area import AreaEvaluator
-from hoopgn.entities.properties.default.v1.area import CalvinAreaConfig
+from hoopgn.properties.default.v1.bool import BoolProperty
+from hoopgn.properties.default.v1.position import PositionProperty
+from hoopgn.properties.default.v1.rotation import RotationProperty
+from hoopgn.properties.evaluators.area import AreaEvaluator
+from hoopgn.properties.default.v1.area import AreaProperty, CalvinAreaConfig
 
 import tapas_gmm_modified
 from tapas_gmm_modified.utils.observation import SceneObservation
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
+overrides: dict[str, list[PropertyV1.Query]] = {
+    "close_drawer_back": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+    ],
+    "open_drawer_back": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+    ],
+    "press_button_back": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+    ],
+    "open_slide_back": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+    ],
+    "close_slide_back": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+    ],
+    "place_red_table": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_red_position"),
+        RotationProperty.Query(label="block_red_rotation"),
+        BoolProperty.Query(label="block_red_scalar"),
+    ],
+    "place_red_drawer": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_red_position"),
+        RotationProperty.Query(label="block_red_rotation"),
+        BoolProperty.Query(label="block_red_scalar"),
+    ],
+    "place_pink_table": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_pink_position"),
+        RotationProperty.Query(label="block_pink_rotation"),
+        BoolProperty.Query(label="block_pink_scalar"),
+    ],
+    "place_pink_drawer": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_pink_position"),
+        RotationProperty.Query(label="block_pink_rotation"),
+        BoolProperty.Query(label="block_pink_scalar"),
+    ],
+    "place_blue_table": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_blue_position"),
+        RotationProperty.Query(label="block_blue_rotation"),
+        BoolProperty.Query(label="block_blue_scalar"),
+    ],
+    "place_blue_drawer": [
+        BoolProperty.Query(label="ee_scalar"),
+        RotationProperty.Query(label="ee_rotation"),
+        PositionProperty.Query(label="ee_position"),
+        AreaProperty.Query(label="block_blue_position"),
+        RotationProperty.Query(label="block_blue_rotation"),
+        BoolProperty.Query(label="block_blue_scalar"),
+    ],
+}
+
 
 class RTapasAgent(TapasAgent):
     @dataclass(kw_only=True)
     class Config(TapasAgent.Config):
-        overrides: set[Property.Query]
         pos_reg: re.Pattern = re.compile(r"(.+?)_(?:position)")
         rot_reg: re.Pattern = re.compile(r"(.+?)_(?:rotation)")
         scalar_reg: re.Pattern = re.compile(r"(.+?)_(?:scalar)")
@@ -33,30 +110,31 @@ class RTapasAgent(TapasAgent):
         super().__init__(cfg)
         self.cfg = cfg
         self.evaluator = AreaEvaluator(AreaEvaluator.Config(area=CalvinAreaConfig()))
+        self.overrides = overrides[self.cfg.query.label]
 
     def get_value(self, x: TensorDict, y: TensorDict) -> torch.Tensor:
         return self._hacky_reversed_fix(x, y)
 
     def _hacky_reversed_fix(self, x: SceneObservation, y: SceneObservation) -> SceneObservation:  # type: ignore
-        for sig in self.cfg.overrides:
-            pos = self.cfg.pos_reg.search(sig.label)
-            rot = self.cfg.rot_reg.search(sig.label)
-            scalar = self.cfg.scalar_reg.search(sig.label)
-            if sig.label == "ee_position":
+        for sig in self.overrides:
+            pos = self.cfg.pos_reg.search(sig)
+            rot = self.cfg.rot_reg.search(sig)
+            scalar = self.cfg.scalar_reg.search(sig)
+            if sig == "ee_position":
                 x.ee_pose = torch.cat(
                     [
                         self.ppost[sig],
                         x.ee_pose[3:],
                     ]
                 )
-            elif sig.label == "ee_rotation":
+            elif sig == "ee_rotation":
                 x.ee_pose = torch.cat(
                     [
                         x.ee_pose[:3],
                         self.ppost[sig],
                     ]
                 )
-            elif sig.label == "ee_scalar":
+            elif sig == "ee_scalar":
                 x.ee_scalar = self.ppost[sig]
             elif pos:
                 x.object_poses[pos.group(1)] = torch.cat(
@@ -78,7 +156,7 @@ class RTapasAgent(TapasAgent):
             elif scalar:
                 x.object_states[scalar.group(1)] = y.object_states[scalar.group(1)]
             else:
-                raise ValueError(f"Unknown state name: {sig.label}")
+                raise ValueError(f"Unknown state name: {sig}")
 
         return x
 
@@ -97,14 +175,6 @@ class RTapasAgent(TapasAgent):
         else:
             pos = x
         return pos.numpy()
-
-    @cached_property
-    def overrides(self) -> dict[Property.Query, torch.Tensor]:
-        values = self._load_conditions(False)
-        for k, v in values.items():
-            if k.label in self.cfg.overrides:
-                logger.info(f"Overriding {k.label} with value {v.cpu().numpy()}.")
-        return values
 
     @cached_property
     def demo_precons(self) -> dict[str, torch.Tensor]:

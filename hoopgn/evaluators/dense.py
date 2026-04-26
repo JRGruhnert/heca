@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from hoopgn.evaluators.evaluator import Evaluator
+from hoopgn.evaluators.evaluator import SceneEvaluator
 from hoopgn.misc.td import TDProperties
 
 
-class DenseEvaluator(Evaluator):
+class DenseEvaluator(SceneEvaluator):
     @dataclass(kw_only=True)
-    class Config(Evaluator.Config):
+    class Config(SceneEvaluator.Config):
         max_progress_reward: float = 1.0
         # Small step penalty to encourage efficiency
         step_penalty: float = -0.002

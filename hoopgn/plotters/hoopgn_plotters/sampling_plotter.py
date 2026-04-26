@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from tqdm import trange
 
 from conf.properties import get_property_set
-from hoopgn.entities.properties.default.v1.area import CalvinAreaConfig
+from hoopgn.properties.default.v1.area import CalvinAreaConfig
 from hoopgn.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from hoopgn.misc.buffer import BufferConfig
@@ -20,7 +20,7 @@ from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import (
 )
 from hoopgn.properties.states.area import AreaStateConfig
 from hoopgn.experiments import select_experiment
-from hoopgn.agents.branches.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
+from hoopgn.agents.hoops.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from hoopgn.experiments.experiment import ExperimentConfig
 from hoopgn.observation.td_properties import TDProperties
 from hoopgn.plotters.plots.entity_3d import (

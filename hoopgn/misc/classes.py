@@ -70,31 +70,31 @@ class SearchableClass(ConfigurableClass):
 class StoragableClass(SearchableClass):
     @dataclass(kw_only=True)
     class Query(SearchableClass.Query):
-        parent: "SearchableClass.Query | str"
-        path: Path = field(init=False)
-
-        def __post_init__(self):
-            if isinstance(self.parent, str):
-                self.path = Path(self.parent)
-            elif isinstance(self.parent, SearchableClass.Query):
-                if isinstance(self.parent, StoragableClass.Query):
-                    self.path = self.parent.path
-                else:
-                    self.path = Path(self.parent.label)
-            else:
-                raise ValueError(f"Invalid parent type: {type(self.parent)}")
+        root: Path = Path("data")
+        ending: str = ".pt"
 
     @dataclass(kw_only=True)
     class Config(SearchableClass.Config):
         pass
 
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
+    @classmethod
+    def from_disk(cls: Type[V], cfg: "StoragableClass.Config") -> V:
+        instance = cls.from_config(cfg)
+        if not isinstance(cfg.query, StoragableClass.Query):
+            raise TypeError("cfg.query must be a StoragableClass.Query")
+        path = cls.resolve_path(cfg.query)
+        instance.load(path, cfg.query.label)
+        return instance
 
+    @classmethod
     @abstractmethod
-    def from_disk(self) -> Any:
+    def resolve_path(cls: Type[V], query: "StoragableClass.Query") -> Path:
         raise NotImplementedError()
 
     @abstractmethod
-    def to_disk(self):
+    def load(self, path: Path, label: str) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def save(self, path: Path, label: str) -> None:
         raise NotImplementedError()

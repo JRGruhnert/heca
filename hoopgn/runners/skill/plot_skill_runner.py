@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from hoopgn.entities.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn.entities.entity import Entity
 from hoopgn.plotters.skill_plotters import select_skill_plotter
 from hoopgn.plotters.skill_plotters.skill_plotter import (

@@ -1,12 +1,12 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 from hoopgn.agents.agent import AgentFeedback
-from hoopgn.entities.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
 
 
-class Evaluator(ConfigurableClass):
+class SceneEvaluator(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         success_reward: float
@@ -24,6 +24,14 @@ class Evaluator(ConfigurableClass):
         self.max = x.v1_length
         self.y = y
 
+    def v1_equal(self, x: TDScene) -> bool:
+        assert self.y is not None
+        assert x.v1 == self.y.v1
+        for k in x.keys():
+            if x[k] != self.y[k]:
+                return False
+        return True
+    
     def is_equal(self, x: TDScene) -> bool:
         assert self.y is not None, "Goal must be set before calling is_equal"
         Property.Query(parent=label="dummy")

@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from hoopgn.agents.hoop import HoopAgent
+from hoopgn.agents.hoops.hoop import HoopAgent
 from hoopgn.misc.classes import ConfigurableClass
 
 from hoopgn.agents.agent import Agent

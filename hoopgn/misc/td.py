@@ -4,6 +4,8 @@ import numpy as np
 from tensordict import TensorDict
 import torch
 
+from hoopgn.properties.property import Property
+
 empty_batchsize = torch.Size([])
 
 

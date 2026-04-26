@@ -1,11 +1,11 @@
 from dataclasses import dataclass
-from hoopgn.evaluators.evaluator import Evaluator
+from hoopgn.evaluators.evaluator import SceneEvaluator
 from hoopgn.misc.td import TDProperties
 
 
-class SparseEvaluator(Evaluator):
+class SparseEvaluator(SceneEvaluator):
     @dataclass(kw_only=True)
-    class Config(Evaluator.Config):
+    class Config(SceneEvaluator.Config):
         step_reward: float
 
     def __init__(self, cfg: Config):

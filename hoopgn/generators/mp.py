@@ -5,7 +5,7 @@ import torch
 
 from hoopgn.agents.agent import Agent
 from hoopgn.agents.leafs.leaf import LeafAgent
-from hoopgn.entities.properties.property import Property
+from hoopgn.properties.property import Property
 from hoopgn.generators.generator import Generator
 from hoopgn.misc.td import TDScene
 

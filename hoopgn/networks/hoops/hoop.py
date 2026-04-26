@@ -5,12 +5,13 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from hoopgn.entities.properties.encoders.encoder import PropertyEncoder
+from hoopgn.properties.encoders.encoder import PropertyEncoder
 from hoopgn.misc import hardware, logger
 from hoopgn.misc.classes import StoragableClass
 from hoopgn.misc.td import TDScene
-from hoopgn.networks.hoops.actors.actor import ActorReadoutNetwork
-from hoopgn.networks.hoops.critics.critic import CriticReadoutNetwork
+from hoopgn.networks.hoops.actor import ActorReadoutNetwork
+from hoopgn.networks.hoops.bases.base import BaseNetwork
+from hoopgn.networks.hoops.critic import CriticReadoutNetwork
 from torch_geometric.data import HeteroData
 
 
@@ -21,8 +22,8 @@ class HoopNetwork(StoragableClass, nn.Module):
 
     @dataclass(kw_only=True)
     class Config(StoragableClass.Config):
-        actor: ActorReadoutNetwork.Config
-        critic: CriticReadoutNetwork.Config
+        base: BaseNetwork.Config
+        encoder: set[PropertyEncoder.Config]
         feature_dim: int = 32
         eval_mode: bool = False
 
@@ -30,6 +31,13 @@ class HoopNetwork(StoragableClass, nn.Module):
         nn.Module.__init__(self)
         self.cfg = cfg
 
+        self.encoders = nn.ModuleDict(
+            {
+                encoder_cfg.query.label: PropertyEncoder.from_config(encoder_cfg)
+                for encoder_cfg in self.cfg.encoder
+            }
+        )
+        self.base = BaseNetwork.from_config(self.cfg.base)
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
         self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
 

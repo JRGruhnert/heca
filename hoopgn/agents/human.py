@@ -10,7 +10,6 @@ class HumanAgent(Agent):
         agents: list[Agent.Query]
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.do_reset = False
 
