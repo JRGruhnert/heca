@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Type
 from tensordict import TensorDict
 import torch
 from torch import nn
@@ -7,21 +8,25 @@ from torch_geometric.data import HeteroData
 
 from hoopgn.properties.encoders.encoder import PropertyEncoder
 from hoopgn.misc import hardware, logger
-from hoopgn.misc.classes import StoragableClass
+from hoopgn.misc.classes import StorageClass
 from hoopgn.misc.td import TDScene
 from hoopgn.networks.hoops.actor import ActorReadoutNetwork
 from hoopgn.networks.hoops.bases.base import BaseNetwork
 from hoopgn.networks.hoops.critic import CriticReadoutNetwork
 from torch_geometric.data import HeteroData
+from typing import TypeVar, Type
+
+V = TypeVar("V", bound="HoopNetwork")
 
 
-class HoopNetwork(StoragableClass, nn.Module):
+class HoopNetwork(StorageClass, nn.Module):
     @dataclass(kw_only=True)
-    class Query(StoragableClass.Query):
+    class Query(StorageClass.Query):
         label: str
 
     @dataclass(kw_only=True)
-    class Config(StoragableClass.Config):
+    class Config(StorageClass.Config):
+        query: "HoopNetwork.Query"
         base: BaseNetwork.Config
         encoder: set[PropertyEncoder.Config]
         feature_dim: int = 32
@@ -72,16 +77,42 @@ class HoopNetwork(StoragableClass, nn.Module):
     def critic(self, data: HeteroData) -> torch.Tensor:
         return self.critic_net(data)
 
-    def from_disk(self):
-        path = self.path / "checkpoint_epoch0.pt"
+    @classmethod
+    def resolve_path(
+        cls: Type[V], query: "HoopNetwork.Query", epoch: int, label: str
+    ) -> Path:
+        return query.root / Path(query.label) / f"ckpt_{epoch}_{label}{query.ending}"
+
+    def load(self, query: "HoopNetwork.Query", label: str = "") -> int:
+        # Scan for all checkpoint files with the given label
+        ckpt_dir = query.root / Path(query.label)
+        pattern = f"ckpt_*_{label}{query.ending}"
+        candidates = list(ckpt_dir.glob(pattern))
+        if not candidates:
+            raise FileNotFoundError(f"No checkpoint found for label '{label}'")
+
+        # Extract epoch numbers and find the highest
+        def extract_epoch(path):
+            name = path.stem
+            parts = name.split("_")
+            try:
+                return int(parts[1])
+            except Exception:
+                return -1
+
+        candidates = [(extract_epoch(p), p) for p in candidates]
+        candidates = [item for item in candidates if item[0] >= 0]
+        if not candidates:
+            raise FileNotFoundError(f"No valid checkpoint found for label '{label}'")
+        epoch, path = max(candidates, key=lambda x: x[0])
         checkpoint = torch.load(path, map_location=hardware.device)
         self.load_state_dict(checkpoint["model_state"], strict=False)
+        return epoch
 
-    def to_disk(self, highscore: bool, index: int):
-        if highscore:
-            tag = Path("highscore_epoch{}.pt".format(index))
-        else:
-            tag = Path("checkpoint_epoch{}.pt".format(index))
+    def save(self, query: "HoopNetwork.Query", epoch: int, label: str) -> None:
+        path = self.resolve_path(query, epoch, label)
+        logger.info(f"Saving weights to: {path}")
+        torch.save({"model_state": self.state_dict()}, path)
 
-        logger.info(f"Saving weights to: {self.path / tag} for epoch {index}")
-        torch.save({"state": self.state_dict()}, self.path / tag)
+    def upgrade(self, checkpoint):
+        self.load_state_dict(checkpoint, strict=False)

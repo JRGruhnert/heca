@@ -4,16 +4,16 @@ from pathlib import Path
 import torch
 from hoopgn.properties.extractors.extractor import PropertyExtractor
 from hoopgn.properties.property import Property
-from hoopgn.misc.classes import StoragableClass
+from hoopgn.misc.classes import StorageClass
 
 
-class ImagePropertyExtractor(PropertyExtractor, StoragableClass):
+class ImagePropertyExtractor(PropertyExtractor, StorageClass):
     @dataclass(kw_only=True)
-    class Query(StoragableClass.Query):
+    class Query(StorageClass.Query):
         property: Property.Query
 
     @dataclass(kw_only=True)
-    class Config(PropertyExtractor.Config, StoragableClass.Config):
+    class Config(PropertyExtractor.Config, StorageClass.Config):
         pass
 
     def __init__(self, cfg: Config):

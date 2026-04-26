@@ -3,12 +3,12 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 
 
-class BaseNetwork(ConfigurableClass, nn.Module):
+class BaseNetwork(ConfigClass, nn.Module):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         feature_dim: int = 32
 
     def __init__(self, cfg: Config):

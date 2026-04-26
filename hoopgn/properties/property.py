@@ -2,7 +2,7 @@ from pathlib import Path
 import torch
 from dataclasses import dataclass
 from hoopgn.entities.entity import Entity
-from hoopgn.misc.classes import SearchableClass
+from hoopgn.misc.classes import QueryClass
 
 from hoopgn.properties.encoders.encoder import PropertyEncoder
 from hoopgn.properties.extractors.extractor import (
@@ -21,13 +21,13 @@ from hoopgn.properties.normalizers.normalizer import (
 )
 
 
-class Property(SearchableClass):
+class Property(QueryClass):
     @dataclass(kw_only=True)
-    class Query(SearchableClass.Query):
+    class Query(QueryClass.Query):
         entity: Entity.Query
 
     @dataclass(kw_only=True)
-    class Config(SearchableClass.Config):
+    class Config(QueryClass.Config):
         ruler: PropertyRuler.Config
         encoder: PropertyEncoder.Config
         parameter: PropertyParameter.Config

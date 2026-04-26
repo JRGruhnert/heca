@@ -2,16 +2,16 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 from hoopgn.agents.hoops.hoop import HoopAgent
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 
 from hoopgn.agents.agent import Agent
 from hoopgn.plotters.hoopgn_plotters import select_multiple_hoopgn_plotters
 from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
 
 
-class HoopGNRunner(ConfigurableClass):
+class HoopGNRunner(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         agent: Agent.Config
         plotters: list[HoopGNPlotterConfig]
         epochs: int = 100

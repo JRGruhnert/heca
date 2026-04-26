@@ -2,13 +2,13 @@ from dataclasses import dataclass
 
 from torch import nn
 
-from hoopgn.misc.classes import StoragableClass
+from hoopgn.misc.classes import StorageClass
 from hoopgn.networks.mlp import StandardMLP
 
 
-class PropertyEncoder(StoragableClass, nn.Module):
+class PropertyEncoder(StorageClass, nn.Module):
     @dataclass(kw_only=True)
-    class Config(StoragableClass.Config):
+    class Config(StorageClass.Config):
         in_dim: int
         out_dim: int = 32
         hidden_dim: int | None = None

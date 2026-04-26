@@ -3,13 +3,13 @@ from typing import Callable
 
 import torch
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.misc.area import Area
 
 
-class State(ConfigurableClass):
+class State(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         values: set[str]
         labeling: Callable[[torch.Tensor], str | None]
 

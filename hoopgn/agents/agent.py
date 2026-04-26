@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
-from hoopgn.misc.classes import StoragableClass
+from hoopgn.misc.classes import StorageClass
 from hoopgn.entities.entity import Entity
 from hoopgn.misc.td import TDScene
 
@@ -12,9 +12,10 @@ class AgentFeedback:
     reward: float
     done: bool
     terminal: bool
+    can_learn: bool = False
 
 
-class Agent(StoragableClass):
+class Agent(StorageClass):
 
     @abstractmethod
     def act(

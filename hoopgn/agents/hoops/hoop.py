@@ -27,18 +27,17 @@ class HoopAgent(Agent):
         hoop: HoopNetwork.Config
         generator: Generator.Config
         evaluator: HoopEvaluator.Config
-        reinforcement: PPO.Config
+        ppo: PPO.Config
         agents: set[Agent.Query]
         training: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.network = HoopNetwork.from_config(cfg.hoop)
+        self.hoop = HoopNetwork.from_config(cfg.hoop)
         self.generator = Generator.from_config(cfg.generator)
         self.evaluator = HoopEvaluator.from_config(cfg.evaluator)
-        self.reinforcement = PPO.from_config(cfg.reinforcement)
         self.explainer = HoopgnExplainer(
-            self.network,
+            self.hoop,
             algorithm=CaptumExplainer("Saliency"),
             explanation_type="model",
             node_mask_type="attributes",
@@ -49,10 +48,9 @@ class HoopAgent(Agent):
                 return_type="probs",
             ),
         )
+        self.ppo = PPO(cfg.ppo, hoop=self.hoop)
 
-    def act(
-        self, x: TDScene, y: TDScene, e: Entity | None = None
-    ) -> tuple[TDScene, AgentFeedback]:
+    def act(self, x: TDScene, y: TDScene, e: Entity) -> tuple[TDScene, AgentFeedback]:
         z = self.apply_expert_knowledge(y, e)
         if self.cfg.training:
             with torch.no_grad():
@@ -63,12 +61,12 @@ class HoopAgent(Agent):
             variants, logits, value = self.predict(x, z)
             action = logits.argmax(dim=-1)
 
-        a, e = variants[action]
-        z, fb = Agent.search(a).act(x, z, e=e)
+        agent, entity = variants[action]
+        z, fb = Agent.search(agent).act(x, z, entity)
         reward, done, terminal = self.evaluator.step(z, fb)
         if self.cfg.training:
             logprob: torch.Tensor = dist.log_prob(action)
-            full = self.reinforcement.append(
+            can_learn = self.ppo.step(
                 x,
                 y,
                 action.detach(),
@@ -78,19 +76,19 @@ class HoopAgent(Agent):
                 done,
                 terminal,
             )
-            if full:
-                state_dict = self.reinforcement.learn()
-                self.network.load_state_dict(state_dict)
-
-        return z, AgentFeedback(reward=reward, done=done, terminal=terminal)
+        else:
+            can_learn = False
+        return z, AgentFeedback(
+            reward=reward, done=done, terminal=terminal, can_learn=can_learn
+        )
 
     def predict(
         self, x: TDScene, y: TDScene
-    ) -> tuple[list[tuple[Agent.Query, Entity | None]], torch.Tensor, torch.Tensor]:
-        x, y = self.network.encode(x, y)
+    ) -> tuple[list[tuple[Agent.Query, Entity]], torch.Tensor, torch.Tensor]:
+        x, y = self.hoop.encode(x, y)
         options, data = self.generator(x, y)
-        logits = self.network.actor(data)
-        value = self.network.critic(data)
+        logits = self.hoop.actor(data)
+        value = self.hoop.critic(data)
         return options, logits, value
 
     def cluster_precon(self) -> dict[str, Entity]:
@@ -139,20 +137,28 @@ class HoopAgent(Agent):
             y = TDScene(data=TDEntities(y_values))
         return x, y
 
-    def train(self, epochs: int, e: Entity):
-        for epoch in range(epochs):
+    def train(self, episodes: int, e: Entity):
+        for ep in range(episodes):
             x, y = self.sample(e)
             terminal = False
             while not terminal:
-                reward, fb = self.act(x, y, e=e)
+                reward, fb = self.act(x, y, e)
+                if fb.can_learn:
+                    xp, highscore = self.ppo.learn(ep)
+                    self.hoop.upgrade(xp)
+                    self.hoop.save(
+                        self.hoop.cfg.query,
+                        epoch=ep,
+                        label="best" if highscore else "latest",
+                    )
                 terminal = fb.terminal
-                logger.info(f"Epoch {epoch}: Reward={reward:.4f}, Done={terminal}")
+                logger.info(f"Epoch {ep}: Reward={reward:.4f}, Done={terminal}")
 
     def explain(self, e: Entity):
         x, y = self.sample(e)
-        x, y = self.network.encode(x, y)
+        x, y = self.hoop.encode(x, y)
         _, data = self.generator(x, y)
-        action = self.network.actor(data)  # Forward pass to populate
+        action = self.hoop.actor(data)  # Forward pass to populate
         explanation = self.explainer(
             data.x_dict,
             data.edge_index_dict,

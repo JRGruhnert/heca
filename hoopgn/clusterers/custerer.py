@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.misc.td import TDScene
 
 
-class Clusterer(ConfigurableClass):
+class Clusterer(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         pass
 
     def __init__(self, cfg: Config):

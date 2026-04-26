@@ -2,16 +2,16 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-from hoopgn.misc.classes import SearchableClass
+from hoopgn.misc.classes import QueryClass
 from hoopgn.misc.td import TDScene
 from hoopgn.properties.property import Property
 from hoopgn.converters.converter import HoopConverter, LeafConverter
 from hoopgn.environments.calvins import calvin_properties
 
 
-class Environment(SearchableClass):
+class Environment(QueryClass):
     @dataclass(kw_only=True)
-    class Config(SearchableClass.Config):
+    class Config(QueryClass.Config):
         hoop_cv: HoopConverter.Config
         leaf_cv: LeafConverter.Config
 

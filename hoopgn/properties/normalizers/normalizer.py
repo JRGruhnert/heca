@@ -2,12 +2,12 @@ from abc import abstractmethod
 from dataclasses import dataclass
 import torch
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 
 
-class PropertyNormalizer(ConfigurableClass):
+class PropertyNormalizer(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         pass
 
     def __init__(self, cfg: Config):

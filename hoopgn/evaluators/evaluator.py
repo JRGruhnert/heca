@@ -3,13 +3,13 @@ from dataclasses import dataclass
 
 from tensordict import TensorDict
 from hoopgn.agents.agent import AgentFeedback
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.misc.td import TDScene
 
 
-class Evaluator(ConfigurableClass):
+class Evaluator(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         success_reward: float
 
     @abstractmethod

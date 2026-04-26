@@ -3,12 +3,12 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 
 
-class Area(ConfigurableClass):
+class Area(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         labels: set[str]
         spawn_surfaces: dict[str, list[list[float]]]
         eval_surfaces: dict[str, list[list[float]]]

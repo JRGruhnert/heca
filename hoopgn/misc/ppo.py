@@ -2,9 +2,9 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.misc.hardware import device
-from hoopgn.hoops.hoop import Hoop
+from hoopgn.networks.hoops.hoop import HoopNetwork
 from hoopgn.misc import logger
 from thop import profile
 
@@ -18,11 +18,10 @@ class AnnealingConfig:
     max_epochs: int = 1000
 
 
-class PPO(ConfigurableClass):
+class PPO(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         # PPO Hyperparameters
-
         batch_size: int = 2048
         mini_batch_size: int = 64
         learning_epochs: int = 5
@@ -37,13 +36,15 @@ class PPO(ConfigurableClass):
         target_kl: float | None = 0.02
         clip_value_loss: bool = True
 
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, hoop: HoopNetwork):
         self.cfg = cfg
 
+        self.hoop = hoop
         self.mse_loss = nn.MSELoss()
-        self.hoop: Hoop | None = None
-        self.optimizer: torch.optim.Optimizer | None = None
-
+        self.optimizer = torch.optim.AdamW(
+            self.hoop.parameters(),
+            lr=self.cfg.lr,
+        )
         self.current: list[TDScene] = []
         self.goal: list[TDScene] = []
         self.actions: list[torch.Tensor] = []
@@ -53,16 +54,10 @@ class PPO(ConfigurableClass):
         self.success: list[bool] = []
         self.terminals: list[bool] = []
 
-    def set_hoop(self, hoop: Hoop):
-        self.hoop = hoop
-        self.optimizer = torch.optim.AdamW(
-            self.hoop.parameters(),
-            lr=self.cfg.lr,
-        )
+        # Statistics
+        self.highscore = float("-inf")
 
-    def learn(self, progress: float | None = None) -> dict:
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
+    def learn(self, progress: float) -> tuple[dict, bool]:
         # Main PPO update loop
         self.mini_batch_loop()
 
@@ -75,13 +70,9 @@ class PPO(ConfigurableClass):
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
-        # Return new weights
-        return self.hoop.state_dict()
+        return self.hoop.state_dict(), self.flush_and_rate()
 
     def mini_batch_loop(self):
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
-
         adv, rtn = self._compute_gae(
             self.rewards,
             self.values,
@@ -249,7 +240,8 @@ class PPO(ConfigurableClass):
             result = profile(self.hoop, inputs=(obs_batch, goal_batch), verbose=False)
             return int(result[0]), int(result[1])
 
-    def flush(self):
+    def flush_and_rate(self):
+        current = len(self.success) / len(self.terminals)
         self.current.clear()
         self.goal.clear()
         self.actions.clear()
@@ -258,6 +250,10 @@ class PPO(ConfigurableClass):
         self.success.clear()
         self.values.clear()
         self.terminals.clear()
+        if current > self.highscore:
+            self.highscore = current
+            return True
+        return False
 
     def to_disk(self, tag: str):
         assert self.optimizer is not None, "Optimizer must be set before saving"
@@ -276,7 +272,7 @@ class PPO(ConfigurableClass):
             "data/" + tag + f"/epoch_data_{0}.pt",
         )
 
-    def append(
+    def step(
         self,
         current: TDProperties,
         goal: TDProperties,
@@ -286,7 +282,7 @@ class PPO(ConfigurableClass):
         reward: float,
         success: bool,
         terminal: bool,
-    ):
+    ) -> bool:
         self.current.append(current)
         self.goal.append(goal)
         self.actions.append(action)
@@ -295,3 +291,4 @@ class PPO(ConfigurableClass):
         self.rewards.append(reward)
         self.success.append(success)
         self.terminals.append(terminal)
+        return len(self.current) >= self.cfg.batch_size

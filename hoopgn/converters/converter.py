@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from tensordict import TensorDict
 from hoopgn.misc.td import TDEntities
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 
 
-class Converter(ConfigurableClass):
+class Converter(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         label: str
 
     def __init__(self, cfg: Config):

@@ -1,11 +1,11 @@
 from abc import ABC, ABCMeta, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar, Type, cast
+from typing import TypeVar, Type, cast
 
-T = TypeVar("T", bound="ConfigurableClass")
-S = TypeVar("S", bound="SearchableClass")
-V = TypeVar("V", bound="StoragableClass")
+T = TypeVar("T", bound="ConfigClass")
+S = TypeVar("S", bound="QueryClass")
+V = TypeVar("V", bound="StorageClass")
 
 
 class ConfigurableMeta(ABCMeta):
@@ -13,55 +13,55 @@ class ConfigurableMeta(ABCMeta):
 
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
-        if cls.__name__ != "ConfigurableClass":
+        if cls.__name__ != "ConfigClass":
             # Ensure each subclass defines its own Config class
             config_cls = attrs.get("Config", None)
             assert config_cls is not None, f"{cls.__name__} must define a Config class"
             ConfigurableMeta.config_class_registry[config_cls] = cls
 
     @staticmethod
-    def from_config(cfg: "ConfigurableClass.Config") -> "ConfigurableClass":
+    def from_config(cfg: "ConfigClass.Config") -> "ConfigClass":
         subclass = ConfigurableMeta.config_class_registry.get(type(cfg))
         assert subclass is not None
         return subclass(cfg)
 
 
-class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
+class ConfigClass(ABC, metaclass=ConfigurableMeta):
     @dataclass(kw_only=True)
     class Config:
         pass
 
     @classmethod
-    def from_config(cls: Type[T], cfg: "ConfigurableClass.Config") -> T:
+    def from_config(cls: Type[T], cfg: "ConfigClass.Config") -> T:
         return cast(T, ConfigurableMeta.from_config(cfg))
 
     @classmethod
-    def from_configs(cls: Type[T], cfgs: list["ConfigurableClass.Config"]) -> list[T]:
+    def from_configs(cls: Type[T], cfgs: list["ConfigClass.Config"]) -> list[T]:
         return [cls.from_config(cfg) for cfg in cfgs]
 
 
-class SearchableClass(ConfigurableClass):
-    registry: dict["SearchableClass.Query", "SearchableClass"] = {}
+class QueryClass(ConfigClass):
+    registry: dict["QueryClass.Query", "QueryClass"] = {}
 
     @dataclass(kw_only=True)
-    class Query(ConfigurableClass.Config):
+    class Query(ConfigClass.Config):
         label: str
 
         def __eq__(self, other):
-            if not isinstance(other, SearchableClass.Query):
+            if not isinstance(other, QueryClass.Query):
                 return NotImplemented
             return self.label == other.label
 
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
-        query: "SearchableClass.Query"
+    class Config(ConfigClass.Config):
+        query: "QueryClass.Query"
 
     @classmethod
-    def search(cls: Type[S], query: "SearchableClass.Query") -> S:
+    def search(cls: Type[S], query: "QueryClass.Query") -> S:
         if query not in cls.registry:
             choice = None
             for cfg in cls.config_class_registry:
-                if isinstance(cfg, "SearchableClass.Config"):
+                if isinstance(cfg, "QueryClass.Config"):
                     if cfg.query == query:
                         choice = cfg
 
@@ -71,34 +71,33 @@ class SearchableClass(ConfigurableClass):
         return cast(S, cls.registry[query])
 
 
-class StoragableClass(SearchableClass):
+class StorageClass(QueryClass):
     @dataclass(kw_only=True)
-    class Query(SearchableClass.Query):
+    class Query(QueryClass.Query):
         root: Path = Path("data")
         ending: str = ".pt"
 
     @dataclass(kw_only=True)
-    class Config(SearchableClass.Config):
+    class Config(QueryClass.Config):
         pass
 
     @classmethod
-    def from_disk(cls: Type[V], cfg: "StoragableClass.Config") -> V:
+    def from_disk(cls: Type[V], cfg: "StorageClass.Config") -> V:
         instance = cls.from_config(cfg)
-        if not isinstance(cfg.query, StoragableClass.Query):
-            raise TypeError("cfg.query must be a StoragableClass.Query")
-        path = cls.resolve_path(cfg.query)
-        instance.load(path, cfg.query.label)
+        if not isinstance(cfg.query, StorageClass.Query):
+            raise TypeError("cfg.query must be a StorageClass.Query")
+        instance.load(cfg.query)
         return instance
 
     @classmethod
     @abstractmethod
-    def resolve_path(cls: Type[V], query: "StoragableClass.Query") -> Path:
+    def resolve_path(cls: Type[V], query: "StorageClass.Query") -> Path:
         raise NotImplementedError()
 
     @abstractmethod
-    def load(self, path: Path, label: str) -> None:
+    def load(self, query: "StorageClass.Query"):
         raise NotImplementedError()
 
     @abstractmethod
-    def save(self, path: Path, label: str) -> None:
+    def save(self, query: "StorageClass.Query") -> None:
         raise NotImplementedError()

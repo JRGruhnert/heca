@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.properties.property import Property
 
 
-class Entity(ConfigurableClass):
+class Entity(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         label: str
         meta: str = "root"
         version: str

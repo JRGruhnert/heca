@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.misc.classes import ConfigClass
 from hoopgn.properties.normalizers.boundary import (
     BoundaryNormalizer,
 )
@@ -11,9 +11,9 @@ from hoopgn.misc.state import State
 from hoopgn.properties.default.v1.area import CalvinAreaConfig
 
 
-class AreaGTModifier(ConfigurableClass):
+class AreaGTModifier(ConfigClass):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
+    class Config(ConfigClass.Config):
         area: Area.Config
 
     def __init__(self, cfg: Config):
