@@ -1,15 +1,14 @@
 from dataclasses import dataclass
 
-from hoopgn.misc.classes import ConfigurableClass
+from hoopgn.entities.entity import Entity
+from hoopgn.environments.environment import Environment
 from hoopgn.properties.property import Property
 
 
-class Entity(ConfigurableClass):
+class RealEntity(Entity):
     @dataclass(kw_only=True)
-    class Config(ConfigurableClass.Config):
-        label: str
-        meta: str = "root"
-        version: str
+    class Config(Entity.Config):
+        env: Environment.Query
         properties: list[Property.Config]
         weights: list[float] | None = None
 
@@ -20,6 +19,8 @@ class Entity(ConfigurableClass):
             assert (
                 sum(self.weights) == 1.0 if self.weights is not None else True
             ), "Weights must sum to 1.0"
+
+            self.meta = f"{self.meta}{self.env}.{self.label}"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

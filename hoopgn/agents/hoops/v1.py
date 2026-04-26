@@ -5,7 +5,7 @@ from hoopgn.properties.property import Property
 from hoopgn.evaluators.dense import DenseEvaluator
 from hoopgn.misc.ppo import PPO
 from hoopgn.agents.hoops.hoop import HoopAgent
-from hoopgn.evaluators.evaluator import SceneEvaluator
+from hoopgn.evaluators.agent_hoop import HoopEvaluator
 from hoopgn.generators.mp import MPGenerator
 from hoopgn.generators.generator import Generator
 from hoopgn.networks.hoops.bases.v1 import V1Network
@@ -21,7 +21,7 @@ class HoopV1Agent(HoopAgent):
     class Config(HoopAgent.Config):
         agents: list[Agent.Config]
         properties: list[Property.Config]
-        evaluator: SceneEvaluator.Config = DenseEvaluator.Config()
+        evaluator: HoopEvaluator.Config = DenseEvaluator.Config()
         reinforcement: PPO.Config = PPO.Config()
         hoop: HoopNetwork.Config = field(init=False)
         generator: Generator.Config = field(init=False)

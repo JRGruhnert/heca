@@ -5,6 +5,7 @@ import torch
 
 from hoopgn.agents.agent import Agent
 from hoopgn.agents.leafs.leaf import LeafAgent
+from hoopgn.entities.entity import Entity
 from hoopgn.properties.property import Property
 from hoopgn.generators.generator import Generator
 from hoopgn.misc.td import TDScene
@@ -25,10 +26,10 @@ class MPGenerator(Generator):
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene
-    ) -> tuple[list[tuple[Agent.Query, TDScene, TDScene]], HeteroData]:
+    ) -> tuple[list[tuple[Agent.Query, Entity | None]], HeteroData]:
         options = []
         for agent in self.cfg.agents:
-            options.append((agent, x, y))
+            options.append((agent, None))
         return options, self.to_data(x, y, z)
 
     def to_data(self, x: TDScene, y: TDScene, z: TDScene) -> HeteroData:

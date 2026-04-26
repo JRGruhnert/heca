@@ -5,33 +5,25 @@ import numpy as np
 from hoopgn.misc.classes import SearchableClass
 from hoopgn.misc.td import TDScene
 from hoopgn.properties.property import Property
-from hoopgn.converters.tapas import TapasConverter
-from hoopgn.converters.v1 import V1Converter
-from hoopgn.converters.v2 import V2Converter
+from hoopgn.converters.converter import HoopConverter, LeafConverter
 from hoopgn.environments.calvins import calvin_properties
 
 
 class Environment(SearchableClass):
     @dataclass(kw_only=True)
     class Config(SearchableClass.Config):
-        v1_cv: V1Converter.Config
-        v2_cv: V2Converter.Config
-        ts_cv: TapasConverter.Config
+        hoop_cv: HoopConverter.Config
+        leaf_cv: LeafConverter.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.v1_cv = V1Converter.from_config(self.cfg.v1_cv)
-        self.v2_cv = V2Converter.from_config(self.cfg.v2_cv)
-        self.ts_cv = TapasConverter.from_config(self.cfg.ts_cv)
+        self.hoop_cv = HoopConverter.from_config(self.cfg.hoop_cv)
+        self.leaf_cv = LeafConverter.from_config(self.cfg.leaf_cv)
 
     def to_observation(self, obs) -> TDScene:
-        return TDScene(
-            {
-                self.v1_cv.cfg.label: self.v1_cv(obs),
-                self.v2_cv.cfg.label: self.v2_cv(obs),
-                self.ts_cv.cfg.label: self.ts_cv(obs),
-            }
-        )
+        data = self.hoop_cv(obs)
+        leaf = self.leaf_cv(obs)
+        return TDScene(data=data, leaf=leaf)
 
     @abstractmethod
     def sample(self) -> TDScene:

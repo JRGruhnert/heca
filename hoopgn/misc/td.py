@@ -4,8 +4,6 @@ import numpy as np
 from tensordict import TensorDict
 import torch
 
-from hoopgn.properties.property import Property
-
 empty_batchsize = torch.Size([])
 
 
@@ -86,65 +84,52 @@ class TDEntities(TensorDict):
     def __init__(self, entities: dict[str, TDEntity]):
         super().__init__(entities, batch_size=empty_batchsize)
 
-    def get_entity(self, key: str) -> TDEntity:
+    def get(self, key: str) -> TDEntity:
         if key not in self.keys():
             raise KeyError(f"Entity '{key}' not found in TDEntities.")
         return cast(TDEntity, self[key])
 
 
 class TDScene(TensorDict):
-    def __init__(self, data: dict[str, TensorDict]):
+    def __init__(
+        self,
+        data: TDEntities,
+        leaf: TensorDict | None = None,
+    ):
         super().__init__(data, batch_size=empty_batchsize)
-
-    def get(self, label: str) -> TensorDict:
-        if label in self:
-            return cast(TensorDict, self[label])
-        assert False, f"Scene with label '{label}' not found."
+        self["entities"] = data
+        if leaf is not None:
+            self["leaf"] = leaf
 
     @property
-    def v1(self) -> TDProperties:
-        return self.get("v1")
+    def entities(self) -> TDEntities:
+        return cast(TDEntities, self["entities"])
 
     @property
-    def v2(self) -> TDEntities:
-        return self.get("v2")
+    def leaf(self) -> TensorDict:
+        return self.get("leaf")
 
     @property
-    def tapas(self) -> TensorDict:
-        return self.get("tapas")
-
-    @property
-    def v1_length(self) -> int:
-        return len(self.v1.keys())
-
-    @property
-    def v2_length(self) -> int:
-        keys = self.v2.keys()
-        count = 0
-        for key in keys:
-            entity = self.v2[key]
-            if isinstance(entity, TDEntity):
-                for _ in entity.keys():
-                    count += 1
-        return count
+    def length(self) -> int:
+        return len(self.entities)
 
 
 class TDWorld(TensorDict):
     def __init__(self, data: dict[str, TDScene]):
         super().__init__(data, batch_size=empty_batchsize)
 
-    def get(self, label: str) -> TensorDict:
+    def scenes(self, label: str) -> TDScene:
         if label in self:
-            return cast(TensorDict, self[label])
+            return cast(TDScene, self[label])
         assert False, f"World with label '{label}' not found."
 
     @property
     def calvin(self) -> TDScene:
-        return self.get("calvin")
+        return self.scenes("calvin")
 
     @property
     def ogbench(self) -> TDScene:
-        return self.get("ogbench")
+        return self.scenes("ogbench")
 
     def __len__(self):
         return len(self.keys())

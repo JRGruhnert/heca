@@ -1,11 +1,17 @@
 import numpy as np
 from dataclasses import dataclass, field
 
+import torch
+
+from hoopgn.converters.calvin_hoop import CalvinHoopConverter
+from hoopgn.converters.calvin_tapas import CalvinTapasConverter
+from hoopgn.converters.converter import HoopConverter, LeafConverter
 from hoopgn.environments.environment import Environment
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 
 from hoopgn.misc.area import Area
+from hoopgn.misc.state import State
 from hoopgn.misc.td import TDScene
 
 
@@ -37,6 +43,9 @@ class CalvinEnvironment(Environment):
 
     @dataclass(kw_only=True)
     class Config(Environment.Config):
+        hoop_cv: HoopConverter.Config = CalvinHoopConverter.Config()
+        leaf_cv: LeafConverter.Config = CalvinTapasConverter.Config()
+
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),
@@ -56,7 +65,16 @@ class CalvinEnvironment(Environment):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.env = Calvin(self.cfg.cc)
-        self.area = Area(CalvinAreaConfig())
+        self.state = State.from_area_config(
+            CalvinAreaConfig(),
+        )
+        self.overrides = set(
+            [
+                "block_red_position",
+                "block_blue_position",
+                "block_pink_position",
+            ]
+        )
 
     def close(self):
         self.env.close()
@@ -71,18 +89,15 @@ class CalvinEnvironment(Environment):
         return self.to_observation(obs)
 
     def modify(self, x: TDScene) -> TDScene:
-        x
+        v1 = x.data["scene"]["v1"]
+        for k in self.overrides:
+            v1[k] = torch.cat([v1[k], self.state(v1[k])])
+        return x
 
     def validate(self, x: TDScene) -> bool:
-        x["v1"]["area"] = self.area(x)
-        ax = self.area.label(x)
-        return ax is not None
-
-    def is_valid(self, x: TDScene) -> bool:
-        assert self.goal is not None, "Goal must be set before calling is_valid"
-        for p in self.properties:
-            l = p.cfg.label
-            if not p.validate(x[l], self.goal[l]):
+        v1 = x.data["scene"]["v1"]
+        for k in self.overrides:
+            if torch.all(v1[k][3:] == 0):
                 return False
         return True
 

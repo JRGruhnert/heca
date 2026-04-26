@@ -14,16 +14,14 @@ from tapas_gmm_modified.utils.observation import (
     dict_to_tensordict,
 )
 
-from hoopgn.converters.converter import (
-    Converter,
-)
+from hoopgn.converters.converter import LeafConverter
 
 empty_batchsize = torch.Size([])
 
 
-class TapasConverter(Converter):
+class CalvinTapasConverter(LeafConverter):
     @dataclass(kw_only=True)
-    class Config(Converter.Config):
+    class Config(LeafConverter.Config):
         label: str = "tapas"
 
     def __init__(self, cfg: Config):

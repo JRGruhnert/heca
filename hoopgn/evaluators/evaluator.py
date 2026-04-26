@@ -1,56 +1,29 @@
 from abc import abstractmethod
 from dataclasses import dataclass
+
+from tensordict import TensorDict
 from hoopgn.agents.agent import AgentFeedback
-from hoopgn.properties.property import Property
 from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
 
 
-class SceneEvaluator(ConfigurableClass):
+class Evaluator(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         success_reward: float
 
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
-
-        # State
-        self.progress: float = 0.0
-        self.max: float = 0.0
-        self.y: TDScene | None = None
-
-    def reset(self, x: TDScene, y: TDScene):
-        self.progress = 0.0
-        self.max = x.v1_length
-        self.y = y
-
-    def v1_equal(self, x: TDScene) -> bool:
-        assert self.y is not None
-        assert x.v1 == self.y.v1
-        for k in x.keys():
-            if x[k] != self.y[k]:
-                return False
-        return True
-    
-    def is_equal(self, x: TDScene) -> bool:
-        assert self.y is not None, "Goal must be set before calling is_equal"
-        Property.Query(parent=label="dummy")
-        results: list[bool] = []
-        for p in self.properties:
-            l = p.cfg.label
-            result = p.evaluate(x[l], self.y[l])
-            results.append(result)
-        dones = results.count(True)
-        self.progress = dones / self.max
-        return all(results)
-
-    def is_sample(self, x: TDScene, y: TDScene) -> bool:
-        self.reset(x, y)
-        return not self.is_equal(x)
-
     @abstractmethod
-    def step(self, x: TDScene, feedback: AgentFeedback) -> tuple[float, bool]:
+    def reset(self, x: TensorDict, y: TensorDict):
         raise NotImplementedError()
 
-    def get_feedback(self, x: TDScene) -> AgentFeedback:
+    @abstractmethod
+    def is_sample(self, x: TensorDict, y: TensorDict) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def step(self, x: TensorDict, feedback: AgentFeedback) -> tuple[float, bool]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_feedback(self, x: TensorDict) -> AgentFeedback:
         raise NotImplementedError()

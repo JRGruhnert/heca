@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from hoopgn.agents.agent import Agent
+from hoopgn.entities.entity import Entity
 from hoopgn.misc.classes import ConfigurableClass
 from hoopgn.misc.td import TDScene
 from torch_geometric.data import Batch, HeteroData
@@ -16,7 +17,7 @@ class Generator(ConfigurableClass):
 
     def __call__(
         self, x: TDScene, y: TDScene
-    ) -> tuple[list[tuple[Agent.Query, TDScene, TDScene]], HeteroData]:
+    ) -> tuple[list[tuple[Agent.Query, Entity | None]], HeteroData]:
         raise NotImplementedError()
 
     def to_batch(self, data: list[HeteroData]) -> Batch:

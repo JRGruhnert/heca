@@ -1,5 +1,5 @@
-from abc import abstractmethod
 from dataclasses import dataclass
+from typing import Callable
 
 import torch
 
@@ -11,6 +11,7 @@ class State(ConfigurableClass):
     @dataclass(kw_only=True)
     class Config(ConfigurableClass.Config):
         values: set[str]
+        labeling: Callable[[torch.Tensor], str | None]
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -21,17 +22,14 @@ class State(ConfigurableClass):
             label: self.make_one_hot(label) for label in cfg.values
         }
         self.zeros = self.make_zeros()
+        self.labeling = cfg.labeling
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        label = self.label(x)
+        label = self.labeling(x)
         if label in self.cfg.values:
             return self.one_hots.get(label, self.zeros)
         else:
             return self.zeros
-
-    @abstractmethod
-    def label(self, x: torch.Tensor) -> str | None:
-        raise NotImplementedError()
 
     def make_zeros(self) -> torch.Tensor:
         return torch.zeros(len(self.cfg.values), dtype=torch.float32)
@@ -47,5 +45,5 @@ class State(ConfigurableClass):
     @classmethod
     def from_area_config(cls, area_cfg: Area.Config) -> "State":
         return cls(
-            cls.Config(values=area_cfg.labels),
+            cls.Config(values=area_cfg.labels, labeling=Area(area_cfg)),
         )

@@ -4,19 +4,19 @@ import numpy as np
 import torch
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
-from hoopgn.converters.converter import Converter
+from hoopgn.converters.converter import HoopConverter
 from hoopgn.misc.td import TDProperties, TDEntities
 
 
-class V1Converter(Converter):
+class CalvinHoopConverter(HoopConverter):
     @dataclass(kw_only=True)
-    class Config(Converter.Config):
+    class Config(HoopConverter.Config):
         label: str = "v1"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def __call__(self, obs: CalvinEnvObservation) -> TDProperties:
+    def __call__(self, obs: CalvinEnvObservation) -> TDEntities:
         state_dict = {}
         state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
         state_dict["ee_rotation"] = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
@@ -35,4 +35,4 @@ class V1Converter(Converter):
                 np.array([value]), dtype=torch.float32
             )
 
-        return TDProperties(state_dict)
+        return TDEntities({"v1": TDProperties(state_dict)})

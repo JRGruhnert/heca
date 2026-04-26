@@ -35,6 +35,10 @@ class ConfigurableClass(ABC, metaclass=ConfigurableMeta):
     def from_config(cls: Type[T], cfg: "ConfigurableClass.Config") -> T:
         return cast(T, ConfigurableMeta.from_config(cfg))
 
+    @classmethod
+    def from_configs(cls: Type[T], cfgs: list["ConfigurableClass.Config"]) -> list[T]:
+        return [cls.from_config(cfg) for cfg in cfgs]
+
 
 class SearchableClass(ConfigurableClass):
     registry: dict["SearchableClass.Query", "SearchableClass"] = {}

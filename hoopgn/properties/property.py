@@ -49,7 +49,7 @@ class Property(SearchableClass):
         ex = self.extractor(x)
         return self.normalizer(ex)
 
-    def measure_distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
+    def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
         """Measures the distance between two values."""
         return self.ruler(x, y)
 

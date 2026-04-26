@@ -27,7 +27,7 @@ class Area(ConfigurableClass):
         self.spawn_surfaces = self._make_surfaces(cfg.spawn_surfaces)
         self.eval_surfaces = self._make_surfaces(cfg.eval_surfaces)
 
-    def label(self, x: torch.Tensor) -> str | None:
+    def __call__(self, x: torch.Tensor) -> str | None:
         return self.check_eval_area(x)
 
     def check_eval_area(self, x: torch.Tensor) -> str | None:
