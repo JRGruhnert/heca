@@ -1,12 +1,12 @@
 from conf.properties import get_property_set
 from conf.agents import get_skill_set
-from hoopgn.agents.hoops.hoopgn_agent import HoopGNSkillConfig
-from hoopgn.misc.buffer import BufferConfig
-from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.evaluators.dense import Dense3EvaluatorConfig
-from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
-from hoopgn.hoops.v1 import MPGNNConfig
-from hoopgn.runners.explainer import ExplainRunnerConfig
+from heca.agents.hecas.hoopgn_agent import HoopGNSkillConfig
+from heca.misc.buffer import BufferConfig
+from heca.environments.calvin import CalvinEnvironmentConfig
+from heca.evaluators.dense import Dense3EvaluatorConfig
+from heca.experiments.noise_experiment import NoiseExperimentConfig
+from heca.hoops.v1 import MPGNNConfig
+from heca.runners.explainer import ExplainRunnerConfig
 
 SKILL_TAG = "blue"
 PROPERTY_TAG = "blue"

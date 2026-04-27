@@ -3,7 +3,7 @@ from typing import cast
 import click
 
 from cli.hoopgn import config_handler
-from hoopgn.runners.explainer import ExplainRunner, ExplainRunnerConfig
+from heca.runners.explainer import ExplainRunner, ExplainRunnerConfig
 
 
 @click.command()

@@ -1,8 +1,8 @@
 from conf.properties import get_property_set
 from conf.agents import get_skill_set
-from hoopgn.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
-from hoopgn.plotters.hoopgn_plotters.sampling_plotter import SpawnAreaPlotterConfig
-from hoopgn.runners.plotter import PlotRunnerConfig
+from heca.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
+from heca.plotters.hoopgn_plotters.sampling_plotter import SpawnAreaPlotterConfig
+from heca.runners.plotter import PlotRunnerConfig
 
 
 SKILL_TAG = "blue"

@@ -1,10 +1,10 @@
 from conf.properties import get_property_set
 from conf.agents import get_skill_set
-from hoopgn.plotters.skill_plotters.condition_plotter import (
+from heca.plotters.skill_plotters.condition_plotter import (
     SkillConditionsPlotterConfig,
 )
-from hoopgn.plotters.skill_plotters.skill_plotter import SkillPlotterConfig
-from hoopgn.runners.skill.plot_skill_runner import SkillPlotRunnerConfig
+from heca.plotters.skill_plotters.skill_plotter import SkillPlotterConfig
+from heca.runners.skill.plot_skill_runner import SkillPlotRunnerConfig
 
 
 plot1 = SkillConditionsPlotterConfig()

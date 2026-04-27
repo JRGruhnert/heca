@@ -1,7 +1,7 @@
-from hoopgn.environments.calvin import CalvinEnvironment
+from heca.environments.calvin import CalvinEnvironment
 
-from hoopgn.misc.logger import LogMode, LoggerConfig
-from hoopgn.hoops.v1 import MPGnn
+from heca.misc.logger import LogMode, LoggerConfig
+from heca.hoops.v1 import MPGnn
 
 
 def ppo_default_config(

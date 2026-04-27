@@ -1,11 +1,11 @@
 from conf.properties import get_property_set
 from conf.agents import get_skill_set
-from hoopgn.agents.hoops.hoopgn_agent import HoopGNSkillConfig
-from hoopgn.environments.calvin import CalvinEnvironmentConfig
-from hoopgn.misc.buffer import BufferConfig
-from hoopgn.evaluators.dense import Dense3EvaluatorConfig
-from hoopgn.hoops.v1 import MPGNNConfig
-from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
+from heca.agents.hecas.hoopgn_agent import HoopGNSkillConfig
+from heca.environments.calvin import CalvinEnvironmentConfig
+from heca.misc.buffer import BufferConfig
+from heca.evaluators.dense import Dense3EvaluatorConfig
+from heca.hoops.v1 import MPGNNConfig
+from heca.experiments.noise_experiment import NoiseExperimentConfig
 from cli.cmd_train import TrainRunnerConfig
 
 

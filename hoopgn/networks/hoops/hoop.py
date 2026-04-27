@@ -6,13 +6,13 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from hoopgn.properties.encoders.encoder import PropertyEncoder
-from hoopgn.misc import hardware, logger
-from hoopgn.misc.classes import StorageClass
-from hoopgn.misc.td import TDScene
-from hoopgn.networks.hoops.actor import ActorReadoutNetwork
-from hoopgn.networks.hoops.bases.base import BaseNetwork
-from hoopgn.networks.hoops.critic import CriticReadoutNetwork
+from heca.properties.encoders.encoder import PropertyEncoder
+from heca.misc import hardware, logger
+from heca.misc.classes import StorageClass
+from heca.misc.td import TDScene
+from heca.networks.heca.actor import ActorReadoutNetwork
+from heca.networks.bases.base import BaseNetwork
+from heca.networks.heca.critic import CriticReadoutNetwork
 from torch_geometric.data import HeteroData
 from typing import TypeVar, Type
 
@@ -28,7 +28,7 @@ class HoopNetwork(StorageClass, nn.Module):
     class Config(StorageClass.Config):
         query: "HoopNetwork.Query"
         base: BaseNetwork.Config
-        encoder: set[PropertyEncoder.Config]
+        encoders: set[PropertyEncoder.Query]
         feature_dim: int = 32
         eval_mode: bool = False
 
@@ -37,10 +37,7 @@ class HoopNetwork(StorageClass, nn.Module):
         self.cfg = cfg
 
         self.encoders = nn.ModuleDict(
-            {
-                encoder_cfg.query.label: PropertyEncoder.from_config(encoder_cfg)
-                for encoder_cfg in self.cfg.encoder
-            }
+            {query.label: PropertyEncoder.search(query) for query in self.cfg.encoders}
         )
         self.base = BaseNetwork.from_config(self.cfg.base)
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)

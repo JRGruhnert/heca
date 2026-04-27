@@ -1,7 +1,7 @@
 from typing import cast
 
 from cli.hoopgn import config_handler
-from hoopgn.runners.skill.plot_skill_runner import (
+from heca.runners.skill.plot_skill_runner import (
     SkillPlotRunner,
     SkillPlotRunnerConfig,
 )

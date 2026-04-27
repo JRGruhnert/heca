@@ -1,7 +1,7 @@
 import wandb
-from hoopgn.experiments.noise_experiment import NoiseExperimentConfig
+from heca.experiments.noise_experiment import NoiseExperimentConfig
 
-from hoopgn.storages.storage import StorageConfig
+from heca.storages.storage import StorageConfig
 
 from cli.cmd_train import TrainRunnerConfig, TrainRunner
 
