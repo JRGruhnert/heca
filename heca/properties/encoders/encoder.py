@@ -2,13 +2,13 @@ from dataclasses import dataclass
 
 from torch import nn
 
-from heca.misc.classes import StorageClass
+from heca.misc.classes import Persistable
 from heca.heca_gnn.mlp import StandardMLP
 
 
-class PropertyEncoder(StorageClass, nn.Module):
+class PropertyEncoder(Persistable, nn.Module):
     @dataclass(kw_only=True)
-    class Config(StorageClass.Config):
+    class Config(Persistable.Config):
         in_dim: int
         out_dim: int = 32
         hidden_dim: int | None = None

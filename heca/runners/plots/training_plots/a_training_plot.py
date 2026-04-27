@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from heca.runners.plotters.hoopgn_plotters.training_plots.training_plot import (
+from heca.runners.plots.training_plots.training_plot import (
     TrainingPlot,
     TrainingPlotConfig,
 )

@@ -1,16 +1,13 @@
 from dataclasses import dataclass
 from tensordict import TensorDict
 from heca.misc.td import TDEntities
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 
 
-class Converter(ConfigClass):
+class Converter(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         label: str
-
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
 
     def __call__(self, observation) -> TensorDict:
         raise NotImplementedError(
@@ -19,10 +16,18 @@ class Converter(ConfigClass):
 
 
 class HecaConverter(Converter):
+    @dataclass(kw_only=True)
+    class Config(Converter.Config):
+        pass
+
     def __call__(self, obs) -> TDEntities:
         raise NotImplementedError()
 
 
 class LeafConverter(Converter):
+    @dataclass(kw_only=True)
+    class Config(Converter.Config):
+        pass
+
     def __call__(self, obs) -> TensorDict:
         raise NotImplementedError()

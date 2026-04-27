@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from heca.converters.calvin_hoop import CalvinHoopConverter
+from heca.converters.calvin_heca import CalvinHecaConverter
 from heca.converters.calvin_tapas import CalvinTapasConverter
 from heca.converters.converter import HecaConverter, LeafConverter
 from heca.environments.environment import Environment
@@ -43,7 +43,7 @@ class CalvinEnvironment(Environment):
 
     @dataclass(kw_only=True)
     class Config(Environment.Config):
-        hoop_cv: HecaConverter.Config = CalvinHoopConverter.Config()
+        hoop_cv: HecaConverter.Config = CalvinHecaConverter.Config()
         leaf_cv: LeafConverter.Config = CalvinTapasConverter.Config()
 
         cc: CalvinConfig = CalvinConfig(

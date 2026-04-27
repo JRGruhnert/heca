@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.misc.hardware import device
 from heca.heca_gnn.hecagn import HecaGN
 from heca.misc import logger
@@ -18,9 +18,9 @@ class AnnealingConfig:
     max_epochs: int = 1000
 
 
-class PPO(ConfigClass):
+class PPO(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         # PPO Hyperparameters
         batch_size: int = 2048
         mini_batch_size: int = 64

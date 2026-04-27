@@ -4,59 +4,52 @@ import torch
 
 from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.misc import logger
-from heca.observation.td_entity import TDEntity
-from heca.runners.plotters.plots.entity_3d import (
+from heca.misc.td import TDEntity
+from heca.runners.plotter import HecaPlotter
+from heca.runners.plots.entity_3d import (
     Entity3DHelper,
     Entity3DHelperConfig,
     Entity3DHelperConfig,
     Entity3DMode,
     EntityPoint,
 )
-from heca.runners.plotters.skill_plotters.skill_plotter import (
-    SkillPlotter,
-    SkillPlotterConfig,
-)
-from heca.properties.features.conditions.condition import (
-    PropertyCondition,
-)
-from heca.properties.states.area import Area
+
+
 from heca.agents.agent import Agent
 
 
-@dataclass
-class SkillConditionsPlotterConfig(SkillPlotterConfig):
-    title: str = "Skill Conditions"
-    subdir: str = "conditions"
-    name: str = "conditions"
-    entity3d: Entity3DHelperConfig = Entity3DHelperConfig(
-        mode=Entity3DMode.DELTAS,
-    )
-    area: Area.Config = CalvinAreaConfig()
+class HecaConditionPlotter(HecaPlotter):
+    @dataclass
+    class Config(HecaPlotter.Config):
+        title: str = "Skill Conditions"
+        subdir: str = "conditions"
+        name: str = "conditions"
+        entity3d: Entity3DHelperConfig = Entity3DHelperConfig(
+            mode=Entity3DMode.DELTAS,
+        )
+        area: CalvinAreaConfig = CalvinAreaConfig()
 
-
-class SkillConditionsPlot(SkillPlotter):
-    def __init__(self, config: SkillConditionsPlotterConfig):
-        super().__init__(config)
-        self.config = config
-        self.entity_dict = {e.cfg.label: e for e in self.entities}
-        self.entity3d = Entity3DHelper(config.entity3d)
+    def __init__(self, cfg: Config):
+        super().__init__(cfg)
+        self.cfg = cfg
+        self.entity3d = Entity3DHelper(cfg.entity3d)
 
     def reset(self):
-        self.entity3d = Entity3DHelper(self.config.entity3d)
+        self.entity3d = Entity3DHelper(self.cfg.entity3d)
 
-    def plot_content(self, skill: Agent):
-        self.config.name = self.config.subdir + "_" + skill.cfg.label
+    def plot_content(self, agent: Agent):
+        self.cfg.name = self.cfg.subdir + "_" + agent.cfg.query.label
         for entity in self.entities:
             label = entity.cfg.label
             self.entity3d.set_entity(
                 entity=entity,
-                current=self.make_td_entity(label, skill.precons),
-                goal=self.make_td_entity(label, skill.postcons),
+                current=self.make_td_entity(label, agent.precons),
+                goal=self.make_td_entity(label, agent.postcons),
                 different=True,  # Makes no sense otherwise
                 solved=False,  # We dont support that currently
             )
         self.entity3d.show_entities()
-        self.entity3d.show_areas(self.config.area)
+        self.entity3d.show_areas(self.cfg.area)
         self.entity3d.finish()
 
     def make_td_entity(
@@ -75,7 +68,7 @@ class SkillConditionsPlot(SkillPlotter):
             if l not in conditions:
                 skip = True
                 logger.debug(
-                    f"Missing condition {l} for entity {label} in skill {self.config.name}"
+                    f"Missing condition {l} for entity {label} in skill {self.cfg.name}"
                 )
                 break
         if not skip:

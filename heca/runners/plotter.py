@@ -8,7 +8,7 @@ import matplotlib.patches as mpatches
 
 from heca.misc import logger
 from heca.entities.entity import Entity
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.properties.property import Property
 from heca.agents.agent import Agent
 
@@ -209,49 +209,24 @@ class StyleConfig:
     )
 
 
-class Plotter(ConfigClass):
+class HecaPlotter(Configurable):
     @dataclass
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         title: str
         name: str
         subdir: str
         rootdir: str = "plots"
         style: StyleConfig = StyleConfig()
-        show: bool = False
-        save: bool = True
+        dry_run: bool = False
+        agents: list[Agent.Config] = field(default_factory=list)
+        plots: list[Plot.Config]
 
     def __init__(self, config: Config):
         self.config = config
-        self.skills: list[Agent] = []
-        self.entities: list[Entity] = []
-        self.properties: list[Property] = []
 
     @abstractmethod
-    def plot_content(self, *args, **kwargs):
+    def make_content(self, plot, *args, **kwargs):
         raise NotImplementedError()
 
-    @abstractmethod
-    def reset(self):
-        raise NotImplementedError()
-
-    def plot(self, *args, **kwargs):
-        self.plot_content(*args, **kwargs)
-        plt.title(self.config.title)
-        plt.tight_layout()
-        if self.config.save:
-            logger.info(f"Saving plot to {self.config.name} in {self.config.subdir}")
-            save_dir = os.path.join(self.config.rootdir, self.config.subdir)
-            os.makedirs(save_dir, exist_ok=True)
-            plot_path = os.path.join(save_dir, f"{self.config.name}_plot.png")
-            plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-        if self.config.show:
-            logger.debug("Showing plot")
-            plt.show()
-        plt.close()
-
-    def init(
-        self, skills: list[Agent], entities: list[Entity], properties: list[Property]
-    ):
-        self.skills = skills
-        self.entities = entities
-        self.properties = properties
+    def plot(self):
+        

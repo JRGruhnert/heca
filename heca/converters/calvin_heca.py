@@ -8,7 +8,7 @@ from heca.converters.converter import HecaConverter
 from heca.misc.td import TDProperties, TDEntities
 
 
-class CalvinHoopConverter(HecaConverter):
+class CalvinHecaConverter(HecaConverter):
     @dataclass(kw_only=True)
     class Config(HecaConverter.Config):
         label: str = "v1"

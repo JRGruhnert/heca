@@ -3,13 +3,13 @@ from dataclasses import dataclass
 
 from tensordict import TensorDict
 from heca.agents.agent import AgentFeedback
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.misc.td import TDScene
 
 
-class Evaluator(ConfigClass):
+class Evaluator(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         success_reward: float
 
     @abstractmethod

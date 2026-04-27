@@ -3,13 +3,13 @@ from typing import Callable
 
 import torch
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.misc.area import Area
 
 
-class State(ConfigClass):
+class State(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         values: set[str]
         labeling: Callable[[torch.Tensor], str | None]
 

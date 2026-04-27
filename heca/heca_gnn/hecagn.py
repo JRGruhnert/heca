@@ -8,7 +8,7 @@ from torch_geometric.data import HeteroData
 
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.misc import hardware, logger
-from heca.misc.classes import StorageClass
+from heca.misc.classes import Persistable
 from heca.misc.td import TDScene
 from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.bases.base import BaseNetwork
@@ -19,13 +19,13 @@ from typing import TypeVar, Type
 V = TypeVar("V", bound="HecaGN")
 
 
-class HecaGN(StorageClass, nn.Module):
+class HecaGN(Persistable, nn.Module):
     @dataclass(kw_only=True)
-    class Query(StorageClass.Query):
+    class Query(Persistable.Query):
         label: str
 
     @dataclass(kw_only=True)
-    class Config(StorageClass.Config):
+    class Config(Persistable.Config):
         query: "HecaGN.Query"
         base: BaseNetwork.Config
         encoders: set[PropertyEncoder.Query]
@@ -39,7 +39,7 @@ class HecaGN(StorageClass, nn.Module):
         self.encoders = nn.ModuleDict(
             {query.label: PropertyEncoder.search(query) for query in self.cfg.encoders}
         )
-        self.base = BaseNetwork.from_config(self.cfg.base)
+        self.base = BaseNetwork.create(self.cfg.base)
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
         self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
 

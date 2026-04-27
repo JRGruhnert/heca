@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from functools import cached_property
 from pathlib import Path
 from typing import Type
@@ -25,6 +26,12 @@ from typing import TypeVar, Type
 V = TypeVar("V", bound="Heca")
 
 
+class HecaMode(Enum):
+    TRAIN = "train"
+    EXPLAIN = "explain"
+    EVALUATE = "evaluate"
+
+
 class Heca(Agent):
     @dataclass(kw_only=True)
     class Query(Agent.Query):
@@ -35,15 +42,15 @@ class Heca(Agent):
         network: HecaGN.Config
         generator: HecaGenerator.Config
         evaluator: HecaEvaluator.Config
-        ppo: PPO.Config
         agents: set[Agent.Query]
-        training: bool = False
+        ppo: PPO.Config
+        mode: HecaMode = HecaMode.EVALUATE
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.network = HecaGN.from_config(cfg.network)
-        self.generator = HecaGenerator.from_config(cfg.generator)
-        self.evaluator = HecaEvaluator.from_config(cfg.evaluator)
+        self.network = HecaGN.create(cfg.network)
+        self.generator = HecaGenerator.create(cfg.generator)
+        self.evaluator = HecaEvaluator.create(cfg.evaluator)
         self.explainer = HoopgnExplainer(
             self.network,
             algorithm=CaptumExplainer("Saliency"),
@@ -65,19 +72,22 @@ class Heca(Agent):
 
     def act(self, x: TDScene, y: TDScene, e: Entity) -> tuple[TDScene, AgentFeedback]:
         z = self.apply_expert_knowledge(y, e)
-        if self.cfg.training:
+        if self.cfg.mode == HecaMode.EXPLAIN:
+            variants, logits, value = self.predict(x, z)
+        else:
             with torch.no_grad():
                 variants, logits, value = self.predict(x, z)
-                dist = Categorical(logits=logits)
-                action = dist.sample()
+
+        if self.cfg.mode == HecaMode.TRAIN:
+            dist = Categorical(logits=logits)
+            action = dist.sample()
         else:
-            variants, logits, value = self.predict(x, z)
             action = logits.argmax(dim=-1)
 
         agent, entity = variants[action]
         z, fb = Agent.search(agent).act(x, z, entity)
         reward, done, terminal = self.evaluator.step(z, fb)
-        if self.cfg.training:
+        if self.cfg.mode == HecaMode.TRAIN:
             logprob: torch.Tensor = dist.log_prob(action)
             can_learn = self.ppo.step(
                 x,
@@ -89,10 +99,11 @@ class Heca(Agent):
                 done,
                 terminal,
             )
-        else:
-            can_learn = False
         return z, AgentFeedback(
-            reward=reward, done=done, terminal=terminal, can_learn=can_learn
+            reward=reward,
+            done=done,
+            terminal=terminal,
+            can_learn=can_learn,
         )
 
     def predict(
@@ -149,38 +160,6 @@ class Heca(Agent):
                 y_values[env.cfg.query.label] = env.sample()
             y = TDScene(heca=TDEntities(y_values))
         return x, y
-
-    def train(self, episodes: int):
-        for ep in range(episodes):
-            x, y = self.sample(self.meta)
-            terminal = False
-            while not terminal:
-                reward, fb = self.act(x, y, self.meta)
-                if fb.can_learn:
-                    xp, lvlup = self.ppo.learn(ep)
-                    self.network.upgrade(xp)
-                    self.network.save(
-                        self.network.cfg.query,
-                        epoch=ep,
-                        label="best" if lvlup else "latest",
-                    )
-                terminal = fb.terminal
-                logger.info(f"Epoch {ep}: Reward={reward:.4f}, Done={terminal}")
-
-    def explain(self):
-        x, y = self.sample(self.meta)
-        x, y = self.network.encode(x, y)
-        _, data = self.generator(x, y)
-        action = self.network.actor(data)  # Forward pass to populate
-        explanation = self.explainer(
-            data.x_dict,
-            data.edge_index_dict,
-            data.edge_attr_dict,
-            index=action.argmax(dim=-1),
-        )
-
-        assert isinstance(explanation, HeteroExplanation)
-        return explanation
 
     @cached_property
     def precons(self) -> list[Entity]:

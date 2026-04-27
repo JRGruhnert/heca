@@ -3,12 +3,12 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 
 
-class BaseNetwork(ConfigClass, nn.Module):
+class BaseNetwork(Configurable, nn.Module):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         feature_dim: int = 32
 
     def __init__(self, cfg: Config):

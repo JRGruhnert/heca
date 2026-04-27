@@ -3,12 +3,12 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 
 
-class Area(ConfigClass):
+class Area(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         labels: set[str]
         spawn_surfaces: dict[str, list[list[float]]]
         eval_surfaces: dict[str, list[list[float]]]

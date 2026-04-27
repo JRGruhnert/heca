@@ -14,8 +14,8 @@ from heca.evaluators.evaluator import EvaluatorConfig
 from heca.evaluators.set_evaluator import SetEvaluatorConfig
 from heca.experiments.noise_experiment import NoiseExperimentConfig
 from heca.hoops.v1 import MPGNNConfig
-from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
-    HoopGNPlot,
+from heca.runners.plotters.hecas.heca import (
+    HecaPlotter,
     HecaPlotterConfig,
 )
 from heca.properties.states.area import AreaStateConfig
@@ -23,7 +23,7 @@ from heca.experiments import select_experiment
 from heca.agents.hecas.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from heca.experiments.experiment import ExperimentConfig
 from heca.observation.td_properties import TDProperties
-from heca.runners.plotters.plots.entity_3d import (
+from heca.runners.plots.entity_3d import (
     Entity3DHelper,
     Entity3DHelperConfig,
     Entity3DMode,
@@ -71,7 +71,7 @@ class SpawnAreaPlotterConfig(HecaPlotterConfig):
     )
 
 
-class SpawnAreaPlotter(HoopGNPlot):
+class SpawnAreaPlotter(HecaPlotter):
     def __init__(self, config: SpawnAreaPlotterConfig):
         self.config = config
         self.experiment = select_experiment(config.experiment)

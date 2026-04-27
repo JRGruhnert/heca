@@ -2,14 +2,14 @@ from dataclasses import dataclass
 
 from heca.agents.agent import Agent
 from heca.entities.entity import Entity
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.misc.td import TDScene
 from torch_geometric.data import Batch, HeteroData
 
 
-class HecaGenerator(ConfigClass):
+class HecaGenerator(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         pass
 
     def __init__(self, cfg: Config):

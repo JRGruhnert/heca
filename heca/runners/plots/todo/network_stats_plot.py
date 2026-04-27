@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from heca.plotters.helper.helper import *
+from heca.plots.helper.helper import *
 
 domains = ["slider", "red/pink/blue", "sr", "srp", "srpb"]
 gnn_flops = [125840, 125936, 161840, 197840, 233840]

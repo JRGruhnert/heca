@@ -5,35 +5,35 @@ from heca.misc.td import TDWorld
 from heca.properties.property import Property
 
 
-class MetaEntity(Entity):
-    @classmethod
-    def ensure_same_meta(cls, entities: list[Entity]) -> str:
+class MetaEntity:
+    @staticmethod
+    def ensure_same_meta(entities: list[Entity]) -> str:
         if len(set(e.Config.meta for e in entities)) > 1:
             raise ValueError("All entities must have the same meta")
         return entities[0].Config.meta
 
-    @classmethod
-    def ensure_same_version(cls, entities: list[Entity]) -> str:
+    @staticmethod
+    def ensure_same_version(entities: list[Entity]) -> str:
         if len(set(e.cfg.version for e in entities)) > 1:
             raise ValueError("All entities must have the same environment version")
         return entities[0].cfg.version
 
-    @classmethod
-    def ensure_same_env(cls, entities: list[RealEntity]) -> Environment.Query:
+    @staticmethod
+    def ensure_same_env(entities: list[RealEntity]) -> Environment.Query:
         if len(set(e.Config.env for e in entities)) > 1:
             raise ValueError("All entities must have the same environment")
         return entities[0].Config.env
 
-    @classmethod
-    def make_properties(cls, entities: list[Entity]) -> set[Property.Config]:
+    @staticmethod
+    def make_properties(entities: list[Entity]) -> set[Property.Config]:
         raise NotImplementedError()
 
-    @classmethod
+    @staticmethod
     def create(
-        cls, meta: str, version: str, props: set[Property.Config], label: str
+        meta: str, version: str, props: set[Property.Config], label: str
     ) -> Entity:
         return Entity(
-            cfg=cls.Config(
+            cfg=Entity.Config(
                 label=label,
                 meta=meta,
                 version=version,

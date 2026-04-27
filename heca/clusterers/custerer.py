@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.misc.td import TDScene
 
 
-class Clusterer(ConfigClass):
+class Clusterer(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         pass
 
     def __init__(self, cfg: Config):

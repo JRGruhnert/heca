@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from heca.plotters.helper.helper import *
+from heca.plots.helper.helper import *
 from heca.misc.data import TrainingRunData, RunDataCollection
 
 

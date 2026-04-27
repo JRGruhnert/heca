@@ -2,21 +2,21 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-from heca.misc.classes import QueryClass
+from heca.misc.classes import Searchable
 from heca.misc.td import TDScene
 from heca.converters.converter import HecaConverter, LeafConverter
 
 
-class Environment(QueryClass):
+class Environment(Searchable):
     @dataclass(kw_only=True)
-    class Config(QueryClass.Config):
+    class Config(Searchable.Config):
         heca_cv: HecaConverter.Config
         leaf_cv: LeafConverter.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.heca_cv = HecaConverter.from_config(self.cfg.heca_cv)
-        self.leaf_cv = LeafConverter.from_config(self.cfg.leaf_cv)
+        self.heca_cv = HecaConverter.create(self.cfg.heca_cv)
+        self.leaf_cv = LeafConverter.create(self.cfg.leaf_cv)
 
     def to_observation(self, obs) -> TDScene:
         heca = self.heca_cv(obs)

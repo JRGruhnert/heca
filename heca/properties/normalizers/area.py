@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.properties.normalizers.boundary import (
     BoundaryNormalizer,
 )
@@ -11,9 +11,9 @@ from heca.misc.state import State
 from heca.properties.default.v1.area import CalvinAreaConfig
 
 
-class AreaGTModifier(ConfigClass):
+class AreaGTModifier(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         area: Area.Config
 
     def __init__(self, cfg: Config):
@@ -42,7 +42,7 @@ class AreaNormalizer(BoundaryNormalizer):
         self.cfg = cfg
         self.lower = torch.tensor(cfg.lower, dtype=torch.float32)
         self.upper = torch.tensor(cfg.upper, dtype=torch.float32)
-        self.modifier = AreaGTModifier.from_config(cfg.modifier)
+        self.modifier = AreaGTModifier.create(cfg.modifier)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         cx = torch.clamp(x, self.lower, self.upper)

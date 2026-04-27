@@ -3,18 +3,18 @@ from dataclasses import dataclass
 from pathlib import Path
 import torch
 from heca.properties.extractors.extractor import PropertyExtractor
-from heca.misc.classes import StorageClass
+from heca.misc.classes import Persistable
 
 
-class ImagePropertyExtractor(PropertyExtractor, StorageClass):
+class ImagePropertyExtractor(PropertyExtractor, Persistable):
     @dataclass(kw_only=True)
-    class Query(StorageClass.Query):
+    class Query(Persistable.Query):
         scene: str
         entity: str
         property: str
 
     @dataclass(kw_only=True)
-    class Config(PropertyExtractor.Config, StorageClass.Config):
+    class Config(PropertyExtractor.Config, Persistable.Config):
         pass
 
     def __init__(self, cfg: Config):

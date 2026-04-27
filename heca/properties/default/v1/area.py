@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 
-
-from heca.entities.entity import Entity
 from heca.properties.v1 import PropertyV1
-from heca.environments.calvin import CalvinAreaConfig, CalvinEnvironment
+from heca.environments.calvin import CalvinAreaConfig
 from heca.properties.encoders.encoder import PropertyEncoder
 
 from heca.properties.encoders.v1.area import AreaEncoder

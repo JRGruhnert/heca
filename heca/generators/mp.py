@@ -23,7 +23,7 @@ class MPGenerator(HecaGenerator):
         super().__init__(cfg)
         self.cfg = cfg
         self.agents = [LeafAgent.search(query) for query in self.cfg.agents]
-        self.meta = Entity.from_config(self.cfg.entity)
+        self.meta = Entity.create(self.cfg.entity)
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene

@@ -1,12 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from heca.misc.data import TrainingRunData
-from heca.plotters.helper.helper import *
+from heca.plots.helper.helper import *
 from dataclasses import dataclass
 
 from heca.misc.data import TrainingRunData
-from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
-    HoopGNPlot,
+from heca.runners.plotters.hecas.heca import (
+    HecaPlotter,
     HecaPlotterConfig,
 )
 
@@ -16,7 +16,7 @@ class TTimePlotConfig(HecaPlotterConfig):
     name: str = "comparison_all_time"
 
 
-class TTimePlot(HoopGNPlot):
+class TTimePlot(HecaPlotter):
     def __init__(self, config: TTimePlotConfig):
         super().__init__(config)
         self.config = config

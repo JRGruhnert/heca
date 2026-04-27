@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 from heca.properties.property import Property
 
 
-class Entity(ConfigClass):
+class Entity(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         label: str
         meta: str = "root"
         version: str
@@ -29,6 +29,6 @@ class Entity(ConfigClass):
             self.cfg.properties
         )
         self.properties: dict[str, tuple[Property, float]] = {
-            v.label: (Property.from_config(v), w)
+            v.label: (Property.create(v), w)
             for v, w in zip(self.cfg.properties, weights)
         }

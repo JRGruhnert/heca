@@ -71,7 +71,7 @@ class TapasAgent(LeafAgent):
         self.cfg = cfg
         self.prds: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
-        self.entity = Entity.from_config(self.cfg.entity)
+        self.entity = Entity.create(self.cfg.entity)
 
     def predict(self, x: TDScene, y: TDScene) -> np.ndarray | None:
         if self.prds is None or self.prds.is_finished:

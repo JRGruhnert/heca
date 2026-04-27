@@ -4,8 +4,8 @@ from glob import glob
 import re
 
 from heca.misc.data import TrainingRunData
-from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
-    HoopGNPlot,
+from heca.runners.plotters.hecas.heca import (
+    HecaPlotter,
     HecaPlotterConfig,
 )
 
@@ -21,7 +21,7 @@ class TrainingPlotConfig(HecaPlotterConfig):
     )
 
 
-class TrainingPlot(HoopGNPlot):
+class TrainingPlot(HecaPlotter):
     def __init__(self, config: TrainingPlotConfig):
         super().__init__(config)
         self.config = config

@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from heca.misc.data import TrainingRunData, RunDataCollection
-from heca.plotters.helper.helper import *
+from heca.plots.helper.helper import *
 
 dom = [
     ["blue", "slider"],

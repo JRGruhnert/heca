@@ -1,18 +1,17 @@
 from typing import cast
 
 from cli.hoopgn import config_handler
-from heca.runners.skill.plot_skill_runner import (
-    SkillPlotRunner,
-    SkillPlotRunnerConfig,
-)
+
 import click
+
+from heca.runners.plotter import HecaPlotter
 
 
 @click.command(help="Commands related to individual skills.")
 @click.pass_context
 def plot(ctx):
     cfg = cast(
-        SkillPlotRunnerConfig,
-        config_handler(path=ctx.obj["hoopgn"], configtype=SkillPlotRunnerConfig),
+        HecaPlotter.Config,
+        config_handler(path=ctx.obj["hoopgn"], configtype=HecaPlotter.Config),
     )
-    SkillPlotRunner(cfg).run()
+    HecaPlotter(cfg).run()

@@ -1,12 +1,12 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 import torch
-from heca.misc.classes import ConfigClass
+from heca.misc.classes import Configurable
 
 
-class PropertyRuler(ConfigClass):
+class PropertyRuler(Configurable):
     @dataclass(kw_only=True)
-    class Config(ConfigClass.Config):
+    class Config(Configurable.Config):
         pass
 
     def __init__(self, cfg: Config):
