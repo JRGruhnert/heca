@@ -2,14 +2,14 @@ from abc import abstractmethod
 from dataclasses import dataclass
 
 import numpy as np
-from heca.misc.classes import Searchable
 from heca.misc.td import TDScene
+from heca.classes.register import Registerable
 from heca.converters.converter import HecaConverter, LeafConverter
 
 
-class Environment(Searchable):
+class Environment(Registerable):
     @dataclass(kw_only=True)
-    class Config(Searchable.Config):
+    class Config(Registerable.Config):
         heca_cv: HecaConverter.Config
         leaf_cv: LeafConverter.Config
 

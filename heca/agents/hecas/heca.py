@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from functools import cached_property
 from pathlib import Path
@@ -10,16 +10,14 @@ from heca.agents.leafs.leaf import LeafAgent
 from heca.entities.entity import Entity
 from heca.entities.meta import MetaEntity
 from heca.environments.environment import Environment
+from heca.environments.meta import MetaEnvironment
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
 from heca.generators.generator import HecaGenerator
-from heca.heca_gnn.hecagn import HecaGN
-
-from heca.misc import logger
-from heca.misc.explainer import HoopgnExplainer
+from heca.heca_gnn.network import HecaNetwork
 from heca.misc.ppo import PPO
 from heca.misc.td import TDEntities, TDScene
-from torch_geometric.explain import CaptumExplainer, HeteroExplanation
+from torch_geometric.explain import CaptumExplainer, Explainer
 
 from typing import TypeVar, Type
 
@@ -29,49 +27,52 @@ V = TypeVar("V", bound="Heca")
 class HecaMode(Enum):
     TRAIN = "train"
     EXPLAIN = "explain"
-    EVALUATE = "evaluate"
+    EVAL = "evaluate"
 
 
 class Heca(Agent):
     @dataclass(kw_only=True)
-    class Query(Agent.Query):
-        version: str
-
-    @dataclass(kw_only=True)
     class Config(Agent.Config):
-        network: HecaGN.Config
         generator: HecaGenerator.Config
         evaluator: HecaEvaluator.Config
+        network: HecaNetwork.Query
         agents: set[Agent.Query]
-        ppo: PPO.Config
-        mode: HecaMode = HecaMode.EVALUATE
+        ppo: PPO.Query
+        mode: HecaMode = HecaMode.EVAL
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.network = HecaGN.create(cfg.network)
+        if self.cfg.mode == HecaMode.TRAIN:
+            self.ppo = PPO.load(self.cfg.ppo, self.cfg.network)
+            self.network = self.ppo.collector()
+        else:
+            self.network = HecaNetwork.load(cfg.network)
+
+        if self.cfg.mode == HecaMode.EXPLAIN:
+            self.explainer = Explainer(
+                self.network,
+                algorithm=CaptumExplainer("Saliency"),
+                explanation_type="model",
+                node_mask_type="attributes",
+                edge_mask_type="object",
+                model_config=dict(
+                    mode="multiclass_classification",
+                    task_level="node",
+                    return_type="probs",
+                ),
+            )
+
         self.generator = HecaGenerator.create(cfg.generator)
         self.evaluator = HecaEvaluator.create(cfg.evaluator)
-        self.explainer = HoopgnExplainer(
-            self.network,
-            algorithm=CaptumExplainer("Saliency"),
-            explanation_type="model",
-            node_mask_type="attributes",
-            edge_mask_type="object",
-            model_config=dict(
-                mode="multiclass_classification",
-                task_level="node",
-                return_type="probs",
-            ),
-        )
-        self.ppo = PPO(cfg.ppo, hoop=self.network)
+        # TODO: Create meta here correctly and post vs precons vs both???
         agents = Agent.search_multiple(list(self.cfg.agents))
         precons: list[Entity] = []
         for agent in agents:
             precons.extend(agent.precons)
-        self.meta = MetaEntity.merge(precons, self.cfg.query.label)
+        self.meta = MetaEntity.merge(precons, self.cfg.network.label)
 
-    def act(self, x: TDScene, y: TDScene, e: Entity) -> tuple[TDScene, AgentFeedback]:
-        z = self.apply_expert_knowledge(y, e)
+    def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
+        z = self.apply_expert_knowledge(y, self.meta)
         if self.cfg.mode == HecaMode.EXPLAIN:
             variants, logits, value = self.predict(x, z)
         else:
@@ -128,26 +129,9 @@ class Heca(Agent):
         else:
             self.postcons
 
-    @property
-    def environments(self) -> list[Environment]:
-        envs = set()
-        for agent_query in self.cfg.agents:
-            agent = Agent.search(agent_query)
-            if isinstance(agent, LeafAgent):
-                envs.add(agent.cfg.query.env)
-            elif isinstance(agent, Heca):
-                envs.update(agent.environments)
-        return [Environment.search(cfg) for cfg in envs]
-
     def sample(self, e: Entity) -> tuple[TDScene, TDScene]:
-        x_values = dict()
-        y_values = dict()
-        for env in self.environments:
-            x_values[env.cfg.query.label] = env.sample()
-            y_values[env.cfg.query.label] = env.sample()
-
-        x = TDScene(heca=TDEntities(x_values))
-        y = TDScene(heca=TDEntities(y_values))
+        envs: list[Environment.Query] = []
+        x, y = MetaEnvironment.sample(envs, e)
         attempts = 0
         while not self.evaluator.is_sample(x, y, e):
             attempts += 1

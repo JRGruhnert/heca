@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from heca.agents.agent import Agent
 from heca.entities.entity import Entity
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 from heca.misc.td import TDScene
 from torch_geometric.data import Batch, HeteroData
 

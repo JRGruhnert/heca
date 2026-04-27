@@ -7,5 +7,5 @@ RealEntity.Config(
     env=CalvinEnvironment.Query(),
     label="sr",
     version="v1",
-    properties=set(base + slide_base + red_base),
+    props=set(base + slide_base + red_base),
 )

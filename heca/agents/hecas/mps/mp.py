@@ -13,7 +13,7 @@ from heca.evaluators.heca import HecaEvaluator
 from heca.generators.mp import MPGenerator
 from heca.generators.generator import HecaGenerator
 from heca.heca_gnn.bases.v1 import V1Network
-from heca.heca_gnn.hecagn import HecaGN
+from heca.heca_gnn.network import HecaNetwork
 from heca.misc.ppo import PPO
 
 
@@ -37,14 +37,14 @@ class MPHeca(Heca):
         )
         evaluator: HecaEvaluator.Config = HecaEvaluator.Config()
         ppo: PPO.Config = PPO.Config()
-        heca: HecaGN.Config = field(init=False)
+        heca: HecaNetwork.Config = field(init=False)
         generator: HecaGenerator.Config = field(init=False)
         training: bool = False
         max_steps: int = 10
 
         def __post_init__(self):
-            self.heca = HecaGN.Config(
-                query=HecaGN.Query(label="mp"),
+            self.heca = HecaNetwork.Config(
+                query=HecaNetwork.Query(label="mp"),
                 base=V1Network.Config(),
                 encoders=self.encoders,
             )

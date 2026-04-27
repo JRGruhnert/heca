@@ -6,20 +6,19 @@ import torch
 
 from dataclasses import dataclass
 from heca.agents.agent import Agent, AgentFeedback
+from heca.classes.register import Registerable
 from heca.entities.entity import Entity
-from heca.properties.property import Property
-from heca.environments.environment import Environment
 from heca.misc.td import TDScene, TDEntity
 
 
 class LeafAgent(Agent):
-    @dataclass(kw_only=True)
-    class Query(Agent.Query):
-        env: Environment.Query
+    @dataclass(frozen=True, kw_only=True)
+    class Query(Registerable.Query):
+        type: str
 
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        query: "LeafAgent.Query"
+        pass
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

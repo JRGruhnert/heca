@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from tensordict import TensorDict
 from heca.misc.td import TDEntities
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 
 
 class Converter(Configurable):

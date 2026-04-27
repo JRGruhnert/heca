@@ -1,6 +1,6 @@
 import torch
 from dataclasses import dataclass
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.encoders.encoder import PropertyEncoder

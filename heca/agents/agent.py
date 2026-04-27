@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
 
-from heca.misc.classes import Persistable
+from heca.classes.register import Registerable
 from heca.entities.entity import Entity
 from heca.misc.td import TDScene
 
@@ -15,9 +15,9 @@ class AgentFeedback:
     can_learn: bool = False
 
 
-class Agent(Persistable):
+class Agent(Registerable):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
+    class Config(Registerable.Config):
         pass
 
     def __init__(self, cfg: Config):

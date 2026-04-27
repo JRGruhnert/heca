@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 import torch
+import copy
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.misc.classes import Configurable
+from heca.classes.persist import Persistable
+from heca.heca_gnn.network import HecaNetwork
 from heca.misc.hardware import device
-from heca.heca_gnn.hecagn import HecaGN
 from heca.misc import logger
 from thop import profile
 
@@ -18,10 +19,17 @@ class AnnealingConfig:
     max_epochs: int = 1000
 
 
-class PPO(Configurable):
+class PPO(Persistable):
+    @dataclass(frozen=True, kw_only=True)
+    class Query(Persistable.Query):
+        pass
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(Persistable.File):
+        pass
+
     @dataclass(kw_only=True)
-    class Config(Configurable.Config):
-        # PPO Hyperparameters
+    class Config(Persistable.Config):
         batch_size: int = 2048
         mini_batch_size: int = 64
         learning_epochs: int = 5
@@ -36,15 +44,13 @@ class PPO(Configurable):
         target_kl: float | None = 0.02
         clip_value_loss: bool = True
 
-    def __init__(self, cfg: Config, hoop: HecaGN):
+    def __init__(self, cfg: Config):
         self.cfg = cfg
-
-        self.hoop = hoop
         self.mse_loss = nn.MSELoss()
-        self.optimizer = torch.optim.AdamW(
-            self.hoop.parameters(),
-            lr=self.cfg.lr,
-        )
+        self.network: HecaNetwork | None = None
+        self.optim: torch.optim.Optimizer | None = None
+
+        # Rollout storage
         self.current: list[TDScene] = []
         self.goal: list[TDScene] = []
         self.actions: list[torch.Tensor] = []
@@ -57,22 +63,28 @@ class PPO(Configurable):
         # Statistics
         self.highscore = float("-inf")
 
+    def load_network(self, query: HecaNetwork.Query):
+        self.network = HecaNetwork.load(query)
+        self.optim = torch.optim.AdamW(self.network.parameters(), lr=self.cfg.lr)
+
     def learn(self, progress: float) -> tuple[dict, bool]:
+        assert self.network is not None
+        assert self.optim is not None
         # Main PPO update loop
         self.mini_batch_loop()
 
         # Update learning rate with linear annealing
         if self.cfg.lr_annealing:
-            assert (
-                progress is not None
-            ), "Progress must be provided for learning rate annealing"
+            assert progress is not None
             lr = self.cfg.lr * (1.0 - progress)
-            for param_group in self.optimizer.param_groups:
+            for param_group in self.optim.param_groups:
                 param_group["lr"] = lr
 
-        return self.hoop.state_dict(), self.flush_and_rate()
+        return self.network.state_dict(), self.flush_and_rate()
 
     def mini_batch_loop(self):
+        assert self.network is not None
+        assert self.optim is not None
         adv, rtn = self._compute_gae(
             self.rewards,
             self.values,
@@ -104,8 +116,8 @@ class PPO(Configurable):
                 # Normalize advantages per minibatch
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
-                # Evaluate policy
-                logprobs, state_values, dist_new = self.hoop.evaluate(
+                # Evaluate policy #TODO: how did evaluate change here
+                logprobs, state_values, dist_new = self.network.evauate(
                     mb_obs, mb_goal, mb_actions
                 )
 
@@ -154,10 +166,10 @@ class PPO(Configurable):
                 )
 
                 ### Update gradients on mini-batch
-                self.optimizer.zero_grad()
+                self.optim.zero_grad()
                 loss.mean().backward()
-                clip_grad_norm_(self.hoop.parameters(), self.cfg.max_grad_norm)
-                self.optimizer.step()
+                clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
+                self.optim.step()
 
                 # Collect metrics (will keep last minibatch values)
                 with torch.no_grad():
@@ -190,8 +202,8 @@ class PPO(Configurable):
     def _compute_gae(
         self, rewards: list[float], values: list[torch.Tensor], terminals: list[bool]
     ):
-        assert self.hoop is not None, "Policy must be set before learning"
-        assert self.optimizer is not None, "Optimizer must be set before learning"
+        assert self.network is not None, "Policy must be set before learning"
+        assert self.optim is not None, "Optimizer must be set before learning"
 
         advantages = []
         gae = 0
@@ -233,11 +245,13 @@ class PPO(Configurable):
         }
 
     def measure_flops(self, obs: TDProperties, goal: TDProperties) -> tuple[int, int]:
-        assert self.hoop is not None, "Hoop must be set before measuring FLOPs"
+        assert self.network is not None, "Hoop must be set before measuring FLOPs"
         with torch.no_grad():
             obs_batch = [obs]
             goal_batch = [goal]
-            result = profile(self.hoop, inputs=(obs_batch, goal_batch), verbose=False)
+            result = profile(
+                self.network, inputs=(obs_batch, goal_batch), verbose=False
+            )
             return int(result[0]), int(result[1])
 
     def flush_and_rate(self):
@@ -256,7 +270,7 @@ class PPO(Configurable):
         return False
 
     def to_disk(self, tag: str):
-        assert self.optimizer is not None, "Optimizer must be set before saving"
+        assert self.optim is not None, "Optimizer must be set before saving"
         logger.info(f"Saving {tag} buffer")
         torch.save(
             {
@@ -266,7 +280,7 @@ class PPO(Configurable):
                 "rewards": torch.tensor(self.rewards),
                 "success": torch.tensor(self.success),
                 "terminals": torch.tensor(self.terminals),
-                "optimizer_state": self.optimizer.state_dict(),
+                "optimizer_state": self.optim.state_dict(),
             },
             # TODO: storage path
             "data/" + tag + f"/epoch_data_{0}.pt",
@@ -292,3 +306,17 @@ class PPO(Configurable):
         self.success.append(success)
         self.terminals.append(terminal)
         return len(self.current) >= self.cfg.batch_size
+
+    def collector(self) -> "HecaNetwork":
+        assert self.network is not None, "Network must be set before collecting"
+        return copy.deepcopy(self.network)
+
+    @classmethod
+    def load(cls, query: "PPO.Query", network: HecaNetwork.Query) -> "PPO":
+        ppo = cls.search(query)  # type: ignore
+        ppo.load_network(network)
+        return ppo
+
+    @classmethod
+    def save(cls, query: "PPO.Query", epoch: int, tag: str) -> bool:
+        raise NotImplementedError()

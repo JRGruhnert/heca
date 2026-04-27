@@ -115,8 +115,8 @@ class TDScene(TensorDict):
 
 
 class TDWorld(TensorDict):
-    def __init__(self, data: dict[str, TDScene]):
-        super().__init__(data, batch_size=empty_batchsize)
+    def __init__(self, scenes: dict[str, TDScene]):
+        super().__init__(scenes, batch_size=empty_batchsize)
 
     def scenes(self, label: str) -> TDScene:
         if label in self:

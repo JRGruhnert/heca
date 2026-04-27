@@ -3,8 +3,7 @@ from dataclasses import dataclass
 
 from tensordict import TensorDict
 from heca.agents.agent import AgentFeedback
-from heca.misc.classes import Configurable
-from heca.misc.td import TDScene
+from heca.classes.config import Configurable
 
 
 class Evaluator(Configurable):

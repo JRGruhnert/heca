@@ -37,7 +37,7 @@ class MetaEntity:
                 label=label,
                 meta=meta,
                 version=version,
-                properties=props,
+                props=props,
             )
         )
 
@@ -76,5 +76,3 @@ class MetaEntity:
             d = v[0].evaluate(a[k], b[k])
             values.append(d * v[1])  # Weight the distance by the property weight
         return all(values) if values else False
-
-        # return cls.distance(a, b, e) == 0.0
