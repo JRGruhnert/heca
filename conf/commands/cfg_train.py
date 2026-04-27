@@ -1,38 +1,18 @@
-from conf.properties import get_property_set
-from conf.agents import get_skill_set
-from heca.agents.hecas.hoopgn_agent import HoopGNSkillConfig
-from heca.environments.calvin import CalvinEnvironmentConfig
-from heca.misc.buffer import BufferConfig
-from heca.evaluators.dense import Dense3EvaluatorConfig
-from heca.hoops.v1 import MPGNNConfig
-from heca.experiments.noise_experiment import NoiseExperimentConfig
-from cli.cmd_train import TrainRunnerConfig
+from heca.agents.hecas.heca import Heca
+from heca.agents.hecas.mps.red import RedMPHeca
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import HecaPlotterConfig
+from heca.runners.plotters.hoopgn_plotters.sampling_plotter import (
+    SpawnAreaPlotterConfig,
+)
 
+from heca.runners.runner import HecaRunner
 
-SKILL_TAG = "blue"
-PROPERTY_TAG = "blue"
+plot1 = SpawnAreaPlotterConfig()
+plotters: list[HecaPlotterConfig] = [plot1]
 
-checkpoint_path = "checkpoints/explain/blue/best.pt"
-skills = get_skill_set(SKILL_TAG)
-
-properties = get_property_set(PROPERTY_TAG)
-
-
-cfg = TrainRunnerConfig(
-    skills=skills,
-    properties=properties,
-    agent=HoopGNSkillConfig(
-        network=MPGNNConfig(dim_skill=len(skills), dim_state=len(properties)),
-        buffer=BufferConfig(size=5),
-    ),
-    experiment=NoiseExperimentConfig(
-        environments=[CalvinEnvironmentConfig()],
-        evaluator=Dense3EvaluatorConfig(
-            states_eval=properties,
-            states_network=properties,
-        ),
-        p_skip=0.0,
-        p_rand=0.0,
-        min_steps=len(skills),
-    ),
+heca = RedMPHeca.search_config(query=RedMPHeca.Query(label="red"))
+assert isinstance(heca, Heca.Config)
+cfg = HecaRunner.Config(
+    heca=heca,
+    plotters=plotters,
 )

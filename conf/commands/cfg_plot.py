@@ -1,23 +1,22 @@
-from conf.properties import get_property_set
-from conf.agents import get_skill_set
+from heca.agents.hecas.heca import Heca
+from heca.agents.hecas.mps.red import RedMPHeca
 from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import HecaPlotterConfig
 from heca.runners.plotters.hoopgn_plotters.sampling_plotter import (
     SpawnAreaPlotterConfig,
 )
-from heca.runners.plotter import PlotRunnerConfig
 
-
-SKILL_TAG = "blue"
-PROPERTY_TAG = "blue"
-
-skills = get_skill_set(SKILL_TAG)
-properties = get_property_set(PROPERTY_TAG)
+from heca.runners.runner import HecaRunner
 
 plot1 = SpawnAreaPlotterConfig()
 plotters: list[HecaPlotterConfig] = [plot1]
 
-cfg = PlotRunnerConfig(
-    skills=skills,
-    properties=properties,
+red_mp = RedMPHeca.Query(
+    label="red",
+)
+
+heca = RedMPHeca.search_config(query=RedMPHeca.Query(label="red"))
+assert isinstance(heca, Heca.Config)
+cfg = HecaRunner.Config(
+    heca=heca,
     plotters=plotters,
 )

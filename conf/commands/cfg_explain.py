@@ -1,40 +1,19 @@
-from conf.properties import get_property_set
-from conf.agents import get_skill_set
-from heca.agents.hecas.hoopgn_agent import HoopGNSkillConfig
-from heca.misc.buffer import BufferConfig
-from heca.environments.calvin import CalvinEnvironmentConfig
-from heca.evaluators.dense import Dense3EvaluatorConfig
-from heca.experiments.noise_experiment import NoiseExperimentConfig
-from heca.hoops.v1 import MPGNNConfig
-from heca.runners.explainer import ExplainRunnerConfig
-
-SKILL_TAG = "blue"
-PROPERTY_TAG = "blue"
-
-checkpoint_path = "checkpoints/explain/blue/best.pt"
-skills = get_skill_set(SKILL_TAG)
-
-properties = get_property_set(PROPERTY_TAG)
-
-cfg = ExplainRunnerConfig(
-    skills=skills,
-    properties=properties,
-    agent=HoopGNSkillConfig(
-        network=MPGNNConfig(
-            dim_skill=len(skills),
-            dim_state=len(properties),
-            explain_mode=True,
-        ),
-        buffer=BufferConfig(size=5),
-    ),
-    experiment=NoiseExperimentConfig(
-        environments=[CalvinEnvironmentConfig()],
-        evaluator=Dense3EvaluatorConfig(
-            states_eval=properties,
-            states_network=properties,
-        ),
-        p_skip=0.0,
-        p_rand=0.0,
-        min_steps=len(skills),
-    ),
+from heca.agents.hecas.heca import Heca
+from heca.agents.hecas.mps.red import RedMPHeca
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import HecaPlotterConfig
+from heca.runners.plotters.hoopgn_plotters.sampling_plotter import (
+    SpawnAreaPlotterConfig,
 )
+
+from heca.runners.runner import HecaRunner
+
+plot1 = SpawnAreaPlotterConfig()
+plotters: list[HecaPlotterConfig] = [plot1]
+
+red_mp = RedMPHeca.Query(
+    label="red",
+)
+
+heca = RedMPHeca.search_config(query=RedMPHeca.Query(label="red"))
+assert isinstance(heca, Heca.Config)
+cfg = HecaRunner.Config(heca=heca, plotters=plotters)

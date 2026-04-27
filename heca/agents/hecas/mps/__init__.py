@@ -1,4 +1,4 @@
-from heca.agents.hecas.mps.red import RedMPAgent
+from heca.agents.hecas.mps.red import RedMPHeca
 
 
-red_mp = RedMPAgent.Query(label="red")
+red_mp = RedMPHeca.Query(label="red")

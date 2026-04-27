@@ -49,11 +49,11 @@ class MetaEntity(Entity):
         return meta, version
 
     @classmethod
-    def merge(cls, entities: list[Entity], cluster: str, label: str) -> Entity:
+    def merge(cls, entities: list[Entity], heca: str) -> Entity:
         old, version = cls.ensure_basics(entities)
         props = cls.make_properties(entities)
-        meta = f"{old}.{cluster}"
-        return cls.create(meta=meta, version=version, props=props, label=label)
+        meta = f"{heca}.{old}"
+        return cls.create(meta=meta, version=version, props=props, label=heca)
 
     @classmethod
     def distance(cls, a: TDWorld, b: TDWorld, e: Entity) -> float:

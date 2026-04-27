@@ -12,22 +12,24 @@ class HecaRunner(ConfigClass):
     class Config(ConfigClass.Config):
         heca: Heca.Config
         plotters: list[HecaPlotterConfig]
-        epochs: int = 100
+        episodes: int = 1000
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.heca = Heca.from_config(cfg.heca)
 
     def train(self):
-        self.heca.train(self.cfg.epochs)
+        assert self.cfg.heca, "No Heca config provided"
+        assert self.cfg.episodes > 0, "Number of episodes must be greater than 0"
+        self.heca = Heca.search(self.cfg.heca.query)
+        self.heca.train(self.cfg.episodes)
 
     def plot(self):
+        assert self.cfg.plotters, "No plotters specified in config"
         for plotter in self.cfg.plotters:
-            Plotter.from_config(plotter).init()
+            plotter = Plotter.from_config(plotter)
             plotter.plot()
 
     def explain(self):
-        obs, goal = self.heca.sample()
-        episode_ended = False
-        while not episode_ended:
-            self.heca.explain()
+        assert self.cfg.heca, "No Heca config provided"
+        self.heca = Heca.search(self.cfg.heca.query)
+        self.heca.explain()

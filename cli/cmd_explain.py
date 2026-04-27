@@ -3,7 +3,7 @@ from typing import cast
 import click
 
 from cli.hoopgn import config_handler
-from heca.runners.explainer import ExplainRunner, ExplainRunnerConfig
+from heca.runners.runner import HecaRunner
 
 
 @click.command()
@@ -11,7 +11,7 @@ from heca.runners.explainer import ExplainRunner, ExplainRunnerConfig
 def explain(ctx):
     cfg_path = ctx.obj["hoopgn"]
     cfg = cast(
-        ExplainRunnerConfig,
-        config_handler(path=cfg_path, configtype=ExplainRunnerConfig),
+        HecaRunner.Config,
+        config_handler(path=cfg_path, configtype=HecaRunner.Config),
     )
-    ExplainRunner(cfg).run()
+    HecaRunner(cfg).explain()

@@ -27,6 +27,10 @@ V = TypeVar("V", bound="Heca")
 
 class Heca(Agent):
     @dataclass(kw_only=True)
+    class Query(Agent.Query):
+        version: str
+
+    @dataclass(kw_only=True)
     class Config(Agent.Config):
         network: HecaGN.Config
         generator: HecaGenerator.Config
@@ -53,6 +57,11 @@ class Heca(Agent):
             ),
         )
         self.ppo = PPO(cfg.ppo, hoop=self.network)
+        agents = Agent.search_multiple(list(self.cfg.agents))
+        precons: list[Entity] = []
+        for agent in agents:
+            precons.extend(agent.precons)
+        self.meta = MetaEntity.merge(precons, self.cfg.query.label)
 
     def act(self, x: TDScene, y: TDScene, e: Entity) -> tuple[TDScene, AgentFeedback]:
         z = self.apply_expert_knowledge(y, e)
@@ -142,29 +151,24 @@ class Heca(Agent):
         return x, y
 
     def train(self, episodes: int):
-        agents = Agent.search_multiple(list(self.cfg.agents))
-        entities: list[Entity] = []
-        for agent in agents:
-            entities.extend(agent.precons)
-        e = MetaEntity.merge(entities, self.cfg.meta, self.cfg.version)
         for ep in range(episodes):
-            x, y = self.sample(e)
+            x, y = self.sample(self.meta)
             terminal = False
             while not terminal:
-                reward, fb = self.act(x, y, e)
+                reward, fb = self.act(x, y, self.meta)
                 if fb.can_learn:
-                    xp, highscore = self.ppo.learn(ep)
+                    xp, lvlup = self.ppo.learn(ep)
                     self.network.upgrade(xp)
                     self.network.save(
                         self.network.cfg.query,
                         epoch=ep,
-                        label="best" if highscore else "latest",
+                        label="best" if lvlup else "latest",
                     )
                 terminal = fb.terminal
                 logger.info(f"Epoch {ep}: Reward={reward:.4f}, Done={terminal}")
 
-    def explain(self, e: Entity):
-        x, y = self.sample(e)
+    def explain(self):
+        x, y = self.sample(self.meta)
         x, y = self.network.encode(x, y)
         _, data = self.generator(x, y)
         action = self.network.actor(data)  # Forward pass to populate

@@ -20,7 +20,7 @@ from heca.misc.ppo import PPO
 class MPHeca(Heca):
     @dataclass(kw_only=True)
     class Query(Heca.Query):
-        label: str
+        version: str = "v1"
 
     @dataclass(kw_only=True)
     class Config(Heca.Config):

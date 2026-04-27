@@ -3,9 +3,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypeVar, Type, cast
 
-T = TypeVar("T", bound="ConfigClass")
-S = TypeVar("S", bound="QueryClass")
-V = TypeVar("V", bound="StorageClass")
+C = TypeVar("C", bound="ConfigClass")
+S = TypeVar("S", bound="StorageClass")
+Q = TypeVar("Q", bound="QueryClass")
+# QQ = TypeVar("QQ", bound="QueryClass.Query")
+QC = TypeVar("QC", bound="QueryClass.Config")
 
 
 class ConfigurableMeta(ABCMeta):
@@ -32,16 +34,17 @@ class ConfigClass(ABC, metaclass=ConfigurableMeta):
         pass
 
     @classmethod
-    def from_config(cls: Type[T], cfg: "ConfigClass.Config") -> T:
-        return cast(T, ConfigurableMeta.from_config(cfg))
+    def from_config(cls: Type[C], cfg: "ConfigClass.Config") -> C:
+        return cast(C, ConfigurableMeta.from_config(cfg))
 
     @classmethod
-    def from_configs(cls: Type[T], cfgs: list["ConfigClass.Config"]) -> list[T]:
+    def from_configs(cls: Type[C], cfgs: list["ConfigClass.Config"]) -> list[C]:
         return [cls.from_config(cfg) for cfg in cfgs]
 
 
 class QueryClass(ConfigClass):
     registry: dict["QueryClass.Query", "QueryClass"] = {}
+    config_registry: dict["QueryClass.Query", "QueryClass.Config"] = {}
 
     @dataclass(kw_only=True)
     class Query(ConfigClass.Config):
@@ -57,21 +60,22 @@ class QueryClass(ConfigClass):
         query: "QueryClass.Query"
 
     @classmethod
-    def search(cls: Type[S], query: "QueryClass.Query") -> S:
+    def search(cls: Type[Q], query: "QueryClass.Query") -> Q:
         if query not in cls.registry:
-            choice = None
-            for cfg in cls.config_class_registry:
-                if isinstance(cfg, "QueryClass.Config"):
-                    if cfg.query == query:
-                        choice = cfg
-
-            assert choice is not None
+            choice = cls.search_config(query)
             cls.registry[query] = cls.from_config(choice)
         assert query in cls.registry
-        return cast(S, cls.registry[query])
+        return cast(Q, cls.registry[query])
 
     @classmethod
-    def search_multiple(cls: Type[S], queries: list["QueryClass.Query"]) -> list[S]:
+    def search_config(cls: Type[Q], query: "QueryClass.Query") -> "QueryClass.Config":
+        for query, cfg in cls.config_registry.items():
+            if isinstance(cfg, cls.Config) and cfg.query == query:
+                return cfg
+        raise ValueError(f"No config found for query: {query}")
+
+    @classmethod
+    def search_multiple(cls: Type[Q], queries: list["QueryClass.Query"]) -> list[Q]:
         return [cls.search(query) for query in queries]
 
 
@@ -86,7 +90,7 @@ class StorageClass(QueryClass):
         pass
 
     @classmethod
-    def from_disk(cls: Type[V], cfg: "StorageClass.Config") -> V:
+    def from_disk(cls: Type[S], cfg: "StorageClass.Config") -> S:
         instance = cls.from_config(cfg)
         if not isinstance(cfg.query, StorageClass.Query):
             raise TypeError("cfg.query must be a StorageClass.Query")
@@ -95,7 +99,7 @@ class StorageClass(QueryClass):
 
     @classmethod
     @abstractmethod
-    def resolve_path(cls: Type[V], query: "StorageClass.Query") -> Path:
+    def resolve_path(cls: Type[S], query: "StorageClass.Query") -> Path:
         raise NotImplementedError()
 
     @abstractmethod

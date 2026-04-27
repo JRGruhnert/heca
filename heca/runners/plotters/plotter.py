@@ -8,6 +8,7 @@ import matplotlib.patches as mpatches
 
 from heca.misc import logger
 from heca.entities.entity import Entity
+from heca.misc.classes import ConfigClass
 from heca.properties.property import Property
 from heca.agents.agent import Agent
 
@@ -208,19 +209,18 @@ class StyleConfig:
     )
 
 
-@dataclass
-class PlotterConfig:
-    title: str
-    name: str
-    subdir: str
-    rootdir: str = "plots"
-    style: StyleConfig = StyleConfig()
-    show: bool = False
-    save: bool = True
+class Plotter(ConfigClass):
+    @dataclass
+    class Config(ConfigClass.Config):
+        title: str
+        name: str
+        subdir: str
+        rootdir: str = "plots"
+        style: StyleConfig = StyleConfig()
+        show: bool = False
+        save: bool = True
 
-
-class Plotter(ABC):
-    def __init__(self, config: PlotterConfig):
+    def __init__(self, config: Config):
         self.config = config
         self.skills: list[Agent] = []
         self.entities: list[Entity] = []

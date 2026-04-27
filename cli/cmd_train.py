@@ -3,7 +3,7 @@ from typing import cast
 import click
 
 from cli.hoopgn import config_handler
-from heca.runners.train_runner import TrainRunner, TrainRunnerConfig
+from heca.runners.runner import HecaRunner
 
 
 @click.command()
@@ -11,7 +11,7 @@ from heca.runners.train_runner import TrainRunner, TrainRunnerConfig
 def train(ctx):
     cfg_path = ctx.obj["hoopgn"]
     cfg = cast(
-        TrainRunnerConfig,
-        config_handler(path=cfg_path, configtype=TrainRunnerConfig),
+        HecaRunner.Config,
+        config_handler(path=cfg_path, configtype=HecaRunner.Config),
     )
-    TrainRunner(cfg).run()
+    HecaRunner(cfg).train()

@@ -14,7 +14,11 @@ RealEntity.Config(
 )
 
 
-class RedMPAgent(MPHeca):
+class RedMPHeca(MPHeca):
+    @dataclass(kw_only=True)
+    class Query(MPHeca.Query):
+        label: str = "red"
+
     @dataclass(kw_only=True)
     class Config(MPHeca.Config):
         agents: set[Agent.Query] = set()
