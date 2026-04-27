@@ -5,8 +5,8 @@ from torch import nn
 
 from torch_geometric.nn import GINConv, GINEConv
 
-from heca.networks.bases.base import BaseNetwork
-from heca.networks.mlp import GinStandardMLP
+from heca.heca_gnn.bases.base import BaseNetwork
+from heca.heca_gnn.mlp import GinStandardMLP
 from torch_geometric.data import HeteroData
 
 

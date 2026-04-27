@@ -1,15 +1,15 @@
-# HRL Master Project
+# *H*ierarchical *E*ntity-*C*entric *A*gents (HECA) is a framework for building, testing and evaluating hierarchical agents that operate on a graph-based world representation.
 
 ```bash
-python -m cli.hoopgn explain -c conf/explain/gnn.py
+heca explain -c conf/explain/gnn.py
 ```
 
 ```bash
-hoopgn -c conf/commands/skill/cfg_plot.py skill plot
+heca -c conf/commands/skill/cfg_plot.py skill plot
 ```
 
 ```bash
-hoopgn explain -c conf/explain/gnn.py
+heca explain -c conf/explain/gnn.py
 ```
 
 ```bash

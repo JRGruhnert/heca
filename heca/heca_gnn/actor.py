@@ -3,7 +3,7 @@ from torch import nn
 
 from torch_geometric.nn import GINConv
 
-from heca.networks.mlp import UnactivatedMLP
+from heca.heca_gnn.mlp import UnactivatedMLP
 from torch_geometric.data import HeteroData
 
 

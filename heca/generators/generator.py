@@ -7,7 +7,7 @@ from heca.misc.td import TDScene
 from torch_geometric.data import Batch, HeteroData
 
 
-class HoopGenerator(ConfigClass):
+class HecaGenerator(ConfigClass):
     @dataclass(kw_only=True)
     class Config(ConfigClass.Config):
         pass

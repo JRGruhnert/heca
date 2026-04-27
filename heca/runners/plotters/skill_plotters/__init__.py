@@ -1,8 +1,8 @@
-from heca.plotters.skill_plotters.condition_plotter import (
+from heca.runners.plotters.skill_plotters.condition_plotter import (
     SkillConditionsPlot,
     SkillConditionsPlotterConfig,
 )
-from heca.plotters.skill_plotters.skill_plotter import (
+from heca.runners.plotters.skill_plotters.skill_plotter import (
     SkillPlotterConfig,
     SkillPlotter,
 )

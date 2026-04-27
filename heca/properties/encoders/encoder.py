@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from torch import nn
 
 from heca.misc.classes import StorageClass
-from heca.networks.mlp import StandardMLP
+from heca.heca_gnn.mlp import StandardMLP
 
 
 class PropertyEncoder(StorageClass, nn.Module):

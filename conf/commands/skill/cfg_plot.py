@@ -1,9 +1,9 @@
 from conf.properties import get_property_set
 from conf.agents import get_skill_set
-from heca.plotters.skill_plotters.condition_plotter import (
+from heca.runners.plotters.skill_plotters.condition_plotter import (
     SkillConditionsPlotterConfig,
 )
-from heca.plotters.skill_plotters.skill_plotter import SkillPlotterConfig
+from heca.runners.plotters.skill_plotters.skill_plotter import SkillPlotterConfig
 from heca.runners.skill.plot_skill_runner import SkillPlotRunnerConfig
 
 

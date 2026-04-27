@@ -14,16 +14,16 @@ from heca.evaluators.evaluator import EvaluatorConfig
 from heca.evaluators.set_evaluator import SetEvaluatorConfig
 from heca.experiments.noise_experiment import NoiseExperimentConfig
 from heca.hoops.v1 import MPGNNConfig
-from heca.plotters.hoopgn_plotters.hoopgn_plotter import (
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
-    HoopGNPlotterConfig,
+    HecaPlotterConfig,
 )
 from heca.properties.states.area import AreaStateConfig
 from heca.experiments import select_experiment
 from heca.agents.hecas.hoopgn_agent import HoopGNSkill, HoopGNSkillConfig
 from heca.experiments.experiment import ExperimentConfig
 from heca.observation.td_properties import TDProperties
-from heca.plotters.plots.entity_3d import (
+from heca.runners.plotters.plots.entity_3d import (
     Entity3DHelper,
     Entity3DHelperConfig,
     Entity3DMode,
@@ -36,7 +36,7 @@ checkpoint_path = "checkpoints/explain/blue/best.pt"
 
 
 @dataclass
-class SpawnAreaPlotterConfig(HoopGNPlotterConfig):
+class SpawnAreaPlotterConfig(HecaPlotterConfig):
     title: str = "Spawn Area Plot"
     name: str = "spawn_area"
     subdir: str = "spawn_area"

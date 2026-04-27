@@ -7,12 +7,12 @@ import torch
 from torch.distributions import Categorical
 from heca.agents.leafs.leaf import LeafAgent
 from heca.entities.entity import Entity
+from heca.entities.meta import MetaEntity
 from heca.environments.environment import Environment
-from heca.evaluators.agent_hoop import HoopEvaluator
+from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
-from heca.generators.generator import HoopGenerator
-from heca.misc.classes import V
-from heca.networks.heca.heca_gnn import HecaGN
+from heca.generators.generator import HecaGenerator
+from heca.heca_gnn.hecagn import HecaGN
 
 from heca.misc import logger
 from heca.misc.explainer import HoopgnExplainer
@@ -20,13 +20,17 @@ from heca.misc.ppo import PPO
 from heca.misc.td import TDEntities, TDScene
 from torch_geometric.explain import CaptumExplainer, HeteroExplanation
 
+from typing import TypeVar, Type
+
+V = TypeVar("V", bound="Heca")
+
 
 class Heca(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         network: HecaGN.Config
-        generator: HoopGenerator.Config
-        evaluator: HoopEvaluator.Config
+        generator: HecaGenerator.Config
+        evaluator: HecaEvaluator.Config
         ppo: PPO.Config
         agents: set[Agent.Query]
         training: bool = False
@@ -34,8 +38,8 @@ class Heca(Agent):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.network = HecaGN.from_config(cfg.network)
-        self.generator = HoopGenerator.from_config(cfg.generator)
-        self.evaluator = HoopEvaluator.from_config(cfg.evaluator)
+        self.generator = HecaGenerator.from_config(cfg.generator)
+        self.evaluator = HecaEvaluator.from_config(cfg.evaluator)
         self.explainer = HoopgnExplainer(
             self.network,
             algorithm=CaptumExplainer("Saliency"),
@@ -122,8 +126,8 @@ class Heca(Agent):
             x_values[env.cfg.query.label] = env.sample()
             y_values[env.cfg.query.label] = env.sample()
 
-        x = TDScene(data=TDEntities(x_values))
-        y = TDScene(data=TDEntities(y_values))
+        x = TDScene(heca=TDEntities(x_values))
+        y = TDScene(heca=TDEntities(y_values))
         attempts = 0
         while not self.evaluator.is_sample(x, y, e):
             attempts += 1
@@ -131,13 +135,18 @@ class Heca(Agent):
                 x_values = dict()
                 for env in self.environments:
                     x_values[env.cfg.query.label] = env.sample()
-                x = TDScene(data=TDEntities(x_values))
+                x = TDScene(heca=TDEntities(x_values))
             for env in self.environments:
                 y_values[env.cfg.query.label] = env.sample()
-            y = TDScene(data=TDEntities(y_values))
+            y = TDScene(heca=TDEntities(y_values))
         return x, y
 
-    def train(self, episodes: int, e: Entity):
+    def train(self, episodes: int):
+        agents = Agent.search_multiple(list(self.cfg.agents))
+        entities: list[Entity] = []
+        for agent in agents:
+            entities.extend(agent.precons)
+        e = MetaEntity.merge(entities, self.cfg.meta, self.cfg.version)
         for ep in range(episodes):
             x, y = self.sample(e)
             terminal = False

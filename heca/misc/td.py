@@ -93,11 +93,11 @@ class TDEntities(TensorDict):
 class TDScene(TensorDict):
     def __init__(
         self,
-        data: TDEntities,
+        heca: TDEntities,
         leaf: TensorDict | None = None,
     ):
-        super().__init__(data, batch_size=empty_batchsize)
-        self["entities"] = data
+        super().__init__(heca, batch_size=empty_batchsize)
+        self["entities"] = heca
         if leaf is not None:
             self["leaf"] = leaf
 

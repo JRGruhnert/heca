@@ -1,8 +1,9 @@
 import numpy as np
 from dataclasses import dataclass
 
-from heca.environments.environment import Environment, StepFeedback
-from heca.observation.td_properties import TDProperties
+from heca.agents.agent import AgentFeedback
+from heca.environments.environment import Environment
+from heca.misc.td import TDProperties
 import gymnasium as gym
 from ogbench import manipspace
 
@@ -45,10 +46,10 @@ class OGBenchEnvironment(Environment):
     def step(
         self,
         action: np.ndarray,
-    ) -> StepFeedback:
+    ) -> AgentFeedback:
         self.og_obs = self.env.step(action)
         # TODO: In Future implement error detection and return other Codes
-        return StepFeedback.OKAY
+        return AgentFeedback(reward=0.0, done=False, terminal=False)
 
     def render(self):
         raise NotImplementedError("Render method not implemented yet.")

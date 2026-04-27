@@ -5,14 +5,14 @@ from heca.plotters.helper.helper import *
 from dataclasses import dataclass
 
 from heca.misc.data import TrainingRunData
-from heca.plotters.hoopgn_plotters.hoopgn_plotter import (
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
-    HoopGNPlotterConfig,
+    HecaPlotterConfig,
 )
 
 
 @dataclass
-class TTimePlotConfig(HoopGNPlotterConfig):
+class TTimePlotConfig(HecaPlotterConfig):
     name: str = "comparison_all_time"
 
 

@@ -18,7 +18,7 @@ class Converter(ConfigClass):
         )
 
 
-class HoopConverter(Converter):
+class HecaConverter(Converter):
     def __call__(self, obs) -> TDEntities:
         raise NotImplementedError()
 

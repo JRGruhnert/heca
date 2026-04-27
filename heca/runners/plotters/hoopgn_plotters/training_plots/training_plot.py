@@ -4,14 +4,14 @@ from glob import glob
 import re
 
 from heca.misc.data import TrainingRunData
-from heca.plotters.hoopgn_plotters.hoopgn_plotter import (
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import (
     HoopGNPlot,
-    HoopGNPlotterConfig,
+    HecaPlotterConfig,
 )
 
 
 @dataclass
-class TrainingPlotConfig(HoopGNPlotterConfig):
+class TrainingPlotConfig(HecaPlotterConfig):
     networks: list[str] = field(default_factory=lambda: ["gnn", "baseline"])
     file_pattern: re.Pattern = re.compile(
         r"(?P<tag>\w+_\w+_\w+)_pe(?P<pe>[0-9.]+)_pr(?P<pr>[0-9.]+)"

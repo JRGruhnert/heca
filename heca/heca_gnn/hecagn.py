@@ -10,23 +10,23 @@ from heca.properties.encoders.encoder import PropertyEncoder
 from heca.misc import hardware, logger
 from heca.misc.classes import StorageClass
 from heca.misc.td import TDScene
-from heca.networks.heca.actor import ActorReadoutNetwork
-from heca.networks.bases.base import BaseNetwork
-from heca.networks.heca.critic import CriticReadoutNetwork
+from heca.heca_gnn.actor import ActorReadoutNetwork
+from heca.heca_gnn.bases.base import BaseNetwork
+from heca.heca_gnn.critic import CriticReadoutNetwork
 from torch_geometric.data import HeteroData
 from typing import TypeVar, Type
 
-V = TypeVar("V", bound="HoopNetwork")
+V = TypeVar("V", bound="HecaGN")
 
 
-class HoopNetwork(StorageClass, nn.Module):
+class HecaGN(StorageClass, nn.Module):
     @dataclass(kw_only=True)
     class Query(StorageClass.Query):
         label: str
 
     @dataclass(kw_only=True)
     class Config(StorageClass.Config):
-        query: "HoopNetwork.Query"
+        query: "HecaGN.Query"
         base: BaseNetwork.Config
         encoders: set[PropertyEncoder.Query]
         feature_dim: int = 32
@@ -76,11 +76,11 @@ class HoopNetwork(StorageClass, nn.Module):
 
     @classmethod
     def resolve_path(
-        cls: Type[V], query: "HoopNetwork.Query", epoch: int, label: str
+        cls: Type[V], query: "HecaGN.Query", epoch: int, label: str
     ) -> Path:
         return query.root / Path(query.label) / f"ckpt_{epoch}_{label}{query.ending}"
 
-    def load(self, query: "HoopNetwork.Query", label: str = "") -> int:
+    def load(self, query: "HecaGN.Query", label: str = "") -> int:
         # Scan for all checkpoint files with the given label
         ckpt_dir = query.root / Path(query.label)
         pattern = f"ckpt_*_{label}{query.ending}"
@@ -106,7 +106,7 @@ class HoopNetwork(StorageClass, nn.Module):
         self.load_state_dict(checkpoint["model_state"], strict=False)
         return epoch
 
-    def save(self, query: "HoopNetwork.Query", epoch: int, label: str) -> None:
+    def save(self, query: "HecaGN.Query", epoch: int, label: str) -> None:
         path = self.resolve_path(query, epoch, label)
         logger.info(f"Saving weights to: {path}")
         torch.save({"model_state": self.state_dict()}, path)

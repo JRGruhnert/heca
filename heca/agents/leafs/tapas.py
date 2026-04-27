@@ -14,6 +14,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     TPGMMConfig,
 )
 from heca.agents.leafs.leaf import LeafAgent
+from heca.entities.entity import Entity
 from heca.environments.environment import Environment
 from heca.properties.property import Property
 from heca.misc.td import TDScene, TDProperties
@@ -26,6 +27,7 @@ sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkp
 class TapasAgent(LeafAgent):
     @dataclass(kw_only=True)
     class Config(LeafAgent.Config):
+        entity: Entity.Config
         policy: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
@@ -69,7 +71,7 @@ class TapasAgent(LeafAgent):
         self.cfg = cfg
         self.prds: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
-        self.properties: list[Property.Config] = []
+        self.entity = Entity.from_config(self.cfg.entity)
 
     def predict(self, x: TDScene, y: TDScene) -> np.ndarray | None:
         if self.prds is None or self.prds.is_finished:
@@ -116,7 +118,7 @@ class TapasAgent(LeafAgent):
             )  # type: ignore
         )  # type: ignore
 
-    def _load_conditions(self, pre: bool) -> dict[Property.Query, torch.Tensor]:
+    def _load_conditions(self, pre: bool) -> dict[Property.Config, torch.Tensor]:
         if pre:
             precon = self.demo_precons
             postcon = self.demo_postcons
@@ -125,14 +127,15 @@ class TapasAgent(LeafAgent):
             postcon = self.demo_precons
 
         result = {}
-        for cfg in self.properties:
-            con = Property.search(cfg.query).extract_condition(
-                precon[cfg.query.label],
-                postcon[cfg.query.label],
-                cfg in self.tp_labels,
+        for key, props in self.entity.properties.items():
+            prop = props[0]
+            con = prop.extract_condition(
+                precon[key],
+                postcon[key],
+                prop in self.tp_labels,
             )
             if con is not None:
-                result[cfg.query] = con
+                result[prop.cfg] = con
         return result
 
     def from_disk(self, path: str):
@@ -160,19 +163,19 @@ class TapasAgent(LeafAgent):
         return temp
 
     @cached_property
-    def ppre(self) -> dict[Property.Query, torch.Tensor]:
+    def ppre(self) -> dict[Property.Config, torch.Tensor]:
         return self._load_conditions(True)
 
     @cached_property
-    def ppost(self) -> dict[Property.Query, torch.Tensor]:
+    def ppost(self) -> dict[Property.Config, torch.Tensor]:
         return self._load_conditions(False)
 
     @cached_property
-    def postcon(self) -> dict[Property.Query, torch.Tensor]:
+    def postcon(self) -> dict[Property.Config, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property
-    def precon(self) -> dict[Property.Query, torch.Tensor]:
+    def precon(self) -> dict[Property.Config, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property

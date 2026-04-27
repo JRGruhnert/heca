@@ -5,14 +5,14 @@ import torch
 from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.misc import logger
 from heca.observation.td_entity import TDEntity
-from heca.plotters.plots.entity_3d import (
+from heca.runners.plotters.plots.entity_3d import (
     Entity3DHelper,
     Entity3DHelperConfig,
     Entity3DHelperConfig,
     Entity3DMode,
     EntityPoint,
 )
-from heca.plotters.skill_plotters.skill_plotter import (
+from heca.runners.plotters.skill_plotters.skill_plotter import (
     SkillPlotter,
     SkillPlotterConfig,
 )

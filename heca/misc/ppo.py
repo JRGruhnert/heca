@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from heca.misc.classes import ConfigClass
 from heca.misc.hardware import device
-from heca.networks.heca.heca_gnn import HecaGN
+from heca.heca_gnn.hecagn import HecaGN
 from heca.misc import logger
 from thop import profile
 

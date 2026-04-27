@@ -4,13 +4,13 @@ import numpy as np
 import torch
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
-from heca.converters.converter import HoopConverter
+from heca.converters.converter import HecaConverter
 from heca.misc.td import TDProperties, TDEntities
 
 
-class CalvinHoopConverter(HoopConverter):
+class CalvinHoopConverter(HecaConverter):
     @dataclass(kw_only=True)
-    class Config(HoopConverter.Config):
+    class Config(HecaConverter.Config):
         label: str = "v1"
 
     def __init__(self, cfg: Config):

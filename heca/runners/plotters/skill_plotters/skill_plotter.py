@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from dataclasses import dataclass
 
-from heca.plotters.plotter import Plotter, PlotterConfig
+from heca.runners.plotters.plotter import Plotter, PlotterConfig
 from heca.agents.agent import Agent
 
 

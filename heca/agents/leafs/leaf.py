@@ -51,20 +51,20 @@ class LeafAgent(Agent):
 
     @cached_property
     @abstractmethod
-    def ppre(self) -> dict[Property.Query, torch.Tensor]:
+    def ppre(self) -> dict[str, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property
     @abstractmethod
-    def ppost(self) -> dict[Property.Query, torch.Tensor]:
+    def ppost(self) -> dict[str, torch.Tensor]:
         raise NotImplementedError()
 
     @cached_property
     @abstractmethod
-    def precons(self) -> dict[Entity.Query, TDEntity]:
+    def precons(self) -> dict[Entity, TDEntity]:
         raise NotImplementedError()
 
     @cached_property
     @abstractmethod
-    def postcons(self) -> dict[Entity.Query, TDEntity]:
+    def postcons(self) -> dict[Entity, TDEntity]:
         raise NotImplementedError()

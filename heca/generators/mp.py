@@ -1,30 +1,33 @@
 from dataclasses import dataclass
+from functools import cached_property
+
+import torch
 
 from heca.agents.agent import Agent
+from heca.agents.leafs.leaf import LeafAgent
 from heca.entities.entity import Entity
-from heca.entities.meta import MetaEntity
-from heca.generators.generator import HoopGenerator
+from heca.entities.real import RealEntity
+from heca.generators.generator import HecaGenerator
+from torch_geometric.data import HeteroData
+
+from heca.misc.td import TDScene
 
 
-class MPGenerator(HoopGenerator):
+class MPGenerator(HecaGenerator):
     @dataclass(kw_only=True)
-    class Config(HoopGenerator.Config):
-        agents: set[Agent.Query]
-        meta: str = "meta"
+    class Config(HecaGenerator.Config):
+        agents: set[LeafAgent.Query]
+        entity: RealEntity.Config
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.agents = [Agent.search(query) for query in self.cfg.agents]
-        self.meta = MetaEntity.merge(
-            [agent.precons for agent in self.agents],
-            label="v1",
-            cluster=self.cfg.meta,
-        )
+        self.agents = [LeafAgent.search(query) for query in self.cfg.agents]
+        self.meta = Entity.from_config(self.cfg.entity)
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene
-    ) -> tuple[list[tuple[Agent.Query, Entity]], HeteroData]:
+    ) -> tuple[list[tuple[LeafAgent.Query, Entity]], HeteroData]:
         options = []
         for agent in self.cfg.agents:
             options.append((agent, self.meta))
@@ -63,8 +66,8 @@ class MPGenerator(HoopGenerator):
     ) -> torch.Tensor:
         agent = LeafAgent.search(cfg.query)
         task_features: list[torch.Tensor] = []
-        for state in x.keys():  # type: ignore
-            pre = agent.ppre.get(str(state), None)
+        for key, prop in self.meta.properties.items():
+            pre = agent.ppre.get(key, None)
             if pre:
                 value = torch.tensor([pre, 0.0]) if pad else torch.tensor([pre])
             else:
@@ -122,10 +125,11 @@ class MPGenerator(HoopGenerator):
 
     @cached_property
     def state_skill_sparse(self) -> torch.Tensor:
+
         edge_list = []
         for a_idx, agent in enumerate(self.agents):
-            for s_idx, property in enumerate(self.cfg.properties):
-                if property.query in agent.precons.keys():
+            for s_idx, property in enumerate(self.meta.properties.keys()):
+                if property in agent.ppre.keys():
                     edge_list.append((s_idx, a_idx))
         return torch.tensor(edge_list, dtype=torch.long).t()
 

@@ -5,7 +5,7 @@ import torch
 
 from heca.converters.calvin_hoop import CalvinHoopConverter
 from heca.converters.calvin_tapas import CalvinTapasConverter
-from heca.converters.converter import HoopConverter, LeafConverter
+from heca.converters.converter import HecaConverter, LeafConverter
 from heca.environments.environment import Environment
 
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -43,7 +43,7 @@ class CalvinEnvironment(Environment):
 
     @dataclass(kw_only=True)
     class Config(Environment.Config):
-        hoop_cv: HoopConverter.Config = CalvinHoopConverter.Config()
+        hoop_cv: HecaConverter.Config = CalvinHoopConverter.Config()
         leaf_cv: LeafConverter.Config = CalvinTapasConverter.Config()
 
         cc: CalvinConfig = CalvinConfig(

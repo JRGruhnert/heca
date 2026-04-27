@@ -1,37 +1,33 @@
-from abc import abstractmethod
 from dataclasses import dataclass
 
 from heca.agents.hecas.heca import Heca
 from heca.misc.classes import ConfigClass
 
-from heca.agents.agent import Agent
-from heca.plotters.hoopgn_plotters import select_multiple_hoopgn_plotters
-from heca.plotters.hoopgn_plotters.hoopgn_plotter import HoopGNPlotterConfig
+from heca.runners.plotters.hoopgn_plotters.hoopgn_plotter import HecaPlotterConfig
+from heca.runners.plotters.plotter import Plotter
 
 
-class HoopGNRunner(ConfigClass):
+class HecaRunner(ConfigClass):
     @dataclass(kw_only=True)
     class Config(ConfigClass.Config):
-        agent: Agent.Config
-        plotters: list[HoopGNPlotterConfig]
+        heca: Heca.Config
+        plotters: list[HecaPlotterConfig]
         epochs: int = 100
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.agent = Agent.from_config(cfg.agent)
-        self.plotters = select_multiple_hoopgn_plotters(cfg.plotters)
+        self.heca = Heca.from_config(cfg.heca)
 
     def train(self):
-        assert isinstance(self.agent, Heca)
-        self.agent.train(10)
+        self.heca.train(self.cfg.epochs)
 
     def plot(self):
-        for plotter in self.plotters:
+        for plotter in self.cfg.plotters:
+            Plotter.from_config(plotter).init()
             plotter.plot()
 
     def explain(self):
-        assert isinstance(self.agent, Heca)
-        obs, goal = self.agent.sample()
+        obs, goal = self.heca.sample()
         episode_ended = False
         while not episode_ended:
-            self.agent.explain()
+            self.heca.explain()

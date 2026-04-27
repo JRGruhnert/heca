@@ -70,6 +70,10 @@ class QueryClass(ConfigClass):
         assert query in cls.registry
         return cast(S, cls.registry[query])
 
+    @classmethod
+    def search_multiple(cls: Type[S], queries: list["QueryClass.Query"]) -> list[S]:
+        return [cls.search(query) for query in queries]
+
 
 class StorageClass(QueryClass):
     @dataclass(kw_only=True)

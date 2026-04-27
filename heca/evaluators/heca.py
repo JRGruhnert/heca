@@ -4,11 +4,10 @@ from heca.agents.agent import AgentFeedback
 from heca.entities.entity import Entity
 from heca.entities.meta import MetaEntity
 from heca.evaluators.evaluator import Evaluator
-from heca.misc import logger
 from heca.misc.td import TDWorld
 
 
-class HoopEvaluator(Evaluator):
+class HecaEvaluator(Evaluator):
     @dataclass(kw_only=True)
     class Config(Evaluator.Config):
         success_reward: float = 25.0
