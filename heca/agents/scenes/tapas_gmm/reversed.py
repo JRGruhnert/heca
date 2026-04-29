@@ -7,7 +7,7 @@ from functools import cached_property
 from tensordict import TensorDict
 
 from heca.properties.v1 import PropertyV1
-from heca.agents.leafs.tapas import TapasAgent
+from heca.agents.scenes.tapas.tapas import TapasAgent
 from heca.properties.default.v1.bool import BoolProperty
 from heca.properties.default.v1.position import PositionProperty
 from heca.properties.default.v1.rotation import RotationProperty

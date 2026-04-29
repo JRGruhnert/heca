@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 
-from heca.agents.leafs.leaf import LeafAgent
-from heca.entities.real import RealEntity
+from heca.agents.scenes.scene_agent import SceneAgent
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.properties.encoders.v1.area import AreaEncoder
 from heca.properties.encoders.v1.rotation import QuaternionEncoder
@@ -18,14 +17,13 @@ from heca.misc.ppo import PPO
 
 
 class MPHeca(Heca):
-    @dataclass(kw_only=True)
+    @dataclass(frozen=True, kw_only=True)
     class Query(Heca.Query):
         version: str = "v1"
 
     @dataclass(kw_only=True)
     class Config(Heca.Config):
-        entity: RealEntity.Config
-        agents: set[LeafAgent.Query]
+        agents: set[SceneAgent.Query]
         encoders: set[PropertyEncoder.Query] = set(
             [
                 AreaEncoder.Query(),
@@ -48,7 +46,4 @@ class MPHeca(Heca):
                 base=V1Network.Config(),
                 encoders=self.encoders,
             )
-            self.generator = MPGenerator.Config(
-                agents=self.agents,
-                entity=self.entity,
-            )
+            self.generator = MPGenerator.Config(agents=self.agents)

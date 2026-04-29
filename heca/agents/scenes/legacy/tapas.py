@@ -1,3 +1,4 @@
+from enum import Enum
 import sys
 from tensordict import TensorDict
 import torch
@@ -13,21 +14,54 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     ModelType,
     TPGMMConfig,
 )
-from heca.agents.leafs.leaf import LeafAgent
-from heca.entities.entity import Entity
-from heca.environments.environment import Environment
+
+from heca.agents.agent import AgentFeedback, Cursor
+from heca.agents.scenes.scene_agent import SceneAgent
+from heca.environments.world import MetaWorld
 from heca.properties.property import Property
-from heca.misc.td import TDScene, TDProperties
+from heca.misc.td import TDScene, TDProperties, TDWorld
 from heca.misc.hardware import device
 from heca.misc import logger
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
+ee_position = PositionProperty.Config(label="ee_position")
+ee_rotation = RotationProperty.Config(label="ee_rotation")
+ee_scalar = BoolProperty.Config(label="ee_scalar")
+slide_position = PositionProperty.Config(label="slide_position")
+slide_rotation = RotationProperty.Config(label="slide_rotation")
+slide_scalar = RangeProperty.Config(label="slide_scalar", low=0.0, high=0.28)
+drawer_position = PositionProperty.Config(label="drawer_position")
+drawer_rotation = RotationProperty.Config(label="drawer_rotation")
+drawer_scalar = RangeProperty.Config(label="drawer_scalar", low=0.0, high=0.22)
+button_position = PositionProperty.Config(label="button_position")
+button_rotation = RotationProperty.Config(label="button_rotation")
+button_scalar = FlipProperty.Config(label="button_scalar")
+led_position = PositionProperty.Config(label="led_position")
+led_rotation = RotationProperty.Config(label="led_rotation")
+block_red_position = AreaProperty.Config(label="block_red_position")
+block_red_scalar = BoolProperty.Config(label="block_red_scalar")
+block_blue_position = AreaProperty.Config(label="block_blue_position")
+block_blue_scalar = BoolProperty.Config(label="block_blue_scalar")
+block_pink_position = AreaProperty.Config(label="block_pink_position")
+block_pink_scalar = BoolProperty.Config(label="block_pink_scalar")
+block_red_rotation = RotationProperty.Config(
+    label="block_red_rotation",
+    evaluator=DefaultEvaluator.Config(),
+)
+block_blue_rotation = RotationProperty.Config(
+    label="block_blue_rotation",
+    evaluator=DefaultEvaluator.Config(),
+)
+block_pink_rotation = RotationProperty.Config(
+    label="block_pink_rotation",
+    evaluator=DefaultEvaluator.Config(),
+)
 
-class TapasAgent(LeafAgent):
+
+class TapasAgent(SceneAgent):
     @dataclass(kw_only=True)
-    class Config(LeafAgent.Config):
-        entity: Entity.Config
+    class Config(SceneAgent.Config):
         policy: GMMPolicyConfig = GMMPolicyConfig(
             suffix="release",
             model=AutoTPGMMConfig(
@@ -71,31 +105,40 @@ class TapasAgent(LeafAgent):
         self.cfg = cfg
         self.prds: RobotTrajectory | None = None
         self.goal: TDProperties | None = None
-        self.entity = Entity.create(self.cfg.entity)
+        self.cursor = Cursor.IDLE
+        self.scene = MetaWorld.get(self.cfg.scene)
 
-    def predict(self, x: TDScene, y: TDScene) -> np.ndarray | None:
-        if self.prds is None or self.prds.is_finished:
-            tx = self.get_observation(x)
-            ty = self.get_observation(y)
-            self.make_prediction(tx, ty)
+    def predict(self, x: TDWorld, y: TDWorld) -> np.ndarray | None:
+        if self.cursor == Cursor.IDLE:
+            self.prds = self.make_prediction(x, y)
         if self.prds is None:
+            self.cursor = Cursor.ERROR
             return None
-        return self._to_action(self.prds.step())
+        else:
+            self.cursor = Cursor.RUNNING
+            return self._to_action(self.prds.step())
 
-    def execute(self, x: TDScene, y: TDScene) -> TDScene:
-        env = Environment.search(self.cfg.query.env)
+    def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         z = x
         while (action := self.predict(z, y)) is not None:
-            z = env.step(action)
-        return z
+            z = self.scene.step(action)
+
+        return z, AgentFeedback(
+            reward=0.0,
+            done=True,
+            terminal=True,
+            cursor=self.cursor,
+        )
 
     def get_value(self, x: TensorDict, y: TensorDict) -> torch.Tensor:
         return x
 
-    def make_prediction(self, x: TensorDict, y: TensorDict) -> RobotTrajectory | None:
-        assert self.goal is not None, "Goal must be set before prediction."
+    def make_prediction(self, x: TDWorld, y: TDWorld) -> RobotTrajectory | None:
+        tx = x.get(self.cfg.scene.label)["tapas"]
+        ty = y.get(self.cfg.scene.label)["tapas"]
         try:
-            self.prds, _ = self.policy.predict(self.get_value(x, y))  # type: ignore
+            prds, _ = self.policy.predict(self.get_value(tx, ty))  # type: ignore
+            return prds  # type: ignore
         except FloatingPointError as e:
             logger.debug(f"Numerical error in prediction: {e}")
             return None
@@ -104,6 +147,7 @@ class TapasAgent(LeafAgent):
             return None
 
     def reset(self, goal: TDProperties):
+        self.cursor = Cursor.IDLE
         self.policy.reset_episode()
         self.prds = None
         self.goal = goal

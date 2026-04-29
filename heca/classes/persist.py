@@ -3,12 +3,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Type, TypeVar, cast
 
-from heca.classes.register import Registerable, SearchableMeta
+from heca.classes.register import Registerable, RegisterableMeta
 
 P = TypeVar("P", bound="Persistable")
 
 
-class PersistableMeta(SearchableMeta):
+class PersistableMeta(RegisterableMeta):
     disk_class_registry: dict[type, type] = {}
 
     def __init__(cls, name, bases, attrs):
@@ -24,7 +24,7 @@ class PersistableMeta(SearchableMeta):
         assert disk_subclass is not None
         for query_class, query_subclass in PersistableMeta.query_class_registry.items():
             if isinstance(disk_subclass, query_subclass):
-                return cast(Persistable, SearchableMeta.from_query(query_class()))
+                return cast(Persistable, RegisterableMeta.from_query(query_class()))
         raise ValueError()
 
 

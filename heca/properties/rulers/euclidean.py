@@ -2,9 +2,7 @@ from dataclasses import dataclass
 import math
 import torch
 
-from heca.properties.rulers.ruler import (
-    PropertyRuler,
-)
+from heca.properties.rulers.ruler import PropertyRuler
 
 
 class EuclideanRuler(PropertyRuler):

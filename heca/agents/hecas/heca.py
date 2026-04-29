@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from pathlib import Path
@@ -6,17 +6,15 @@ from typing import Type
 
 import torch
 from torch.distributions import Categorical
-from heca.agents.leafs.leaf import LeafAgent
 from heca.entities.entity import Entity
-from heca.entities.meta import MetaEntity
-from heca.environments.environment import Environment
-from heca.environments.meta import MetaEnvironment
+from heca.environments.scene import Scene
+from heca.environments.world import MetaWorld
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
 from heca.generators.generator import HecaGenerator
 from heca.heca_gnn.network import HecaNetwork
 from heca.misc.ppo import PPO
-from heca.misc.td import TDEntities, TDScene
+from heca.misc.td import TDScene, TDWorld
 from torch_geometric.explain import CaptumExplainer, Explainer
 
 from typing import TypeVar, Type
@@ -37,8 +35,8 @@ class Heca(Agent):
         evaluator: HecaEvaluator.Config
         network: HecaNetwork.Query
         agents: set[Agent.Query]
+        mode: HecaMode
         ppo: PPO.Query
-        mode: HecaMode = HecaMode.EVAL
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -64,15 +62,12 @@ class Heca(Agent):
 
         self.generator = HecaGenerator.create(cfg.generator)
         self.evaluator = HecaEvaluator.create(cfg.evaluator)
-        # TODO: Create meta here correctly and post vs precons vs both???
-        agents = Agent.search_multiple(list(self.cfg.agents))
-        precons: list[Entity] = []
-        for agent in agents:
-            precons.extend(agent.precons)
-        self.meta = MetaEntity.merge(precons, self.cfg.network.label)
+
+        MetaWorld.search_and_register(list(self.cfg.agents))
 
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
-        z = self.apply_expert_knowledge(y, self.meta)
+        # z = self.apply_expert_knowledge(y)
+        z = y
         if self.cfg.mode == HecaMode.EXPLAIN:
             variants, logits, value = self.predict(x, z)
         else:
@@ -86,7 +81,7 @@ class Heca(Agent):
             action = logits.argmax(dim=-1)
 
         agent, entity = variants[action]
-        z, fb = Agent.search(agent).act(x, z, entity)
+        z, fb = Agent.search(agent).act(x, z)
         reward, done, terminal = self.evaluator.step(z, fb)
         if self.cfg.mode == HecaMode.TRAIN:
             logprob: torch.Tensor = dist.log_prob(action)
@@ -129,20 +124,15 @@ class Heca(Agent):
         else:
             self.postcons
 
-    def sample(self, e: Entity) -> tuple[TDScene, TDScene]:
-        envs: list[Environment.Query] = []
-        x, y = MetaEnvironment.sample(envs, e)
+    def sample(self, e: Entity) -> tuple[TDWorld, TDWorld]:
+        x = MetaWorld.sample()
+        y = MetaWorld.sample()
         attempts = 0
         while not self.evaluator.is_sample(x, y, e):
             attempts += 1
             if attempts % 5 == 0:
-                x_values = dict()
-                for env in self.environments:
-                    x_values[env.cfg.query.label] = env.sample()
-                x = TDScene(heca=TDEntities(x_values))
-            for env in self.environments:
-                y_values[env.cfg.query.label] = env.sample()
-            y = TDScene(heca=TDEntities(y_values))
+                x = MetaWorld.sample()
+            y = MetaWorld.sample()
         return x, y
 
     @cached_property
@@ -162,3 +152,11 @@ class Heca(Agent):
 
     def save(self, path: Path, label: str) -> None:
         raise NotImplementedError()
+
+    def required_scenes(self) -> list[Scene.Query]:
+        scenes = set()
+        for agent_query in self.cfg.agents:
+            agent = Agent.search(agent_query)
+            for scene_query in agent.required_scenes():
+                scenes.add(scene_query)
+        return list(scenes)

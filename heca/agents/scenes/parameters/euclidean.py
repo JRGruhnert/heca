@@ -2,13 +2,12 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.properties.parameters.parameter import (
+from heca.agents.scenes.parameters.parameter import (
     PropertyParameter,
 )
-from heca.misc.binary import Binary
 
 
-class BinaryParameter(PropertyParameter):
+class EuclideanParameter(PropertyParameter):
     @dataclass(kw_only=True)
     class Config(PropertyParameter.Config):
         pass
@@ -25,7 +24,6 @@ class BinaryParameter(PropertyParameter):
     ) -> torch.Tensor | None:
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
-        if Binary.is_binary(start) and Binary.is_binary(end):
-            if Binary.is_always_same(start, end):
-                return start.mean(dim=0)
-        return None  # Not constant enough
+        if selected_by_tapas:
+            return start.mean(dim=0)
+        return None  # Not selected by tapas

@@ -6,8 +6,6 @@ from heca.properties.evaluators.evaluator import PropertyEvaluator
 from heca.properties.evaluators.threshold import ThresholdEvaluator
 from heca.properties.normalizers.ignore import IgnoreNormalizer
 from heca.properties.normalizers.normalizer import PropertyNormalizer
-from heca.properties.parameters.flip import FlipParameter
-from heca.properties.parameters.parameter import PropertyParameter
 from heca.properties.rulers.flip import FlipRuler
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.v1 import PropertyV1
@@ -22,4 +20,3 @@ class FlipProperty(PropertyV1):
         )
         normalizer: PropertyNormalizer.Config = IgnoreNormalizer.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
-        parameter: PropertyParameter.Config = FlipParameter.Config()

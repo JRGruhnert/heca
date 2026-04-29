@@ -3,30 +3,30 @@ from typing import TypeVar, Type, cast
 
 from heca.classes.config import Configurable, ConfigurableMeta
 
-S = TypeVar("S", bound="Searchable")
+S = TypeVar("S", bound="Registerable")
 
 
-class SearchableMeta(ConfigurableMeta):
+class RegisterableMeta(ConfigurableMeta):
     query_class_registry: dict[type, type] = {}
 
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
-        if cls.__name__ != "Searchable":
+        if cls.__name__ != "Registerable":
             query = attrs.get("Query")
             assert query is not None
-            SearchableMeta.query_class_registry[query] = cls
+            RegisterableMeta.query_class_registry[query] = cls
 
     @staticmethod
     def from_query(query: "Registerable.Query") -> "Registerable":
-        query_subclass = SearchableMeta.query_class_registry.get(type(query))
+        query_subclass = RegisterableMeta.query_class_registry.get(type(query))
         assert query_subclass is not None
-        for cfg_class, cfg_subclass in SearchableMeta.cfg_class_registry.items():
+        for cfg_class, cfg_subclass in RegisterableMeta.cfg_class_registry.items():
             if isinstance(query_subclass, cfg_subclass):
                 return cast(Registerable, ConfigurableMeta.from_config(cfg_class()))
         raise ValueError()
 
 
-class Registerable(Configurable, metaclass=SearchableMeta):
+class Registerable(Configurable, metaclass=RegisterableMeta):
     registry: dict["Registerable.Query", "Registerable"] = {}
 
     @dataclass(frozen=True, kw_only=True)
@@ -40,6 +40,6 @@ class Registerable(Configurable, metaclass=SearchableMeta):
     @classmethod
     def search(cls: Type[S], query: "Registerable.Query") -> S:
         if query not in cls.registry:
-            cls.registry[query] = cast(S, SearchableMeta.from_query(query))
+            cls.registry[query] = cast(S, RegisterableMeta.from_query(query))
         assert query in cls.registry
         return cast(S, cls.registry[query])

@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 
 from heca.agents.agent import AgentFeedback
-from heca.environments.environment import Environment
+from heca.environments.scene import Environment
 from heca.misc.td import TDProperties
 import gymnasium as gym
 from ogbench import manipspace

@@ -8,8 +8,8 @@ from heca.properties.extractors.gt import CGTExtractor
 from heca.properties.extractors.extractor import PropertyExtractor
 from heca.properties.normalizers.normalizer import PropertyNormalizer
 from heca.properties.normalizers.quaternion import QuaternionNormalizer
-from heca.properties.parameters.parameter import PropertyParameter
-from heca.properties.parameters.quaternion import QuaternionParameter
+from heca.agents.scenes.parameters.parameter import PropertyParameter
+from heca.agents.scenes.parameters.quaternion import QuaternionParameter
 from heca.properties.rulers.angular import AngularRuler
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.property import Property

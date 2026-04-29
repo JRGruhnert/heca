@@ -8,8 +8,6 @@ from heca.properties.extractors.gt import CGTExtractor
 from heca.properties.extractors.extractor import PropertyExtractor
 from heca.properties.normalizers.normalizer import PropertyNormalizer
 from heca.properties.normalizers.quaternion import QuaternionNormalizer
-from heca.properties.parameters.parameter import PropertyParameter
-from heca.properties.parameters.quaternion import QuaternionParameter
 from heca.properties.rulers.angular import AngularRuler
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.v1 import PropertyV1
@@ -23,6 +21,5 @@ class RotationProperty(PropertyV1):
             query=QuaternionEncoder.Query(),
         )
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
-        parameter: PropertyParameter.Config = QuaternionParameter.Config()
         normalizer: PropertyNormalizer.Config = QuaternionNormalizer.Config()
         extractor: PropertyExtractor.Config = CGTExtractor.Config(field_name="Quat")

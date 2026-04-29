@@ -2,12 +2,11 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.properties.parameters.parameter import (
-    PropertyParameter,
-)
+from heca.agents.scenes.legacy.parameters.parameter import PropertyParameter
+from heca.misc.binary import Binary
 
 
-class DomainParameter(PropertyParameter):
+class BinaryParameter(PropertyParameter):
     @dataclass(kw_only=True)
     class Config(PropertyParameter.Config):
         pass
@@ -24,4 +23,7 @@ class DomainParameter(PropertyParameter):
     ) -> torch.Tensor | None:
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
-        raise NotImplementedError()
+        if Binary.is_binary(start) and Binary.is_binary(end):
+            if Binary.is_always_same(start, end):
+                return start.mean(dim=0)
+        return None  # Not constant enough

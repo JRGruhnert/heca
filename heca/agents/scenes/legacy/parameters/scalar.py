@@ -2,12 +2,8 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.properties.parameters.parameter import (
-    PropertyParameter,
-)
-from heca.misc.threshold_boundary import (
-    BoundaryThreshold,
-)
+from heca.agents.scenes.legacy.parameters.parameter import PropertyParameter
+from heca.misc.threshold_boundary import BoundaryThreshold
 
 
 class ScalarParameter(PropertyParameter):

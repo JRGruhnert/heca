@@ -91,27 +91,16 @@ class TDEntities(TensorDict):
 
 
 class TDScene(TensorDict):
-    def __init__(
-        self,
-        heca: TDEntities,
-        leaf: TensorDict | None = None,
-    ):
-        super().__init__(heca, batch_size=empty_batchsize)
-        self["entities"] = heca
-        if leaf is not None:
-            self["leaf"] = leaf
+    def __init__(self, formats: dict[str, TensorDict]):
+        super().__init__(formats, batch_size=empty_batchsize)
 
-    @property
-    def entities(self) -> TDEntities:
-        return cast(TDEntities, self["entities"])
+    def heca_format(self) -> TDEntities:
+        assert "heca" in self.keys()
+        return cast(TDEntities, self["heca"])
 
-    @property
-    def leaf(self) -> TensorDict:
-        return self.get("leaf")
-
-    @property
-    def length(self) -> int:
-        return len(self.entities)
+    def tapas_format(self) -> TDProperties:
+        assert "tapas" in self.keys()
+        return cast(TDProperties, self["tapas"])
 
 
 class TDWorld(TensorDict):

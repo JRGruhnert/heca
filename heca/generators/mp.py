@@ -3,31 +3,27 @@ from functools import cached_property
 
 import torch
 
-from heca.agents.agent import Agent
-from heca.agents.leafs.leaf import LeafAgent
+from heca.agents.scenes.scene_agent import SceneAgent
 from heca.entities.entity import Entity
-from heca.entities.real import RealEntity
 from heca.generators.generator import HecaGenerator
 from torch_geometric.data import HeteroData
 
-from heca.misc.td import TDScene
+from heca.misc.td import TDEntity, TDScene
 
 
 class MPGenerator(HecaGenerator):
     @dataclass(kw_only=True)
     class Config(HecaGenerator.Config):
-        agents: set[LeafAgent.Query]
-        entity: RealEntity.Config
+        agents: set[SceneAgent.Query]
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.agents = [LeafAgent.search(query) for query in self.cfg.agents]
-        self.meta = Entity.create(self.cfg.entity)
+        self.agents = [SceneAgent.search(query) for query in self.cfg.agents]
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene
-    ) -> tuple[list[tuple[LeafAgent.Query, Entity]], HeteroData]:
+    ) -> tuple[list[tuple[SceneAgent.Query, tuple[Entity, TDEntity]]], HeteroData]:
         options = []
         for agent in self.cfg.agents:
             options.append((agent, self.meta))
@@ -53,22 +49,19 @@ class MPGenerator(HecaGenerator):
         self, x: TDScene, pad: bool = False, sparse: bool = False
     ) -> torch.Tensor:
         features: list[torch.Tensor] = []
-        for cfg in self.cfg.agents:
-            assert isinstance(
-                cfg, LeafAgent.Config
-            ), "Only LeafAgents are supported in MPGenerator."
-            distances = self.distances(x, cfg=cfg, pad=pad, sparse=sparse)
+        for query in self.cfg.agents:
+            assert isinstance(query, SceneAgent.Query)
+            distances = self.st_distance(x, query=query, pad=pad, sparse=sparse)
             features.append(distances)
         return torch.stack(features, dim=0).float()
 
-    def distances(
-        self, x: TDScene, cfg: LeafAgent.Config, pad: bool, sparse: bool
+    def st_distance(
+        self, x: TDScene, query: SceneAgent.Query, pad: bool, sparse: bool
     ) -> torch.Tensor:
-        agent = LeafAgent.search(cfg.query)
+        agent = SceneAgent.search(query)
         task_features: list[torch.Tensor] = []
-        for key, prop in self.meta.properties.items():
-            pre = agent.ppre.get(key, None)
-            if pre:
+        for key in x.scenes.get("mp").keys():
+            if pre := agent.ppre.get(key):
                 value = torch.tensor([pre, 0.0]) if pad else torch.tensor([pre])
             else:
                 nv = -1.0 if sparse else 0.0  # For Identification in filtering

@@ -1,4 +1,4 @@
-from heca.environments.calvin import CalvinEnvironment
+from heca.environments.scenes.calvin import CalvinEnvironment
 
 from heca.misc.logger import LogMode, LoggerConfig
 from heca.hoops.v1 import MPGnn
