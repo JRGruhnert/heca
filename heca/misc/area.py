@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 
 
 class Area(Configurable):
@@ -14,13 +14,9 @@ class Area(Configurable):
         eval_surfaces: dict[str, list[list[float]]]
 
         def __post_init__(self):
-            assert len(self.labels) > 0, "At least one label must be defined."
-            assert self.labels == set(
-                self.spawn_surfaces.keys()
-            ), "Labels must match spawn surfaces."
-            assert self.labels == set(
-                self.eval_surfaces.keys()
-            ), "Labels must match eval surfaces."
+            assert len(self.labels) > 0
+            assert self.labels == set(self.spawn_surfaces.keys())
+            assert self.labels == set(self.eval_surfaces.keys())
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

@@ -1,6 +1,6 @@
-from heca.agents.scenes.legacy.tapas import TapasAgent
-from heca.agents.scenes.legacy.reversed import RTapasAgent
-from heca.environments.scenes.calvin import CalvinEnvironment
+from heca.agents.experts.legacy.lagacy_n import TapasAgent
+from heca.agents.experts.legacy.legacy_r import RTapasAgent
+from heca.environments.scenes.calvin.scene import CalvinEnvironment
 
 close_drawer = TapasAgent.Query(
     env=CalvinEnvironment.Query(),

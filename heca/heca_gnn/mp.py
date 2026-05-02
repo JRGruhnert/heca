@@ -4,9 +4,11 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from heca.misc.td import TDWorld
+from heca.heca_gnn.network import HecaNetwork
+from heca.properties.encoders.encoder import PropertyEncoder
 from heca.misc import hardware, logger
 from heca.classes.persist import Persistable
+from heca.misc.td import TDWorld
 from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.bases.base import BaseNetwork
 from heca.heca_gnn.critic import CriticReadoutNetwork
@@ -16,13 +18,13 @@ from typing import TypeVar
 V = TypeVar("V", bound="HecaNetwork")
 
 
-class HecaNetwork(Persistable, nn.Module):
+class MPNetwork(HecaNetwork):
     @dataclass(frozen=True, kw_only=True)
-    class Query(Persistable.Query):
+    class Query(HecaNetwork.Query):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class Disk(Persistable.File):
+    class File(HecaNetwork.File):
         pass
 
         @classmethod
@@ -33,13 +35,20 @@ class HecaNetwork(Persistable, nn.Module):
     class Config(Persistable.Config):
         query: "HecaNetwork.Query"
         base: BaseNetwork.Config
-        feature_dim: int = 64
+        feature_dim: int = 32
         eval_mode: bool = False
+        encoders: list[PropertyEncoder.Query]
 
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)
         self.cfg = cfg
 
+        self.encoders = nn.ModuleDict(
+            {
+                encoder.label: PropertyEncoder.search(encoder)
+                for encoder in self.cfg.encoders
+            }
+        )
         self.base = BaseNetwork.create(self.cfg.base)
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
         self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
@@ -63,9 +72,6 @@ class HecaNetwork(Persistable, nn.Module):
     def critic(self, data: HeteroData) -> torch.Tensor:
         return self.critic_net(data)
 
-    def upgrade(self, checkpoint):
-        self.load_state_dict(checkpoint, strict=False)
-
     @classmethod
     def load(cls, query: "HecaNetwork.Query") -> "HecaNetwork":
         path = cls.Disk.get_latest(query)
@@ -85,3 +91,6 @@ class HecaNetwork(Persistable, nn.Module):
         torch.save({"model_state": cls.search(query).state_dict()}, path)
         logger.info(f"Saved {tag} for epoch {epoch}.")
         return True
+
+    def upgrade(self, checkpoint):
+        self.load_state_dict(checkpoint, strict=False)

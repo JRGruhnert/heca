@@ -2,12 +2,11 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.agents.scenes.parameters.parameter import (
-    PropertyParameter,
-)
+from heca.agents.experts.legacy.parameters.parameter import PropertyParameter
+from heca.misc.quaternion import Quaternion
 
 
-class EuclideanParameter(PropertyParameter):
+class QuaternionParameter(PropertyParameter):
     @dataclass(kw_only=True)
     class Config(PropertyParameter.Config):
         pass
@@ -25,5 +24,5 @@ class EuclideanParameter(PropertyParameter):
         assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
         assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
         if selected_by_tapas:
-            return start.mean(dim=0)
-        return None  # Not selected by tapas
+            return Quaternion.mean(start)
+        return None

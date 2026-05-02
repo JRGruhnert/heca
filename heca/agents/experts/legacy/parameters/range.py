@@ -4,7 +4,7 @@ from functools import cached_property
 import torch
 
 from heca.properties.normalizers.boundary import BoundaryNormalizer
-from heca.agents.scenes.legacy.parameters.parameter import PropertyParameter
+from heca.agents.experts.legacy.parameters.parameter import PropertyParameter
 
 
 class RangeParameter(PropertyParameter):

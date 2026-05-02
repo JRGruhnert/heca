@@ -2,10 +2,10 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.agents.scenes.legacy.parameters.parameter import PropertyParameter
+from heca.agents.experts.legacy.parameters.parameter import PropertyParameter
 
 
-class DomainParameter(PropertyParameter):
+class IgnoreParameter(PropertyParameter):
     @dataclass(kw_only=True)
     class Config(PropertyParameter.Config):
         pass
@@ -20,6 +20,4 @@ class DomainParameter(PropertyParameter):
         end: torch.Tensor,
         selected_by_tapas: bool = False,
     ) -> torch.Tensor | None:
-        assert isinstance(start, torch.Tensor), "start must be a torch.Tensor"
-        assert isinstance(end, torch.Tensor), "end must be a torch.Tensor"
-        raise NotImplementedError()
+        return None

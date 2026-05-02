@@ -7,7 +7,7 @@ from typing import Type
 import torch
 from torch.distributions import Categorical
 from heca.entities.entity import Entity
-from heca.environments.scene import Scene
+from heca.environments.scenes.scene import Scene
 from heca.environments.world import MetaWorld
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
@@ -85,7 +85,7 @@ class Heca(Agent):
         reward, done, terminal = self.evaluator.step(z, fb)
         if self.cfg.mode == HecaMode.TRAIN:
             logprob: torch.Tensor = dist.log_prob(action)
-            can_learn = self.ppo.step(
+            learn = self.ppo.step(
                 x,
                 y,
                 action.detach(),
@@ -99,7 +99,7 @@ class Heca(Agent):
             reward=reward,
             done=done,
             terminal=terminal,
-            can_learn=can_learn,
+            learn=learn,
         )
 
     def predict(

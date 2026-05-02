@@ -4,22 +4,23 @@ from typing import Callable
 import torch
 from heca.classes.merge import Mergeable
 from heca.properties.property import Property
-from heca.environments.scene import Environment
 from heca.misc.td import TDEntity, TDWorld
 
 
 class Entity(Mergeable):
+    @dataclass(frozen=True, kw_only=True)
+    class Query(Mergeable.Query):
+        env: str
+
     @dataclass(kw_only=True)
     class Config(Mergeable.Config):
         props: set[Property.Config]
-        weights: list[float] | None = None
-        env: Environment.Query | None = None
+        weights: list[float]
 
         def __post_init__(self):
-            if self.weights is not None and len(self.weights) != len(self.props):
-                raise ValueError("Weights must be provided for all properties")
-            assert len(self.props) > 0, "At least one property must be provided"
-            assert sum(self.weights) == 1.0 if self.weights is not None else True
+            assert len(self.weights) == len(self.props)
+            assert len(self.props) > 0
+            assert sum(self.weights) == 1.0
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -37,28 +38,13 @@ class Entity(Mergeable):
         return meta.pop()
 
     @classmethod
-    def merge(cls, query: "Entity.Query", items: list["Entity.Query"]) -> "Entity":
+    def merge(cls, items: list["Entity.Query"]) -> "Entity":
         assert len(items) > 0
         cls.ensure_same_meta(items)
         props = cls.make_properties(items)
         meta = f"{heca}.{old}"
         # TODO how to mege? with query?
         return Entity(cfg=Entity.Config(props=props))
-
-    @staticmethod
-    def make_properties(items: list["Entity.Query"]) -> set[Property.Config]:
-        prop_dict: dict[str, list[Property.Config]] = {}
-        # TODO this is a bit hacky, we should have a better way to cluster properties
-        for item in items:
-            for prop in item.props:
-                if prop.label not in prop_dict:
-                    prop_dict[prop.label] = []
-                prop_dict[prop.label].append(prop)
-        merged_props = set()
-        for label, configs in prop_dict.items():
-            merged_prop = Property.extract(label, configs)
-            merged_props.add(merged_prop)
-        return merged_props
 
     def _weighted(self, a: TDWorld, b: TDWorld, op: Callable) -> list[torch.Tensor]:
         values = []

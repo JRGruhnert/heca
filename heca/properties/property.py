@@ -2,7 +2,6 @@ import torch
 from dataclasses import dataclass
 from heca.classes.config import Configurable
 
-from heca.properties.aggregators.aggregator import PropertyAggregator
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.properties.extractors.extractor import PropertyExtractor
@@ -19,7 +18,6 @@ class Property(Configurable):
         evaluator: PropertyEvaluator.Config
         extractor: PropertyExtractor.Config
         normalizer: PropertyNormalizer.Config
-        aggregator: PropertyAggregator.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -28,7 +26,6 @@ class Property(Configurable):
         self.evaluator = PropertyEvaluator.create(cfg.evaluator)
         self.extractor = PropertyExtractor.create(cfg.extractor)
         self.normalizer = PropertyNormalizer.create(cfg.normalizer)
-        self.aggregator = PropertyAggregator.create(cfg.aggregator)
 
     def read(self, x: torch.Tensor) -> torch.Tensor:
         """Extracts the property value from the given modality."""
@@ -43,9 +40,3 @@ class Property(Configurable):
         """Evaluates whether given values are similar."""
         m = self.ruler(x, y)
         return self.evaluator(x, y, m)
-
-    def extract(
-        self, x: torch.Tensor, y: torch.Tensor, values: list[torch.Tensor]
-    ) -> torch.Tensor:
-        """Aggregates the property value from the given modality."""
-        return self.aggregator(x, y, values)

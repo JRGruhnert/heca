@@ -8,15 +8,13 @@ from heca.properties.normalizers.normalizer import PropertyNormalizer
 from heca.properties.rulers.euclidean import EuclideanRuler
 from heca.properties.normalizers.area import AreaNormalizer
 from heca.properties.rulers.ruler import PropertyRuler
-from heca.properties.v1 import PropertyV1
+from heca.properties.default.v1.property import PropertyV1
 
 
 class PositionProperty(PropertyV1):
     @dataclass(kw_only=True)
     class Config(PropertyV1.Config):
         ruler: PropertyRuler.Config = EuclideanRuler.Config()
-        encoder: PropertyEncoder.Config = PositionEncoder.Config(
-            query=PositionEncoder.Query(),
-        )
+        encoder: PropertyEncoder.Config = PositionEncoder.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
         normalizer: PropertyNormalizer.Config = AreaNormalizer.Config()

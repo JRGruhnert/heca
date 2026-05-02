@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from heca.properties.evaluators.evaluator import PropertyEvaluator
 
 
-class DomainEvaluator(PropertyEvaluator):
+class StateEvaluator(PropertyEvaluator):
     @dataclass(kw_only=True)
     class Config(PropertyEvaluator.Config):
         pass

@@ -22,7 +22,3 @@ class Evaluator(Configurable):
     @abstractmethod
     def step(self, x: TensorDict, feedback: AgentFeedback) -> tuple[float, bool]:
         raise NotImplementedError()
-
-    @abstractmethod
-    def get_feedback(self, x: TensorDict) -> AgentFeedback:
-        raise NotImplementedError()

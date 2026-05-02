@@ -35,4 +35,4 @@ class PropertyParameter(Configurable):
         reversed: bool,
         selected_by_tapas: bool = False,
     ) -> torch.Tensor | None:
-        raise NotImplementedError("Subclasses must implement this method.")
+        raise NotImplementedError()

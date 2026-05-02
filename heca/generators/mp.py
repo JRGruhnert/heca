@@ -3,7 +3,7 @@ from functools import cached_property
 
 import torch
 
-from heca.agents.scenes.scene_agent import SceneAgent
+from heca.agents.experts.expert import ExpertAgent
 from heca.entities.entity import Entity
 from heca.generators.generator import HecaGenerator
 from torch_geometric.data import HeteroData
@@ -14,16 +14,16 @@ from heca.misc.td import TDEntity, TDScene
 class MPGenerator(HecaGenerator):
     @dataclass(kw_only=True)
     class Config(HecaGenerator.Config):
-        agents: set[SceneAgent.Query]
+        agents: set[ExpertAgent.Query]
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.agents = [SceneAgent.search(query) for query in self.cfg.agents]
+        self.agents = [ExpertAgent.search(query) for query in self.cfg.agents]
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene
-    ) -> tuple[list[tuple[SceneAgent.Query, tuple[Entity, TDEntity]]], HeteroData]:
+    ) -> tuple[list[tuple[ExpertAgent.Query, tuple[Entity, TDEntity]]], HeteroData]:
         options = []
         for agent in self.cfg.agents:
             options.append((agent, self.meta))
@@ -50,15 +50,15 @@ class MPGenerator(HecaGenerator):
     ) -> torch.Tensor:
         features: list[torch.Tensor] = []
         for query in self.cfg.agents:
-            assert isinstance(query, SceneAgent.Query)
+            assert isinstance(query, ExpertAgent.Query)
             distances = self.st_distance(x, query=query, pad=pad, sparse=sparse)
             features.append(distances)
         return torch.stack(features, dim=0).float()
 
     def st_distance(
-        self, x: TDScene, query: SceneAgent.Query, pad: bool, sparse: bool
+        self, x: TDScene, query: ExpertAgent.Query, pad: bool, sparse: bool
     ) -> torch.Tensor:
-        agent = SceneAgent.search(query)
+        agent = ExpertAgent.search(query)
         task_features: list[torch.Tensor] = []
         for key in x.scenes.get("mp").keys():
             if pre := agent.ppre.get(key):

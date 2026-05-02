@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.agents.scenes.legacy.parameters.parameter import PropertyParameter
+from heca.agents.experts.legacy.parameters.parameter import PropertyParameter
 from heca.misc.binary import Binary
 
 

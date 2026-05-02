@@ -5,23 +5,24 @@ from functools import cached_property
 
 from heca.classes.register import Registerable
 from heca.entities.entity import Entity
-from heca.environments.scene import Scene
+from heca.entities.precon import Precon
+from heca.environments.scenes.scene import Scene
 from heca.misc.td import TDEntity, TDScene
 
 
 class Cursor(Enum):
     IDLE = 1
     ERROR = 2
-    RUNNING = 3
+    ACTIVE = 3
 
 
 @dataclass(kw_only=True)
 class AgentFeedback:
-    reward: float
     done: bool
+    learn: bool
+    state: Cursor
+    reward: float
     terminal: bool
-    cursor: Cursor = Cursor.IDLE
-    can_learn: bool = False
 
 
 class Agent(Registerable):
@@ -37,19 +38,33 @@ class Agent(Registerable):
         raise NotImplementedError()
 
     @abstractmethod
+    def evaluate(self, x: TDScene, y: TDScene) -> AgentFeedback:
+        raise NotImplementedError()
+
+    @abstractmethod
     def sample(self) -> tuple[TDScene, TDScene]:
         raise NotImplementedError()
 
-    @cached_property
     @abstractmethod
-    def precons(self) -> list[tuple[Entity, TDEntity]]:
+    def gen_pre(self) -> list[tuple[Entity, TDEntity]]:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def gen_post(self) -> list[tuple[Entity, TDEntity]]:
         raise NotImplementedError()
 
     @cached_property
-    @abstractmethod
+    def precons(self) -> list[tuple[Entity, TDEntity]]:
+        return self.gen_pre()
+
+    @cached_property
     def postcons(self) -> list[tuple[Entity, TDEntity]]:
-        raise NotImplementedError()
+        return self.gen_post()
 
     @abstractmethod
     def required_scenes(self) -> list[Scene.Query]:
         raise NotImplementedError()
+
+    def make_options(self, x: TDScene, y: TDScene, con: Precon) -> list[HeteroData]:
+        # take precon
+        return [x]

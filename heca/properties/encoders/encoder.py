@@ -2,11 +2,12 @@ from dataclasses import dataclass
 
 from torch import nn
 
-from heca.misc.classes import Persistable
+from heca.classes.persist import Persistable
 from heca.heca_gnn.mlp import StandardMLP
 
 
 class PropertyEncoder(Persistable, nn.Module):
+
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
         in_dim: int

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from heca.agents.scenes.scene_agent import SceneAgent
+from heca.agents.experts.expert import ExpertAgent
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.properties.encoders.v1.area import AreaEncoder
 from heca.properties.encoders.v1.rotation import QuaternionEncoder
@@ -23,7 +23,7 @@ class MPHeca(Heca):
 
     @dataclass(kw_only=True)
     class Config(Heca.Config):
-        agents: set[SceneAgent.Query]
+        agents: set[ExpertAgent.Query]
         encoders: set[PropertyEncoder.Query] = set(
             [
                 AreaEncoder.Query(),

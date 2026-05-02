@@ -1,5 +1,6 @@
 from heca.agents.agent import Agent
-from heca.environments.scene import Scene
+from heca.entities.entity import Entity
+from heca.environments.scenes.scene import Scene
 from heca.misc.td import TDWorld
 
 
@@ -26,3 +27,11 @@ class MetaWorld:
             return Scene.search(query)
         else:
             raise ValueError(f"Scene {query.label} not found in MetaWorld.")
+
+    @classmethod
+    def entities(cls) -> list[Entity.Query]:
+        return [
+            entity
+            for scene_query in cls.register
+            for entity in cls.get(scene_query).entities()
+        ]

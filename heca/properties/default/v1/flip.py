@@ -8,15 +8,13 @@ from heca.properties.normalizers.ignore import IgnoreNormalizer
 from heca.properties.normalizers.normalizer import PropertyNormalizer
 from heca.properties.rulers.flip import FlipRuler
 from heca.properties.rulers.ruler import PropertyRuler
-from heca.properties.v1 import PropertyV1
+from heca.properties.default.v1.property import PropertyV1
 
 
 class FlipProperty(PropertyV1):
     @dataclass(kw_only=True)
     class Config(PropertyV1.Config):
         ruler: PropertyRuler.Config = FlipRuler.Config()
-        encoder: PropertyEncoder.Config = FlipEncoder.Config(
-            query=FlipEncoder.Query(),
-        )
+        encoder: PropertyEncoder.Config = FlipEncoder.Config()
         normalizer: PropertyNormalizer.Config = IgnoreNormalizer.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()

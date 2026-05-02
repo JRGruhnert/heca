@@ -9,7 +9,7 @@ from heca.properties.rulers.euclidean import EuclideanRuler
 from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.normalizers.boundary import BoundaryNormalizer
 from heca.properties.normalizers.normalizer import PropertyNormalizer
-from heca.properties.v1 import PropertyV1
+from heca.properties.default.v1.property import PropertyV1
 
 
 class RangeProperty(PropertyV1):
@@ -18,9 +18,7 @@ class RangeProperty(PropertyV1):
         low: float
         high: float
         ruler: PropertyRuler.Config = EuclideanRuler.Config()
-        encoder: PropertyEncoder.Config = RangeEncoder.Config(
-            query=RangeEncoder.Query(),
-        )
+        encoder: PropertyEncoder.Config = RangeEncoder.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()
         extractor: PropertyExtractor.Config = CGTExtractor.Config(field_name="Range")
         normalizer: PropertyNormalizer.Config = field(init=False)

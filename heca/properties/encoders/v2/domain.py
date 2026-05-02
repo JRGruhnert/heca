@@ -4,7 +4,7 @@ from heca.properties.encoders.encoder import PropertyEncoder
 
 
 class DomainEncoder(PropertyEncoder):
-    @dataclass(kw_only=True)
+    @dataclass(frozen=True, kw_only=True)
     class Query(PropertyEncoder.Query):
         label: str = "domain"
 
