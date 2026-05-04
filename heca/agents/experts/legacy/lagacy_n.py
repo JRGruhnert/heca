@@ -15,7 +15,7 @@ from heca.agents.experts.legacy import v1
 from heca.agents.agent import Cursor
 from heca.agents.experts.legacy.parameters.parameter import PropertyParameter
 from heca.agents.experts.tapas import TapasAgent
-from heca.environments.world import MetaWorld
+from heca.environment.world import MetaWorld
 from heca.misc.td import TDProperties
 
 sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints

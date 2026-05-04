@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from heca.agents.agent import Agent
 from heca.classes.register import Registerable
-from heca.environments.scenes.scene import Scene
+from heca.environment.scenes.scene import Scene
 from heca.misc.td import TDScene
 
 

@@ -6,7 +6,8 @@ import torch
 
 from heca.classes.config import Configurable
 from heca.entities.entity import Entity
-from heca.environments.scenes.scene import Scene
+from heca.environment.scenes.calvin.scene import CalvinScene
+from heca.environment.scenes.scene import Scene
 from tapas_gmm_modified.dense_correspondence.correspondence_finder import (
     find_best_match,
 )
@@ -152,7 +153,8 @@ class ImageSelector(Configurable):
         self.root.mainloop()
 
 
-imse = ImageSelector(
-    cfg=ImageSelector.Config(entities=[Entity.Query(meta="example_entity")])
+selector_cfg = ImageSelector.Config(
+    scene=CalvinScene.Query(),
 )
-imse.run()
+selector = ImageSelector(cfg=selector_cfg)
+selector.run()

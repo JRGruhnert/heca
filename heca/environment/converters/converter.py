@@ -9,18 +9,16 @@ class Converter(Configurable):
     class Config(Configurable.Config):
         label: str
 
-    def __call__(self, observation) -> TensorDict:
-        raise NotImplementedError(
-            "ObservationConverter __call__ method not implemented yet."
-        )
+    def __call__(self, obs) -> tuple[TensorDict, bool]:
+        raise NotImplementedError()
 
 
-class HecaConverter(Converter):
+class ObsConverter(Converter):
     @dataclass(kw_only=True)
     class Config(Converter.Config):
         pass
 
-    def __call__(self, obs) -> TDEntities:
+    def __call__(self, obs) -> tuple[TDEntities, bool]:
         raise NotImplementedError()
 
 
@@ -29,5 +27,5 @@ class LeafConverter(Converter):
     class Config(Converter.Config):
         pass
 
-    def __call__(self, obs) -> TensorDict:
+    def __call__(self, obs) -> tuple[TensorDict, bool]:
         raise NotImplementedError()

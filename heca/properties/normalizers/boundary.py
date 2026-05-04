@@ -2,9 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from heca.properties.normalizers.normalizer import (
-    PropertyNormalizer,
-)
+from heca.properties.normalizers.normalizer import PropertyNormalizer
 
 
 class BoundaryNormalizer(PropertyNormalizer):

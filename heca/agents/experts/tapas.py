@@ -10,8 +10,8 @@ from tapas_gmm_modified.policy.models.tpgmm import AutoTPGMM
 from heca.agents.agent import AgentFeedback, Cursor
 from heca.agents.experts.expert import ExpertAgent
 from heca.entities.entity import Entity
-from heca.environments.scenes.scene import Scene
-from heca.environments.world import MetaWorld
+from heca.environment.scenes.scene import Scene
+from heca.environment.world import MetaWorld
 from heca.misc.td import TDEntity, TDScene, TDWorld
 from heca.misc import logger
 from heca.misc.hardware import device

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 from heca.properties.normalizers.boundary import (
     BoundaryNormalizer,
 )

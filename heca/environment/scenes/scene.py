@@ -3,8 +3,9 @@ from dataclasses import dataclass
 
 import numpy as np
 from heca.classes.register import Registerable
-from heca.converters.converter import Converter
+from heca.environment.converters.converter import Converter
 from heca.entities.entity import Entity
+
 from heca.misc.td import TDScene
 
 
@@ -20,9 +21,15 @@ class Scene(Registerable):
             k: Converter.create(v) for k, v in self.cfg.converters.items()
         }
 
-    def to_observation(self, obs) -> TDScene:
+    def to_observation(self, obs) -> tuple[TDScene, bool]:
         formats = {k: self.converters[k](obs) for k in self.converters}
-        return TDScene(formats=formats)
+        valid = all(v[1] for v in formats.values())
+        return TDScene(formats={k: v[0] for k, v in formats.items()}), valid
+
+    def sample_image(self) -> dict[str, np.ndarray]:
+        if "image" not in self.converters:
+            raise ValueError("No image converter specified for this scene.")
+        return self.converters["image"](obs)
 
     @abstractmethod
     def step(self, action: np.ndarray) -> TDScene:
@@ -38,6 +45,3 @@ class Scene(Registerable):
 
     def entities(self) -> list[Entity.Query]:
         raise NotImplementedError()
-
-    def preuse(self) -> list[Entity.Query]:
-        return self.entities()

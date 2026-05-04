@@ -7,7 +7,7 @@ from heca.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from heca.misc.buffer import BufferConfig
 from heca.entities.entity import Entity
-from heca.environments.scenes.calvin import CalvinEnvironmentConfig
+from heca.environment.scenes.calvin import CalvinEnvironmentConfig
 from heca.evaluators import select_evaluator
 from heca.evaluators.dense import Dense3EvaluatorConfig
 from heca.evaluators.evaluator import EvaluatorConfig
@@ -28,7 +28,6 @@ from heca.runners.plotters.plots.entity_3d import (
     Entity3DHelperConfig,
     Entity3DMode,
 )
-
 
 skills = get_skill_set("srpb")
 properties = get_property_set("srpb")

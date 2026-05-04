@@ -7,8 +7,8 @@ from typing import Type
 import torch
 from torch.distributions import Categorical
 from heca.entities.entity import Entity
-from heca.environments.scenes.scene import Scene
-from heca.environments.world import MetaWorld
+from heca.environment.scenes.scene import Scene
+from heca.environment.world import MetaWorld
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
 from heca.generators.generator import HecaGenerator

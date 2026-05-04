@@ -6,7 +6,7 @@ from functools import cached_property
 from heca.classes.register import Registerable
 from heca.entities.entity import Entity
 from heca.entities.precon import Precon
-from heca.environments.scenes.scene import Scene
+from heca.environment.scenes.scene import Scene
 from heca.misc.td import TDEntity, TDScene
 
 

@@ -1,9 +1,7 @@
 import torch
 from dataclasses import dataclass
 
-from heca.properties.extractors.extractor import (
-    PropertyExtractor,
-)
+from heca.properties.extractors.extractor import PropertyExtractor
 
 
 class CGTExtractor(PropertyExtractor):

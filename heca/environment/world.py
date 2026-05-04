@@ -1,6 +1,6 @@
 from heca.agents.agent import Agent
 from heca.entities.entity import Entity
-from heca.environments.scenes.scene import Scene
+from heca.environment.scenes.scene import Scene
 from heca.misc.td import TDWorld
 
 

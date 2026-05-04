@@ -9,7 +9,7 @@ from heca.properties.rulers.euclidean import EuclideanRuler
 from heca.properties.normalizers.normalizer import PropertyNormalizer
 from heca.properties.evaluators.area import AreaEvaluator
 from heca.properties.normalizers.area import AreaNormalizer
-from heca.environments.scenes.calvin.area import CalvinAreaConfig
+from heca.environment.scenes.calvin.area import CalvinAreaConfig
 
 
 class AreaProperty(PropertyV1):
