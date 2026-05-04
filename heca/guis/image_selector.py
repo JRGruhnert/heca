@@ -15,6 +15,32 @@ from tapas_gmm_modified.dense_correspondence.correspondence_augmentation import 
     random_flip,
 )
 
+# Pseudocode for ViT-based dense correspondence
+from tapas_gmm_modified.encoder.vit_extractor import (
+    VitFeatureEncoder,
+    VitFeatureEncoderConfig,
+)
+from tapas_gmm_modified.encoder.models.vit_extractor.extractor import (
+    VitEncoderModel,
+    VitFeatureModelConfig,
+)
+
+# 1. Create config (adapt as needed)
+config = VitFeatureEncoderConfig(
+    encoder=VitFeatureModelConfig(
+        load_size="B_16_imagenet1k",
+    )
+)
+
+# 2. Instantiate encoder
+encoder = VitFeatureEncoder(config)
+
+# 3. Prepare your image as a torch tensor (B, C, H, W)
+img_tensor = ...  # Your image
+
+# 4. Get dense descriptors
+descriptors = encoder.compute_descriptor(img_tensor)  # shape: (B, D, H, W)
+
 
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)

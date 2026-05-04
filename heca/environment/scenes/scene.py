@@ -8,12 +8,14 @@ from heca.entities.entity import Entity
 
 from heca.misc.td import TDScene
 
+from heca.extractor import VitFeatureEncoderConfig
+
 
 class Scene(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
         converters: dict[str, Converter.Config]
-        gt: bool = False
+        encoder: VitFeatureEncoderConfig | None = None
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
