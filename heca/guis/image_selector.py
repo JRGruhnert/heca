@@ -15,32 +15,6 @@ from tapas_gmm_modified.dense_correspondence.correspondence_augmentation import 
     random_flip,
 )
 
-# Pseudocode for ViT-based dense correspondence
-from tapas_gmm_modified.encoder.vit_extractor import (
-    VitFeatureEncoder,
-    VitFeatureEncoderConfig,
-)
-from tapas_gmm_modified.encoder.models.vit_extractor.extractor import (
-    VitEncoderModel,
-    VitFeatureModelConfig,
-)
-
-# 1. Create config (adapt as needed)
-config = VitFeatureEncoderConfig(
-    encoder=VitFeatureModelConfig(
-        load_size="B_16_imagenet1k",
-    )
-)
-
-# 2. Instantiate encoder
-encoder = VitFeatureEncoder(config)
-
-# 3. Prepare your image as a torch tensor (B, C, H, W)
-img_tensor = ...  # Your image
-
-# 4. Get dense descriptors
-descriptors = encoder.compute_descriptor(img_tensor)  # shape: (B, D, H, W)
-
 
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)
@@ -87,8 +61,9 @@ class ImageSelector(Configurable):
         self.canvas.pack()
 
     def load_image(self):
-        x = self.scene.sample()
+        x = self.scene.sample_image()
         # TODO: get image from here
+        # x is a dict[str, np.ndarray] which has to be converted to tensor
         self.img_raw = np.random.randint(0, 255, (3, 400, 400), dtype=np.uint8)
 
         img = Image.fromarray(self.img_raw.transpose(1, 2, 0))
@@ -104,17 +79,23 @@ class ImageSelector(Configurable):
             title = f"Image Selector - Entity: {self.current_pair[0].label}, Property: {self.current_pair[1]}"
             self.root.title(title)
 
+    def predict_point(self, img: torch.Tensor) -> tuple[int, int]:
+        # 4. Get dense descriptors
+        descriptors = self.scene.encoder.compute_descriptor(img)  # shape: (B, D, H, W)
+
     def on_click(self, event: tk.Event):
         self.point = (event.x, event.y)
+        self.place_marker(self.point)
 
+    def place_marker(self, point: tuple[int, int]):
         if self.marker:
             self.canvas.delete(self.marker)
 
         self.marker = self.canvas.create_oval(
-            event.x - self.cfg.marker_radius,
-            event.y - self.cfg.marker_radius,
-            event.x + self.cfg.marker_radius,
-            event.y + self.cfg.marker_radius,
+            point[0] - self.cfg.marker_radius,
+            point[1] - self.cfg.marker_radius,
+            point[0] + self.cfg.marker_radius,
+            point[1] + self.cfg.marker_radius,
             fill="red",
         )
 

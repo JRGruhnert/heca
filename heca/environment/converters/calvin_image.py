@@ -1,9 +1,9 @@
-import argparse
 import math
 import types
 from dataclasses import dataclass
 from typing import List, Tuple, Union
 
+import numpy as np
 import timm
 import torch
 import torch.nn.modules.utils as nn_utils
@@ -11,16 +11,35 @@ from PIL import Image
 from torch import nn
 from torchvision import transforms
 
-from heca.classes.persist import Persistable
+from heca.environment.converters.extractor import Extractor
 from heca.misc import hardware
+from heca.misc.td import TDScene
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 
 
-class ViTExtractor(Persistable):
-    class Config(Persistable.Config):
+class ViTExtractor(Extractor):
+    @dataclass(frozen=True, kw_only=True)
+    class Query(Extractor.Query):
+        pass
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(Extractor.File):
+        pass
+
+    @dataclass(kw_only=True)
+    class Config(Extractor.Config):
         model_type: str = "dino_vits8"
         stride: int = 4
+        load_size: int | None
+        layer: int
+        facet: str
+        bin: bool
+        thresh: float
+        include_cls: bool
+        register_tokens: int = 0  # extra cls-tokens for DinoV2+registers
+        center_crop: bool = False
+        pad: bool = False
 
     """This class facilitates extraction of features, descriptors, and saliency maps from a ViT.
 
@@ -41,14 +60,21 @@ class ViTExtractor(Persistable):
         )
         self.model.eval()
         self.model.to(hardware.device)
-        self.p = self.model.patch_embed.patch_size
-        self.stride = self.model.patch_embed.proj.stride
 
-        # NOTE: dino uses the IMAGENET_DEFAULT_MEAN and _STD, see
-        # https://github.com/facebookresearch/dinov2/blob/main/dinov2/data/transforms.py#L42
-        # https://github.com/facebookresearch/dinov2/issues/2
-        self.mean = (0.485, 0.456, 0.406)
-        self.std = (0.229, 0.224, 0.225)
+        self.stride = self.model.patch_embed.proj.stride
+        patch_size = self.model.patch_embed.patch_size
+        if type(patch_size) is tuple:
+            assert all([p == patch_size[0] for p in patch_size]), "has to be square"
+            self.p = patch_size[0]
+        else:
+            self.p = patch_size
+
+        self.mean = (
+            (0.485, 0.456, 0.406) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
+        )
+        self.std = (
+            (0.229, 0.224, 0.225) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
+        )
 
         self._feats = []
         self.hook_handlers = []
@@ -78,10 +104,16 @@ class ViTExtractor(Persistable):
             model = torch.hub.load(
                 "facebookresearch/dino:main", model_type_dict[model_type]
             )
+            assert isinstance(model, nn.Module) and isinstance(
+                temp_model, nn.Module
+            ), "models should be of type nn.Module"
             temp_state_dict = temp_model.state_dict()
             del temp_state_dict["head.weight"]
             del temp_state_dict["head.bias"]
             model.load_state_dict(temp_state_dict)
+        assert isinstance(model, nn.Module) and isinstance(
+            temp_model, nn.Module
+        ), "models should be of type nn.Module"
         return model
 
     @staticmethod
@@ -265,7 +297,7 @@ class ViTExtractor(Persistable):
         self.hook_handlers = []
 
     def _extract_features(
-        self, batch: torch.Tensor, layers: List[int] = 11, facet: str = "key"
+        self, batch: torch.Tensor, layers: List[int] = [11], facet: str = "key"
     ) -> List[torch.Tensor]:
         """
         extract features from the model
@@ -383,8 +415,7 @@ class ViTExtractor(Persistable):
             "query",
             "value",
             "token",
-        ], f"""{facet} is not a supported facet for descriptors.
-                                                             choose from ['key' | 'query' | 'value' | 'token'] """
+        ], f"{facet} is not a supported facet for descriptors."
         self._extract_features(batch, [layer], facet)
         x = self._feats[0]
         if facet == "token":
@@ -405,86 +436,29 @@ class ViTExtractor(Persistable):
             desc = self._log_bin(x)
         return desc
 
-    def extract_saliency_maps(self, batch: torch.Tensor) -> torch.Tensor:
-        """
-        extract saliency maps. The saliency maps are extracted by averaging several attention heads from the last layer
-        in of the CLS token. All values are then normalized to range between 0 and 1.
-        :param batch: batch to extract saliency maps for. Has shape BxCxHxW.
-        :return: a tensor of saliency maps. has shape Bxt-1
-        """
-        assert (
-            self.model_type == "dino_vits8"
-        ), f"saliency maps are supported only for dino_vits model_type."
-        self._extract_features(batch, [11], "attn")
-        head_idxs = [0, 2, 4, 5]
-        curr_feats = self._feats[0]  # Bxhxtxt
-        cls_attn_map = curr_feats[:, head_idxs, 0, 1:].mean(dim=1)  # Bx(t-1)
-        temp_mins, temp_maxs = cls_attn_map.min(dim=1)[0], cls_attn_map.max(dim=1)[0]
-        cls_attn_maps = (cls_attn_map - temp_mins) / (
-            temp_maxs - temp_mins
-        )  # normalize to range [0,1]
-        return cls_attn_maps
-
-
-class VitEncoderModel(ViTExtractor):
-    @dataclass
-    class Config(ViTExtractor.Config):
-        load_size: int | None
-        layer: int
-        facet: str
-        bin: bool
-        thresh: float
-        stride: int
-        include_cls: bool
-
-        register_tokens: int = 0  # extra cls-tokens for DinoV2+registers
-
-        center_crop: bool = False
-        pad: bool = False
-
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
-        self.model = ViTExtractor.create_model(self.cfg.model_type)
-        self.model = ViTExtractor.patch_vit_resolution(
-            self.model, stride=self.cfg.stride
-        )
-        self.model.eval()
-        self.model.to(hardware.device)
-
-        self.stride = self.model.patch_embed.proj.stride
-        patch_size = self.model.patch_embed.patch_size
-        if type(patch_size) is tuple:
-            assert all([p == patch_size[0] for p in patch_size]), "has to be square"
-            self.p = patch_size[0]
-        else:
-            self.p = patch_size
-
-        self.mean = (
-            (0.485, 0.456, 0.406) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
-        )
-        self.std = (
-            (0.229, 0.224, 0.225) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
-        )
-
-        self._feats = []
-        self.hook_handlers = []
-        self.load_size = None
-        self.num_patches = None
-
-    def preprocess(self, img_tensor: torch.Tensor) -> Tuple[torch.Tensor, Image.Image]:
-        return super().preprocess(
+    def __call__(self, obs) -> tuple[TDScene, bool]:
+        np_image_dict = self._get_image_dict(obs)
+        img_tensor = self._convert_image_dict(np_image_dict)
+        img_tensor = self.preprocess(
             img_tensor,
             load_size=self.cfg.load_size,
             center_crop=self.cfg.center_crop,
             pad=self.cfg.pad,
         )
-
-    def extract_descriptors(self, batch: torch.Tensor) -> torch.Tensor:
-        return super().extract_descriptors(
-            batch,
+        desc = self.extract_descriptors(
+            img_tensor,
             layer=self.cfg.layer,
             facet=self.cfg.facet,
             bin=self.cfg.bin,
             include_cls=self.cfg.include_cls,
             register_tokens=self.cfg.register_tokens,
         )
+        if self.cfg.thresh > 0:
+            desc = desc * (desc.norm(dim=-1, keepdim=True) > self.cfg.thresh).float()
+        return TDScene(formats={"descriptors": desc}), True
+
+    def _get_image_dict(self, obs) -> dict[str, np.ndarray]:
+        raise NotImplementedError()
+
+    def _convert_image_dict(self, img_dict: dict[str, np.ndarray]) -> torch.Tensor:
+        raise NotImplementedError()

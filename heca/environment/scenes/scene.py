@@ -8,20 +8,21 @@ from heca.entities.entity import Entity
 
 from heca.misc.td import TDScene
 
-from heca.extractor import VitFeatureEncoderConfig
+from heca.environment.converters.extractor import VitEncoderModel
 
 
 class Scene(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
         converters: dict[str, Converter.Config]
-        encoder: VitFeatureEncoderConfig | None = None
+        encoder: VitEncoderModel.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.converters = {
             k: Converter.create(v) for k, v in self.cfg.converters.items()
         }
+        self.encoder = VitEncoderModel.create(self.cfg.encoder)
 
     def to_observation(self, obs) -> tuple[TDScene, bool]:
         formats = {k: self.converters[k](obs) for k in self.converters}
