@@ -3,26 +3,26 @@ from dataclasses import dataclass
 
 import numpy as np
 from heca.classes.register import Registerable
-from heca.environment.converters.converter import Converter
 from heca.entities.entity import Entity
 
+from heca.environment.extractors.calvin_image import ImageExtractor
 from heca.misc.td import TDScene
 
-from heca.environment.converters.extractor import VitEncoderModel
+from heca.environment.extractors.extractor import Extractor
 
 
 class Scene(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
-        converters: dict[str, Converter.Config]
-        encoder: VitEncoderModel.Config
+        img_extractor: ImageExtractor.Config | None = None
+        gt_extractor: Extractor.Config | None = None
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.converters = {
             k: Converter.create(v) for k, v in self.cfg.converters.items()
         }
-        self.encoder = VitEncoderModel.create(self.cfg.encoder)
+        self.extractor = Extractor.create(self.cfg.encoder)
 
     def to_observation(self, obs) -> tuple[TDScene, bool]:
         formats = {k: self.converters[k](obs) for k in self.converters}

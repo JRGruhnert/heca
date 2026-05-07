@@ -14,7 +14,6 @@ from tapas_gmm_modified.utils.observation import (
     dict_to_tensordict,
 )
 
-from heca.environment.converters.converter import LeafConverter
 
 empty_batchsize = torch.Size([])
 

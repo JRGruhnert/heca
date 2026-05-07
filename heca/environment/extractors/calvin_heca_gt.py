@@ -4,7 +4,6 @@ import numpy as np
 import torch
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
-from heca.environment.converters.converter import ObsConverter
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
 from heca.misc.state import State
 from heca.misc.td import TDProperties, TDEntities
@@ -53,4 +52,4 @@ class CalvinHecaConverter(ObsConverter):
             state_dict[k] = torch.cat([state_dict[k], self.state(state_dict[k])])
             if torch.all(state_dict[k][3:] == 0):
                 valid = False
-        return TDEntities({"v1": TDProperties(state_dict)}), valid
+        return TDEntities({self.cfg.label: TDProperties(state_dict)}), valid

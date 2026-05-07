@@ -1,20 +1,17 @@
 import numpy as np
 from dataclasses import dataclass
 
-import torch
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
 
 from heca.entities.entity import Entity
+from heca.environment.extractors.extractor import Extractor
 from heca.environment.scenes.scene import Scene
-from heca.environment.scenes.calvin.area import CalvinAreaConfig
 from heca.environment.scenes.calvin import v1, v2
-from heca.misc.state import State
 from heca.misc.td import TDScene
 
 
-from heca.environment.converters.calvin_heca_gt import CalvinHecaConverter
-from heca.environment.converters.calvin_tapas import CalvinTapasConverter
-from heca.environment.converters.converter import ObsConverter, LeafConverter
+from heca.environment.extractors.calvin_heca_gt import CalvinHecaConverter
+from heca.environment.extractors.calvin_tapas import CalvinTapasConverter
 from heca.properties.property import Property
 
 
@@ -25,8 +22,8 @@ class CalvinScene(Scene):
 
     @dataclass(kw_only=True)
     class Config(Scene.Config):
-        heca_cv: ObsConverter.Config = CalvinHecaConverter.Config()
-        leaf_cv: LeafConverter.Config = CalvinTapasConverter.Config()
+        heca_cv: Extractor.Config = CalvinHecaConverter.Config()
+        leaf_cv: Extractor.Config = CalvinTapasConverter.Config()
 
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
@@ -73,3 +70,7 @@ class CalvinScene(Scene):
 
     def entities(self) -> list[Entity.Config]:
         return v2.entities
+
+    def get_image(self) -> dict[str, np.ndarray]:
+        obs = self.env._get_obs()
+        return self.converters["image"](obs)

@@ -1,24 +1,25 @@
 import math
 import types
 from dataclasses import dataclass
-from typing import List, Tuple, Union
-
+from typing import List, Tuple
+from tapas_gmm_modified.utils.debug import measure_runtime
 import numpy as np
 import timm
 import torch
-import torch.nn.modules.utils as nn_utils
 from PIL import Image
 from torch import nn
 from torchvision import transforms
+import torch.nn.modules.utils as nn_utils
 
-from heca.environment.converters.extractor import Extractor
-from heca.misc import hardware
+from heca.environment.extractors.extractor import Extractor
+from heca.misc import hardware, logger
 from heca.misc.td import TDScene
+from tapas_gmm_modified.viz.operations import channel_back2front_batch
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 
 
-class ViTExtractor(Extractor):
+class ImageExtractor(Extractor):
     @dataclass(frozen=True, kw_only=True)
     class Query(Extractor.Query):
         pass
@@ -30,16 +31,19 @@ class ViTExtractor(Extractor):
     @dataclass(kw_only=True)
     class Config(Extractor.Config):
         model_type: str = "dino_vits8"
-        stride: int = 4
-        load_size: int | None
-        layer: int
-        facet: str
-        bin: bool
-        thresh: float
-        include_cls: bool
+        stride: int = 8
+        load_size: int | None = None
+        layer: int = 11
+        facet: str = "token"
+        bin: bool = False
+        thresh: float = 0.5
+        # dafuq
+        include_cls: bool = False
         register_tokens: int = 0  # extra cls-tokens for DinoV2+registers
         center_crop: bool = False
         pad: bool = False
+        frozen: bool = True
+        image_dim: tuple[int, int] = (480, 640)
 
     """This class facilitates extraction of features, descriptors, and saliency maps from a ViT.
 
@@ -54,10 +58,8 @@ class ViTExtractor(Extractor):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.model = ViTExtractor.create_model(self.cfg.model_type)
-        self.model = ViTExtractor.patch_vit_resolution(
-            self.model, stride=self.cfg.stride
-        )
+        self.model = ImageExtractor.create_model(self.cfg.model_type)
+        self.model = ImageExtractor.patch_vit_resolution(self.model, self.cfg.stride)
         self.model.eval()
         self.model.to(hardware.device)
 
@@ -76,6 +78,7 @@ class ViTExtractor(Extractor):
             (0.229, 0.224, 0.225) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
         )
 
+        self._get_descriptor_resolution(self.cfg.image_dim)
         self._feats = []
         self.hook_handlers = []
         self.load_size = None
@@ -184,26 +187,18 @@ class ViTExtractor(Extractor):
         if stride == patch_size:  # nothing to do
             return model
 
-        stride = nn_utils._pair(stride)
-        assert all(
-            [(patch_size // s_) * s_ == patch_size for s_ in stride]
-        ), f"stride {stride} should divide patch_size {patch_size}"
+        stride_t: tuple = nn_utils._pair(stride)
+        assert all([(patch_size // s_) * s_ == patch_size for s_ in stride_t])
 
         # fix the stride
         model.patch_embed.proj.stride = stride
         # fix the positional encoding code
-        model.interpolate_pos_encoding = types.MethodType(
-            ViTExtractor._fix_pos_enc(patch_size, stride), model
+        model.interpolate_pos_encoding = types.MethodType(  # type: ignore
+            ImageExtractor._fix_pos_enc(patch_size, stride_t), model
         )
         return model
 
-    def preprocess(
-        self,
-        img_tensor,
-        load_size: Union[int, tuple[int, int], None] = None,
-        center_crop: bool = False,
-        pad: bool = False,
-    ) -> Tuple[torch.Tensor, Image.Image]:
+    def preprocess(self, img_tensor) -> Tuple[torch.Tensor, Image.Image]:
         """
         Preprocesses an image before extraction.
         :param img_tensor: Torch image tensor.
@@ -212,14 +207,15 @@ class ViTExtractor(Extractor):
                     (1) the preprocessed image as a tensor to insert the model of shape BxCxHxW.
                     (2) the pil image in relevant dimensions
         """
-        if load_size is not None:
-            if center_crop:
+        if self.cfg.load_size is not None:
+            if self.cfg.center_crop:
                 img_tensor = transforms.CenterCrop(224)(img_tensor)
-            elif pad:
+            elif self.cfg.pad:
                 img_tensor = transforms.Pad(5)(img_tensor)
             else:
                 img_tensor = transforms.Resize(
-                    load_size, interpolation=transforms.InterpolationMode.BILINEAR
+                    self.cfg.load_size,
+                    interpolation=transforms.InterpolationMode.BILINEAR,
                 )(  # LANCZOS)(
                     img_tensor
                 )
@@ -296,9 +292,7 @@ class ViTExtractor(Extractor):
             handle.remove()
         self.hook_handlers = []
 
-    def _extract_features(
-        self, batch: torch.Tensor, layers: List[int] = [11], facet: str = "key"
-    ) -> List[torch.Tensor]:
+    def _extract_features(self, batch: torch.Tensor) -> List[torch.Tensor]:
         """
         extract features from the model
         :param batch: batch to extract features for. Has shape BxCxHxW.
@@ -311,7 +305,7 @@ class ViTExtractor(Extractor):
         """
         B, C, H, W = batch.shape
         self._feats = []
-        self._register_hooks(layers, facet)
+        self._register_hooks([self.cfg.layer], self.cfg.facet)
         _ = self.model(batch)
         self._unregister_hooks()
         self.load_size = (H, W)
@@ -321,87 +315,7 @@ class ViTExtractor(Extractor):
         )
         return self._feats
 
-    def _log_bin(self, x: torch.Tensor, hierarchy: int = 2) -> torch.Tensor:
-        """
-        create a log-binned descriptor.
-        :param x: tensor of features. Has shape Bxhxtxd.
-        :param hierarchy: how many bin hierarchies to use.
-        """
-        B = x.shape[0]
-        num_bins = 1 + 8 * hierarchy
-
-        bin_x = x.permute(0, 2, 3, 1).flatten(start_dim=-2, end_dim=-1)  # Bx(t-1)x(dxh)
-        bin_x = bin_x.permute(0, 2, 1)
-        bin_x = bin_x.reshape(
-            B, bin_x.shape[1], self.num_patches[0], self.num_patches[1]
-        )
-        # Bx(dxh)xnum_patches[0]xnum_patches[1]
-        sub_desc_dim = bin_x.shape[1]
-
-        avg_pools = []
-        # compute bins of all sizes for all spatial locations.
-        for k in range(0, hierarchy):
-            # avg pooling with kernel 3**kx3**k
-            win_size = 3**k
-            avg_pool = torch.nn.AvgPool2d(
-                win_size, stride=1, padding=win_size // 2, count_include_pad=False
-            )
-            avg_pools.append(avg_pool(bin_x))
-
-        bin_x = torch.zeros(
-            (B, sub_desc_dim * num_bins, self.num_patches[0], self.num_patches[1])
-        ).to(self.device)
-        for y in range(self.num_patches[0]):
-            for x in range(self.num_patches[1]):
-                part_idx = 0
-                # fill all bins for a spatial location (y, x)
-                for k in range(0, hierarchy):
-                    kernel_size = 3**k
-                    for i in range(y - kernel_size, y + kernel_size + 1, kernel_size):
-                        for j in range(
-                            x - kernel_size, x + kernel_size + 1, kernel_size
-                        ):
-                            if i == y and j == x and k != 0:
-                                continue
-                            if (
-                                0 <= i < self.num_patches[0]
-                                and 0 <= j < self.num_patches[1]
-                            ):
-                                bin_x[
-                                    :,
-                                    part_idx
-                                    * sub_desc_dim : (part_idx + 1)
-                                    * sub_desc_dim,
-                                    y,
-                                    x,
-                                ] = avg_pools[k][:, :, i, j]
-                            else:  # handle padding in a more delicate way than zero padding
-                                temp_i = max(0, min(i, self.num_patches[0] - 1))
-                                temp_j = max(0, min(j, self.num_patches[1] - 1))
-                                bin_x[
-                                    :,
-                                    part_idx
-                                    * sub_desc_dim : (part_idx + 1)
-                                    * sub_desc_dim,
-                                    y,
-                                    x,
-                                ] = avg_pools[k][:, :, temp_i, temp_j]
-                            part_idx += 1
-        bin_x = (
-            bin_x.flatten(start_dim=-2, end_dim=-1).permute(0, 2, 1).unsqueeze(dim=1)
-        )
-        # Bx1x(t-1)x(dxh)
-        return bin_x
-
-    def extract_descriptors(
-        self,
-        batch: torch.Tensor,
-        layer: int = 11,
-        facet: str = "key",
-        bin: bool = False,
-        include_cls: bool = False,
-        register_tokens: int = 0,
-    ) -> torch.Tensor:
+    def extract_descriptors(self, batch: torch.Tensor) -> torch.Tensor:
         """
         extract descriptors from the model
         :param batch: batch to extract descriptors for. Has shape BxCxHxW.
@@ -410,55 +324,189 @@ class ViTExtractor(Extractor):
         :param bin: apply log binning to the descriptor. default is False.
         :return: tensor of descriptors. Bx1xtxd' where d' is the dimension of the descriptors.
         """
-        assert facet in [
-            "key",
-            "query",
-            "value",
-            "token",
-        ], f"{facet} is not a supported facet for descriptors."
-        self._extract_features(batch, [layer], facet)
+        assert self.cfg.facet in ["key", "query", "value", "token"]
+        self._extract_features(batch)
         x = self._feats[0]
-        if facet == "token":
+        if self.cfg.facet == "token":
             x.unsqueeze_(dim=1)  # Bx1xtxd
-        if not include_cls:
+        if not self.cfg.include_cls:
             x = x[
-                :, :, 1 + register_tokens :, :
+                :, :, 1 + self.cfg.register_tokens :, :
             ]  # remove cls token and register tokens
         else:
             assert (
-                not bin
+                not self.cfg.bin
             ), "bin = True and include_cls = True are not supported together, set one of them False."
-        if not bin:
+        if not self.cfg.bin:
             desc = (
                 x.permute(0, 2, 3, 1).flatten(start_dim=-2, end_dim=-1).unsqueeze(dim=1)
             )  # Bx1xtx(dxh)
         else:
-            desc = self._log_bin(x)
+            # desc = self._log_bin(x)
+            logger.warning("log binning is not implemented yet")
         return desc
 
+    def _get_descriptor_resolution(self, image_dim: tuple[int, int]):
+        if "dinov2" in self.cfg.model_type:
+            assert self.cfg.load_size is not None
+            H_descr = W_descr = self.cfg.load_size // 14
+            if self.cfg.stride == 7:
+                H_descr = H_descr * 2 - 1
+                W_descr = W_descr * 2 - 1
+            else:
+                assert self.cfg.stride == 14
+
+            if self.cfg.center_crop:
+                H_descr -= 4
+                W_descr -= 4
+            elif self.cfg.pad:
+                H_descr += 2
+                W_descr += 2
+        else:
+            H_descr = image_dim[0] // 8
+            W_descr = image_dim[1] // 8
+            # H_descr = W_descr = 32
+            if self.cfg.stride == 4:
+                H_descr = H_descr * 2 - 1
+                W_descr = W_descr * 2 - 1
+            else:
+                assert self.cfg.stride == 8
+
+        self.H_descr, self.W_descr = H_descr, W_descr
+
+    @measure_runtime
+    def compute_descriptor(
+        self, camera_obs: torch.Tensor, upscale: bool = True
+    ) -> torch.Tensor:
+        camera_obs = camera_obs.to(hardware.device)
+
+        _, H, W = camera_obs.shape
+
+        with torch.inference_mode():
+            prep, _ = self.preprocess(camera_obs)
+            descr = self.extract_descriptors(prep).squeeze(0)
+
+        descr = descr.reshape(1, self.H_descr, self.W_descr, descr.shape[-1])
+        descr = channel_back2front_batch(descr)
+
+        if upscale:
+            descr = torch.nn.functional.interpolate(
+                input=descr, size=[H, W], mode="bilinear", align_corners=True
+            )
+
+        return descr
+
+    def compute_descriptor_batch(
+        self, camera_obs: torch.Tensor, upscale: bool = True
+    ) -> torch.Tensor:
+        camera_obs = camera_obs.to(hardware.device)
+
+        B, _, H, W = camera_obs.shape
+
+        with torch.inference_mode():
+            prep, _ = self.preprocess(camera_obs)
+            descr = self.extract_descriptors(prep).squeeze(0)
+
+        descr = descr.reshape(B, self.H_descr, self.W_descr, descr.shape[-1])
+        descr = channel_back2front_batch(descr)
+
+        if upscale:
+            descr = torch.nn.functional.interpolate(
+                input=descr, size=[H, W], mode="bilinear", align_corners=True
+            )
+
+        return descr
+
+    def from_disk(self, *args, **kwargs):
+        logger.info("This encoder needs no chekpoint loading.")
+
+    def encode(self, obs) -> torch.Tensor:
+        rgb = self._get_image_tuple(obs)
+        enc = tuple(self.compute_descriptor_batch(img) for img in rgb)
+        return torch.cat(enc, dim=-1)
+
     def __call__(self, obs) -> tuple[TDScene, bool]:
-        np_image_dict = self._get_image_dict(obs)
-        img_tensor = self._convert_image_dict(np_image_dict)
-        img_tensor = self.preprocess(
-            img_tensor,
-            load_size=self.cfg.load_size,
-            center_crop=self.cfg.center_crop,
-            pad=self.cfg.pad,
-        )
-        desc = self.extract_descriptors(
-            img_tensor,
-            layer=self.cfg.layer,
-            facet=self.cfg.facet,
-            bin=self.cfg.bin,
-            include_cls=self.cfg.include_cls,
-            register_tokens=self.cfg.register_tokens,
-        )
+        np_image_dict = self._get_image_tuple(obs)
+        img_tensor = self.preprocess(img_tensor)
+
+        # TODO: what input ?
+        enc = self.encode(obs)
         if self.cfg.thresh > 0:
             desc = desc * (desc.norm(dim=-1, keepdim=True) > self.cfg.thresh).float()
         return TDScene(formats={"descriptors": desc}), True
 
-    def _get_image_dict(self, obs) -> dict[str, np.ndarray]:
-        raise NotImplementedError()
+    def _get_image_tuple(self, obs) -> tuple[torch.Tensor, ...]:
+        camera_obs = batch.camera_obs
+        return tuple((o.rgb for o in camera_obs))
 
-    def _convert_image_dict(self, img_dict: dict[str, np.ndarray]) -> torch.Tensor:
-        raise NotImplementedError()
+    # def _log_bin(self, x: torch.Tensor, hierarchy: int = 2) -> torch.Tensor:
+    #     """
+    #     create a log-binned descriptor.
+    #     :param x: tensor of features. Has shape Bxhxtxd.
+    #     :param hierarchy: how many bin hierarchies to use.
+    #     """
+    #     B = x.shape[0]
+    #     num_bins = 1 + 8 * hierarchy
+
+    #     bin_x = x.permute(0, 2, 3, 1).flatten(start_dim=-2, end_dim=-1)  # Bx(t-1)x(dxh)
+    #     bin_x = bin_x.permute(0, 2, 1)
+    #     bin_x = bin_x.reshape(
+    #         B, bin_x.shape[1], self.num_patches[0], self.num_patches[1]
+    #     )
+    #     # Bx(dxh)xnum_patches[0]xnum_patches[1]
+    #     sub_desc_dim = bin_x.shape[1]
+
+    #     avg_pools = []
+    #     # compute bins of all sizes for all spatial locations.
+    #     for k in range(0, hierarchy):
+    #         # avg pooling with kernel 3**kx3**k
+    #         win_size = 3**k
+    #         avg_pool = torch.nn.AvgPool2d(
+    #             win_size, stride=1, padding=win_size // 2, count_include_pad=False
+    #         )
+    #         avg_pools.append(avg_pool(bin_x))
+
+    #     bin_x = torch.zeros(
+    #         (B, sub_desc_dim * num_bins, self.num_patches[0], self.num_patches[1])
+    #     ).to(self.device)
+    #     for y in range(self.num_patches[0]):
+    #         for x in range(self.num_patches[1]):
+    #             part_idx = 0
+    #             # fill all bins for a spatial location (y, x)
+    #             for k in range(0, hierarchy):
+    #                 kernel_size = 3**k
+    #                 for i in range(y - kernel_size, y + kernel_size + 1, kernel_size):
+    #                     for j in range(
+    #                         x - kernel_size, x + kernel_size + 1, kernel_size
+    #                     ):
+    #                         if i == y and j == x and k != 0:
+    #                             continue
+    #                         if (
+    #                             0 <= i < self.num_patches[0]
+    #                             and 0 <= j < self.num_patches[1]
+    #                         ):
+    #                             bin_x[
+    #                                 :,
+    #                                 part_idx
+    #                                 * sub_desc_dim : (part_idx + 1)
+    #                                 * sub_desc_dim,
+    #                                 y,
+    #                                 x,
+    #                             ] = avg_pools[k][:, :, i, j]
+    #                         else:  # handle padding in a more delicate way than zero padding
+    #                             temp_i = max(0, min(i, self.num_patches[0] - 1))
+    #                             temp_j = max(0, min(j, self.num_patches[1] - 1))
+    #                             bin_x[
+    #                                 :,
+    #                                 part_idx
+    #                                 * sub_desc_dim : (part_idx + 1)
+    #                                 * sub_desc_dim,
+    #                                 y,
+    #                                 x,
+    #                             ] = avg_pools[k][:, :, temp_i, temp_j]
+    #                         part_idx += 1
+    #     bin_x = (
+    #         bin_x.flatten(start_dim=-2, end_dim=-1).permute(0, 2, 1).unsqueeze(dim=1)
+    #     )
+    #     # Bx1x(t-1)x(dxh)
+    #     return bin_x
