@@ -11,13 +11,13 @@ class TDEntity(TensorDict):
 
     def __init__(
         self,
-        domain: torch.Tensor,
+        # domain: torch.Tensor,
         position: torch.Tensor,
         rotation: torch.Tensor,
         state: torch.Tensor,
     ):
         data = {
-            "domain": domain,
+            # "domain": domain,
             "position": position,
             "rotation": rotation,
             "state": state,

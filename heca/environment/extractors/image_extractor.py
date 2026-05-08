@@ -2,8 +2,6 @@ import math
 import types
 from dataclasses import dataclass
 from typing import List, Tuple
-from tapas_gmm_modified.utils.debug import measure_runtime
-import numpy as np
 import timm
 import torch
 from PIL import Image
@@ -11,25 +9,28 @@ from torch import nn
 from torchvision import transforms
 import torch.nn.modules.utils as nn_utils
 
-from heca.environment.extractors.extractor import Extractor
+from heca.classes.persist import Persistable
 from heca.misc import hardware, logger
-from heca.misc.td import TDScene
+from heca.misc.td import TDEntities, TDScene
+
 from tapas_gmm_modified.viz.operations import channel_back2front_batch
+from tapas_gmm_modified.utils.debug import measure_runtime
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 
 
-class ImageExtractor(Extractor):
+class ImageExtractor(Persistable):
     @dataclass(frozen=True, kw_only=True)
-    class Query(Extractor.Query):
+    class Query(Persistable.Query):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class File(Extractor.File):
-        pass
+    class File(Persistable.File):
+        folder: str = "image_extractors"
+        ending: str = ".pt"
 
     @dataclass(kw_only=True)
-    class Config(Extractor.Config):
+    class Config(Persistable.Config):
         model_type: str = "dino_vits8"
         stride: int = 8
         load_size: int | None = None
@@ -83,6 +84,8 @@ class ImageExtractor(Extractor):
         self.hook_handlers = []
         self.load_size = None
         self.num_patches = None
+
+        self.values: TDEntities | None = None
 
     @staticmethod
     def create_model(model_type: str) -> nn.Module:
@@ -417,17 +420,19 @@ class ImageExtractor(Extractor):
 
         return descr
 
-    def from_disk(self, *args, **kwargs):
-        logger.info("This encoder needs no chekpoint loading.")
-
-    def encode(self, obs) -> torch.Tensor:
-        rgb = self._get_image_tuple(obs)
+    def encode(self, rgb: tuple[torch.Tensor, ...]) -> torch.Tensor:
         enc = tuple(self.compute_descriptor_batch(img) for img in rgb)
         return torch.cat(enc, dim=-1)
 
-    def __call__(self, obs) -> tuple[TDScene, bool]:
+    def predict_point(self, img: torch.Tensor) -> tuple[int, int]:
+        # 4. Get dense descriptors
+        descriptors = self.scene.extractor.compute_descriptor(
+            img
+        )  # shape: (B, D, H, W)
+
+    def __call__(self, rgb: dict[str, torch.Tensor]) -> TDEntities:
         np_image_dict = self._get_image_tuple(obs)
-        img_tensor = self.preprocess(img_tensor)
+        img_tensor, img_pil = self.preprocess(img_tensor)
 
         # TODO: what input ?
         enc = self.encode(obs)
@@ -435,9 +440,33 @@ class ImageExtractor(Extractor):
             desc = desc * (desc.norm(dim=-1, keepdim=True) > self.cfg.thresh).float()
         return TDScene(formats={"descriptors": desc}), True
 
-    def _get_image_tuple(self, obs) -> tuple[torch.Tensor, ...]:
-        camera_obs = batch.camera_obs
-        return tuple((o.rgb for o in camera_obs))
+    def set_values(self, values: TDEntities) -> None:
+        self.values = values
+
+    @classmethod
+    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        try:
+            td = torch.load(directory / "samples.pt", map_location=hardware.device)
+            extractor.set_values(td)
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.warning(f"Could not load TDEntities: {e}")
+
+        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
+        return extractor
+
+    @classmethod
+    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        if extractor.values is None:
+            logger.warning(
+                f"ImageExtractor for scene {scene} with query: {query} has no values to save."
+            )
+            return False
+        torch.save(extractor.values, directory / "samples.pt")
+        return True
 
     # def _log_bin(self, x: torch.Tensor, hierarchy: int = 2) -> torch.Tensor:
     #     """

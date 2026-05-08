@@ -61,7 +61,7 @@ class ImageSelector(Configurable):
         self.canvas.pack()
 
     def load_image(self):
-        x = self.scene.sample_image()
+        x = self.scene.sample_images()
         # TODO: get image from here
         # x is a dict[str, np.ndarray] which has to be converted to tensor
         self.img_raw = np.random.randint(0, 255, (3, 400, 400), dtype=np.uint8)
@@ -78,10 +78,6 @@ class ImageSelector(Configurable):
         if self.current_pair is not None:
             title = f"Image Selector - Entity: {self.current_pair[0].label}, Property: {self.current_pair[1]}"
             self.root.title(title)
-
-    def predict_point(self, img: torch.Tensor) -> tuple[int, int]:
-        # 4. Get dense descriptors
-        descriptors = self.scene.encoder.compute_descriptor(img)  # shape: (B, D, H, W)
 
     def on_click(self, event: tk.Event):
         self.point = (event.x, event.y)

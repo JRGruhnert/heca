@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import torch
 from torch import nn
-from torch_geometric.data import HeteroData
 
 from heca.misc.td import TDWorld
 from heca.misc import hardware, logger
@@ -11,9 +10,6 @@ from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.bases.base import BaseNetwork
 from heca.heca_gnn.critic import CriticReadoutNetwork
 from torch_geometric.data import HeteroData
-from typing import TypeVar
-
-V = TypeVar("V", bound="HecaNetwork")
 
 
 class HecaNetwork(Persistable, nn.Module):
@@ -22,12 +18,38 @@ class HecaNetwork(Persistable, nn.Module):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class Disk(Persistable.File):
-        pass
+    class File(Persistable.File):
+        folder: str = "networks"
+        ending: str = ".pt"
 
         @classmethod
-        def resolve_path(cls, query: "HecaNetwork.Query", epoch: int, tag: str) -> Path:
-            return cls.root / Path(query.label) / f"ckpt_{epoch}_{tag}_{cls.ending}"
+        def file_name(cls, epoch: int, tag: str) -> str:
+            assert tag in ["epoch", "best"]
+            assert epoch >= 0
+            return f"ckpt_{tag}_{epoch}{cls.ending}"
+
+        @classmethod
+        def find_matching_files(cls, directory: Path, pattern: str) -> list[Path]:
+            return list(directory.glob(pattern))
+
+        @classmethod
+        def get_latest(cls, query: "HecaNetwork.Query") -> Path | None:
+            directory = cls.resolve_directory(query)
+            pattern = f"ckpt_epoch_*.pt"
+            matching_files = cls.find_matching_files(directory, pattern)
+            epochs = []
+            for file in matching_files:
+                try:
+                    epoch_str = file.stem.split("_")[-1]
+                    epoch = int(epoch_str)
+                    epochs.append(epoch)
+                except (IndexError, ValueError):
+                    continue
+            max_epoch = max(epochs) if epochs else None
+            if max_epoch is not None:
+                return cls.resolve_directory(query) / cls.file_name(max_epoch, "epoch")
+            else:
+                return None
 
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
@@ -68,20 +90,18 @@ class HecaNetwork(Persistable, nn.Module):
 
     @classmethod
     def load(cls, query: "HecaNetwork.Query") -> "HecaNetwork":
-        path = cls.Disk.get_latest(query)
-        if path:
-            logger.info(f"Loading weights from: {path}")
-            ckpt = torch.load(path, map_location=hardware.device)
-            model = cls.search(query)
+        file = cls.File.get_latest(query)
+        model = cls.search(query)
+        if file:
+            logger.info(f"Loading weights from: {file}")
+            ckpt = torch.load(file, map_location=hardware.device)
             model.load_state_dict(ckpt["model_state"], strict=False)
-            return model
-        else:
-            return cls.search(query)
+        return model
 
     @classmethod
-    def save(cls, query: "HecaNetwork.Query", epoch: int, tag: str) -> bool:
-        path = cls.Disk.resolve_path(query, epoch, tag)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"model_state": cls.search(query).state_dict()}, path)
-        logger.info(f"Saved {tag} for epoch {epoch}.")
+    def save(cls, query: "HecaNetwork.Query", tag: str, epoch: int) -> bool:
+        path = cls.File.resolve_directory(query)
+        file = cls.File.file_name(epoch, tag)
+        torch.save({"model_state": cls.search(query).state_dict()}, path / file)
+        logger.info(f"Saved model for epoch {epoch} with tag: {tag}.")
         return True

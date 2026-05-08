@@ -28,7 +28,9 @@ class MPNetwork(HecaNetwork):
         pass
 
         @classmethod
-        def resolve_path(cls, query: "HecaNetwork.Query", epoch: int, tag: str) -> Path:
+        def resolve_file_path(
+            cls, query: "HecaNetwork.Query", epoch: int, tag: str
+        ) -> Path:
             return cls.root / Path(query.label) / f"ckpt_{epoch}_{tag}_{cls.ending}"
 
     @dataclass(kw_only=True)

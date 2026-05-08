@@ -40,48 +40,14 @@ class Persistable(Registerable, metaclass=PersistableMeta):
     @dataclass(frozen=True, kw_only=True)
     class File(Registerable):
         root: Path = Path("data")
-        tag: str = "epoch"
+        folder: str
         ending: str
 
         @classmethod
-        def find_matching_files(cls, directory: Path, pattern: str) -> list[Path]:
-            return list(directory.glob(pattern))
-
-        @classmethod
-        def resolve_path(
-            cls, query: "Persistable.Query", epoch: int, tag: str | None = None
-        ) -> Path:
-            if tag is None:
-                tag = cls.tag
-            return (
-                cls.resolve_directory()
-                / Path(query.label)
-                / f"ckpt_{tag}_{epoch}{cls.ending}"
-            )
-
-        @classmethod
-        def get_latest(cls, query: "Persistable.Query") -> Path | None:
-            directory = cls.resolve_directory() / Path(query.label)
-            pattern = f"ckpt_{cls.tag}_*.pt"
-            matching_files = cls.find_matching_files(directory, pattern)
-            epochs = []
-            for file in matching_files:
-                try:
-                    epoch_str = file.stem.split("_")[-1]
-                    epoch = int(epoch_str)
-                    epochs.append(epoch)
-                except (IndexError, ValueError):
-                    continue
-            max_epoch = max(epochs) if epochs else None
-            if max_epoch is not None:
-                return cls.resolve_path(query, tag=cls.tag, epoch=max_epoch)
-            else:
-                return None
-
-        @classmethod
-        @abstractmethod
-        def resolve_directory(cls) -> Path:
-            raise NotImplementedError()
+        def resolve_directory(cls, query: "Persistable.Query") -> Path:
+            path = cls.root / Path(cls.folder) / Path(query.label)
+            path.mkdir(parents=True, exist_ok=True)
+            return path
 
     @classmethod
     @abstractmethod
@@ -90,5 +56,5 @@ class Persistable(Registerable, metaclass=PersistableMeta):
 
     @classmethod
     @abstractmethod
-    def save(cls: Type[P], query: "Persistable.Query", epoch: int, tag: str) -> bool:
+    def save(cls: Type[P], query: "Persistable.Query") -> bool:
         raise NotImplementedError()
