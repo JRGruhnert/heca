@@ -45,6 +45,17 @@ class ImageExtractor(Persistable):
         pad: bool = False
         frozen: bool = True
         image_dim: tuple[int, int] = (480, 640)
+        # keypoints
+        descriptor_dim = 384
+        keypoints = keypoints_conf
+        prior_type = PriorTypes.NONE
+        projection = ProjectionTypes.GLOBAL_HARD
+        taper_sm = 25
+        cosine_distance = True
+        use_spatial_expectation = False
+        threshold_keypoint_dist = None
+        overshadow_keypoints = False
+        add_noise_scale = None
 
     """This class facilitates extraction of features, descriptors, and saliency maps from a ViT.
 
@@ -539,3 +550,169 @@ class ImageExtractor(Persistable):
     #     )
     #     # Bx1x(t-1)x(dxh)
     #     return bin_x
+
+    def encode(self, camera_obs) -> tuple[torch.Tensor, dict]:
+        rgb = tuple(o.rgb for o in camera_obs)
+        depth = tuple(o.depth for o in camera_obs)
+        extr = tuple(o.extr for o in camera_obs)
+        intr = tuple(o.intr for o in camera_obs)
+
+        n_cams = len(rgb)
+
+        descriptor = tuple(self.compute_descriptor_batch(r, upscale=False) for r in rgb)
+
+        kp, info = self._encode(
+            rgb,
+            depth,
+            extr,
+            intr,
+            tuple((None for _ in range(n_cams))),
+            descriptor=descriptor,
+            ref_descriptor=self._reference_descriptor_vec,
+        )
+
+        if self.add_noise_scale is not None:
+            kp = self.add_gaussian_noise(kp, self.add_noise_scale, skip_z=False)
+
+        return kp, info
+
+    def _encode(
+        self,
+        rgb,
+        depth,
+        extr,
+        intr,
+        prior,
+        descriptor,
+        ref_descriptor,
+    ):
+        # All args are tuples, besides the kwargs.
+        # the value to which overshadowed and super-threshold are set. -1
+        # corresponds to 0 in pixel-space. Should be out of (0, img_size) to
+        # avoid confusion? TODO! Eg set st it will end up being -1 in pixel
+        ZERO_VAL = torch.tensor(-1, dtype=torch.float32, device=descriptor[0].device)
+
+        n_cams = len(rgb)
+
+        kwargs = {
+            "ref_descriptor": ref_descriptor,
+            "taper": self.cfg.taper_sm,
+            "use_spatial_expectation": self.cfg.use_spatial_expectation,
+            "projection": self.cfg.projection,
+            "cosine": self.cfg.cosine_distance,
+        }
+
+        kp, distance, kp_raw_2d, prior, sm, post = tuple(
+            zip(
+                *(
+                    self.compute_keypoints(r, d, e, i, desc, p, **kwargs)
+                    for r, d, e, i, desc, p in zip(
+                        rgb, depth, extr, intr, descriptor, prior
+                    )
+                )
+            )
+        )
+
+        if self.cfg.overshadow_keypoints and n_cams > 1:
+            dist_per_cam = torch.stack(distance)
+            best_cam = torch.argmin(dist_per_cam, dim=0)
+            # repeat to fit size of kp-tensor which has x_comps, y_comps
+            best_cam = best_cam.repeat(1, self.keypoint_dimension)
+
+            kp = tuple(
+                torch.where(best_cam == i, k, ZERO_VAL) for i, k in enumerate(kp)
+            )
+
+        kp = torch.cat(kp, dim=-1)
+
+        if self.cfg.thresh:
+            # repeat to fit size of kp-tensor which has x_comps, y_comps
+            expanded_dist = torch.cat(
+                tuple(d.repeat(1, self.keypoint_dimension) for d in distance), dim=-1
+            )
+            kp = torch.where(expanded_dist > self.cfg.thresh, ZERO_VAL, kp)
+
+        info = {
+            "descriptor": descriptor,
+            "distance": distance,
+            "kp_raw_2d": kp_raw_2d,
+            "depth": depth,
+            "prior": prior,
+            "sm": sm,
+            "post": post,
+        }
+
+        return kp, info
+
+    def compute_keypoints(
+        self,
+        camera_obs,
+        depth,
+        extrinsics,
+        intrinsics,
+        descriptor,
+        prior=None,
+        ref_descriptor=None,
+        taper=1,
+        use_spatial_expectation=False,
+        projection=None,
+        cosine=False,
+    ):
+        sm = self.softmax_of_reference_descriptors(
+            descriptor, ref_descriptor, taper=taper, cosine=cosine
+        )
+
+        post = sm
+        # When correspondence is (almost) zero across the image, the tensor
+        # degenerates (becomes zeros, hence nan after renomalization below).
+        # Fix by adding small epsilon.
+        # post += 1e-10
+        # # normalize to sum to one
+        post /= torch.sum(post, dim=(-1, -2)).unsqueeze(-1).unsqueeze(-1)
+
+        if use_spatial_expectation:
+            kp = self.get_spatial_expectation(post)
+        else:
+            kp = self.get_mode(post)
+
+        distance = None  # TODO: does not work properly anymore -> removed
+
+        kp_raw_2d = kp
+
+        if projection == ProjectionTypes.NONE:
+            pass
+        elif projection == ProjectionTypes.EGO:
+            raise ValueError(
+                "Ego projection makes no sense for vanilla kp, "
+                "only for GT or particle filter models."
+            )
+        elif projection == ProjectionTypes.UVD:
+            kp = append_depth_to_uv(
+                kp, depth, self.image_width - 1, self.image_height - 1
+            )
+        else:
+            if projection in [ProjectionTypes.LOCAL_HARD, ProjectionTypes.LOCAL_SOFT]:
+                # create identity extrinsics
+                extrinsics = torch.zeros_like(extrinsics)
+                extrinsics[:, range(4), range(4)] = 1
+            if projection in [ProjectionTypes.LOCAL_SOFT, ProjectionTypes.GLOBAL_SOFT]:
+                kp = model_based_vision.soft_pixels_to_3D_world(
+                    kp,
+                    post,
+                    depth,
+                    extrinsics,
+                    intrinsics,
+                    self.image_width - 1,
+                    self.image_height - 1,
+                )
+            else:
+                kp = hard_pixels_to_3D_world(
+                    kp,
+                    depth,
+                    extrinsics,
+                    intrinsics,
+                    self.image_width - 1,
+                    self.image_height - 1,
+                )
+
+        return kp, distance, kp_raw_2d, prior, sm, post

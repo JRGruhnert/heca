@@ -7,7 +7,7 @@ import torch
 from heca.classes.register import Registerable
 from heca.entities.entity import Entity
 
-from heca.environment.extractors.image_extractor import ImageExtractor
+from heca.environment.image_extractor import ImageExtractor
 from heca.misc.td import TDEntities, TDProperties, TDScene
 from tensordict import TensorDict
 
