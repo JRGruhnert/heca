@@ -1,4 +1,3 @@
-from cProfile import label
 from enum import Enum
 from functools import cached_property
 import math
@@ -17,22 +16,16 @@ from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
 from heca.misc.td import (
-    TDCamReferences,
     TDEntity,
-    TDPoseReferences,
     TDEntities,
     TDPoseStates,
-    TDScene,
     TDSceneReferences,
     TDStateReferences,
 )
 
 from tapas_gmm_modified.viz.operations import channel_back2front_batch
 from tapas_gmm_modified.utils.debug import measure_runtime
-from tapas_gmm_modified.utils.geometry_torch import (
-    append_depth_to_uv,
-    hard_pixels_to_3D_world,
-)
+from tapas_gmm_modified.utils.geometry_torch import hard_pixels_to_3D_world
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 
@@ -57,7 +50,6 @@ class ImageExtractor(Persistable):
     class Config(Persistable.Config):
         model_type: str = "dino_vits8"
         stride: int = 8
-        load_size: int | None = None
         layer: int = 11
         facet: str = "token"
         thresh: float = 0.5
@@ -116,7 +108,6 @@ class ImageExtractor(Persistable):
         self._get_descriptor_resolution(self.cfg.image_dim)
         self._feats = []
         self.hook_handlers = []
-        self.load_size = None
         self.num_patches = None
 
         # dont understand yet
@@ -139,121 +130,9 @@ class ImageExtractor(Persistable):
 
         return dim_mapping[self.image_height], dim_mapping[self.image_width]
 
-    @staticmethod
-    def create_model(model_type: str) -> nn.Module:
-        """
-        :param model_type: a string specifying which model to load. [dino_vits8 | dino_vits16 | dino_vitb8 |
-                           dino_vitb16 | vit_small_patch8_224 | vit_small_patch16_224 | vit_base_patch8_224 |
-                           vit_base_patch16_224]
-        :return: the model
-        """
-        if "dinov2" in model_type:
-            model = torch.hub.load("facebookresearch/dinov2", model_type)
-        elif "dino" in model_type:
-            model = torch.hub.load("facebookresearch/dino:main", model_type)
-        else:  # model from timm -- load weights from timm to dino model (enables working on arbitrary size images).
-            temp_model = timm.create_model(model_type, pretrained=True)
-            model_type_dict = {
-                "vit_small_patch16_224": "dino_vits16",
-                "vit_small_patch8_224": "dino_vits8",
-                "vit_base_patch16_224": "dino_vitb16",
-                "vit_base_patch8_224": "dino_vitb8",
-            }
-            model = torch.hub.load(
-                "facebookresearch/dino:main", model_type_dict[model_type]
-            )
-            assert isinstance(model, nn.Module) and isinstance(
-                temp_model, nn.Module
-            ), "models should be of type nn.Module"
-            temp_state_dict = temp_model.state_dict()
-            del temp_state_dict["head.weight"]
-            del temp_state_dict["head.bias"]
-            model.load_state_dict(temp_state_dict)
-        assert isinstance(model, nn.Module) and isinstance(
-            temp_model, nn.Module
-        ), "models should be of type nn.Module"
-        return model
-
-    @staticmethod
-    def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
-        """
-        Creates a method for position encoding interpolation.
-        :param patch_size: patch size of the model.
-        :param stride_hw: A tuple containing the new height and width stride respectively.
-        :return: the interpolation method
-        """
-
-        def interpolate_pos_encoding(
-            self, x: torch.Tensor, w: int, h: int
-        ) -> torch.Tensor:
-            npatch = x.shape[1] - 1
-            N = self.pos_embed.shape[1] - 1
-            if npatch == N and w == h:
-                return self.pos_embed
-            class_pos_embed = self.pos_embed[:, 0]
-            patch_pos_embed = self.pos_embed[:, 1:]
-            dim = x.shape[-1]
-            # compute number of tokens taking stride into account
-            w0 = 1 + (w - patch_size) // stride_hw[1]
-            h0 = 1 + (h - patch_size) // stride_hw[0]
-            assert (
-                w0 * h0 == npatch
-            ), f"""got wrong grid size for {h}x{w} with patch_size {patch_size} and
-                                            stride {stride_hw} got {h0}x{w0}={h0 * w0} expecting {npatch}"""
-            # we add a small number to avoid floating point error in the interpolation
-            # see discussion at https://github.com/facebookresearch/dino/issues/8
-            w0, h0 = w0 + 0.1, h0 + 0.1
-            patch_pos_embed = nn.functional.interpolate(
-                patch_pos_embed.reshape(
-                    1, int(math.sqrt(N)), int(math.sqrt(N)), dim
-                ).permute(0, 3, 1, 2),
-                scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
-                mode="bicubic",
-                align_corners=False,
-                recompute_scale_factor=False,
-            )
-            assert (
-                int(w0) == patch_pos_embed.shape[-2]
-                and int(h0) == patch_pos_embed.shape[-1]
-            )
-            patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-            return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
-
-        return interpolate_pos_encoding
-
-    @staticmethod
-    def patch_vit_resolution(model: nn.Module, stride: int) -> nn.Module:
-        """
-        change resolution of model output by changing the stride of the patch extraction.
-        :param model: the model to change resolution for.
-        :param stride: the new stride parameter.
-        :return: the adjusted model
-        """
-        patch_size = model.patch_embed.patch_size
-
-        # Dino-V2 returns a tuple of ints (H and W)
-        if type(patch_size) == tuple:
-            # assert that all values in the tuple patch_size are equal
-            assert all(
-                [p == patch_size[0] for p in patch_size]
-            ), "assuming square patches. else implement ..."
-            patch_size = patch_size[0]
-
-        if stride == patch_size:  # nothing to do
-            return model
-
-        stride_t: tuple = nn_utils._pair(stride)
-        assert all([(patch_size // s_) * s_ == patch_size for s_ in stride_t])
-
-        # fix the stride
-        model.patch_embed.proj.stride = stride
-        # fix the positional encoding code
-        model.interpolate_pos_encoding = types.MethodType(  # type: ignore
-            ImageExtractor._fix_pos_enc(patch_size, stride_t), model
-        )
-        return model
-
-    def preprocess(self, img_tensor) -> Tuple[torch.Tensor, Image.Image]:
+    def preprocess(
+        self, img_tensor: torch.Tensor, load_size: tuple[int, int] | None = None
+    ) -> Tuple[torch.Tensor, Image.Image]:
         """
         Preprocesses an image before extraction.
         :param img_tensor: Torch image tensor.
@@ -262,14 +141,14 @@ class ImageExtractor(Persistable):
                     (1) the preprocessed image as a tensor to insert the model of shape BxCxHxW.
                     (2) the pil image in relevant dimensions
         """
-        if self.cfg.load_size is not None:
+        if load_size is not None:
             if self.cfg.center_crop:
                 img_tensor = transforms.CenterCrop(224)(img_tensor)
             elif self.cfg.pad:
                 img_tensor = transforms.Pad(5)(img_tensor)
             else:
                 img_tensor = transforms.Resize(
-                    self.cfg.load_size,
+                    load_size,
                     interpolation=transforms.InterpolationMode.BILINEAR,
                 )(  # LANCZOS)(
                     img_tensor
@@ -282,32 +161,31 @@ class ImageExtractor(Persistable):
 
         return prep_img
 
-    def extract_descriptors(self, batch: torch.Tensor) -> torch.Tensor:
-        B, C, H, W = batch.shape
+    def extract_features(self, batch: torch.Tensor) -> torch.Tensor:
         self._feats = []
         self._register_hooks([self.cfg.layer], self.cfg.facet)
         _ = self.model(batch)
         self._unregister_hooks()
-        self.load_size = (H, W)
-        self.num_patches = (
-            1 + (H - self.p) // self.stride[0],
-            1 + (W - self.p) // self.stride[1],
-        )
-        x = self._feats[0]
-        if self.cfg.facet == "token":
-            x = x.unsqueeze_(dim=1)  # Bx1xtxd
+        return self._feats[0].unsqueeze_(dim=1)
 
-        if not self.cfg.include_cls:
-            x = x[
-                :, :, 1 + self.cfg.register_tokens :, :
-            ]  # remove cls token and register tokens
+    def extract_descriptors(self, batch: torch.Tensor) -> torch.Tensor:
+        x = self.extract_features(batch)
+        x = x[
+            :, :, 1 + self.cfg.register_tokens :, :
+        ]  # remove cls token and register tokens
 
         return x.permute(0, 2, 3, 1).flatten(start_dim=-2, end_dim=-1).unsqueeze(dim=1)
 
-    def _get_descriptor_resolution(self, image_dim: tuple[int, int]):
+    def extract_cls_token(self, batch: torch.Tensor) -> torch.Tensor:
+        x = self.extract_features(batch)
+        return x[:, 0, 0, :]
+
+    def _get_descriptor_resolution(
+        self, image_dim: tuple[int, int], load_size: tuple[int, int] | None = None
+    ):
         if "dinov2" in self.cfg.model_type:
-            assert self.cfg.load_size is not None
-            H_descr = W_descr = self.cfg.load_size // 14
+            assert load_size is not None, "load_size must be provided for dinov2 models"
+            H_descr = W_descr = load_size[0] // 14
             if self.cfg.stride == 7:
                 H_descr = H_descr * 2 - 1
                 W_descr = W_descr * 2 - 1
@@ -338,27 +216,8 @@ class ImageExtractor(Persistable):
     ) -> torch.Tensor:
         camera_obs = camera_obs.to(hardware.device)
 
-        _, H, W = camera_obs.shape
-
-        with torch.inference_mode():
-            prep, _ = self.preprocess(camera_obs)
-            descr = self.extract_descriptors(prep).squeeze(0)
-
-        descr = descr.reshape(1, self.H_descr, self.W_descr, descr.shape[-1])
-        descr = channel_back2front_batch(descr)
-
-        if upscale:
-            descr = torch.nn.functional.interpolate(
-                input=descr, size=[H, W], mode="bilinear", align_corners=True
-            )
-
-        return descr
-
-    def compute_descriptor_batch(
-        self, camera_obs: torch.Tensor, upscale: bool = True
-    ) -> torch.Tensor:
-        camera_obs = camera_obs.to(hardware.device)
-
+        if len(camera_obs.shape) == 3:
+            camera_obs = camera_obs.unsqueeze(dim=0)
         B, _, H, W = camera_obs.shape
 
         with torch.inference_mode():
@@ -374,34 +233,6 @@ class ImageExtractor(Persistable):
             )
 
         return descr
-
-    @classmethod
-    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
-        directory = cls.File.resolve_directory(query) / scene
-        extractor = cls.search(query)
-        try:
-            td = torch.load(directory / "samples.pt", map_location=hardware.device)
-            extractor.descriptor_data = td
-        except (FileNotFoundError, RuntimeError) as e:
-            logger.warning(f"Could not load TDEntities: {e}")
-
-        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
-        return extractor
-
-    @classmethod
-    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
-        directory = cls.File.resolve_directory(query) / scene
-        extractor = cls.search(query)
-        if extractor.descriptor_data is None:
-            logger.warning(
-                f"ImageExtractor for scene {scene} with query: {query} has no references to save."
-            )
-            return False
-        torch.save(extractor.descriptor_data, directory / "samples.pt")
-        return True
-
-    def encode_entity(self, entity: Entity.Query) -> torch.Tensor:
-        raise NotImplementedError()
 
     @cached_property
     def ref_pose_descriptors(self) -> torch.Tensor:
@@ -538,7 +369,7 @@ class ImageExtractor(Persistable):
         intr: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor, dict]:
 
-        descriptor = self.compute_descriptor_batch(
+        descriptor = self.compute_descriptor(
             rgb,
             upscale=False,
         )
@@ -881,3 +712,142 @@ class ImageExtractor(Persistable):
         for handle in self.hook_handlers:
             handle.remove()
         self.hook_handlers = []
+
+    @classmethod
+    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        try:
+            td = torch.load(directory / "samples.pt", map_location=hardware.device)
+            extractor.descriptor_data = td
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.warning(f"Could not load TDEntities: {e}")
+
+        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
+        return extractor
+
+    @classmethod
+    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        if extractor.descriptor_data is None:
+            logger.warning(
+                f"ImageExtractor for scene {scene} with query: {query} has no references to save."
+            )
+            return False
+        torch.save(extractor.descriptor_data, directory / "samples.pt")
+        return True
+
+    @staticmethod
+    def create_model(model_type: str) -> nn.Module:
+        """
+        :param model_type: a string specifying which model to load. [dino_vits8 | dino_vits16 | dino_vitb8 |
+                           dino_vitb16 | vit_small_patch8_224 | vit_small_patch16_224 | vit_base_patch8_224 |
+                           vit_base_patch16_224]
+        :return: the model
+        """
+        if "dinov2" in model_type:
+            model = torch.hub.load("facebookresearch/dinov2", model_type)
+        elif "dino" in model_type:
+            model = torch.hub.load("facebookresearch/dino:main", model_type)
+        else:  # model from timm -- load weights from timm to dino model (enables working on arbitrary size images).
+            temp_model = timm.create_model(model_type, pretrained=True)
+            model_type_dict = {
+                "vit_small_patch16_224": "dino_vits16",
+                "vit_small_patch8_224": "dino_vits8",
+                "vit_base_patch16_224": "dino_vitb16",
+                "vit_base_patch8_224": "dino_vitb8",
+            }
+            model = torch.hub.load(
+                "facebookresearch/dino:main", model_type_dict[model_type]
+            )
+            assert isinstance(model, nn.Module) and isinstance(
+                temp_model, nn.Module
+            ), "models should be of type nn.Module"
+            temp_state_dict = temp_model.state_dict()
+            del temp_state_dict["head.weight"]
+            del temp_state_dict["head.bias"]
+            model.load_state_dict(temp_state_dict)
+        assert isinstance(model, nn.Module) and isinstance(
+            temp_model, nn.Module
+        ), "models should be of type nn.Module"
+        return model
+
+    @staticmethod
+    def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
+        """
+        Creates a method for position encoding interpolation.
+        :param patch_size: patch size of the model.
+        :param stride_hw: A tuple containing the new height and width stride respectively.
+        :return: the interpolation method
+        """
+
+        def interpolate_pos_encoding(
+            self, x: torch.Tensor, w: int, h: int
+        ) -> torch.Tensor:
+            npatch = x.shape[1] - 1
+            N = self.pos_embed.shape[1] - 1
+            if npatch == N and w == h:
+                return self.pos_embed
+            class_pos_embed = self.pos_embed[:, 0]
+            patch_pos_embed = self.pos_embed[:, 1:]
+            dim = x.shape[-1]
+            # compute number of tokens taking stride into account
+            w0 = 1 + (w - patch_size) // stride_hw[1]
+            h0 = 1 + (h - patch_size) // stride_hw[0]
+            assert (
+                w0 * h0 == npatch
+            ), f"""got wrong grid size for {h}x{w} with patch_size {patch_size} and
+                                            stride {stride_hw} got {h0}x{w0}={h0 * w0} expecting {npatch}"""
+            # we add a small number to avoid floating point error in the interpolation
+            # see discussion at https://github.com/facebookresearch/dino/issues/8
+            w0, h0 = w0 + 0.1, h0 + 0.1
+            patch_pos_embed = nn.functional.interpolate(
+                patch_pos_embed.reshape(
+                    1, int(math.sqrt(N)), int(math.sqrt(N)), dim
+                ).permute(0, 3, 1, 2),
+                scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
+                mode="bicubic",
+                align_corners=False,
+                recompute_scale_factor=False,
+            )
+            assert (
+                int(w0) == patch_pos_embed.shape[-2]
+                and int(h0) == patch_pos_embed.shape[-1]
+            )
+            patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
+            return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
+
+        return interpolate_pos_encoding
+
+    @staticmethod
+    def patch_vit_resolution(model: nn.Module, stride: int) -> nn.Module:
+        """
+        change resolution of model output by changing the stride of the patch extraction.
+        :param model: the model to change resolution for.
+        :param stride: the new stride parameter.
+        :return: the adjusted model
+        """
+        patch_size = model.patch_embed.patch_size
+
+        # Dino-V2 returns a tuple of ints (H and W)
+        if type(patch_size) == tuple:
+            # assert that all values in the tuple patch_size are equal
+            assert all(
+                [p == patch_size[0] for p in patch_size]
+            ), "assuming square patches. else implement ..."
+            patch_size = patch_size[0]
+
+        if stride == patch_size:  # nothing to do
+            return model
+
+        stride_t: tuple = nn_utils._pair(stride)
+        assert all([(patch_size // s_) * s_ == patch_size for s_ in stride_t])
+
+        # fix the stride
+        model.patch_embed.proj.stride = stride
+        # fix the positional encoding code
+        model.interpolate_pos_encoding = types.MethodType(  # type: ignore
+            ImageExtractor._fix_pos_enc(patch_size, stride_t), model
+        )
+        return model
