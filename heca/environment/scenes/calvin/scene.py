@@ -9,7 +9,7 @@ from heca.properties.property import Property
 from heca.environment.scenes.scene import Scene
 from heca.environment.scenes.calvin import v1, v2
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
-from heca.misc.td import TDProperties, TDEntities, TDScene, empty_batchsize
+from heca.misc.td import TDProperties, TDEntities, TDScene, empty_bs
 from heca.misc.state import State
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
@@ -136,7 +136,7 @@ class CalvinScene(Scene):
             object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
-            batch_size=empty_batchsize,
+            batch_size=empty_bs,
         )
 
     def image_tensors(self, obs: CalvinEnvObservation) -> dict[str, TensorDict]:
@@ -153,7 +153,7 @@ class CalvinScene(Scene):
                     "extr": torch.Tensor(obs.extr[cam]),
                     "intr": torch.Tensor(obs.intr[cam]),
                 },
-                batch_size=empty_batchsize,
+                batch_size=empty_bs,
             )
         return camera_obs
 
