@@ -6,7 +6,7 @@ from heca.properties.evaluators.domain import DomainEvaluator
 from heca.properties.evaluators.evaluator import PropertyEvaluator
 from heca.properties.rulers.domain import DomainRuler
 from heca.properties.rulers.ruler import PropertyRuler
-from heca.properties.property import Property
+from heca.properties.default.v2.property import Property
 
 
 class DomainProperty(Property):

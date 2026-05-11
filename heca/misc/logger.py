@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
+import functools
 import pprint
+from typing import Callable
 from loguru import logger
 from wandb import util as wandb_util
 import wandb
@@ -99,3 +101,17 @@ class Logger:
             pass  # No logging
 
         self.time += 1
+
+
+def measure_runtime(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = datetime.now()
+        result = func(*args, **kwargs)
+        end = datetime.now()
+        with logger.contextualize(filter=False):
+            delta = end - start
+            logger.info(f"Runtime: {delta} H:M:S.ms")
+        return result
+
+    return wrapper

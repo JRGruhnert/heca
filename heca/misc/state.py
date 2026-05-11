@@ -3,7 +3,7 @@ from typing import Callable
 
 import torch
 
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 from heca.misc.area import Area
 
 
@@ -40,6 +40,12 @@ class State(Configurable):
         one_hot = self.make_zeros()
         index = list(self.cfg.values).index(label)
         one_hot[index] = 1.0
+        return one_hot
+
+    def one_hot_from_idx(self, idx: int) -> torch.Tensor:
+        assert 0 <= idx < len(self.cfg.values), "Index out of bounds."
+        one_hot = self.make_zeros()
+        one_hot[idx] = 1.0
         return one_hot
 
     @classmethod

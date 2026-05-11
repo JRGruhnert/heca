@@ -9,7 +9,7 @@ import matplotlib.patches as mpatches
 from heca.misc import logger
 from heca.entities.entity import Entity
 from heca.misc.classes import Configurable
-from heca.properties.property import Property
+from heca.properties.property import PropertyV1
 from heca.agents.agent import Agent
 
 # Sets a gloabal style. Every plot uses this still if this file is imported.

@@ -1,5 +1,4 @@
 from enum import Enum
-from functools import cached_property
 import math
 import types
 from dataclasses import dataclass
@@ -11,21 +10,19 @@ from PIL import Image
 from torch import nn
 from torchvision import transforms
 import torch.nn.modules.utils as nn_utils
-import torch.nn.functional as F
 from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
+from heca.misc.logger import measure_runtime
 from heca.misc.td import (
     TDCamReferences,
     TDEntity,
     TDEntities,
-    TDEntityStates,
     TDSceneReferences,
     TDStateReferences,
 )
 
 from tapas_gmm_modified.viz.operations import channel_back2front_batch
-from tapas_gmm_modified.utils.debug import measure_runtime
 from tapas_gmm_modified.utils.geometry_torch import hard_pixels_to_3D_world
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
@@ -251,7 +248,7 @@ class ImageExtractor(Persistable):
             all_states.append(states)
             all_infos.append(info)
             all_masks.append(info["kp_mask"])
-            all_scores.append(info["confidence"])
+            all_scores.append(info["state_scores"])
 
         kps_stack = torch.stack(all_kps)  # (C, K, D)
         kps_mask = torch.stack(all_masks)  # (C, K)
@@ -376,7 +373,7 @@ class ImageExtractor(Persistable):
             self.image_height - 1,
         )
 
-        states, confidence = self.compute_states(
+        states, scores = self.compute_states(
             cam_refs,
             rgb,
             kps_raw_2d,
@@ -391,7 +388,7 @@ class ImageExtractor(Persistable):
             "kp_mask": kps_mask,
             "sm": sm,
             "post": post,
-            "confidence": confidence,
+            "state_scores": scores,
         }
 
         return kps, states, info
@@ -409,44 +406,28 @@ class ImageExtractor(Persistable):
         )
         return numerator / denominator if denominator != 0 else torch.tensor(0.0)
 
-    def classify(self, query_embedding, memory):
-        """
-        query_embedding: torch.Tensor of shape (D,) or (1, D)
-        memory: dict[str, torch.Tensor] where each value is (B, D)
-        """
-        if query_embedding.ndim == 1:
-            query_embedding = query_embedding.unsqueeze(0)  # (1, D)
-        scores = {}
-        for cls, embeddings in memory.items():
-            # embeddings: (B, D), query_embedding: (1, D)
-            sims = F.cosine_similarity(embeddings, query_embedding, dim=1)  # (B,)
-            scores[cls] = sims.max().item()
-        # Find the class with the highest score
-        best_cls = None
-        best_score = float("-inf")
-        for cls, score in scores.items():
-            if score > best_score:
-                best_score = score
-                best_cls = cls
-        return best_cls, scores
-
     def compute_states(
         self,
         cam_refs: TDCamReferences,
         rgb: torch.Tensor,
         kp_raw_2d: torch.Tensor,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        one_hots = []
+        scores = []
         for idx, query in enumerate(self.entities):
             entity_refs = cam_refs.entity_states.entities.get(query.label)
             assert isinstance(entity_refs, TDStateReferences)
             cls_tokens = self.encode_states(rgb, kp_raw_2d[idx])
-
-            sims = F.cosine_similarity(
+            distances = torch.nn.functional.cosine_similarity(
                 cls_tokens, entity_refs.cls_tokens, dim=1
-            )  # (B,)
-            score = sims.max().item()
-        # kp raw has different shape then in preprocessing
-        raise NotImplementedError("State computation not implemented yet.")
+            )
+            entity = Entity.search(query)
+            max_idx = int(torch.argmax(distances).item())
+            max_score = distances[max_idx].item()
+            one_hot_state = entity.make_state_one_hot(max_idx)
+            one_hots.append(one_hot_state)
+            scores.append(max_score)
+        return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
 
     def prepare_references(self, examples: TDSceneReferences):
         td = examples.copy()

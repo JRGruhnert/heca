@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from tensordict import TensorDict
 
 from heca.entities.entity import Entity
-from heca.properties.property import Property
+from heca.properties.property import PropertyV1
 from heca.environment.scenes.scene import Scene
 from heca.environment.scenes.calvin import v1, v2
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
@@ -183,7 +183,7 @@ class CalvinScene(Scene):
                 self.valid = False
         return TDProperties(state_dict)
 
-    def properties(self) -> list[Property.Config]:
+    def properties(self) -> list[PropertyV1.Config]:
         return v1.properties
 
     def entities(self) -> list[Entity.Config]:

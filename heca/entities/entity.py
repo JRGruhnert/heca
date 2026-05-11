@@ -3,7 +3,8 @@ from typing import Callable
 
 import torch
 from heca.classes.merge import Mergeable
-from heca.properties.property import Property
+from heca.properties.default.v2.state import StateProperty
+from heca.properties.default.v2.property import Property
 from heca.misc.td import TDEntity, TDWorld
 
 
@@ -37,14 +38,14 @@ class Entity(Mergeable):
             raise ValueError("All entities must have the same meta")
         return meta.pop()
 
-    @classmethod
-    def merge(cls, items: list["Entity.Query"]) -> "Entity":
-        assert len(items) > 0
-        cls.ensure_same_meta(items)
-        props = cls.make_properties(items)
-        meta = f"{heca}.{old}"
-        # TODO how to mege? with query?
-        return Entity(cfg=Entity.Config(props=props))
+    # @classmethod
+    # def merge(cls, items: list["Entity.Query"]) -> "Entity":
+    #    assert len(items) > 0
+    #    cls.ensure_same_meta(items)
+    #    props = cls.make_properties(items)
+    #    meta = f"{heca}.{old}"
+    #    # TODO how to mege? with query?
+    #    return Entity(cfg=Entity.Config(props=props))
 
     def _weighted(self, a: TDWorld, b: TDWorld, op: Callable) -> list[torch.Tensor]:
         values = []
@@ -60,20 +61,12 @@ class Entity(Mergeable):
     def _evaluate_op(self, prop: Property, x, y) -> bool:
         return prop.evaluate(x, y)
 
-    def _extract_op(self, prop: Property, x, y, values) -> torch.Tensor:
-        return prop.extract(x, y, values)
+    # def _extract_op(self, prop: Property, x, y, values) -> torch.Tensor:
+    #    return prop.extract(x, y, values)
 
-    def _read_op(self, prop: Property, x) -> torch.Tensor:
-        ex = prop.extractor(x)
-        return prop.normalizer(ex)
-
-    def read(self, x: torch.Tensor) -> torch.Tensor:
-        values = self._weighted(x, x, self._read_op)
-        return all(values) if values else False
-
-    def distance(self, a: TDEntity, b: TDEntity) -> float:
-        values = self._weighted(a, b, self._distance_op)
-        return sum(values) / len(values) if values else 0.0
+    # def distance(self, a: TDEntity, b: TDEntity) -> float:
+    #    values = self._weighted(a, b, self._distance_op)
+    #    return sum(values) / len(values) if values else 0.0
 
     def evaluate(self, a: TDEntity, b: TDEntity) -> bool:
         values = self._weighted(a, b, self._evaluate_op)
@@ -83,3 +76,13 @@ class Entity(Mergeable):
         self, x: torch.Tensor, y: torch.Tensor, values: list[torch.Tensor]
     ) -> torch.Tensor:
         raise NotImplementedError()
+
+    @property
+    def state(self) -> StateProperty:
+        for prop, _ in self.properties.values():
+            if isinstance(prop, StateProperty):
+                return prop
+        raise ValueError("Entity does not have a state property.")
+
+    def make_state_one_hot(self, idx: int) -> torch.Tensor:
+        return self.state.state.one_hot_from_idx(idx)

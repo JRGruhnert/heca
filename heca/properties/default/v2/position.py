@@ -6,7 +6,7 @@ from heca.properties.evaluators.evaluator import PropertyEvaluator
 from heca.properties.evaluators.threshold import ThresholdEvaluator
 from heca.properties.rulers.euclidean import EuclideanRuler
 from heca.properties.rulers.ruler import PropertyRuler
-from heca.properties.property import Property
+from heca.properties.default.v2.property import Property
 
 
 class PositionProperty(Property):
