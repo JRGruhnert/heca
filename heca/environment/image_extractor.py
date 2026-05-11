@@ -16,9 +16,10 @@ from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
 from heca.misc.td import (
+    TDCamReferences,
     TDEntity,
     TDEntities,
-    TDPoseStates,
+    TDEntityStates,
     TDSceneReferences,
     TDStateReferences,
 )
@@ -54,7 +55,6 @@ class ImageExtractor(Persistable):
         facet: str = "token"
         thresh: float = 0.5
         # dafuq
-        include_cls: bool = False
         register_tokens: int = 0  # extra cls-tokens for DinoV2+registers
         center_crop: bool = False
         pad: bool = False
@@ -71,6 +71,7 @@ class ImageExtractor(Persistable):
         kp_selection_threshold: float = 0.2
         ee_kp_index: int = 0  # index of the end effector keypoint in the keypoint list.
         state_method: StateExtractionMode = StateExtractionMode.NCC
+        state_kernel_patches: int = 3
 
     """This class facilitates extraction of features, descriptors, and saliency maps from a ViT.
 
@@ -86,17 +87,11 @@ class ImageExtractor(Persistable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.model = ImageExtractor.create_model(self.cfg.model_type)
-        self.model = ImageExtractor.patch_vit_resolution(self.model, self.cfg.stride)
+        self.model, self.stride, self.patch_size = ImageExtractor.patch_vit_resolution(
+            self.model, self.cfg.stride
+        )
         self.model.eval()
         self.model.to(hardware.device)
-
-        self.stride = self.model.patch_embed.proj.stride
-        patch_size = self.model.patch_embed.patch_size
-        if type(patch_size) is tuple:
-            assert all([p == patch_size[0] for p in patch_size]), "has to be square"
-            self.p = patch_size[0]
-        else:
-            self.p = patch_size
 
         self.mean = (
             (0.485, 0.456, 0.406) if "dino" in self.cfg.model_type else (0.5, 0.5, 0.5)
@@ -124,6 +119,7 @@ class ImageExtractor(Persistable):
         # my stuff
         self.descriptor_data: TDSceneReferences = TDSceneReferences()
         self.entities: list[Entity.Query] = []
+        self.state_patch_size = self.cfg.state_kernel_patches * self.patch_size
 
     def get_dc_dim(self):
         dim_mapping = {128: 32, 256: 32, 360: 45, 480: 60, 640: 80}
@@ -234,16 +230,6 @@ class ImageExtractor(Persistable):
 
         return descr
 
-    @cached_property
-    def ref_pose_descriptors(self) -> torch.Tensor:
-        points = self.descriptor_data.get("points").long()  # (B, 2)
-        descriptors = self.descriptor_data.get("descriptors")  # (B, D, H, W)
-        B = descriptors.shape[0]
-        x = points[:, 0]
-        y = points[:, 1]
-        batch_idx = torch.arange(B)
-        return descriptors[batch_idx, :, x, y]  # (B, D)
-
     def __call__(self, cams: dict) -> TDEntities:
         all_kps = []
         all_states = []
@@ -252,8 +238,10 @@ class ImageExtractor(Persistable):
         all_scores = []
 
         for label, cam in cams.items():
+            data = self.descriptor_data.get(label)
+            assert isinstance(data, TDCamReferences)
             kps, states, info = self.encode(
-                label,
+                data,
                 cam.rgb,
                 cam.depth,
                 cam.extrinsics,
@@ -362,7 +350,7 @@ class ImageExtractor(Persistable):
 
     def encode(
         self,
-        label: str,
+        cam_refs: TDCamReferences,
         rgb: torch.Tensor,
         depth: torch.Tensor,
         extr: torch.Tensor,
@@ -374,21 +362,24 @@ class ImageExtractor(Persistable):
             upscale=False,
         )
 
-        ref_descriptor = self.descriptor_data.get(label).get_point_references
+        kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(
+            cam_refs.pose_refs.kp_refs,
+            descriptor,
+        )
 
-        kps, kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(
+        kps = hard_pixels_to_3D_world(
+            kps_raw_2d,
             depth,
             extr,
             intr,
-            descriptor,
-            ref_descriptor,
+            self.image_width - 1,
+            self.image_height - 1,
         )
 
-        pose_states = self.descriptor_data.get(label).get_pose_states()
         states, confidence = self.compute_states(
+            cam_refs,
+            rgb,
             kps_raw_2d,
-            descriptor,
-            pose_states,
         )
 
         info = {
@@ -405,34 +396,6 @@ class ImageExtractor(Persistable):
 
         return kps, states, info
 
-    def get_state_references_batch(
-        self, state_references: TDStateReferences, kernel_size: int = 7
-    ) -> torch.Tensor:
-        points = state_references.get_state_points()  # (B, 2)
-        descriptors = state_references.get_state_descriptors()  # (B, D, H, W)
-        B, D, H, W = descriptors.shape
-        pad = kernel_size // 2
-        descriptors_padded = F.pad(descriptors, (pad, pad, pad, pad))
-        x = points[:, 0] + pad
-        y = points[:, 1] + pad
-        patches = []
-        for b in range(B):
-            patch = descriptors_padded[
-                b, :, x[b] - pad : x[b] + pad + 1, y[b] - pad : y[b] + pad + 1
-            ]
-            patches.append(patch)
-        return torch.stack(patches, dim=0)  # (B, D, n, n)
-
-    def get_single_state_reference(
-        self, point: torch.Tensor, descriptors: torch.Tensor, kernel_size: int = 7
-    ) -> torch.Tensor:
-        D, H, W = descriptors.shape
-        pad = kernel_size // 2
-        descriptors_padded = F.pad(descriptors, (pad, pad, pad, pad))
-        x = point[0] + pad
-        y = point[1] + pad
-        return descriptors_padded[:, x - pad : x + pad + 1, y - pad : y + pad + 1]
-
     def ncc(self, patch1: torch.Tensor, patch2: torch.Tensor) -> torch.Tensor:
         """
         Compute Normalized Cross-Correlation (NCC) between two patches.
@@ -446,85 +409,107 @@ class ImageExtractor(Persistable):
         )
         return numerator / denominator if denominator != 0 else torch.tensor(0.0)
 
+    def classify(self, query_embedding, memory):
+        """
+        query_embedding: torch.Tensor of shape (D,) or (1, D)
+        memory: dict[str, torch.Tensor] where each value is (B, D)
+        """
+        if query_embedding.ndim == 1:
+            query_embedding = query_embedding.unsqueeze(0)  # (1, D)
+        scores = {}
+        for cls, embeddings in memory.items():
+            # embeddings: (B, D), query_embedding: (1, D)
+            sims = F.cosine_similarity(embeddings, query_embedding, dim=1)  # (B,)
+            scores[cls] = sims.max().item()
+        # Find the class with the highest score
+        best_cls = None
+        best_score = float("-inf")
+        for cls, score in scores.items():
+            if score > best_score:
+                best_score = score
+                best_cls = cls
+        return best_cls, scores
+
     def compute_states(
         self,
+        cam_refs: TDCamReferences,
+        rgb: torch.Tensor,
         kp_raw_2d: torch.Tensor,
-        descriptors: torch.Tensor,
-        pose_states: TDPoseStates,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute state for each entity using the method specified in config:
-        - 'ncc': Use patchwise NCC (original method)
-        - 'vit_cls': Use ViT CLS token similarity (global image descriptor)
-        """
-        if self.cfg.state_method == StateExtractionMode.NCC:
-            # Original NCC-based method
-            states = []
-            scores = []
-            num_present = min(
-                kp_raw_2d.shape[0], descriptors.shape[0], len(self.entities)
-            )
-            for idx, query in enumerate(self.entities):
-                if idx >= num_present:
-                    continue
-                td_state_ref = pose_states.get(query.label)
-                states_ref = self.get_state_references_batch(td_state_ref)
-                current_ref = self.get_single_state_reference(
-                    kp_raw_2d[idx],
-                    descriptors[idx],
-                )
-                s_scores = [self.ncc(p, current_ref) for p in states_ref]
-                best_idx = torch.argmax(torch.tensor(s_scores)).item()
-                score = s_scores[int(best_idx)]
-                states.append(best_idx)
-                scores.append(score)
-            return torch.tensor(states), torch.tensor(scores)
-        elif self.cfg.state_method == StateExtractionMode.DINO:
-            # Alternate: Use ViT CLS token similarity for state extraction
-            # Assumes pose_states stores reference CLS tokens for each state
-            states = []
-            scores = []
-            # For each entity, get current CLS token and compare to reference CLS tokens
-            num_present = min(descriptors.shape[0], len(self.entities))
-            for idx, query in enumerate(self.entities):
-                if idx >= num_present:
-                    continue
-                td_state_ref = pose_states.get(query.label)
-                # td_state_ref should provide a tensor of shape (num_states, D) for reference CLS tokens
-                ref_cls_tokens = td_state_ref.get_cls_tokens()  # (num_states, D)
-                # Get current CLS token for this entity (assume descriptors[idx] is (D, H, W) or (D, ...))
-                # If descriptors[idx] is (D, H, W), take mean spatially or use a hook to get CLS
-                # Here, assume descriptors[idx] is (D,) or (D, 1, 1)
-                if descriptors[idx].ndim == 3:
-                    # (D, H, W) -> mean spatially
-                    current_cls = descriptors[idx].mean(dim=(1, 2))
-                elif descriptors[idx].ndim == 2:
-                    current_cls = descriptors[idx].mean(dim=1)
-                else:
-                    current_cls = descriptors[idx].flatten()
-                # Compute cosine similarity to each reference CLS token
-                sims = F.cosine_similarity(
-                    ref_cls_tokens, current_cls.unsqueeze(0), dim=1
-                )
-                best_idx = torch.argmax(sims).item()
-                score = sims[best_idx].item()
-                states.append(best_idx)
-                scores.append(score)
-            return torch.tensor(states), torch.tensor(scores)
+        for idx, query in enumerate(self.entities):
+            entity_refs = cam_refs.entity_states.entities.get(query.label)
+            assert isinstance(entity_refs, TDStateReferences)
+            cls_tokens = self.encode_states(rgb, kp_raw_2d[idx])
 
-        else:
-            # Unsupported method (implement malmo if others dont work.)
-            raise NotImplementedError()
+            sims = F.cosine_similarity(
+                cls_tokens, entity_refs.cls_tokens, dim=1
+            )  # (B,)
+            score = sims.max().item()
+        # kp raw has different shape then in preprocessing
+        raise NotImplementedError("State computation not implemented yet.")
+
+    def prepare_references(self, examples: TDSceneReferences):
+        td = examples.copy()
+        assert isinstance(td, TDSceneReferences)
+        for cam in td.cams.values():
+            for idx, query in enumerate(self.entities):
+                state_refs = cam.entity_states.entities.get(query.label)
+                assert isinstance(state_refs, TDStateReferences)
+
+                s_img_desc = self.compute_descriptor(
+                    state_refs.images_raw,
+                    upscale=False,
+                )
+                kp_img_desc = self.compute_descriptor(
+                    cam.pose_refs.images_raw,
+                    upscale=False,
+                )
+                cam.pose_refs.set_preprocessed(kp_img_desc)
+
+                kps_raw_2d, _, _, _ = self.compute_keypoints(
+                    cam.pose_refs.kp_refs[idx],
+                    s_img_desc,
+                )  # (N, 2*Nref) where for each kp: (x, y)
+
+                cls_tokens = self.encode_states(
+                    state_refs.images_raw,
+                    kps_raw_2d,
+                )
+
+                state_refs.set_preprocessed(cls_tokens)
+
+    def encode_states(
+        self,
+        rgb: torch.Tensor,
+        kps_raw_2d: torch.Tensor,
+    ) -> torch.Tensor:
+        x = kps_raw_2d[:, 0]
+        y = kps_raw_2d[:, 1]
+        pad = self.state_patch_size // 2
+        # TODO: which mode?
+        img_padded = torch.nn.functional.pad(rgb, (pad, pad, pad, pad), mode="reflect")
+        # Extract (C, k, k) patch for each batch element at (x[b], y[b])
+        patches = []
+        for b in range(img_padded.shape[0]):
+            x_b = int(x[b].item())
+            y_b = int(y[b].item())
+            patch = img_padded[b, :, y_b - pad : y_b + pad, x_b - pad : x_b + pad]
+            patches.append(patch)
+        patches = torch.stack(patches, dim=0)  # (B, C, k, k)
+        assert patches.shape[2] == self.state_patch_size
+        assert patches.shape[3] == self.state_patch_size
+
+        prep, _ = self.preprocess(patches)
+        # Extract CLS token
+        with torch.inference_mode():
+            return self.extract_cls_token(prep)
 
     def compute_keypoints(
         self,
-        depth,
-        extrinsics,
-        intrinsics,
-        descriptor_images,
-        ref_descriptor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        sm = self.softmax_of_reference_descriptors(descriptor_images, ref_descriptor)
+        point_refs: torch.Tensor,
+        image_desc: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        sm = self.softmax_of_reference_descriptors(image_desc, point_refs)
         # sm = similarity map
         post = sm
         # When correspondence is (almost) zero across the image, the tensor
@@ -540,18 +525,9 @@ class ImageExtractor(Persistable):
             max_sim > self.cfg.kp_selection_threshold
         ).float()  # 1 if present, 0 if not
 
-        kp_raw_2d = self.get_mode(post)
+        kp_raw_2d = self.get_mode(post)  # (N, 2*Nref) where for each kp: (x, y)
 
-        kp = hard_pixels_to_3D_world(
-            kp_raw_2d,
-            depth,
-            extrinsics,
-            intrinsics,
-            self.image_width - 1,
-            self.image_height - 1,
-        )
-
-        return kp, kp_raw_2d, kp_mask, sm, post
+        return kp_raw_2d, kp_mask, sm, post
 
     def softmax_of_reference_descriptors(
         self,
@@ -713,31 +689,6 @@ class ImageExtractor(Persistable):
             handle.remove()
         self.hook_handlers = []
 
-    @classmethod
-    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
-        directory = cls.File.resolve_directory(query) / scene
-        extractor = cls.search(query)
-        try:
-            td = torch.load(directory / "samples.pt", map_location=hardware.device)
-            extractor.descriptor_data = td
-        except (FileNotFoundError, RuntimeError) as e:
-            logger.warning(f"Could not load TDEntities: {e}")
-
-        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
-        return extractor
-
-    @classmethod
-    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
-        directory = cls.File.resolve_directory(query) / scene
-        extractor = cls.search(query)
-        if extractor.descriptor_data is None:
-            logger.warning(
-                f"ImageExtractor for scene {scene} with query: {query} has no references to save."
-            )
-            return False
-        torch.save(extractor.descriptor_data, directory / "samples.pt")
-        return True
-
     @staticmethod
     def create_model(model_type: str) -> nn.Module:
         """
@@ -821,12 +772,14 @@ class ImageExtractor(Persistable):
         return interpolate_pos_encoding
 
     @staticmethod
-    def patch_vit_resolution(model: nn.Module, stride: int) -> nn.Module:
+    def patch_vit_resolution(
+        model: nn.Module, stride: int
+    ) -> tuple[nn.Module, int, int]:
         """
         change resolution of model output by changing the stride of the patch extraction.
         :param model: the model to change resolution for.
         :param stride: the new stride parameter.
-        :return: the adjusted model
+        :return: the adjusted model, the new stride, and the patch size
         """
         patch_size = model.patch_embed.patch_size
 
@@ -839,7 +792,7 @@ class ImageExtractor(Persistable):
             patch_size = patch_size[0]
 
         if stride == patch_size:  # nothing to do
-            return model
+            return model, stride, patch_size
 
         stride_t: tuple = nn_utils._pair(stride)
         assert all([(patch_size // s_) * s_ == patch_size for s_ in stride_t])
@@ -850,4 +803,30 @@ class ImageExtractor(Persistable):
         model.interpolate_pos_encoding = types.MethodType(  # type: ignore
             ImageExtractor._fix_pos_enc(patch_size, stride_t), model
         )
-        return model
+        return model, stride, patch_size
+
+    @classmethod
+    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        try:
+            td = torch.load(directory / "samples.pt", map_location=hardware.device)
+            assert isinstance(td, TDSceneReferences)
+            extractor.prepare_references(td)
+        except (FileNotFoundError, RuntimeError) as e:
+            logger.warning(f"Could not load TDEntities: {e}")
+
+        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
+        return extractor
+
+    @classmethod
+    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
+        directory = cls.File.resolve_directory(query) / scene
+        extractor = cls.search(query)
+        if extractor.descriptor_data is None:
+            logger.warning(
+                f"ImageExtractor for scene {scene} with query: {query} has no references to save."
+            )
+            return False
+        torch.save(extractor.descriptor_data, directory / "samples.pt")
+        return True

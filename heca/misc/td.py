@@ -77,28 +77,29 @@ class TDStateReferences(TensorDict):
     def __init__(self):
         super().__init__({}, batch_size=empty_bs)
 
-    def get_state_points(self) -> torch.Tensor:
-        if "points" not in self.keys():
-            raise KeyError()
-        return cast(torch.Tensor, self["points"])
-
-    def get_state_descriptors(self) -> torch.Tensor:
-        if "descriptors" not in self.keys():
-            raise KeyError()
-        return cast(torch.Tensor, self["descriptors"])
-
-    def get_state_images_raw(self) -> torch.Tensor:
-        if "images_raw" not in self.keys():
-            raise KeyError()
+    @property
+    def images_raw(self) -> torch.Tensor:  # (B, C, H, W)
         return cast(torch.Tensor, self["images_raw"])
 
-    def get_state_references(self) -> torch.Tensor:
-        raise NotImplementedError()
+    @property
+    def cls_tokens(self) -> torch.Tensor:  # (B, D)
+        return cast(torch.Tensor, self["states"])
+
+    def set_preprocessed(self, states: torch.Tensor):
+        self["states"] = states
 
 
-class TDPoseStates(TensorDict):
+class TDEntityStates(TensorDict):
     def __init__(self):
         super().__init__({}, batch_size=empty_bs)
+
+    @property
+    def entities(self) -> dict[str, TDStateReferences]:
+        return {
+            label: cast(TDStateReferences, self[label])
+            for label in self.keys()
+            if isinstance(label, str)
+        }
 
 
 class TDPoseReferences(TensorDict):
@@ -108,30 +109,29 @@ class TDPoseReferences(TensorDict):
             batch_size=empty_bs,
         )
 
-    def get_points(self) -> torch.Tensor:
-        if "points" not in self.keys():
-            raise KeyError()
+    @property
+    def points(self) -> torch.Tensor:
         return cast(torch.Tensor, self["points"])
 
-    def get_descriptors(self) -> torch.Tensor:
-        if "descriptors" not in self.keys():
-            raise KeyError()
-        return cast(torch.Tensor, self["descriptors"])
-
-    def get_images_raw(self) -> torch.Tensor:
-        if "images_raw" not in self.keys():
-            raise KeyError()
+    @property
+    def images_raw(self) -> torch.Tensor:
         return cast(torch.Tensor, self["images_raw"])
 
+    @property
+    def descriptors(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["descriptors"])
+
     @cached_property
-    def get_point_references(self) -> torch.Tensor:
-        points = self.get_points()  # (B, 2)
-        descriptors = self.get_descriptors()  # (B, D, H, W)
-        B = descriptors.shape[0]
+    def kp_refs(self) -> torch.Tensor:
+        points = self.points  # (B, 2)
+        descriptors = self.descriptors  # (B, D, H, W)
         x = points[:, 0]
         y = points[:, 1]
-        batch_idx = torch.arange(B)
+        batch_idx = torch.arange(descriptors.shape[0])
         return descriptors[batch_idx, :, x, y]  # (B, D)
+
+    def set_preprocessed(self, desc: torch.Tensor):
+        self["descriptors"] = desc
 
 
 class TDCamReferences(TensorDict):
@@ -139,20 +139,18 @@ class TDCamReferences(TensorDict):
         super().__init__(
             {
                 "pose_references": TDPoseReferences(),
-                "pose_states": TDPoseStates(),
+                "entity_states": TDEntityStates(),
             },
             batch_size=empty_bs,
         )
 
-    def get_pose_references(self) -> TDPoseReferences:
-        if "pose_references" not in self.keys():
-            raise KeyError()
+    @property
+    def pose_refs(self) -> TDPoseReferences:
         return cast(TDPoseReferences, self["pose_references"])
 
-    def get_pose_states(self) -> TDPoseStates:
-        if "pose_states" not in self.keys():
-            raise KeyError()
-        return cast(TDPoseStates, self["pose_states"])
+    @property
+    def entity_states(self) -> TDEntityStates:
+        return cast(TDEntityStates, self["entity_states"])
 
 
 class TDSceneReferences(TensorDict):
@@ -162,8 +160,10 @@ class TDSceneReferences(TensorDict):
             batch_size=empty_bs,
         )
 
-    def get_all_cams(self) -> dict[str, TDCamReferences]:
-        for label in self.keys():
-            if not isinstance(label, str):
-                raise TypeError()
-        return {label: cast(TDCamReferences, self[label]) for label in self.keys()}
+    @property
+    def cams(self) -> dict[str, TDCamReferences]:
+        return {
+            label: cast(TDCamReferences, self[label])
+            for label in self.keys()
+            if isinstance(label, str)
+        }

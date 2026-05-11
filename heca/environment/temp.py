@@ -51,14 +51,20 @@ def embed_image(image_path):
 # --------------------------------------------------
 
 memory = {
-    "open": [
-        embed_image("open1.png"),
-        embed_image("open2.png"),
-    ],
-    "closed": [
-        embed_image("closed1.png"),
-        embed_image("closed2.png"),
-    ],
+    "open": torch.stack(
+        [
+            embed_image("open1.png"),
+            embed_image("open2.png"),
+        ],
+        dim=0,
+    ),  # shape (B_open, D)
+    "closed": torch.stack(
+        [
+            embed_image("closed1.png"),
+            embed_image("closed2.png"),
+        ],
+        dim=0,
+    ),  # shape (B_closed, D)
 }
 
 # --------------------------------------------------
@@ -67,23 +73,25 @@ memory = {
 
 
 def classify(query_embedding):
+    """
+    query_embedding: torch.Tensor of shape (D,) or (1, D)
+    memory: dict[str, torch.Tensor] where each value is (B, D)
+    """
+    if query_embedding.ndim == 1:
+        query_embedding = query_embedding.unsqueeze(0)  # (1, D)
     scores = {}
-
     for cls, embeddings in memory.items():
-
-        sims = [
-            F.cosine_similarity(
-                query_embedding.unsqueeze(0),
-                e.unsqueeze(0),
-            ).item()
-            for e in embeddings
-        ]
-
-        scores[cls] = max(sims)
-
-    pred = max(scores, key=scores.get)
-
-    return pred, scores
+        # embeddings: (B, D), query_embedding: (1, D)
+        sims = F.cosine_similarity(embeddings, query_embedding, dim=1)  # (B,)
+        scores[cls] = sims.max().item()
+    # Find the class with the highest score
+    best_cls = None
+    best_score = float('-inf')
+    for cls, score in scores.items():
+        if score > best_score:
+            best_score = score
+            best_cls = cls
+    return best_cls, scores
 
 
 # --------------------------------------------------
