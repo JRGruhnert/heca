@@ -115,7 +115,7 @@ class ImageExtractor(Persistable):
 
         # my stuff
         self.descriptor_data: TDSceneReferences = TDSceneReferences()
-        self.entities: list[Entity.Query] = []
+        self.entities: list[Entity.Config] = []
         self.state_patch_size = self.cfg.state_kernel_patches * self.patch_size
 
     def get_dc_dim(self):
@@ -414,17 +414,17 @@ class ImageExtractor(Persistable):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         one_hots = []
         scores = []
-        for idx, query in enumerate(self.entities):
-            entity_refs = cam_refs.entity_states.entities.get(query.label)
+        for idx, entity_config in enumerate(self.entities):
+            entity_refs = cam_refs.entity_states.entities.get(entity_config.label)
             assert isinstance(entity_refs, TDStateReferences)
             cls_tokens = self.encode_states(rgb, kp_raw_2d[idx])
             distances = torch.nn.functional.cosine_similarity(
                 cls_tokens, entity_refs.cls_tokens, dim=1
             )
-            entity = Entity.search(query)
+            entity = Entity.create(entity_config)
             max_idx = int(torch.argmax(distances).item())
             max_score = distances[max_idx].item()
-            one_hot_state = entity.make_state_one_hot(max_idx)
+            one_hot_state = entity.state.one_hot_from_idx(max_idx)
             one_hots.append(one_hot_state)
             scores.append(max_score)
         return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
@@ -433,8 +433,8 @@ class ImageExtractor(Persistable):
         td = examples.copy()
         assert isinstance(td, TDSceneReferences)
         for cam in td.cams.values():
-            for idx, query in enumerate(self.entities):
-                state_refs = cam.entity_states.entities.get(query.label)
+            for idx, entity_config in enumerate(self.entities):
+                state_refs = cam.entity_states.entities.get(entity_config.label)
                 assert isinstance(state_refs, TDStateReferences)
 
                 s_img_desc = self.compute_descriptor(

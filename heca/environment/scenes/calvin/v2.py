@@ -1,23 +1,49 @@
 from heca.entities.entity import Entity
-from heca.properties.default.v2.position import PositionProperty
-from heca.properties.default.v2.rotation import RotationProperty
-from heca.properties.default.v2.state import StateProperty, State
 
-CLAVIN_ENTITIES = {
-    Entity.Query(label="ee", meta="ee", env="calvin"): Entity.Config(
-        props=set(
-            [
-                PositionProperty.Config(label="ee_position"),
-                RotationProperty.Config(label="ee_rotation"),
-                StateProperty.Config(
-                    label="ee_scalar",
-                    state=State.Config(values={"on", "off"}),
-                ),
-            ]
-        ),
-        weights=list(),
-    )
-}
-
-
-entities = [CLAVIN_ENTITIES[Entity.Query(label="ee", meta="ee", env="calvin")]]
+entities = [
+    Entity.Config(
+        env="calvin",
+        label="ee",
+        states={"open", "closed"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="drawer",
+        states={"open", "closed"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="slider",
+        states={"open", "closed", "half-open"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="button",
+        states={"pressed", "released"},
+    ),
+    # Entity.Config(
+    #    env="calvin",
+    #    label="switch",
+    #    states={"on", "off"},
+    # ),
+    Entity.Config(
+        env="calvin",
+        label="light",
+        states={"on", "off"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="red_block",
+        states={"grabbed", "ungrabbed"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="pink_block",
+        states={"grabbed", "ungrabbed"},
+    ),
+    Entity.Config(
+        env="calvin",
+        label="blue_block",
+        states={"grabbed", "ungrabbed"},
+    ),
+]

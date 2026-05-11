@@ -55,3 +55,6 @@ class StateProperty(Property):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.state = State(cfg.state)
+
+    def one_hot_from_idx(self, idx: int) -> torch.Tensor:
+        return self.state.one_hot_from_idx(idx)

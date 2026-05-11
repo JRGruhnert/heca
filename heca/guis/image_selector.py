@@ -32,7 +32,7 @@ class ImageSelector(Configurable):
         self.canvas.pack()
         self.scene = Scene.search(self.cfg.scene)
 
-        self.selection_pairs: list[tuple[Entity.Query, str]] = []
+        self.selection_pairs: list[tuple[Entity.Config, str]] = []
         for query in self.scene.entities():
             entity = Entity.search(query)
             for key in entity.properties.keys():

@@ -10,7 +10,6 @@ from heca.properties.evaluators.evaluator import PropertyEvaluator
 class Property(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        label: str
         ruler: PropertyRuler.Config
         encoder: PropertyEncoder.Config
         evaluator: PropertyEvaluator.Config
