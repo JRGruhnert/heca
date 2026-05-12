@@ -11,7 +11,6 @@ class IgnoreRuler(PropertyRuler):
         default_distance: float = 0.0
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
 
     def distance(

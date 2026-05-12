@@ -12,3 +12,8 @@ class DomainEncoder(PropertyEncoder):
     class Config(PropertyEncoder.Config):
         in_dim: int = 1
         hidden_dim: int = 8
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(PropertyEncoder.File):
+        folder: str = "domain"
+        ending: str = ".pt"

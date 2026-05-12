@@ -1,16 +1,9 @@
 from abc import abstractmethod
-from dataclasses import dataclass
 import torch
 from heca.classes.config import Configurable
 
 
 class PropertyRuler(Configurable):
-    @dataclass(kw_only=True)
-    class Config(Configurable.Config):
-        pass
-
-    def __init__(self, cfg: Config):
-        self.cfg = cfg
 
     def __call__(self, a: torch.Tensor, b: torch.Tensor) -> float:
         value = self.distance(a, b)

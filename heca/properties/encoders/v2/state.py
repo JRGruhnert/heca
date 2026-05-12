@@ -11,3 +11,8 @@ class StateEncoder(PropertyEncoder):
     @dataclass(kw_only=True)
     class Config(PropertyEncoder.Config):
         in_dim: int = 1
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(PropertyEncoder.File):
+        folder: str = "state"
+        ending: str = ".pt"

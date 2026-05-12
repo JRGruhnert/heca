@@ -11,3 +11,8 @@ class PositionEncoder(PropertyEncoder):
     @dataclass(kw_only=True)
     class Config(PropertyEncoder.Config):
         in_dim: int = 3
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(PropertyEncoder.File):
+        folder: str = "position"
+        ending: str = ".pt"

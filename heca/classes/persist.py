@@ -14,9 +14,9 @@ class PersistableMeta(RegisterableMeta):
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
         if cls.__name__ != "Persistable":
-            disk = attrs.get("Disk")
-            assert disk is not None
-            PersistableMeta.disk_class_registry[disk] = cls
+            file = getattr(cls, "File", None)
+            assert file is not None
+            PersistableMeta.disk_class_registry[file] = cls
 
     @staticmethod
     def from_disk(disk: "Persistable.File") -> "Persistable":
@@ -38,7 +38,7 @@ class Persistable(Registerable, metaclass=PersistableMeta):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class File(Registerable):
+    class File:
         root: Path = Path("data")
         folder: str
         ending: str

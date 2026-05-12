@@ -5,11 +5,19 @@ from dataclasses import dataclass
 from tensordict import TensorDict
 
 from heca.entities.entity import Entity
+from heca.environment.image_extractor import ImageExtractor
 from heca.properties.property import PropertyV1
 from heca.environment.scenes.scene import Scene
 from heca.environment.scenes.calvin import v1, v2
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
-from heca.misc.td import TDProperties, TDEntities, TDScene, empty_bs
+from heca.misc.td import (
+    TDCamRecord,
+    TDCamRecordings,
+    TDProperties,
+    TDEntities,
+    TDScene,
+    empty_bs,
+)
 from heca.misc.state import State
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
@@ -29,6 +37,8 @@ class CalvinScene(Scene):
 
     @dataclass(kw_only=True)
     class Config(Scene.Config):
+        extractor: ImageExtractor.Query = ImageExtractor.Query(scene="calvin")
+        img_size: tuple[int, int] = (256, 256)
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),
@@ -157,6 +167,22 @@ class CalvinScene(Scene):
             )
         return camera_obs
 
+    def image_tensors2(self, obs: CalvinEnvObservation) -> TDCamRecordings:
+        camera_obs = {}
+        for cam in obs.camera_names:
+            rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
+            mask = obs.mask[cam].astype(int)
+
+            record = TDCamRecord(
+                rgb=torch.Tensor(rgb),
+                d=torch.Tensor(obs.depth[cam]),
+                mask=torch.Tensor(mask).to(torch.uint8),
+                extr=torch.Tensor(obs.extr[cam]),
+                intr=torch.Tensor(obs.intr[cam]),
+            )
+            camera_obs[cam] = record
+        return TDCamRecordings({cam: record for cam, record in camera_obs.items()})
+
     def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
         state_dict = {}
         state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
@@ -186,5 +212,6 @@ class CalvinScene(Scene):
     def properties(self) -> list[PropertyV1.Config]:
         return v1.properties
 
-    def entities(self) -> list[Entity.Config]:
-        return v2.entities
+    @property
+    def entities(self) -> list[Entity]:
+        return [Entity.create(e) for e in v2.entities]

@@ -11,3 +11,8 @@ class RotationEncoder(PropertyEncoder):
     @dataclass(kw_only=True)
     class Config(PropertyEncoder.Config):
         in_dim: int = 4
+
+    @dataclass(frozen=True, kw_only=True)
+    class File(PropertyEncoder.File):
+        folder: str = "rotation"
+        ending: str = ".pt"

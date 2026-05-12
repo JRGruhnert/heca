@@ -3,12 +3,10 @@ from dataclasses import dataclass, field
 import torch
 
 from heca.classes.config import Configurable
-from heca.properties.normalizers.boundary import (
-    BoundaryNormalizer,
-)
+from heca.environment.scenes.calvin.area import CalvinAreaConfig
+from heca.properties.normalizers.boundary import BoundaryNormalizer
 from heca.misc.area import Area
 from heca.misc.state import State
-from heca.properties.default.v1.area import CalvinAreaConfig
 
 
 class AreaGTModifier(Configurable):

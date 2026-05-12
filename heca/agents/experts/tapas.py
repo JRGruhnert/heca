@@ -46,8 +46,8 @@ class TapasAgent(ExpertAgent):
         while not predictions.is_finished:
             pred = predictions.step()
             action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-            z = self.scene.step(action)
-
+            obs = self.scene.step(action)
+        z = self.scene.make_full_td(obs)
         # TODO: compute actual reward, done, terminal based on scene evaluation
         reward, done = self.evaluate(z, y)
         return z, AgentFeedback(

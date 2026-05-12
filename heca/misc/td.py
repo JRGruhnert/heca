@@ -81,6 +81,14 @@ class TDStateReferences(TensorDict):
     def images_raw(self) -> torch.Tensor:  # (B, C, H, W)
         return cast(torch.Tensor, self["images_raw"])
 
+    def add_reference(self, img_raw: torch.Tensor):
+        if "images_raw" not in self.keys():
+            self["images_raw"] = img_raw.unsqueeze(0)
+        else:
+            self["images_raw"] = torch.cat(
+                [self.images_raw, img_raw.unsqueeze(0)], dim=0
+            )
+
     @property
     def cls_tokens(self) -> torch.Tensor:  # (B, D)
         return cast(torch.Tensor, self["states"])
@@ -116,6 +124,19 @@ class TDPoseReferences(TensorDict):
     @property
     def images_raw(self) -> torch.Tensor:
         return cast(torch.Tensor, self["images_raw"])
+
+    def add_reference(self, point: torch.Tensor, img_raw: torch.Tensor):
+        if "points" not in self.keys():
+            self["points"] = point.unsqueeze(0)
+        else:
+            self["points"] = torch.cat([self.points, point.unsqueeze(0)], dim=0)
+
+        if "images_raw" not in self.keys():
+            self["images_raw"] = img_raw.unsqueeze(0)
+        else:
+            self["images_raw"] = torch.cat(
+                [self.images_raw, img_raw.unsqueeze(0)], dim=0
+            )
 
     @property
     def descriptors(self) -> torch.Tensor:
@@ -164,6 +185,101 @@ class TDSceneReferences(TensorDict):
     def cams(self) -> dict[str, TDCamReferences]:
         return {
             label: cast(TDCamReferences, self[label])
+            for label in self.keys()
+            if isinstance(label, str)
+        }
+
+    def add_pose(
+        self,
+        cam_label: str,
+        entity_label: str,
+        point: torch.Tensor,
+        img_raw: torch.Tensor,
+    ):
+        if cam_label not in self.keys():
+            self[cam_label] = TDCamReferences()
+        cam_refs = self.cams[cam_label]
+
+        if entity_label not in cam_refs.pose_refs.keys():
+            cam_refs.pose_refs[entity_label] = TDPoseReferences()
+
+        pose_ref = cam_refs.pose_refs[entity_label]
+        assert isinstance(pose_ref, TDPoseReferences)
+        pose_ref.add_reference(
+            point=point,
+            img_raw=img_raw,
+        )
+
+    def add_state(
+        self,
+        cam_label: str,
+        entity_label: str,
+        img_raw: torch.Tensor,
+    ):
+        if cam_label not in self.keys():
+            self[cam_label] = TDCamReferences()
+        cam_refs = self.cams[cam_label]
+
+        if entity_label not in cam_refs.entity_states.keys():
+            cam_refs.entity_states[entity_label] = TDStateReferences()
+
+        state_ref = cam_refs.entity_states[entity_label]
+        assert isinstance(state_ref, TDStateReferences)
+        state_ref.add_reference(img_raw)
+
+
+class TDCamRecord(TensorDict):
+    def __init__(
+        self,
+        rgb: torch.Tensor,
+        d: torch.Tensor,
+        mask: torch.Tensor,
+        extr: torch.Tensor,
+        intr: torch.Tensor,
+    ):
+        super().__init__(
+            {
+                "rgb": rgb,
+                "d": d,
+                "mask": mask,
+                "extr": extr,
+                "intr": intr,
+            },
+            batch_size=empty_bs,
+        )
+
+    @property
+    def rgb(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["rgb"])
+
+    @property
+    def d(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["d"])
+
+    @property
+    def mask(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["mask"])
+
+    @property
+    def extr(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["extr"])
+
+    @property
+    def intr(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["intr"])
+
+
+class TDCamRecordings(TensorDict):
+    def __init__(self, records: dict[str, TDCamRecord]):
+        super().__init__(
+            records,
+            batch_size=empty_bs,
+        )
+
+    @property
+    def records(self) -> dict[str, TDCamRecord]:
+        return {
+            label: cast(TDCamRecord, self[label])
             for label in self.keys()
             if isinstance(label, str)
         }

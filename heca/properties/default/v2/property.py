@@ -11,13 +11,13 @@ class Property(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         ruler: PropertyRuler.Config
-        encoder: PropertyEncoder.Config
+        encoder: PropertyEncoder.Query
         evaluator: PropertyEvaluator.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.ruler = PropertyRuler.create(cfg.ruler)
-        self.encoder = PropertyEncoder.create(cfg.encoder)
+        self.encoder = PropertyEncoder.search(cfg.encoder)
         self.evaluator = PropertyEvaluator.create(cfg.evaluator)
 
     def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:

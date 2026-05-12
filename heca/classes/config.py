@@ -10,16 +10,16 @@ class ConfigurableMeta(ABCMeta):
 
     def __init__(cls, name, bases, attrs):
         super().__init__(name, bases, attrs)
-        if cls.__name__ != "Configurable":
-            config = attrs.get("Config")
-            assert config is not None
+        config = attrs.get("Config")
+        if config is not None and name != "Configurable":
             ConfigurableMeta.cfg_class_registry[config] = cls
 
     @staticmethod
-    def from_config(config: "Configurable.Config") -> "Configurable":
-        subclass = ConfigurableMeta.cfg_class_registry.get(type(config))
-        assert subclass is not None
-        return subclass(config)
+    def from_config(config):
+        for cfg_cls, subclass in ConfigurableMeta.cfg_class_registry.items():
+            if isinstance(config, cfg_cls):
+                return subclass(config)
+        raise ValueError()
 
 
 class Configurable(ABC, metaclass=ConfigurableMeta):

@@ -10,6 +10,9 @@ class BinaryRuler(PropertyRuler):
     class Config(PropertyRuler.Config):
         pass
 
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+
     def distance(
         self,
         current: torch.Tensor,

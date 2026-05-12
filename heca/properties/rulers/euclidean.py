@@ -11,7 +11,6 @@ class EuclideanRuler(PropertyRuler):
         pass
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.max_dist = math.sqrt(3)
 

@@ -10,5 +10,8 @@ class DomainRuler(PropertyRuler):
     class Config(PropertyRuler.Config):
         pass
 
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+
     def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
         raise NotImplementedError()

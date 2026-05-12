@@ -15,6 +15,7 @@ from heca.entities.entity import Entity
 from heca.misc import hardware, logger
 from heca.misc.logger import measure_runtime
 from heca.misc.td import (
+    TDCamRecordings,
     TDCamReferences,
     TDEntity,
     TDEntities,
@@ -37,7 +38,8 @@ class StateExtractionMode(Enum):
 class ImageExtractor(Persistable):
     @dataclass(frozen=True, kw_only=True)
     class Query(Persistable.Query):
-        pass
+        label: str = "default"
+        scene: str
 
     @dataclass(frozen=True, kw_only=True)
     class File(Persistable.File):
@@ -227,22 +229,22 @@ class ImageExtractor(Persistable):
 
         return descr
 
-    def __call__(self, cams: dict) -> TDEntities:
+    def __call__(self, recordings: TDCamRecordings) -> TDEntities:
         all_kps = []
         all_states = []
         all_infos = []
         all_masks = []
         all_scores = []
 
-        for label, cam in cams.items():
+        for label, cam in recordings.records.items():
             data = self.descriptor_data.get(label)
             assert isinstance(data, TDCamReferences)
             kps, states, info = self.encode(
                 data,
                 cam.rgb,
-                cam.depth,
-                cam.extrinsics,
-                cam.intrinsics,
+                cam.d,
+                cam.extr,
+                cam.intr,
             )
             all_kps.append(kps)
             all_states.append(states)
@@ -787,8 +789,8 @@ class ImageExtractor(Persistable):
         return model, stride, patch_size
 
     @classmethod
-    def load(cls, query: "ImageExtractor.Query", scene: str) -> "ImageExtractor":
-        directory = cls.File.resolve_directory(query) / scene
+    def load(cls, query: "ImageExtractor.Query") -> "ImageExtractor":
+        directory = cls.File.resolve_directory(query) / query.scene
         extractor = cls.search(query)
         try:
             td = torch.load(directory / "samples.pt", map_location=hardware.device)
@@ -797,16 +799,18 @@ class ImageExtractor(Persistable):
         except (FileNotFoundError, RuntimeError) as e:
             logger.warning(f"Could not load TDEntities: {e}")
 
-        logger.info(f"Loaded ImageExtractor for scene {scene} with query: {query}")
+        logger.info(
+            f"Loaded ImageExtractor for scene {query.scene} with query: {query}"
+        )
         return extractor
 
     @classmethod
-    def save(cls, query: "ImageExtractor.Query", scene: str) -> bool:
-        directory = cls.File.resolve_directory(query) / scene
+    def save(cls, query: "ImageExtractor.Query") -> bool:
+        directory = cls.File.resolve_directory(query) / query.scene
         extractor = cls.search(query)
         if extractor.descriptor_data is None:
             logger.warning(
-                f"ImageExtractor for scene {scene} with query: {query} has no references to save."
+                f"ImageExtractor for scene {query.scene} with query: {query} has no references to save."
             )
             return False
         torch.save(extractor.descriptor_data, directory / "samples.pt")

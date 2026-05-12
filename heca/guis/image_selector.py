@@ -5,69 +5,70 @@ import numpy as np
 import torch
 
 from heca.classes.config import Configurable
-from heca.entities.entity import Entity
-from heca.environment.scenes.calvin.scene import CalvinScene
 from heca.environment.scenes.scene import Scene
-from tapas_gmm_modified.dense_correspondence.correspondence_finder import (
-    find_best_match,
-)
-from tapas_gmm_modified.dense_correspondence.correspondence_augmentation import (
-    random_flip,
-)
+from heca.misc.td import TDSceneReferences
 
 
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         marker_radius: int = 5
-        samples_per_point: int = 3
         scene: Scene.Query
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.root = tk.Tk()
-        self.root.title("Image Selector")
-        self.canvas = tk.Canvas(self.root, width=400, height=400)
+        self.scene = Scene.search(self.cfg.scene)
+        self.window = tk.Tk()
+        self.canvas = tk.Canvas(
+            self.window,
+            width=self.scene.cfg.img_size[0],
+            height=self.scene.cfg.img_size[1],
+        )
+        # controls
         self.canvas.bind("<Button-1>", self.on_click)
         self.canvas.pack()
-        self.scene = Scene.search(self.cfg.scene)
+        tk.Button(self.window, text="Accept", command=self.accept).pack()
+        tk.Button(self.window, text="Resample", command=self.refresh).pack()
 
-        self.selection_pairs: list[tuple[Entity.Config, str]] = []
-        for query in self.scene.entities():
-            entity = Entity.search(query)
-            for key in entity.properties.keys():
-                self.selection_pairs.append((query, key))
+        # Prepare selection tuples
+        self.selection_labels = ["pose", "state"]
+        self.cam_labels = self.get_cam_labels()
+        self.selection_tuples: list[tuple[str, str, str]] = []
+        for entity in self.scene.entities:
+            for s_label in self.selection_labels:
+                for cam in self.cam_labels:
+                    self.selection_tuples.append((cam, entity.cfg.label, s_label))
 
-        self.pair_iter = iter(self.selection_pairs)
-        self.results: dict[
-            Entity.Query,
-            dict[str, list[tuple[tuple[int, int], np.ndarray]]],
-        ] = {}
+        self.selection_iter = iter(self.selection_tuples)
+        self.result: TDSceneReferences = TDSceneReferences()
 
-        self.current_pair = None
         self.point = None
         self.marker = None
-        self.sample = 0
+        self.current_tuple = None
+        self.image = None
 
-        # controls
-        tk.Button(self.root, text="Accept", command=self.accept).pack()
-        tk.Button(self.root, text="Resample", command=self.refresh).pack()
+        self.load_next_or_finish()
 
-        self.next_pair()  # Start with the first (entity, property)
-
-    def set_canvas(self):
-        self.canvas = tk.Canvas(self.root, width=400, height=400)
-        self.canvas.bind("<Button-1>", self.on_click)
-        self.canvas.pack()
+    def torch_to_imagetk(self, img_tensor: torch.Tensor) -> ImageTk.PhotoImage:
+        # Ensure tensor is on CPU and detached
+        img_tensor = img_tensor.cpu().detach()
+        # If float, scale to 0-255 and convert to uint8
+        if img_tensor.dtype != torch.uint8:
+            img_tensor = (img_tensor * 255).clamp(0, 255).to(torch.uint8)
+        # Convert to numpy and (H, W, C)
+        img_np = img_tensor.numpy()
+        if img_np.shape[0] == 3:  # (C, H, W) -> (H, W, C)
+            img_np = np.transpose(img_np, (1, 2, 0))
+        img_pil = Image.fromarray(img_np)
+        return ImageTk.PhotoImage(img_pil)
 
     def load_image(self):
-        x = self.scene.sample_images()
+        assert self.current_tuple is not None
+        recordings = self.scene.sample_images()
         # TODO: get image from here
         # x is a dict[str, np.ndarray] which has to be converted to tensor
-        self.img_raw = np.random.randint(0, 255, (3, 400, 400), dtype=np.uint8)
-
-        img = Image.fromarray(self.img_raw.transpose(1, 2, 0))
-        self.img = ImageTk.PhotoImage(img)
+        self.img_raw = recordings.records[self.current_tuple[0]].rgb
+        self.img = self.torch_to_imagetk(self.img_raw)
 
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self.img)
@@ -75,9 +76,52 @@ class ImageSelector(Configurable):
         self.point = None
         self.marker = None
 
-        if self.current_pair is not None:
-            title = f"Image Selector - Entity: {self.current_pair[0].label}, Property: {self.current_pair[1]}"
-            self.root.title(title)
+    def accept(self):
+        assert self.point is not None
+        assert self.current_tuple is not None
+        cam, entity_label, s_label = self.current_tuple
+
+        if s_label == "pose":
+            self.result.add_pose(
+                cam_label=cam,
+                entity_label=entity_label,
+                point=torch.tensor(self.point, dtype=torch.float32),
+                img_raw=self.img_raw,
+            )
+        elif s_label == "state":
+            self.result.add_state(
+                cam_label=cam,
+                entity_label=entity_label,
+                img_raw=self.img_raw,
+            )
+        else:
+            raise ValueError(f"Unknown selection label: {s_label}")
+
+        self.load_next_or_finish()
+
+    def save(self):
+        pass
+
+    def run(self):
+        self.window.mainloop()
+
+    def get_cam_labels(self) -> list[str]:
+        cam_recordings = self.scene.sample_images()
+        return list(cam_recordings.records.keys())
+
+    def load_next_or_finish(self):
+        self.current_tuple = next(self.selection_iter, None)
+        if self.current_tuple is not None:
+            title = f"Selection for: {self.current_tuple[0]}.{self.current_tuple[1]}.{self.current_tuple[2]}"
+            self.window.title(title)
+            self.load_image()
+        else:
+            self.save()
+            self.window.quit()
+
+    def refresh(self):
+
+        self.load_image()
 
     def on_click(self, event: tk.Event):
         self.point = (event.x, event.y)
@@ -95,69 +139,11 @@ class ImageSelector(Configurable):
             fill="red",
         )
 
-    def next_pair(self):
-        try:
-            self.current_pair = next(self.pair_iter)
-            self.sample = 0
-            self.load_image()
-        except StopIteration:
-            self.current_pair = None
-            self.save()
-            self.root.quit()
 
-    def accept(self):
-        assert self.current_pair is not None
-        assert self.point is not None
-        if self.current_pair is not None:
-            entity_query, prop_name = self.current_pair
-            if entity_query not in self.results:
-                self.results[entity_query] = {}
-            if prop_name not in self.results[entity_query]:
-                self.results[entity_query][prop_name] = []
-
-            self.results[entity_query][prop_name].append((self.point, self.img_raw))
-            self.sample += 1
-            if self.sample < self.cfg.samples_per_point:
-                self.load_image()
-                return
-        self.next_pair()
-
-    def refresh(self):
-        self.load_image()
-
-    def save(self):
-        for entity, prop_points in self.results.items():
-            for prop, point in prop_points.items():
-                print(f"Entity: {entity}, Property: {prop}, Selected Point: {point}")
-
-        # Dummy descriptors for demonstration (replace with real data)
-        dummy_res_a = np.random.rand(400, 400, 16)
-        dummy_res_b = np.random.rand(400, 400, 16)
-        dummy_img = np.random.randint(0, 255, (3, 400, 400), dtype=np.uint8)
-        metric = "euclidean"
-        for entity, prop_points in self.results.items():
-            for prop, point in prop_points.items():
-                if point is not None:
-                    img_tensor = torch.from_numpy(dummy_img)
-                    u, v = point
-                    uv_pixel_positions = (torch.tensor([u]), torch.tensor([v]))
-                    aug_images, aug_uv = random_flip([img_tensor], uv_pixel_positions)
-                    aug_point = (int(aug_uv[0][0]), int(aug_uv[1][0]))
-
-                    # Use augmented point in find_best_match
-                    best_match_uv, best_match_diff, norm_diffs = find_best_match(
-                        pixel_a=aug_point,
-                        res_a=dummy_res_a,
-                        res_b=dummy_res_b,
-                        metric=metric,
-                    )
-
-    def run(self):
-        self.root.mainloop()
-
+from heca.environment.scenes.calvin.scene import CalvinScene
 
 selector_cfg = ImageSelector.Config(
     scene=CalvinScene.Query(),
 )
-selector = ImageSelector(cfg=selector_cfg)
+selector = ImageSelector.create(selector_cfg)
 selector.run()

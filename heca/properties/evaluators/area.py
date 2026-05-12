@@ -3,9 +3,7 @@ from dataclasses import dataclass
 import torch
 
 from heca.misc.area import Area
-from heca.properties.evaluators.evaluator import (
-    PropertyEvaluator,
-)
+from heca.properties.evaluators.evaluator import PropertyEvaluator
 
 
 class AreaEvaluator(PropertyEvaluator):
@@ -14,7 +12,6 @@ class AreaEvaluator(PropertyEvaluator):
         area: Area.Config
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.area = Area.create(cfg.area)
 
