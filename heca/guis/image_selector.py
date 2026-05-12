@@ -6,13 +6,14 @@ import torch
 
 from heca.classes.config import Configurable
 from heca.environment.scenes.scene import Scene
-from heca.misc.td import TDSceneReferences
+from heca.misc.td import TDEntity, TDSceneReferences
 
 
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        marker_radius: int = 5
+        marker_radius: int = 4
+
         scene: Scene.Query
 
     def __init__(self, cfg: Config):
@@ -65,16 +66,30 @@ class ImageSelector(Configurable):
     def load_image(self):
         assert self.current_tuple is not None
         recordings = self.scene.sample_images()
-        # TODO: get image from here
-        # x is a dict[str, np.ndarray] which has to be converted to tensor
-        self.img_raw = recordings.records[self.current_tuple[0]].rgb
+        record = recordings.records[self.current_tuple[0]]
+        self.img_raw = record.rgb
         self.img = self.torch_to_imagetk(self.img_raw)
 
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self.img)
 
+        self.scene.extractor.prepare_references(self.result)
+        td_cam_references = self.result.cams[self.current_tuple[0]]
+        _, _, info = self.scene.extractor.encode(
+            td_cam_references,
+            record.rgb,
+            record.d,
+            record.intr,
+            record.extr,
+        )
+        raw_2d = info.get("kp_raw_2d")
+        assert raw_2d is not None
+        points = self.scene.extractor.get_points_from_kp_2d(raw_2d)
+        self.place_references(points)
+
         self.point = None
         self.marker = None
+        self.markers = []
 
     def accept(self):
         assert self.point is not None
@@ -138,6 +153,21 @@ class ImageSelector(Configurable):
             point[1] + self.cfg.marker_radius,
             fill="red",
         )
+
+    def place_references(self, points: dict[str, tuple[int, int]]):
+        for marker in self.markers:
+            self.canvas.delete(marker)
+        self.markers = []
+
+        for point in points.values():
+            marker = self.canvas.create_oval(
+                point[0] - self.cfg.marker_radius // 2,
+                point[1] - self.cfg.marker_radius // 2,
+                point[0] + self.cfg.marker_radius // 2,
+                point[1] + self.cfg.marker_radius // 2,
+                fill="blue",
+            )
+            self.markers.append(marker)
 
 
 from heca.environment.scenes.calvin.scene import CalvinScene

@@ -12,10 +12,6 @@ from tensordict import TensorDict
 
 
 class Scene(Registerable):
-    @dataclass(frozen=True, kw_only=True)
-    class Query(Registerable.Query):
-        label: str
-
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
         extractor: ImageExtractor.Query

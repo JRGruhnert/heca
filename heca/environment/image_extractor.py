@@ -13,7 +13,7 @@ import torch.nn.modules.utils as nn_utils
 from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
-from heca.misc.logger import measure_runtime
+from heca.misc.logger import info, measure_runtime
 from heca.misc.td import (
     TDCamRecordings,
     TDCamReferences,
@@ -395,6 +395,19 @@ class ImageExtractor(Persistable):
 
         return kps, states, info
 
+    def get_points_from_kp_2d(
+        self, kps_raw_2d: torch.Tensor
+    ) -> dict[str, tuple[int, int]]:
+        """
+        Converts a (B, 2) tensor of keypoints to a dict mapping entity labels to (x, y) tuples.
+        """
+        points = [tuple(map(int, xy)) for xy in kps_raw_2d.detach().cpu().numpy()]
+        label_point_dict = {}
+        for idx, entity in enumerate(self.entities):
+            if idx < len(points):
+                label_point_dict[entity.label] = points[idx]
+        return label_point_dict
+
     def ncc(self, patch1: torch.Tensor, patch2: torch.Tensor) -> torch.Tensor:
         """
         Compute Normalized Cross-Correlation (NCC) between two patches.
@@ -695,16 +708,12 @@ class ImageExtractor(Persistable):
             model = torch.hub.load(
                 "facebookresearch/dino:main", model_type_dict[model_type]
             )
-            assert isinstance(model, nn.Module) and isinstance(
-                temp_model, nn.Module
-            ), "models should be of type nn.Module"
+            assert isinstance(model, nn.Module)
             temp_state_dict = temp_model.state_dict()
             del temp_state_dict["head.weight"]
             del temp_state_dict["head.bias"]
             model.load_state_dict(temp_state_dict)
-        assert isinstance(model, nn.Module) and isinstance(
-            temp_model, nn.Module
-        ), "models should be of type nn.Module"
+        assert isinstance(model, nn.Module)
         return model
 
     @staticmethod

@@ -56,6 +56,7 @@ class CalvinScene(Scene):
         )
 
     def __init__(self, cfg: Config):
+        super().__init__(cfg)
         self.cfg = cfg
         self.env = Calvin(self.cfg.cc)
 
