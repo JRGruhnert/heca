@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from dataclasses import dataclass
-
+from PIL.Image import Image
 from tensordict import TensorDict
 
 from heca.entities.entity import Entity
@@ -101,6 +101,9 @@ class CalvinScene(Scene):
 
     def render(self):
         raise NotImplementedError()
+
+    def image_numpy(self, obs) -> dict[str, np.ndarray]:
+        return obs.rgb
 
     def tapas_td(
         self, obs: CalvinEnvObservation, extracted: TDEntities | None = None

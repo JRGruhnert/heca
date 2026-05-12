@@ -1,6 +1,7 @@
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Any
-
+from PIL.Image import Image
 import numpy as np
 import torch
 from heca.classes.register import Registerable
@@ -23,9 +24,13 @@ class Scene(Registerable):
         self.cfg = cfg
         self.extractor = ImageExtractor.load(self.cfg.extractor)
 
-    def sample_images(self) -> TDCamRecordings:
+    def sample_td_images(self) -> TDCamRecordings:
         obs = self._reset()
         return self.image_tensors2(obs)
+
+    def sample_images(self) -> dict[str, np.ndarray]:
+        obs = self._reset()
+        return self.image_numpy(obs)
 
     def reset(self) -> TDScene:
         obs = self._reset()
@@ -77,6 +82,9 @@ class Scene(Registerable):
         raise NotImplementedError()
 
     def image_tensors2(self, obs) -> TDCamRecordings:
+        raise NotImplementedError()
+
+    def image_numpy(self, obs) -> dict[str, np.ndarray]:
         raise NotImplementedError()
 
     def _reset(self) -> Any:

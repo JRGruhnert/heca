@@ -2,18 +2,16 @@ from enum import Enum
 import math
 import types
 from dataclasses import dataclass
-from typing import List, Tuple
 import numpy as np
 import timm
 import torch
-from PIL import Image
 from torch import nn
 from torchvision import transforms
 import torch.nn.modules.utils as nn_utils
 from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
-from heca.misc.logger import info, measure_runtime
+from heca.misc.logger import measure_runtime
 from heca.misc.td import (
     TDCamRecordings,
     TDCamReferences,
@@ -58,7 +56,7 @@ class ImageExtractor(Persistable):
         center_crop: bool = False
         pad: bool = False
         frozen: bool = True
-        image_dim: tuple[int, int] = (480, 640)
+        image_dim: tuple[int, int] = (256, 256)
 
         # keypoints
         descriptor_dim: int = 384
@@ -127,7 +125,7 @@ class ImageExtractor(Persistable):
 
     def preprocess(
         self, img_tensor: torch.Tensor, load_size: tuple[int, int] | None = None
-    ) -> Tuple[torch.Tensor, Image.Image]:
+    ) -> torch.Tensor:
         """
         Preprocesses an image before extraction.
         :param img_tensor: Torch image tensor.
@@ -216,9 +214,18 @@ class ImageExtractor(Persistable):
         B, _, H, W = camera_obs.shape
 
         with torch.inference_mode():
-            prep, _ = self.preprocess(camera_obs)
+            prep = self.preprocess(camera_obs)
             descr = self.extract_descriptors(prep).squeeze(0)
-
+        print("descr.shape before reshape:", descr.shape)
+        print(
+            "B, H_descr, W_descr, descr.shape[-1]:",
+            B,
+            self.H_descr,
+            self.W_descr,
+            descr.shape[-1],
+        )
+        print("Expected elements:", B * self.H_descr * self.W_descr * descr.shape[-1])
+        print("Actual elements:", descr.numel())
         descr = descr.reshape(B, self.H_descr, self.W_descr, descr.shape[-1])
         descr = channel_back2front_batch(descr)
 
@@ -495,7 +502,7 @@ class ImageExtractor(Persistable):
         assert patches.shape[2] == self.state_patch_size
         assert patches.shape[3] == self.state_patch_size
 
-        prep, _ = self.preprocess(patches)
+        prep = self.preprocess(patches)
         # Extract CLS token
         with torch.inference_mode():
             return self.extract_cls_token(prep)
@@ -652,7 +659,7 @@ class ImageExtractor(Persistable):
 
         return _inner_hook
 
-    def _register_hooks(self, layers: List[int], facet: str) -> None:
+    def _register_hooks(self, layers: list[int], facet: str) -> None:
         """
         register hook to extract features.
         :param layers: layers from which to extract features.

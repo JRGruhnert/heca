@@ -3,7 +3,7 @@ from heca.entities.entity import Entity
 entities = [
     Entity.Config(
         env="calvin",
-        label="ee",
+        label="cursor",
         states={"open", "closed"},
     ),
     Entity.Config(

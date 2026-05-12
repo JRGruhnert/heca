@@ -205,6 +205,9 @@ class TDSceneReferences(TensorDict):
 
         pose_ref = cam_refs.pose_refs[entity_label]
         assert isinstance(pose_ref, TDPoseReferences)
+        print(
+            f"Adding point: {point}, img_raw shape: {img_raw.shape} to cam {cam_label}, entity {entity_label}"
+        )
         pose_ref.add_reference(
             point=point,
             img_raw=img_raw,
