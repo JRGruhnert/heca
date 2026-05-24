@@ -1,13 +1,14 @@
-from dataclasses import dataclass
 import abc
-from tensordict import TensorDict
-from PIL import Image, ImageTk
+import re
+import tkinter as tk
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
-import tkinter as tk
+
 import numpy as np
 import torch
-import re
+from PIL import Image, ImageTk
+from tensordict import TensorDict
 
 from heca.classes.persist import Persistable
 from heca.entities.entity import Entity, Mobility
@@ -21,10 +22,9 @@ from heca.misc.td import (
 )
 
 
-class SelectionTriple(NamedTuple):
-    cam_label: str
-    entity_label: str
-    selection_label: str
+class KPTuple(NamedTuple):
+    cam: str
+    kp: Entity
 
 
 class Scene(Persistable):
@@ -54,32 +54,26 @@ class Scene(Persistable):
         }
 
         # Kp selection
-        self.triples: list[SelectionTriple] = []
+        self.selection_tuples: list[KPTuple] = []
         for cam in self.extractors.keys():
             for entity in self.entities:
-                self.triples.append(
-                    SelectionTriple(
-                        cam_label=cam,
-                        entity_label=entity.cfg.label,
-                        selection_label=self.cfg.dc_label,
+                self.selection_tuples.append(
+                    KPTuple(
+                        cam=cam,
+                        kp=entity,
                     ),
                 )
-                for state_label in entity.cfg.states:
-                    self.triples.append(
-                        SelectionTriple(
-                            cam_label=cam,
-                            entity_label=entity.cfg.label,
-                            selection_label=state_label,
-                        ),
-                    )
 
-        self.triple = None
-        self.point = None
-        self.marker = None
-        self.title = "Selection for: {cam}.{entity}.{selection}"
-        self.loaded_samples: dict[
-            SelectionTriple, list[tuple[Image.Image, int, int]]
-        ] = {triple: [] for triple in self.triples}
+        self.pred_marker: int | None = None
+        self.manual_marker: int | None = None
+        self.selection: KPTuple | None = None
+        self.point: tuple[int, int] | None = None
+        self.title: str = "Selection for: {cam}.{kp}.{selection}"
+        self.state_samples: dict[KPTuple, dict[str, list[Image.Image]]] = {
+            triple: {state: [] for state in triple.kp.cfg.states}
+            for triple in self.selection_tuples
+        }
+        self.kp_samples: dict[KPTuple, tuple[Image.Image, int, int, int, int]] = {}
 
     def reset(self) -> TDScene:
         obs = self._reset()
@@ -271,13 +265,12 @@ class Scene(Persistable):
     def _load(self, path: Path):
         files: list[Path] = []
         postfix = r"_ex\d+_x-?\d+(?:\.\d+)?_y-?\d+(?:\.\d+)?\.png"
-        for triple in self.triples:
-            entity_dir = path / triple.cam_label / triple.entity_label
-            files.extend(
-                list(entity_dir.glob(f"{triple.selection_label}_ex*_x*_y*.png"))
-            )
-        for triple in self.triples:
-            pattern = re.compile(rf"({re.escape(triple.selection_label)}){postfix}")
+        for selection in self.selection_tuples:
+            edir = path / selection.cam / selection.kp.cfg.label
+
+            files.extend(list(edir.glob(f"{selection.selection_label}_ex*_x*_y*.png")))
+        for selection in self.selection_tuples:
+            pattern = re.compile(rf"({re.escape(selection.selection_label)}){postfix}")
             rem = [(pattern.match(file.name), file) for file in files]
             rem = [(m, f) for m, f in rem if m is not None]
             for match, file in rem:
@@ -287,14 +280,14 @@ class Scene(Persistable):
                 y_val = int(match.group(4))
                 # Load the image and store it in the appropriate extractor
                 img = Image.open(file)
-                self.loaded_samples[triple].append((img, x_val, y_val))
+                self.state_samples[selection].append((img, x_val, y_val))
 
         for cam, extractor in self.extractors.items():
             for entity in self.entities:
                 e_label = entity.cfg.label
                 rem = {
                     key: value
-                    for key, value in self.loaded_samples.items()
+                    for key, value in self.state_samples.items()
                     if key.cam_label == cam and key.entity_label == e_label
                 }
                 dc_match = next(
@@ -328,7 +321,7 @@ class Scene(Persistable):
                 extractor.add_entity_sample_for_cam(entity, dc_match, state_matches)
 
     def _save(self, path: Path):
-        for triple, samples in self.loaded_samples.items():
+        for triple, samples in self.state_samples.items():
             entity_dir = path / triple.cam_label / triple.entity_label
             entity_dir.mkdir(parents=True, exist_ok=True)
             for idx, (img, x_val, y_val) in enumerate(samples):
@@ -338,7 +331,10 @@ class Scene(Persistable):
                 )
 
     def make_rnd_image(self):
-        assert self.triple is not None
+        assert self.selection is not None
+        assert self.label is not None
+        if self.label == self.cfg.dc_label:
+            self.dc_values = None
         obs = self._reset()
         # num_actions = 10  # TODO: Tune this number based on the environment dynamics
         # for _ in range(num_actions):
@@ -348,7 +344,7 @@ class Scene(Persistable):
         #    action = torch.cat([pos, quat, gripper]).numpy()
         #    obs = self._step(action)
         np_images_dict = self.image_numpy(obs)
-        picture = np_images_dict[self.triple[0]]
+        picture = np_images_dict[self.selection.cam]
         self.img = Image.fromarray(picture)
 
         orig_w, orig_h = self.img.size
@@ -375,35 +371,77 @@ class Scene(Persistable):
             anchor="nw",
             image=self.img_tk,
         )
+        if self.dc_values is not None:
+            self.place_predicted_marker(
+                self.img, self.dc_values[0], self.dc_values[1], self.dc_values[2]
+            )
+
+    def place_predicted_marker(
+        self, image: Image.Image, ref: Image.Image, u: int, v: int
+    ):
+        assert self.selection is not None
+        extractor = self.extractors[self.selection.cam]
+        x, y = extractor.encode_direct(image=image, ref_image=ref, x=u, y=v)
+        x, y = self.scale_point_to_canvas(int(x), int(y))
+        self.place_marker(x, y, "purple", self.pred_marker)
 
     def on_click(self, event: tk.Event):
-        # remove canvas offset
-        x = event.x - self.offset_x
-        y = event.y - self.offset_y
+        assert self.selection is not None
+        self.point = self.scale_point_to_image(event.x, event.y)
+        self.place_marker(event.x, event.y, "red", self.manual_marker)
 
-        # convert back to original image coordinates
-        real_x = int(x / self.scale)
-        real_y = int(y / self.scale)
+        if self.label == self.cfg.dc_label and self.dc_values is None:
+            # First click on new kp selection
+            self.dc_values = (self.img, self.point[0], self.point[1])
+            self.place_predicted_marker(
+                self.img, self.dc_values[0], self.dc_values[1], self.dc_values[2]
+            )
+            if self.manual_marker is not None:
+                self.canvas.delete(self.manual_marker)
+        elif self.dc_values is not None:
+            # Second click on same selection, update DC values
+            self.kp_samples[self.selection] = (
+                self.img,
+                self.dc_values[1],
+                self.dc_values[2],
+                event.x,
+                event.y,
+            )
+        else:
+            raise NotImplementedError(
+                f"Unexpected click state: label={self.label}, dc_values={self.dc_values}"
+            )
 
-        self.point = (real_x, real_y)
+    def scale_point_to_canvas(self, x: int, y: int) -> tuple[int, int]:
+        # Scale the point according to the display size
+        scaled_x = int(x * self.scale) + self.offset_x
+        scaled_y = int(y * self.scale) + self.offset_y
+        return scaled_x, scaled_y
 
-        if self.marker:
-            self.canvas.delete(self.marker)
+    def scale_point_to_image(self, x: int, y: int) -> tuple[int, int]:
+        # Remove the offset and scale back to original image coordinates
+        real_x = int((x - self.offset_x) / self.scale)
+        real_y = int((y - self.offset_y) / self.scale)
+        return real_x, real_y
 
-        # Draw a marker at the clicked point
-        self.marker = self.canvas.create_oval(
-            event.x - self.cfg.marker_radius,
-            event.y - self.cfg.marker_radius,
-            event.x + self.cfg.marker_radius,
-            event.y + self.cfg.marker_radius,
-            fill="red",
+    def place_marker(self, x: int, y: int, color: str, marker: int | None):
+        if marker is not None:
+            self.canvas.delete(marker)
+
+        # Draw a marker at the specified point
+        self.manual_marker = self.canvas.create_oval(
+            x - self.cfg.marker_radius,
+            y - self.cfg.marker_radius,
+            x + self.cfg.marker_radius,
+            y + self.cfg.marker_radius,
+            fill=color,
         )
 
     def add_image(self):
         assert self.point is not None
-        assert self.triple is not None
+        assert self.selection is not None
 
-        self.loaded_samples[self.triple].append(
+        self.state_samples[self.selection].append(
             (self.img, self.point[0], self.point[1])
         )
         self.make_rnd_image()
@@ -431,19 +469,29 @@ class Scene(Persistable):
             btn_frame, text="Resample", bg="blue", command=self.make_rnd_image
         ).pack(side="left")
 
-        self.triples_iter = iter(self.triples)
+        self.entity_labels: list[str] = []
+        self.selection_iter = iter(self.selection_tuples)
+        self.label_iter = iter(self.entity_labels)
         self.load_next_or_finish()
         self.window.mainloop()
 
     def load_next_or_finish(self):
-        self.triple = next(self.triples_iter, None)
-        if self.triple is None:
-            self.window.quit()
-            return
+        self.label = next(self.label_iter, None)
+        if self.label is None:
+            self.selection = next(self.selection_iter, None)
+            if self.selection is None:
+                self.window.quit()
+                return
+            else:
+                self.label_iter = iter(self.selection.kp.cfg.states)
+                self.label = self.cfg.dc_label
+                self.dc_values: tuple[Image.Image, int, int] | None = None
+        assert self.label is not None
+        assert self.selection is not None
         title = self.title.format(
-            cam=self.triple.cam_label,
-            entity=self.triple.entity_label,
-            selection=self.triple.selection_label,
+            cam=self.selection.cam,
+            kp=self.selection.kp.cfg.label,
+            selection=self.label,
         )
         self.window.title(title)
         self.make_rnd_image()
