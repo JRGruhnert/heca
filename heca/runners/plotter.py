@@ -8,7 +8,7 @@ import matplotlib.patches as mpatches
 
 from heca.misc import logger
 from heca.entities.entity import Entity
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 from heca.properties.property import PropertyV1
 from heca.agents.agent import Agent
 
@@ -219,7 +219,7 @@ class HecaPlotter(Configurable):
         style: StyleConfig = StyleConfig()
         dry_run: bool = False
         agents: list[Agent.Config] = field(default_factory=list)
-        plots: list[Plot.Config]
+        # plots: list[Plot.Config]
 
     def __init__(self, config: Config):
         self.config = config
@@ -229,4 +229,4 @@ class HecaPlotter(Configurable):
         raise NotImplementedError()
 
     def plot(self):
-        
+        pass

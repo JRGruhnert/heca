@@ -13,6 +13,6 @@ class StateEncoder(PropertyEncoder):
         in_dim: int = 1
 
     @dataclass(frozen=True, kw_only=True)
-    class File(PropertyEncoder.File):
+    class File(PropertyEncoder.Location):
         folder: str = "state"
         ending: str = ".pt"

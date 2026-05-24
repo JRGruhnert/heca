@@ -47,9 +47,3 @@ class State(Configurable):
         one_hot = self.make_zeros()
         one_hot[idx] = 1.0
         return one_hot
-
-    @classmethod
-    def from_area_config(cls, area_cfg: Area.Config) -> "State":
-        return cls(
-            cls.Config(values=area_cfg.labels, labeling=Area(area_cfg)),
-        )

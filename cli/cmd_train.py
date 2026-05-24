@@ -2,7 +2,7 @@ from typing import cast
 
 import click
 
-from cli.hoopgn import config_handler
+from cli.heca import config_handler
 from heca.runners.runner import HecaRunner
 
 

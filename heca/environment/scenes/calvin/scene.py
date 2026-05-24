@@ -1,24 +1,22 @@
+from functools import cached_property
+
 import torch
 import numpy as np
-from dataclasses import dataclass
-from PIL.Image import Image
+from dataclasses import dataclass, field
 from tensordict import TensorDict
 
 from heca.entities.entity import Entity
-from heca.environment.image_extractor import ImageExtractor
-from heca.properties.property import PropertyV1
+from heca.environment.scenes.image_extractor import ImageExtractor
 from heca.environment.scenes.scene import Scene
-from heca.environment.scenes.calvin import v1, v2
-from heca.environment.scenes.calvin.area import CalvinAreaConfig
+from heca.misc.state import State
+from heca.misc.area import Area
 from heca.misc.td import (
-    TDCamRecord,
-    TDCamRecordings,
+    TDImage,
     TDProperties,
     TDEntities,
     TDScene,
     empty_bs,
 )
-from heca.misc.state import State
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -30,6 +28,27 @@ from tapas_gmm_modified.utils.observation import (
 )
 
 
+@dataclass(kw_only=True)
+class CalvinAreaConfig(Area.Config):
+    labels: set[str] = field(
+        default_factory=lambda: {"table", "drawer_open", "drawer_closed"}
+    )
+    spawn_surfaces: dict = field(
+        default_factory=lambda: {
+            "table": [[0.0, -0.15, 0.46], [0.30, -0.03, 0.46]],
+            "drawer_open": [[0.04, -0.35, 0.38], [0.30, -0.21, 0.38]],
+            "drawer_closed": [[0.04, -0.16, 0.38], [0.30, -0.03, 0.38]],
+        }
+    )
+    eval_surfaces: dict = field(
+        default_factory=lambda: {
+            "table": [[-0.02, -0.17, 0.44], [0.32, -0.01, 0.54]],
+            "drawer_open": [[0.02, -0.37, 0.34], [0.32, -0.23, 0.44]],
+            "drawer_closed": [[0.02, -0.18, 0.34], [0.32, -0.00, 0.44]],
+        }
+    )
+
+
 class CalvinScene(Scene):
     @dataclass(frozen=True, kw_only=True)
     class Query(Scene.Query):
@@ -37,8 +56,12 @@ class CalvinScene(Scene):
 
     @dataclass(kw_only=True)
     class Config(Scene.Config):
-        extractor: ImageExtractor.Query = ImageExtractor.Query(scene="calvin")
-        img_size: tuple[int, int] = (256, 256)
+        extractors: dict[str, ImageExtractor.Config] = field(
+            default_factory=lambda: {
+                # "wrist": ImageExtractor.Config(),
+                "front": ImageExtractor.Config(),
+            }
+        )
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),
@@ -68,41 +91,28 @@ class CalvinScene(Scene):
                 "block_pink_position",
             ]
         )
-        self.state = State.from_area_config(
-            CalvinAreaConfig(),
+        self.state = State(
+            State.Config(
+                values={"table", "drawer_open", "drawer_closed"},
+                labeling=Area(CalvinAreaConfig()),
+            ),
         )
+
         self.valid = True
 
     def close(self):
         self.env.close()
 
-    def _add_v1_td(self, td: TDScene, obs: CalvinEnvObservation) -> TDScene:
-        td["v1"] = self.v1_td(obs)
-        return td
-
     def _reset(self) -> CalvinEnvObservation:
         return self.env.reset()[0]
-
-    def reset(self) -> TDScene:
-        td = super().reset()
-        td["v1"] = self.v1_td(self._reset())
-        return td
 
     def _step(self, action: np.ndarray) -> CalvinEnvObservation:
         return self.env.step(action, render=False)[0]
 
-    def step(self, action: np.ndarray) -> TDScene:
-        td = super().step(action)
-        td["v1"] = self.v1_td(self._step(action))
-        return td
-
     def is_bad_sample(self, obs: TDScene) -> bool:
         return not self.valid
 
-    def render(self):
-        raise NotImplementedError()
-
-    def image_numpy(self, obs) -> dict[str, np.ndarray]:
+    def image_numpy(self, obs: CalvinEnvObservation) -> dict[str, np.ndarray]:
         return obs.rgb
 
     def tapas_td(
@@ -171,13 +181,13 @@ class CalvinScene(Scene):
             )
         return camera_obs
 
-    def image_tensors2(self, obs: CalvinEnvObservation) -> TDCamRecordings:
+    def to_td_image_dict(self, obs: CalvinEnvObservation) -> dict[str, TDImage]:
         camera_obs = {}
         for cam in obs.camera_names:
             rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
             mask = obs.mask[cam].astype(int)
 
-            record = TDCamRecord(
+            record = TDImage(
                 rgb=torch.Tensor(rgb),
                 d=torch.Tensor(obs.depth[cam]),
                 mask=torch.Tensor(mask).to(torch.uint8),
@@ -185,7 +195,7 @@ class CalvinScene(Scene):
                 intr=torch.Tensor(obs.intr[cam]),
             )
             camera_obs[cam] = record
-        return TDCamRecordings({cam: record for cam, record in camera_obs.items()})
+        return camera_obs
 
     def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
         state_dict = {}
@@ -213,9 +223,52 @@ class CalvinScene(Scene):
                 self.valid = False
         return TDProperties(state_dict)
 
-    def properties(self) -> list[PropertyV1.Config]:
-        return v1.properties
-
-    @property
+    @cached_property
     def entities(self) -> list[Entity]:
-        return [Entity.create(e) for e in v2.entities]
+        ents = [
+            Entity.Config(
+                label="drawer",
+                states={"open", "closed"},
+            ),
+            Entity.Config(
+                label="slider",
+                states={"open", "closed", "half-open"},
+            ),
+            Entity.Config(
+                label="button",
+                states={"pressed", "released"},
+            ),
+            # Entity.Config(
+            #    env="calvin",
+            #    label="switch",
+            #    states={"on", "off"},
+            # ),
+            Entity.Config(
+                label="light",
+                states={"on", "off"},
+            ),
+            Entity.Config(
+                label="red_block",
+                states={"grabbed", "ungrabbed"},
+            ),
+            Entity.Config(
+                label="pink_block",
+                states={"grabbed", "ungrabbed"},
+            ),
+            Entity.Config(
+                label="blue_block",
+                states={"grabbed", "ungrabbed"},
+            ),
+        ]
+        return [Entity.create(e) for e in ents]
+
+    def get_cursor(
+        self, obs: CalvinEnvObservation
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        pos = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
+        rot = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
+        state = torch.tensor([obs.ee_state], dtype=torch.float32)
+        return pos, rot, state
+
+    def heca_td(self, obs: CalvinEnvObservation) -> TDEntities:
+        raise NotImplementedError()

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import torch
 
-from heca.classes.config import Configurable
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.properties.encoders.v2.state import StateEncoder
 from heca.properties.evaluators.state import StateEvaluator
@@ -11,12 +10,16 @@ from heca.properties.rulers.ruler import PropertyRuler
 from heca.properties.default.v2.property import Property
 
 
-class State(Configurable):
+class StateProperty(Property):
     @dataclass(kw_only=True)
-    class Config(Configurable.Config):
+    class Config(Property.Config):
+        ruler: PropertyRuler.Config = StateRuler.Config()
+        encoder: PropertyEncoder.Query = StateEncoder.Query()
+        evaluator: PropertyEvaluator.Config = StateEvaluator.Config()
         values: set[str]
 
     def __init__(self, cfg: Config):
+        super().__init__(cfg)
         self.cfg = cfg
         assert len(cfg.values) > 0, "State must have at least one value."
         assert None not in cfg.values, "State values cannot be None."
@@ -42,19 +45,3 @@ class State(Configurable):
         one_hot = self.make_zeros()
         one_hot[idx] = 1.0
         return one_hot
-
-
-class StateProperty(Property):
-    @dataclass(kw_only=True)
-    class Config(Property.Config):
-        ruler: PropertyRuler.Config = StateRuler.Config()
-        encoder: PropertyEncoder.Query = StateEncoder.Query()
-        evaluator: PropertyEvaluator.Config = StateEvaluator.Config()
-        state: State.Config
-
-    def __init__(self, cfg: Config):
-        super().__init__(cfg)
-        self.state = State(cfg.state)
-
-    def one_hot_from_idx(self, idx: int) -> torch.Tensor:
-        return self.state.one_hot_from_idx(idx)

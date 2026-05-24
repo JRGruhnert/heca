@@ -1,6 +1,6 @@
 from typing import cast
 
-from cli.hoopgn import config_handler
+from cli.heca import config_handler
 
 import click
 

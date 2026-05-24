@@ -18,7 +18,7 @@ class HecaNetwork(Persistable, nn.Module):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class File(Persistable.File):
+    class File(Persistable.Directory):
         folder: str = "networks"
         ending: str = ".pt"
 
@@ -34,7 +34,7 @@ class HecaNetwork(Persistable, nn.Module):
 
         @classmethod
         def get_latest(cls, query: "HecaNetwork.Query") -> Path | None:
-            directory = cls.resolve_directory(query)
+            directory = cls.resolve(query)
             pattern = f"ckpt_epoch_*.pt"
             matching_files = cls.find_matching_files(directory, pattern)
             epochs = []
@@ -47,7 +47,7 @@ class HecaNetwork(Persistable, nn.Module):
                     continue
             max_epoch = max(epochs) if epochs else None
             if max_epoch is not None:
-                return cls.resolve_directory(query) / cls.file_name(max_epoch, "epoch")
+                return cls.resolve(query) / cls.file_name(max_epoch, "epoch")
             else:
                 return None
 
@@ -100,7 +100,7 @@ class HecaNetwork(Persistable, nn.Module):
 
     @classmethod
     def save(cls, query: "HecaNetwork.Query", tag: str, epoch: int) -> bool:
-        path = cls.File.resolve_directory(query)
+        path = cls.File.resolve(query)
         file = cls.File.file_name(epoch, tag)
         torch.save({"model_state": cls.search(query).state_dict()}, path / file)
         logger.info(f"Saved model for epoch {epoch} with tag: {tag}.")

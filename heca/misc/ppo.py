@@ -25,7 +25,7 @@ class PPO(Persistable):
         pass
 
     @dataclass(frozen=True, kw_only=True)
-    class File(Persistable.File):
+    class File(Persistable.Directory):
         pass
 
     @dataclass(kw_only=True)

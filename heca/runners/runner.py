@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from heca.agents.hecas.heca import Heca
-from heca.misc.classes import Configurable
+from heca.classes.config import Configurable
 
 from heca.runners.plotter import HecaPlotter
 
@@ -10,7 +10,7 @@ class HecaRunner(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         heca: Heca.Config
-        plots: list[HecaPlot.Config]
+        # plots: list[HecaPlot.Config]
         episodes: int = 1000
 
     def __init__(self, cfg: Config):
@@ -24,7 +24,7 @@ class HecaRunner(Configurable):
             x, y = self.heca.sample(self.meta)
             terminal = False
             while not terminal:
-                reward, fb = self.act(x, y, self.meta)
+                reward, fb = self.heca.act(x, y, self.meta)
                 if fb.can_learn:
                     xp, lvlup = self.ppo.learn(ep)
                     self.network.upgrade(xp)

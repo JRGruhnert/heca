@@ -16,7 +16,7 @@ def config_handler(path, attr="cfg", configtype=None):
     return cfg
 
 
-def hoopgn_config(func):
+def heca_config(func):
     return click.option(
         "--config",
         "-c",
@@ -27,8 +27,8 @@ def hoopgn_config(func):
 
 
 @click.group()
-@hoopgn_config
+@heca_config
 @click.pass_context
-def hoopgn(ctx, config):
+def heca(ctx, config):
     ctx.ensure_object(dict)
-    ctx.obj["hoopgn"] = config
+    ctx.obj["heca"] = config

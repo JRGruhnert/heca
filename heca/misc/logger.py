@@ -9,7 +9,7 @@ from wandb import util as wandb_util
 import wandb
 from wandb.wandb_run import Run
 
-DEBUG = False
+DEBUG = True
 logger.remove()
 
 if DEBUG:

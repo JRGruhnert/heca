@@ -12,14 +12,7 @@ from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc import hardware, logger
 from heca.misc.logger import measure_runtime
-from heca.misc.td import (
-    TDCamRecordings,
-    TDCamReferences,
-    TDEntity,
-    TDEntities,
-    TDSceneReferences,
-    TDStateReferences,
-)
+from heca.misc.td import TDEntity, TDEntities
 
 from tapas_gmm_modified.viz.operations import channel_back2front_batch
 from tapas_gmm_modified.utils.geometry_torch import hard_pixels_to_3D_world
@@ -33,14 +26,14 @@ class StateExtractionMode(Enum):
     DINO = "dino"
 
 
-class ImageExtractor(Persistable):
+class ImageExtractorOld(Persistable):
     @dataclass(frozen=True, kw_only=True)
     class Query(Persistable.Query):
         label: str = "default"
         scene: str
 
     @dataclass(frozen=True, kw_only=True)
-    class File(Persistable.File):
+    class Location(Persistable.Location):
         folder: str = "image_extractors"
         ending: str = ".pt"
 
@@ -69,6 +62,7 @@ class ImageExtractor(Persistable):
         ee_kp_index: int = 0  # index of the end effector keypoint in the keypoint list.
         state_method: StateExtractionMode = StateExtractionMode.NCC
         state_kernel_patches: int = 3
+        matching_interpolated_descriptors: bool = True
 
     """This class facilitates extraction of features, descriptors, and saliency maps from a ViT.
 
@@ -83,9 +77,9 @@ class ImageExtractor(Persistable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.model = ImageExtractor.create_model(self.cfg.model_type)
-        self.model, self.stride, self.patch_size = ImageExtractor.patch_vit_resolution(
-            self.model, self.cfg.stride
+        self.model = ImageExtractorOld.create_model(self.cfg.model_type)
+        self.model, self.stride, self.patch_size = (
+            ImageExtractorOld.patch_vit_resolution(self.model, self.cfg.stride)
         )
         self.model.eval()
         self.model.to(hardware.device)
@@ -800,13 +794,13 @@ class ImageExtractor(Persistable):
         model.patch_embed.proj.stride = stride
         # fix the positional encoding code
         model.interpolate_pos_encoding = types.MethodType(  # type: ignore
-            ImageExtractor._fix_pos_enc(patch_size, stride_t), model
+            ImageExtractorOld._fix_pos_enc(patch_size, stride_t), model
         )
         return model, stride, patch_size
 
     @classmethod
-    def load(cls, query: "ImageExtractor.Query") -> "ImageExtractor":
-        directory = cls.File.resolve_directory(query) / query.scene
+    def load(cls, query: "ImageExtractorOld.Query") -> "ImageExtractorOld":
+        directory = cls.File.resolve(query) / query.scene
         extractor = cls.search(query)
         try:
             td = torch.load(directory / "samples.pt", map_location=hardware.device)
@@ -821,8 +815,8 @@ class ImageExtractor(Persistable):
         return extractor
 
     @classmethod
-    def save(cls, query: "ImageExtractor.Query") -> bool:
-        directory = cls.File.resolve_directory(query) / query.scene
+    def save(cls, query: "ImageExtractorOld.Query") -> bool:
+        directory = cls.File.resolve(query) / query.scene
         extractor = cls.search(query)
         if extractor.descriptor_data is None:
             logger.warning(
