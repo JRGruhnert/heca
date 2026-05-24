@@ -29,7 +29,6 @@ class ImageExtractor(Configurable):
         frozen: bool = True
         taper_sm: int = 25
 
-        kp_selection_threshold: float = 0.2
         state_knn_config: EntityStateKNN.Config = EntityStateKNN.Config(
             top_k=5,
             score_mode=ScoreMode.AVERAGE,
@@ -37,6 +36,7 @@ class ImageExtractor(Configurable):
             selection_mode=SelectionMode.WEIGHTED_VOTE,
         )
         state_kernel_radius: int = 16
+        kp_selection_threshold: float = 0.2
         use_state_coordinates: bool = False
         matching_interpolated_descriptors: bool = True
 

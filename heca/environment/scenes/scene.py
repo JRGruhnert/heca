@@ -10,7 +10,7 @@ import torch
 import re
 
 from heca.classes.persist import Persistable
-from heca.entities.entity import Entity
+from heca.entities.entity import Entity, Mobility
 from heca.environment.scenes.image_extractor import ImageExtractor
 from heca.misc import logger
 from heca.misc.td import (
@@ -46,6 +46,7 @@ class Scene(Persistable):
         self.cursor = Entity.Config(
             label="cursor",
             states={"open", "closed"},
+            mobility=Mobility.FREE,
         )
         self.extractors = {
             name: ImageExtractor.create(extractor)

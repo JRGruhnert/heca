@@ -5,7 +5,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from tensordict import TensorDict
 
-from heca.entities.entity import Entity
+from heca.entities.entity import Entity, Mobility
 from heca.environment.scenes.image_extractor import ImageExtractor
 from heca.environment.scenes.scene import Scene
 from heca.misc.state import State
@@ -229,14 +229,17 @@ class CalvinScene(Scene):
             Entity.Config(
                 label="drawer",
                 states={"open", "closed"},
+                mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="slider",
                 states={"open", "closed", "half-open"},
+                mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="button",
                 states={"pressed", "released"},
+                mobility=Mobility.STATIC,
             ),
             # Entity.Config(
             #    env="calvin",
@@ -246,18 +249,22 @@ class CalvinScene(Scene):
             Entity.Config(
                 label="light",
                 states={"on", "off"},
+                mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="red_block",
-                states={"grabbed", "ungrabbed"},
+                states={"grabbed", "drawer", "table"},
+                mobility=Mobility.FREE,
             ),
             Entity.Config(
                 label="pink_block",
-                states={"grabbed", "ungrabbed"},
+                states={"grabbed", "drawer", "table"},
+                mobility=Mobility.FREE,
             ),
             Entity.Config(
                 label="blue_block",
-                states={"grabbed", "ungrabbed"},
+                states={"grabbed", "drawer", "table"},
+                mobility=Mobility.FREE,
             ),
         ]
         return [Entity.create(e) for e in ents]
