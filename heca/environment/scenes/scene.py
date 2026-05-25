@@ -54,24 +54,26 @@ class Scene(Persistable):
         }
 
         # Kp selection
-        self.selection_tuples: list[KPTuple] = []
+        self.kp_tuples: list[KPTuple] = []
         for cam in self.extractors.keys():
             for entity in self.entities:
-                self.selection_tuples.append(
+                self.kp_tuples.append(
                     KPTuple(
                         cam=cam,
                         kp=entity,
                     ),
                 )
 
+        self.line_marker: int | None = None
         self.pred_marker: int | None = None
         self.manual_marker: int | None = None
         self.selection: KPTuple | None = None
         self.point: tuple[int, int] | None = None
+        self.dc_values: tuple[Image.Image, int, int] | None = None
         self.title: str = "Selection for: {cam}.{kp}.{selection}"
         self.state_samples: dict[KPTuple, dict[str, list[Image.Image]]] = {
             triple: {state: [] for state in triple.kp.cfg.states}
-            for triple in self.selection_tuples
+            for triple in self.kp_tuples
         }
         self.kp_samples: dict[KPTuple, tuple[Image.Image, int, int, int, int]] = {}
 
@@ -264,77 +266,78 @@ class Scene(Persistable):
 
     def _load(self, path: Path):
         files: list[Path] = []
-        postfix = r"_ex\d+_x-?\d+(?:\.\d+)?_y-?\d+(?:\.\d+)?\.png"
-        for selection in self.selection_tuples:
-            edir = path / selection.cam / selection.kp.cfg.label
+        dc_postfix = r"_x1\d+_y1\d+_x2\d+_y2\d+\.png"
+        sample_postfix = r"_sample\d+\.png"
+        for kpt in self.kp_tuples:
+            edir = path / kpt.cam / kpt.kp.cfg.label
+            for state in kpt.kp.cfg.states:
+                files.extend(list(edir.glob(f"{state}_sample*.png")))
+            files.extend(list(edir.glob(f"{self.cfg.dc_label}_x1*_y1*_x2*_y2*.png")))
 
-            files.extend(list(edir.glob(f"{selection.selection_label}_ex*_x*_y*.png")))
-        for selection in self.selection_tuples:
-            pattern = re.compile(rf"({re.escape(selection.selection_label)}){postfix}")
+        for kpt in self.kp_tuples:
+            for state in kpt.kp.cfg.states:
+                pattern = re.compile(rf"({re.escape(state)}){sample_postfix}")
+                rem = [(pattern.match(file.name), file) for file in files]
+                rem = [(m, f) for m, f in rem if m is not None]
+                for match, file in rem:
+                    self.state_samples[kpt][state].append(
+                        Image.open(file),
+                    )
+            pattern = re.compile(rf"{re.escape(self.cfg.dc_label)}{dc_postfix}")
             rem = [(pattern.match(file.name), file) for file in files]
             rem = [(m, f) for m, f in rem if m is not None]
             for match, file in rem:
-                # selection_label = match.group(1)
-                # ex_num = int(match.group(2))
-                x_val = int(match.group(3))
-                y_val = int(match.group(4))
-                # Load the image and store it in the appropriate extractor
-                img = Image.open(file)
-                self.state_samples[selection].append((img, x_val, y_val))
-
-        for cam, extractor in self.extractors.items():
-            for entity in self.entities:
-                e_label = entity.cfg.label
-                rem = {
-                    key: value
-                    for key, value in self.state_samples.items()
-                    if key.cam_label == cam and key.entity_label == e_label
-                }
-                dc_match = next(
-                    (
-                        value
-                        for key, value in rem.items()
-                        if key.selection_label == self.cfg.dc_label
-                    ),
-                    None,
+                self.kp_samples[kpt] = (
+                    Image.open(file),
+                    int(match.group(1)),
+                    int(match.group(2)),
+                    int(match.group(3)),
+                    int(match.group(4)),
                 )
-                assert dc_match is not None
+
+        for kpt in self.kp_tuples:
+            for state in kpt.kp.cfg.states:
+                state_samples = self.state_samples.get(kpt, None)
+                dc_sample = self.kp_samples.get(kpt, None)
                 # logger.debug(f'Found {len(rem)} matches for "{cam}" and "{e_label}"')
                 # logger.debug(f"Matches: {rem.keys()}")
                 # logger.debug(f"DC match: {dc_match}")
-                state_matches = {
-                    key.selection_label: value
-                    for key, value in rem.items()
-                    if key.selection_label in entity.cfg.states
-                }
-                assert state_matches.keys() == set(entity.cfg.states)
-                if len(dc_match) == 0:
+                if dc_sample is None:
                     logger.warning(
-                        f"Missing DC samples for {cam} and {e_label}. Skipping entity."
+                        f"Missing DC samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping entity."
                     )
                     continue
-                if any(len(matches) == 0 for matches in state_matches.values()):
+                if state_samples is None or state_samples.keys() != set(
+                    kpt.kp.cfg.states
+                ):
                     logger.warning(
-                        f"Missing state samples for {cam} and {e_label}. Skipping entity."
+                        f"Missing state samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping entity."
                     )
                     continue
-                extractor.add_entity_sample_for_cam(entity, dc_match, state_matches)
+                self.extractors[kpt.cam].add_entity_sample_for_cam(
+                    kpt.kp, dc_sample, state_samples
+                )
 
     def _save(self, path: Path):
-        for triple, samples in self.state_samples.items():
-            entity_dir = path / triple.cam_label / triple.entity_label
+        for kpt, state_dict in self.state_samples.items():
+            entity_dir = path / kpt.cam / kpt.kp.cfg.label
             entity_dir.mkdir(parents=True, exist_ok=True)
-            for idx, (img, x_val, y_val) in enumerate(samples):
+            for state, samples in state_dict.items():
+                for idx, img in enumerate(samples):
+                    img.save(
+                        entity_dir / f"{state}_sample{idx}.png"
+                    )  # e.g., "open_sample0.png"
+            kps = self.kp_samples.get(kpt, None)
+            if kps is not None:
+                img, x1, y1, x2, y2 = kps
                 img.save(
-                    entity_dir
-                    / f"{triple.selection_label}_ex{idx}_x{x_val}_y{y_val}.png"
+                    entity_dir / f"{self.cfg.dc_label}_x1{x1}_y1{y1}_x2{x2}_y2{y2}.png"
                 )
 
     def make_rnd_image(self):
         assert self.selection is not None
         assert self.label is not None
-        if self.label == self.cfg.dc_label:
-            self.dc_values = None
+
         obs = self._reset()
         # num_actions = 10  # TODO: Tune this number based on the environment dynamics
         # for _ in range(num_actions):
@@ -404,8 +407,8 @@ class Scene(Persistable):
                 self.img,
                 self.dc_values[1],
                 self.dc_values[2],
-                event.x,
-                event.y,
+                self.point[0],
+                self.point[1],
             )
         else:
             raise NotImplementedError(
@@ -438,12 +441,9 @@ class Scene(Persistable):
         )
 
     def add_image(self):
-        assert self.point is not None
         assert self.selection is not None
-
-        self.state_samples[self.selection].append(
-            (self.img, self.point[0], self.point[1])
-        )
+        assert self.label is not None
+        self.state_samples[self.selection][self.label].append(self.img)
         self.make_rnd_image()
 
     def sample_selection(self):
@@ -470,7 +470,7 @@ class Scene(Persistable):
         ).pack(side="left")
 
         self.entity_labels: list[str] = []
-        self.selection_iter = iter(self.selection_tuples)
+        self.selection_iter = iter(self.kp_tuples)
         self.label_iter = iter(self.entity_labels)
         self.load_next_or_finish()
         self.window.mainloop()
@@ -485,7 +485,7 @@ class Scene(Persistable):
             else:
                 self.label_iter = iter(self.selection.kp.cfg.states)
                 self.label = self.cfg.dc_label
-                self.dc_values: tuple[Image.Image, int, int] | None = None
+                self.dc_values = None
         assert self.label is not None
         assert self.selection is not None
         title = self.title.format(

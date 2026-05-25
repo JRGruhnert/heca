@@ -615,7 +615,6 @@ class ImageExtractorOld(Persistable):
         modes_2d[0] = modes_2d[0] / (self.dc_width - 1) * 2 - 1
 
         # move new dim into the middle and flatten to get (N, 2*Nref)
-        stacked_2d_features = torch.cat((modes_2d[0], modes_2d[1]), 1)
         stacked_2d_features = modes_2d.permute((1, 0, 2))
         stacked_2d_features = stacked_2d_features.reshape(s[0], -1)
 

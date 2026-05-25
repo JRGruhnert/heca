@@ -67,18 +67,15 @@ class ImageExtractor(Configurable):
         self.entities: list[Entity] = []
         self.cams: set[str] = set()
         self.entity_state_knn = EntityStateKNN.create(self.cfg.state_knn_config)
-        self.entity_descr: torch.Tensor | None = None
+        self.kp_patch_descr: torch.Tensor | None = None
+        self.entity_state_coords: torch.Tensor | None = None
         self.image_size: tuple[int, int] = (0, 0)
 
-    def norm_to_target_coords(
+    def scale_normalized_coords(
         self, norm_coords: torch.Tensor, size_hw: tuple[int, int]
     ) -> torch.Tensor:
         height, width = size_hw
-        scale_yx = torch.tensor(
-            [height - 1, width - 1],
-            device=norm_coords.device,
-            dtype=norm_coords.dtype,
-        )
+        scale_yx = torch.tensor([height - 1, width - 1])
         pixel_coordinates_yx = (norm_coords + 1.0) * 0.5 * scale_yx
         return pixel_coordinates_yx.round().long()
 
@@ -104,27 +101,35 @@ class ImageExtractor(Configurable):
         if self.cfg.interpolate_descriptors:
             descr = torch.nn.functional.interpolate(
                 input=descr,
-                size=self.image_size,
+                size=(
+                    (image.height, image.width)
+                    if isinstance(image, Image.Image)
+                    else image.shape[2:]
+                ),
                 mode="bilinear",
                 align_corners=True,
             )
 
         return descr
 
-    def hard_pixels_to_3D_world(
-        self,
-        kps_raw_2d,  # N, 2*k, where x features are stacked on top of y features
-        depth,  # N, H, W
-        camera_to_world,  # N, 4, 4
-        K,  # N, 3, 3
-        img_width,
-        img_height,
-    ):
+    def kps_raw_2d_to_image_coords(
+        self, kps_raw_2d: torch.Tensor, size_hw: tuple[int, int]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         u_norm, v_norm = kps_raw_2d.chunk(2, dim=-1)
         norm_uv = torch.stack((v_norm, u_norm), dim=-1)
-        pixel_yx = self.norm_to_target_coords(norm_uv, (img_height, img_width))
-        x_pixel = pixel_yx[..., 0].detach()
-        y_pixel = pixel_yx[..., 1].detach()
+        pixel_yx = self.scale_normalized_coords(norm_uv, size_hw)
+        x_pixel = pixel_yx[..., 0]  # (B, Nref)
+        y_pixel = pixel_yx[..., 1]  # (B, Nref)
+        return x_pixel, y_pixel
+
+    def hard_pixels_to_3D_world(
+        self,
+        x_pixel: torch.Tensor,  # B, Nref
+        y_pixel: torch.Tensor,  # B, Nref
+        depth: torch.Tensor,  # N, H, W
+        extr: torch.Tensor,  # N, 4, 4
+        intr: torch.Tensor,  # N, 3, 3
+    ):
 
         B, N_kp = x_pixel.shape
         batch_indices = torch.arange(
@@ -134,7 +139,7 @@ class ImageExtractor(Configurable):
         z = z.reshape(B, N_kp)
 
         pos = self.batched_pinhole_projection_image_to_world_coordinates_orig(
-            y_pixel, x_pixel, z, K, camera_to_world
+            y_pixel, x_pixel, z, intr, extr
         )
 
         return pos.permute(0, 2, 1).reshape((B, -1))
@@ -178,71 +183,54 @@ class ImageExtractor(Configurable):
     def normalize_coords(
         self, coords: torch.Tensor, size_hw: tuple[int, int]
     ) -> torch.Tensor:
-        height, width = size_hw
         return torch.stack(
             [
-                2.0 * coords[..., 0] / max(height - 1, 1) - 1.0,
-                2.0 * coords[..., 1] / max(width - 1, 1) - 1.0,
+                2.0 * coords[..., 0] / max(size_hw[0] - 1, 1) - 1.0,
+                2.0 * coords[..., 1] / max(size_hw[1] - 1, 1) - 1.0,
             ],
             dim=-1,
-        )
-
-    def img_coords_to_patch_coords(self, img_coors: torch.Tensor) -> torch.Tensor:
-        # img_coords is (N, 2) where (y, x) in pixel coordinates
-        # we want to map to patch coordinates, which are normalized to [-1, 1]
-        # and take into account the patch size and stride
-        patch_coords = img_coors.float() / self.cfg.stride
-        patch_coords = self.normalize_coords(
-            patch_coords,
-            (
-                self.image_size[0] // self.cfg.stride,
-                self.image_size[1] // self.cfg.stride,
-            ),
-        )
-        return patch_coords
-
-    def get_patch_index_from_img_coords(
-        self, y: int, x: int, img_desc: torch.Tensor
-    ) -> tuple[int, int]:
-        _, _, H, W = img_desc.shape
-        logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
-        ref_norm_yx = self.normalize_coords(
-            torch.tensor([y, x], dtype=torch.float32), self.image_size
-        )
-        ref_py, ref_px = self.norm_to_target_coords(ref_norm_yx, (H, W)).tolist()
-        return ref_py, ref_px
+        )  # (..., 2)
 
     def encode_direct(
         self, ref_image: Image.Image, image: Image.Image, x: int, y: int
-    ) -> tuple[float, float]:
-        self.image_size = (image.height, image.width)
+    ) -> tuple[int, int]:
         ref_img_desc = self.compute_descriptor(ref_image)  # (1, D, H, W)
         img_desc = self.compute_descriptor(image)  # (1, D, H, W)
-        ref_py, ref_px = self.get_patch_index_from_img_coords(y, x, ref_img_desc)
+        ref_py, ref_px = self.transform_coords(
+            y,
+            x,
+            image.height,
+            image.width,
+            img_desc.shape[2],
+            img_desc.shape[3],
+        )
         ref_patch_desc = ref_img_desc[..., ref_py, ref_px]  # (1, D)
         kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, ref_patch_desc)
         assert kps_raw_2d.shape == (1, 2)
-        yx = self.norm_to_target_coords(kps_raw_2d, (image.height, image.width))
-        y, x = yx[0].tolist()
-        return y, x
+        y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
+            kps_raw_2d, (image.height, image.width)
+        )  # (1, 1), (1, 1)
+
+        return int(y_pixel.squeeze(0).item()), int(x_pixel.squeeze(0).item())
 
     def encode(
         self, td_image: TDImage
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
-        self.image_size = (td_image.rgb.shape[1], td_image.rgb.shape[2])
         image_desc = self.compute_descriptor(td_image.rgb)
 
         kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(image_desc)
-
         states, scores = self.compute_kps_states(kps_raw_2d, image_desc)
 
+        y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
+            kps_raw_2d, (td_image.rgb.shape[1], td_image.rgb.shape[2])
+        )  # (B, Nref), (B, Nref)
+
         kps = self.hard_pixels_to_3D_world(
-            kps_raw_2d,
+            x_pixel,
+            y_pixel,
             td_image.d,
             td_image.extr,
             td_image.intr,
-            self.image_size[1],
-            self.image_size[0],
         )
 
         info = {
@@ -262,6 +250,7 @@ class ImageExtractor(Configurable):
     def compute_keypoints(
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        # image_desc is (B, D, H, W) and ref_patch_desc is (Nref, D)
         sm = self.softmax_of_reference_descriptors(image_desc, ref_patch_desc)
         # sm is similarity map
         post = sm
@@ -278,7 +267,7 @@ class ImageExtractor(Configurable):
             max_sim > self.cfg.kp_selection_threshold
         ).float()  # 1 if present, 0 if not
 
-        kp_raw_2d = self.get_mode(post)  # (N, 2*Nref) where for each kp: (x, y)
+        kp_raw_2d = self.get_mode(post)  # (N, 2*Nref)
 
         return kp_raw_2d, kp_mask, sm, post
 
@@ -286,8 +275,8 @@ class ImageExtractor(Configurable):
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
     ) -> torch.Tensor:
         if ref_patch_desc is None:
-            assert self.entity_descr is not None
-            patch_desc = self.entity_descr
+            assert self.kp_patch_descr is not None
+            patch_desc = self.kp_patch_descr
         else:
             patch_desc = ref_patch_desc
 
@@ -331,10 +320,8 @@ class ImageExtractor(Configurable):
 
     def get_mode(self, softmax_activations: torch.Tensor) -> torch.Tensor:
         # need argmax over two last dimensions, so join them first
-        B, N, H, W = (
-            softmax_activations.shape
-        )  # N is number of keypoints, H and W are spatial dimensions
-        sm_flat = softmax_activations.view(B, N, -1)
+        B, Nref, H, W = softmax_activations.shape
+        sm_flat = softmax_activations.view(B, Nref, -1)
         modes_flat = torch.argmax(sm_flat, dim=2)
 
         # reshape back to 2D. Note that the new dim is in the front for now.
@@ -350,27 +337,46 @@ class ImageExtractor(Configurable):
         modes_2d[0] = modes_2d[0] / (W - 1) * 2 - 1
 
         # move new dim into the middle and flatten to get (N, 2*Nref)
-        stacked_2d_features = torch.cat((modes_2d[0], modes_2d[1]), 1)
         stacked_2d_features = modes_2d.permute((1, 0, 2))
         stacked_2d_features = stacked_2d_features.reshape(B, -1)
 
         return stacked_2d_features
 
     def get_state_kernel(
-        self, descriptor: torch.Tensor, coords: torch.Tensor
+        self,
+        img_descr: torch.Tensor,
+        kps_raw_2d: torch.Tensor,
+        state_coords: torch.Tensor,
     ) -> torch.Tensor:
-        # coords is (B, 2,) where (y, x) in tensor indexing coordinates
-        # descriptor is (B, C, H, W)
+        # img_descr is (B, C, H, W)
+        # kps_raw_2d is (B, 2*Nref) where for each kp: (x, y) in normalized coordinates
+        # state_coords is (Nref, 2)
+        # per_batch is list of B tensors each (N, 2)
+        coords = (
+            state_coords.unsqueeze(0).permute(0, 2, 1).reshape(1, -1)
+        )  # (1, 2*Nref)
+        rel_state_coords = self.relative_state_coords(
+            kps_raw_2d, state_coords
+        )  # (B, Nref, 2)
         r = self.cfg.state_patch_radius
-        y, x = coords[:, 0], coords[:, 1]
-        return descriptor[:, :, y - r : y + r + 1, x - r : x + r + 1]
+        return img_descr[:, :, y - r : y + r + 1, x - r : x + r + 1]
+
+    def relative_state_coords(
+        self, kp_coords: torch.Tensor, state_coords: torch.Tensor
+    ) -> torch.Tensor:
+        # both inputs are (B, 2*Nref)
+        return state_coords - kp_coords
 
     def compute_kps_states(
-        self, kp_raw_2d: torch.Tensor, image_desc: torch.Tensor
+        self, kps_raw_2d: torch.Tensor, image_desc: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        _, _, H, W = image_desc.shape
-        coords = self.norm_to_target_coords(kp_raw_2d, (H, W))
-        kernels = self.get_state_kernel(image_desc, coords)
+        # TODO:
+        assert self.entity_state_coords is not None
+        kernels = self.get_state_kernel(
+            image_desc,
+            kps_raw_2d,
+            self.entity_state_coords,
+        )
         one_hots = []
         scores = []
         for idx, entity in enumerate(self.entities):
@@ -429,7 +435,7 @@ class ImageExtractor(Configurable):
         stride: int,
     ) -> tuple[nn.Module, int]:
         patch_size = model.patch_embed.patch_size
-        print(f"Original patch size: {patch_size}, stride: {stride}")
+        # print(f"Original patch size: {patch_size}, stride: {stride}")
         assert (
             patch_size[0] == patch_size[1]
         ), "currently only support square patches. else implement ..."
@@ -449,52 +455,80 @@ class ImageExtractor(Configurable):
         )
         return model, patch_size
 
+    def transform_coords(
+        self, y: int, x: int, origin_h: int, origin_w: int, target_h: int, target_w: int
+    ) -> tuple[int, int]:
+        # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
+        ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
+        target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
+        return target_yx[0].item(), target_yx[1].item()
+
+    def add_entity_reference_sample(
+        self, dc_ref_patch_desc: torch.Tensor, state_coords: torch.Tensor
+    ):
+        if self.kp_patch_descr is None or self.entity_state_coords is None:
+            self.kp_patch_descr = dc_ref_patch_desc
+            self.entity_state_coords = state_coords
+        else:
+            self.kp_patch_descr = torch.cat(
+                (self.kp_patch_descr, dc_ref_patch_desc), dim=0
+            )
+            self.entity_state_coords = torch.cat(
+                (self.entity_state_coords, state_coords), dim=0
+            )
+
     def add_entity_sample_for_cam(
         self,
         entity: Entity,
-        dc_list: list[tuple[Image.Image, int, int]],
-        state_image_dict: dict[str, list[tuple[Image.Image, int, int]]],
+        kpt: tuple[Image.Image, int, int, int, int],
+        kps: dict[str, list[Image.Image]],
     ):
+        dc_img, dc_x, dc_y, state_x, state_y = kpt
         self.entities.append(entity)
-        dc_desc_mean: torch.Tensor | None = None
-        for dc_img, dc_x, dc_y in dc_list:
-            dc_img_desc = self.compute_descriptor(dc_img)
-            _, _, dc_h, dc_w = dc_img_desc.shape
-            dc_norm_yx = self.normalize_coords(
-                torch.tensor([dc_y, dc_x], dtype=torch.float32),
-                (dc_img.height, dc_img.width),
-            )
-            dc_py, dc_px = self.norm_to_target_coords(dc_norm_yx, (dc_h, dc_w)).tolist()
-            dc_desc = dc_img_desc[0, :, dc_py, dc_px].unsqueeze(0)
-            if dc_desc_mean is None:
-                dc_desc_mean = dc_desc
-            else:
-                dc_desc_mean = torch.cat((dc_desc_mean, dc_desc), dim=0)
+        dc_img_desc = self.compute_descriptor(kpt[0])
+        dc_py, dc_px = self.transform_coords(
+            dc_x,
+            dc_y,
+            dc_img.height,
+            dc_img.width,
+            dc_img_desc.shape[2],
+            dc_img_desc.shape[3],
+        )
+        state_py, state_px = self.transform_coords(
+            state_y,
+            state_x,
+            dc_img.height,
+            dc_img.width,
+            dc_img_desc.shape[2],
+            dc_img_desc.shape[3],
+        )
+        dc_ref_patch_desc = dc_img_desc[..., dc_py, dc_px]  # (1, D)
+        dc_norm_coords = self.normalize_coords(
+            torch.tensor([dc_py, dc_px]), self.image_size
+        )
+        state_norm_coords = self.normalize_coords(
+            torch.tensor([state_py, state_px]), self.image_size
+        )
+        rel_state_pos = [
+            state_norm_coords[0] - dc_norm_coords[0],
+            state_norm_coords[1] - dc_norm_coords[1],
+        ]
+        state_coords = torch.tensor(rel_state_pos).unsqueeze(0)  # (1, 2)
+        self.add_entity_reference_sample(dc_ref_patch_desc, state_coords)
 
-        assert dc_desc_mean is not None
-        dc_desc_mean = dc_desc_mean.mean(dim=0, keepdim=True)
-
-        if self.entity_descr is None:
-            self.entity_descr = dc_desc_mean
-        else:
-            self.entity_descr = torch.cat((self.entity_descr, dc_desc_mean), dim=0)
-
-        for state_label, state_list in state_image_dict.items():
-            for state_img, state_x, state_y in state_list:
-                if self.cfg.use_state_coordinates:
-                    coords = torch.tensor(
-                        [state_y, state_x], device=dc_desc.device
-                    ).unsqueeze(0)
-                else:
-                    state_img_desc = self.compute_descriptor(state_img)
-                    kp_raw_2d, _, _, _ = self.compute_keypoints(state_img_desc, dc_desc)
-                    _, _, state_h, state_w = state_img_desc.shape
-                    coords = self.norm_to_target_coords(
-                        kp_raw_2d.squeeze(0).flip(0), (state_h, state_w)
-                    ).unsqueeze(0)
-                kernel = self.get_state_kernel(state_img_desc, coords)
+        for state, images in kps.items():
+            for img in images:
+                state_img_desc = self.compute_descriptor(img)  # (1, D, H, W)
+                kps_raw_2d, _, _, _ = self.compute_keypoints(
+                    state_img_desc, dc_ref_patch_desc
+                )  # (1, 2)
+                kernel = self.get_state_kernel(
+                    state_img_desc,
+                    kps_raw_2d,
+                    state_coords,
+                )  # (1, C, k, k)
                 self.entity_state_knn.register(
                     entity.cfg.label,
-                    state_label,
+                    state,
                     kernel,
                 )
