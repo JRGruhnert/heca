@@ -46,7 +46,6 @@ class ImageExtractor(Configurable):
         )
         state_patch_radius: int = 2
         kp_selection_threshold: float = 0.2
-        use_state_coordinates: bool = False
         interpolate_descriptors: bool = False
         state_extraction_mode: StateExtractionMode = StateExtractionMode.IMAGE
 
@@ -79,6 +78,12 @@ class ImageExtractor(Configurable):
         pixel_coordinates_yx = (norm_coords + 1.0) * 0.5 * scale_yx
         return pixel_coordinates_yx.round().long()
 
+    def get_image_size(self, image: Image.Image | torch.Tensor) -> tuple[int, int]:
+        if isinstance(image, Image.Image):
+            return image.height, image.width
+        else:
+            return image.shape[2], image.shape[3]
+
     # @measure_runtime
     def compute_descriptor(self, image: Image.Image | torch.Tensor) -> torch.Tensor:
         with torch.inference_mode():
@@ -90,22 +95,21 @@ class ImageExtractor(Configurable):
             # output is unpooled, a (1, 261, 4096) shaped tensor
             # [B, 1 + N, C]
         # cls_token = feats[:, 0] # Not using atm
-        patch_tokens = feats[:, 1:]
+        # register_token = feats[:, 1:5] # Not using atm
+        patch_tokens = feats[:, 5:]
 
         B, N, C = patch_tokens.shape
-
-        descr = patch_tokens.reshape(B, self.patch_size, self.patch_size, C)
-
+        # logger.debug(f"Patch tokens shape: {patch_tokens.shape}")
+        image_size = self.get_image_size(image)
+        grid_h, grid_w = self.compute_patch_grid_size(image_size)
+        descr = patch_tokens.reshape(B, grid_h, grid_w, C)
+        # logger.debug(f"Reshaped patch tokens to: {descr.shape}")
         descr = descr.permute(0, 3, 1, 2)  # (B, C, H, W)
-
+        # logger.debug(f"Permuted patch tokens to: {descr.shape}")
         if self.cfg.interpolate_descriptors:
             descr = torch.nn.functional.interpolate(
                 input=descr,
-                size=(
-                    (image.height, image.width)
-                    if isinstance(image, Image.Image)
-                    else image.shape[2:]
-                ),
+                size=image_size,
                 mode="bilinear",
                 align_corners=True,
             )
@@ -118,14 +122,14 @@ class ImageExtractor(Configurable):
         u_norm, v_norm = kps_raw_2d.chunk(2, dim=-1)
         norm_uv = torch.stack((v_norm, u_norm), dim=-1)
         pixel_yx = self.scale_normalized_coords(norm_uv, size_hw)
-        x_pixel = pixel_yx[..., 0]  # (B, Nref)
-        y_pixel = pixel_yx[..., 1]  # (B, Nref)
-        return x_pixel, y_pixel
+        y_pixel = pixel_yx[..., 0]  # (B, Nref)
+        x_pixel = pixel_yx[..., 1]  # (B, Nref)
+        return y_pixel, x_pixel
 
     def hard_pixels_to_3D_world(
         self,
-        x_pixel: torch.Tensor,  # B, Nref
         y_pixel: torch.Tensor,  # B, Nref
+        x_pixel: torch.Tensor,  # B, Nref
         depth: torch.Tensor,  # N, H, W
         extr: torch.Tensor,  # N, 4, 4
         intr: torch.Tensor,  # N, 3, 3
@@ -192,10 +196,13 @@ class ImageExtractor(Configurable):
         )  # (..., 2)
 
     def encode_direct(
-        self, ref_image: Image.Image, image: Image.Image, x: int, y: int
+        self, ref_image: Image.Image, image: Image.Image, y: int, x: int
     ) -> tuple[int, int]:
+        logger.debug(f"Starting encoder")
         ref_img_desc = self.compute_descriptor(ref_image)  # (1, D, H, W)
+        logger.debug(f"Computed ref reference")
         img_desc = self.compute_descriptor(image)  # (1, D, H, W)
+        logger.debug(f"Computed image descriptor")
         ref_py, ref_px = self.transform_coords(
             y,
             x,
@@ -204,6 +211,7 @@ class ImageExtractor(Configurable):
             img_desc.shape[2],
             img_desc.shape[3],
         )
+        logger.debug(f"Transformed reference pixels: ({ref_py}, {ref_px})")
         ref_patch_desc = ref_img_desc[..., ref_py, ref_px]  # (1, D)
         kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, ref_patch_desc)
         assert kps_raw_2d.shape == (1, 2)
@@ -213,31 +221,34 @@ class ImageExtractor(Configurable):
 
         return int(y_pixel.squeeze(0).item()), int(x_pixel.squeeze(0).item())
 
-    def encode(
-        self, td_image: TDImage
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, dict]:
-        image_desc = self.compute_descriptor(td_image.rgb)
+    def encode(self, td_img: TDImage) -> tuple[torch.Tensor, torch.Tensor, dict]:
+        image_desc = self.compute_descriptor(td_img.rgb)  # (1, D, H, W)
 
-        kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(image_desc)
-        states, scores = self.compute_kps_states(kps_raw_2d, image_desc)
+        kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(
+            image_desc
+        )  # (1, 2*Nref), (1, Nref), (1, Nref, H, W), (1, Nref, H, W)
 
         y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
-            kps_raw_2d, (td_image.rgb.shape[1], td_image.rgb.shape[2])
-        )  # (B, Nref), (B, Nref)
+            kps_raw_2d, (td_img.rgb.shape[1], td_img.rgb.shape[2])
+        )  # (1, Nref), (1, Nref)
 
         kps = self.hard_pixels_to_3D_world(
-            x_pixel,
             y_pixel,
-            td_image.d,
-            td_image.extr,
-            td_image.intr,
+            x_pixel,
+            td_img.d,
+            td_img.extr,
+            td_img.intr,
         )
+
+        states, scores = self.compute_kps_states(
+            kps_raw_2d, image_desc
+        )  # (1, num_states), (1, num_states)
 
         info = {
             "descriptor": image_desc,
             "distance": None,
             "kp_raw_2d": kps_raw_2d,
-            "depth": td_image.d,
+            "depth": td_img.d,
             "prior": None,
             "kp_mask": kps_mask,
             "sm": sm,
@@ -245,7 +256,7 @@ class ImageExtractor(Configurable):
             "state_scores": scores,
         }
 
-        return kps, kps_mask, states, scores, info
+        return kps, states, info
 
     def compute_keypoints(
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
@@ -346,37 +357,56 @@ class ImageExtractor(Configurable):
         self,
         img_descr: torch.Tensor,
         kps_raw_2d: torch.Tensor,
-        state_coords: torch.Tensor,
+        coords: torch.Tensor,
     ) -> torch.Tensor:
         # img_descr is (B, C, H, W)
-        # kps_raw_2d is (B, 2*Nref) where for each kp: (x, y) in normalized coordinates
-        # state_coords is (Nref, 2)
-        # per_batch is list of B tensors each (N, 2)
-        coords = (
-            state_coords.unsqueeze(0).permute(0, 2, 1).reshape(1, -1)
-        )  # (1, 2*Nref)
-        rel_state_coords = self.relative_state_coords(
-            kps_raw_2d, state_coords
-        )  # (B, Nref, 2)
-        r = self.cfg.state_patch_radius
-        return img_descr[:, :, y - r : y + r + 1, x - r : x + r + 1]
+        # kps_raw_2d is (B, 2*Nref) with xy ordering
+        # coords is (Nref, 2) as relative normalized offsets in yx ordering
+        B, C, H, W = img_descr.shape
+        assert B == 1, "get_state_kernel currently expects batch size 1"
+        assert (
+            kps_raw_2d.shape[0] == coords.shape[0]
+        ), "number of keypoints and state coords must match"
+        # Convert keypoints from flattened xy to (B, Nref, yx)
+        Nref = coords.shape[0]
+        kps_xy = kps_raw_2d.view(B, 2, Nref).permute(0, 2, 1)
+        kps_yx = kps_xy.flip(-1)
 
-    def relative_state_coords(
-        self, kp_coords: torch.Tensor, state_coords: torch.Tensor
-    ) -> torch.Tensor:
-        # both inputs are (B, 2*Nref)
-        return state_coords - kp_coords
+        # Apply per-reference relative state offsets (normalized yx)
+        target_yx_norm = kps_yx + coords.unsqueeze(0)
+
+        # Map normalized yx to descriptor-grid integer indices
+        target_yx = self.scale_normalized_coords(
+            target_yx_norm,
+            (H, W),
+        )
+
+        # Pad descriptor map so kernels at borders still have fixed size
+        r = self.cfg.state_patch_radius
+        kernel_size = 2 * r + 1
+        padded = torch.nn.functional.pad(img_descr, (r, r, r, r), mode="replicate")
+
+        y_idx = target_yx[0, :, 0] + r
+        x_idx = target_yx[0, :, 1] + r
+        kernels = []
+        for y, x in zip(y_idx.tolist(), x_idx.tolist()):
+            patch = padded[0:1, :, y - r : y + r + 1, x - r : x + r + 1]
+            assert patch.shape[-2:] == (kernel_size, kernel_size)
+            kernels.append(patch.squeeze(0))
+
+        return torch.stack(kernels, dim=0)  # (Nref, C, k, k)
 
     def compute_kps_states(
         self, kps_raw_2d: torch.Tensor, image_desc: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        # TODO:
+        # kps_raw_2d is (1, 2*Nref)
+        # image_desc is (1, C, H, W)
         assert self.entity_state_coords is not None
         kernels = self.get_state_kernel(
             image_desc,
             kps_raw_2d,
             self.entity_state_coords,
-        )
+        )  # (1, C, k, k)
         one_hots = []
         scores = []
         for idx, entity in enumerate(self.entities):
@@ -429,6 +459,13 @@ class ImageExtractor(Configurable):
 
         return interpolate_pos_encoding
 
+    def compute_patch_grid_size(self, image_size: tuple[int, int]) -> tuple[int, int]:
+        # Compute the number of patches along height and width
+        h, w = image_size
+        grid_h = 1 + (h - self.patch_size) // self.cfg.stride
+        grid_w = 1 + (w - self.patch_size) // self.cfg.stride
+        return grid_h, grid_w
+
     @staticmethod
     def patch_vit_resolution(
         model: nn.Module,
@@ -461,7 +498,7 @@ class ImageExtractor(Configurable):
         # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
         ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
         target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
-        return target_yx[0].item(), target_yx[1].item()
+        return int(target_yx[0].item()), int(target_yx[1].item())
 
     def add_entity_reference_sample(
         self, dc_ref_patch_desc: torch.Tensor, state_coords: torch.Tensor

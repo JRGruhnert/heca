@@ -190,12 +190,12 @@ class Scene(Persistable):
         all_scores = []
 
         for td_image in td_image_dict.values():
-            kps, kps_mask, states, scores, info = self.extractors[""].encode(td_image)
+            kps, states, info = self.extractors[""].encode(td_image)
             all_kps.append(kps)
             all_states.append(states)
             all_infos.append(info)
-            all_masks.append(kps_mask)
-            all_scores.append(scores)
+            all_masks.append(info["kp_mask"])
+            all_scores.append(info["state_scores"])
 
         kps_stack = torch.stack(all_kps)  # (C, K, D)
         kps_mask = torch.stack(all_masks)  # (C, K)
@@ -265,58 +265,53 @@ class Scene(Persistable):
         return TDEntities(td_entities)
 
     def _load(self, path: Path):
-        files: list[Path] = []
-        dc_postfix = r"_x1\d+_y1\d+_x2\d+_y2\d+\.png"
-        sample_postfix = r"_sample\d+\.png"
+        dc_pattern = re.compile(
+            rf"{re.escape(self.cfg.dc_label)}_xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png"
+        )
+        sample_postfix = r"_sample(\d+)\.png"
         for kpt in self.kp_tuples:
             edir = path / kpt.cam / kpt.kp.cfg.label
             for state in kpt.kp.cfg.states:
-                files.extend(list(edir.glob(f"{state}_sample*.png")))
-            files.extend(list(edir.glob(f"{self.cfg.dc_label}_x1*_y1*_x2*_y2*.png")))
-
-        for kpt in self.kp_tuples:
-            for state in kpt.kp.cfg.states:
-                pattern = re.compile(rf"({re.escape(state)}){sample_postfix}")
-                rem = [(pattern.match(file.name), file) for file in files]
-                rem = [(m, f) for m, f in rem if m is not None]
-                for match, file in rem:
-                    self.state_samples[kpt][state].append(
+                state_pattern = re.compile(rf"{re.escape(state)}{sample_postfix}")
+                for file in edir.glob(f"{state}_sample*.png"):
+                    if state_pattern.fullmatch(file.name):
+                        self.state_samples[kpt][state].append(
+                            Image.open(file),
+                        )
+            for file in edir.glob(f"{self.cfg.dc_label}_xk*_yk*_xs*_ys*.png"):
+                match = dc_pattern.fullmatch(file.name)
+                if match:
+                    self.kp_samples[kpt] = (
                         Image.open(file),
+                        int(match.group(1)),
+                        int(match.group(2)),
+                        int(match.group(3)),
+                        int(match.group(4)),
                     )
-            pattern = re.compile(rf"{re.escape(self.cfg.dc_label)}{dc_postfix}")
-            rem = [(pattern.match(file.name), file) for file in files]
-            rem = [(m, f) for m, f in rem if m is not None]
-            for match, file in rem:
-                self.kp_samples[kpt] = (
-                    Image.open(file),
-                    int(match.group(1)),
-                    int(match.group(2)),
-                    int(match.group(3)),
-                    int(match.group(4)),
-                )
 
-        for kpt in self.kp_tuples:
-            for state in kpt.kp.cfg.states:
-                state_samples = self.state_samples.get(kpt, None)
-                dc_sample = self.kp_samples.get(kpt, None)
-                # logger.debug(f'Found {len(rem)} matches for "{cam}" and "{e_label}"')
-                # logger.debug(f"Matches: {rem.keys()}")
-                # logger.debug(f"DC match: {dc_match}")
-                if dc_sample is None:
-                    logger.warning(
-                        f"Missing DC samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping entity."
-                    )
-                    continue
-                if state_samples is None or state_samples.keys() != set(
-                    kpt.kp.cfg.states
-                ):
-                    logger.warning(
-                        f"Missing state samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping entity."
-                    )
-                    continue
-                self.extractors[kpt.cam].add_entity_sample_for_cam(
-                    kpt.kp, dc_sample, state_samples
+            dc_sample = self.kp_samples.get(kpt)
+            state_samples = self.state_samples.get(kpt)
+
+            if dc_sample is None or state_samples is None:
+                logger.warning(
+                    f"Missing samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping."
                 )
+                continue
+
+            expected_states = set(kpt.kp.cfg.states)
+            loaded_states = set(state_samples.keys())
+            if loaded_states != expected_states:
+                logger.warning(
+                    f"State label mismatch for {kpt.cam} and {kpt.kp.cfg.label}. "
+                    f"Expected {expected_states}, got {loaded_states}. Skipping."
+                )
+                continue
+
+            self.extractors[kpt.cam].add_entity_sample_for_cam(
+                kpt.kp,
+                dc_sample,
+                state_samples,
+            )
 
     def _save(self, path: Path):
         for kpt, state_dict in self.state_samples.items():
@@ -331,10 +326,33 @@ class Scene(Persistable):
             if kps is not None:
                 img, x1, y1, x2, y2 = kps
                 img.save(
-                    entity_dir / f"{self.cfg.dc_label}_x1{x1}_y1{y1}_x2{x2}_y2{y2}.png"
+                    entity_dir / f"{self.cfg.dc_label}_xk{x1}_yk{y1}_xs{x2}_ys{y2}.png"
                 )
 
+    def update_line_marker(self):
+        if self.line_marker is not None:
+            self.canvas.delete(self.line_marker)
+            self.line_marker = None
+
+        if self.manual_marker is None or self.pred_marker is None:
+            return
+
+        mx1, my1, mx2, my2 = self.canvas.coords(self.manual_marker)
+        px1, py1, px2, py2 = self.canvas.coords(self.pred_marker)
+
+        mx = (mx1 + mx2) / 2.0
+        my = (my1 + my2) / 2.0
+        px = (px1 + px2) / 2.0
+        py = (py1 + py2) / 2.0
+
+        self.line_marker = self.canvas.create_line(
+            mx, my, px, py, fill="yellow", width=2
+        )
+
     def make_rnd_image(self):
+        self.pred_marker = None
+        self.manual_marker = None
+        self.line_marker = None
         assert self.selection is not None
         assert self.label is not None
 
@@ -380,29 +398,52 @@ class Scene(Persistable):
             )
 
     def place_predicted_marker(
-        self, image: Image.Image, ref: Image.Image, u: int, v: int
+        self, image: Image.Image, ref_image: Image.Image, x: int, y: int
     ):
         assert self.selection is not None
         extractor = self.extractors[self.selection.cam]
-        x, y = extractor.encode_direct(image=image, ref_image=ref, x=u, y=v)
+        logger.debug(f"Using extractor {extractor} ")
+        y, x = extractor.encode_direct(image=image, ref_image=ref_image, y=y, x=x)
+        logger.debug(f"Predicted DC point (x={x}, y={y}) in image coordinates")
         x, y = self.scale_point_to_canvas(int(x), int(y))
-        self.place_marker(x, y, "purple", self.pred_marker)
+        logger.debug(f"Predicted DC point (x={x}, y={y}) in canvas coordinates")
+        self.pred_marker = self.place_marker(x, y, "blue", self.pred_marker)
+        self.update_line_marker()
+
+    def update_add_button_visibility(self):
+        assert self.label is not None
+        if self.label == self.cfg.dc_label:
+            if self.add_btn.winfo_ismapped():
+                self.add_btn.pack_forget()
+        else:
+            if not self.add_btn.winfo_ismapped():
+                self.add_btn.pack(side="left")
 
     def on_click(self, event: tk.Event):
         assert self.selection is not None
         self.point = self.scale_point_to_image(event.x, event.y)
-        self.place_marker(event.x, event.y, "red", self.manual_marker)
+        self.manual_marker = self.place_marker(
+            event.x, event.y, "red", self.manual_marker
+        )
+        self.update_line_marker()
 
         if self.label == self.cfg.dc_label and self.dc_values is None:
             # First click on new kp selection
+            logger.debug(f"First Click point={self.point}")
             self.dc_values = (self.img, self.point[0], self.point[1])
             self.place_predicted_marker(
                 self.img, self.dc_values[0], self.dc_values[1], self.dc_values[2]
             )
             if self.manual_marker is not None:
                 self.canvas.delete(self.manual_marker)
+                self.manual_marker = None
+            if self.line_marker is not None:
+                self.canvas.delete(self.line_marker)
+                self.line_marker = None
+
         elif self.dc_values is not None:
             # Second click on same selection, update DC values
+            logger.debug(f"Second Click point={self.point}")
             self.kp_samples[self.selection] = (
                 self.img,
                 self.dc_values[1],
@@ -427,22 +468,28 @@ class Scene(Persistable):
         real_y = int((y - self.offset_y) / self.scale)
         return real_x, real_y
 
-    def place_marker(self, x: int, y: int, color: str, marker: int | None):
+    def place_marker(self, x: int, y: int, color: str, marker: int | None) -> int:
         if marker is not None:
             self.canvas.delete(marker)
 
         # Draw a marker at the specified point
-        self.manual_marker = self.canvas.create_oval(
+        marker = self.canvas.create_oval(
             x - self.cfg.marker_radius,
             y - self.cfg.marker_radius,
             x + self.cfg.marker_radius,
             y + self.cfg.marker_radius,
             fill=color,
         )
+        return marker
 
     def add_image(self):
         assert self.selection is not None
         assert self.label is not None
+
+        if self.label == self.cfg.dc_label:
+            logger.warning("Cannot add sample for DC label. Ignoring.")
+            return
+
         self.state_samples[self.selection][self.label].append(self.img)
         self.make_rnd_image()
 
@@ -459,14 +506,15 @@ class Scene(Persistable):
         # controls
         self.canvas.bind("<Button-1>", self.on_click)
         self.canvas.pack()
-        tk.Button(btn_frame, text="Add", bg="green", command=self.add_image).pack(
-            side="left"
+        self.add_btn = tk.Button(
+            btn_frame, text="Add", bg="#D1FAE5", command=self.add_image
         )
+        self.add_btn.pack(side="left")
         tk.Button(
-            btn_frame, text="Next", bg="red", command=self.load_next_or_finish
+            btn_frame, text="Next", bg="#FECACA", command=self.load_next_or_finish
         ).pack(side="left")
         tk.Button(
-            btn_frame, text="Resample", bg="blue", command=self.make_rnd_image
+            btn_frame, text="Resample", bg="#BFDBFE", command=self.make_rnd_image
         ).pack(side="left")
 
         self.entity_labels: list[str] = []
@@ -494,4 +542,5 @@ class Scene(Persistable):
             selection=self.label,
         )
         self.window.title(title)
+        self.update_add_button_visibility()
         self.make_rnd_image()
