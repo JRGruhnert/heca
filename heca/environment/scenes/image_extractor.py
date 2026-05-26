@@ -45,6 +45,7 @@ class ImageExtractor(Configurable):
             selection_mode=SelectionMode.WEIGHTED_VOTE,
         )
         state_patch_radius: int = 2
+        sample_per_reference: int = 5
         kp_selection_threshold: float = 0.2
         interpolate_descriptors: bool = False
         state_extraction_mode: StateExtractionMode = StateExtractionMode.IMAGE
@@ -196,24 +197,26 @@ class ImageExtractor(Configurable):
         )  # (..., 2)
 
     def encode_direct(
-        self, ref_image: Image.Image, image: Image.Image, y: int, x: int
+        self,
+        image: Image.Image,
+        ref_images: list[tuple[Image.Image, int, int]],
     ) -> tuple[int, int]:
         logger.debug(f"Starting encoder")
-        ref_img_desc = self.compute_descriptor(ref_image)  # (1, D, H, W)
-        logger.debug(f"Computed ref reference")
         img_desc = self.compute_descriptor(image)  # (1, D, H, W)
-        logger.debug(f"Computed image descriptor")
-        ref_py, ref_px = self.transform_coords(
-            y,
-            x,
-            image.height,
-            image.width,
-            img_desc.shape[2],
-            img_desc.shape[3],
-        )
-        logger.debug(f"Transformed reference pixels: ({ref_py}, {ref_px})")
-        ref_patch_desc = ref_img_desc[..., ref_py, ref_px]  # (1, D)
-        kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, ref_patch_desc)
+        sample_patch_descs = []
+        for i, (dc_img, dc_x, dc_y) in enumerate(ref_images):
+            dc_img_desc = self.compute_descriptor(dc_img)  # (1, D, H, W)
+            NSample, D, H, W = dc_img_desc.shape
+            dc_py, dc_px = self.transform_coords(
+                dc_x, dc_y, dc_img.height, dc_img.width, H, W
+            )
+            sample_patch_descs.append(dc_img_desc[0, :, dc_py, dc_px])  # (D,)
+
+        dc_ref_patch_desc = torch.stack(sample_patch_descs, dim=0).unsqueeze(
+            0
+        )  # (1, NSample, D)
+
+        kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, dc_ref_patch_desc)
         assert kps_raw_2d.shape == (1, 2)
         y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
             kps_raw_2d, (image.height, image.width)
@@ -293,18 +296,23 @@ class ImageExtractor(Configurable):
         else:
             patch_desc = ref_patch_desc
 
-        Nref, Dref = patch_desc.shape
+        if patch_desc.ndim == 2:
+            patch_desc = patch_desc.unsqueeze(1)  # (Nref, 1, D)
+
+        Nref, NSample, Dref = patch_desc.shape
         N, D, H, W = image_desc.shape
-        neg_squared_norm_diffs = self.compute_ref_descr_distances(
-            image_desc, patch_desc
-        )
-        n_s_n_d_flat = neg_squared_norm_diffs.view(N, Nref, H * W)  # 1, nm, H*W
-        # print(neg_squared_norm_diffs_flat.shape, "should be N, Nref, H*W")
-        # neg_squared_norm_diffs_flat /= math.sqrt(D)
+
+        patch_desc_flat = patch_desc.view(Nref * NSample, Dref)
+        distances = self.compute_ref_descr_distances(image_desc, patch_desc_flat)
+        # distances: (N, Nref*NSample, H, W)
 
         softmax = torch.nn.Softmax(dim=2)
-        sm_activ = softmax(n_s_n_d_flat * self.cfg.taper_sm).view(N, Nref, H, W)
-        # print(softmax_activations.shape, "should be N, Nref, H, W")
+        sm_flat = softmax(distances.view(N, Nref * NSample, H * W) * self.cfg.taper_sm)
+        sm = sm_flat.view(N, Nref, NSample, H, W)
+
+        sm_activ = sm.mean(
+            dim=2
+        )  # (N, Nref, H, W) — average heatmaps, then argmax finds peak
         return sm_activ
 
     def compute_ref_descr_distances(
@@ -519,40 +527,44 @@ class ImageExtractor(Configurable):
     def add_entity_sample_for_cam(
         self,
         entity: Entity,
-        kpt: tuple[Image.Image, int, int, int, int],
+        kpt: list[tuple[Image.Image, int, int, int, int]],
         kps: dict[str, list[Image.Image]],
     ):
-        dc_img, dc_x, dc_y, state_x, state_y = kpt
+        assert len(kpt) == self.cfg.sample_per_reference
+        assert len(kps) == len(entity.cfg.states)
+        assert all(state in kps for state in entity.cfg.states)
+        assert all(
+            len(kps[state]) == self.cfg.sample_per_reference
+            for state in entity.cfg.states
+        )
         self.entities.append(entity)
-        dc_img_desc = self.compute_descriptor(kpt[0])
-        dc_py, dc_px = self.transform_coords(
-            dc_x,
-            dc_y,
-            dc_img.height,
-            dc_img.width,
-            dc_img_desc.shape[2],
-            dc_img_desc.shape[3],
-        )
-        state_py, state_px = self.transform_coords(
-            state_y,
-            state_x,
-            dc_img.height,
-            dc_img.width,
-            dc_img_desc.shape[2],
-            dc_img_desc.shape[3],
-        )
-        dc_ref_patch_desc = dc_img_desc[..., dc_py, dc_px]  # (1, D)
-        dc_norm_coords = self.normalize_coords(
-            torch.tensor([dc_py, dc_px]), self.image_size
-        )
-        state_norm_coords = self.normalize_coords(
-            torch.tensor([state_py, state_px]), self.image_size
-        )
-        rel_state_pos = [
-            state_norm_coords[0] - dc_norm_coords[0],
-            state_norm_coords[1] - dc_norm_coords[1],
-        ]
-        state_coords = torch.tensor(rel_state_pos).unsqueeze(0)  # (1, 2)
+        sample_patch_descs = []
+        sample_state_coords = []
+        for i, (dc_img, dc_x, dc_y, state_x, state_y) in enumerate(kpt):
+            dc_img_desc = self.compute_descriptor(dc_img)  # (1, D, H, W)
+            NSample, D, H, W = dc_img_desc.shape
+            dc_py, dc_px = self.transform_coords(
+                dc_x, dc_y, dc_img.height, dc_img.width, H, W
+            )
+            state_py, state_px = self.transform_coords(
+                state_x, state_y, dc_img.height, dc_img.width, H, W
+            )
+            sample_patch_descs.append(dc_img_desc[0, :, dc_py, dc_px])  # (D,)
+
+            dc_norm = self.normalize_coords(
+                torch.tensor([dc_py, dc_px]), self.image_size
+            )
+            state_norm = self.normalize_coords(
+                torch.tensor([state_py, state_px]), self.image_size
+            )
+            sample_state_coords.append(state_norm - dc_norm)  # (2,)
+
+        dc_ref_patch_desc = torch.stack(sample_patch_descs, dim=0)  # (NSample, D)
+        # Average relative state offset across samples → single (1, 2) per entity
+        state_coords = (
+            torch.stack(sample_state_coords, dim=0).mean(dim=0).unsqueeze(0)
+        )  # (1, 2)
+
         self.add_entity_reference_sample(dc_ref_patch_desc, state_coords)
 
         for state, images in kps.items():

@@ -68,14 +68,18 @@ class Scene(Persistable):
         self.pred_marker: int | None = None
         self.manual_marker: int | None = None
         self.selection: KPTuple | None = None
+        self.sample_idx: int = 0
+        self.max_samples_per_label: int = 5
         self.point: tuple[int, int] | None = None
         # self.dc_values: tuple[Image.Image, int, int] | None = None
-        self.title: str = "Selection for: {cam}.{kp}.{selection}"
+        self.title: str = "Selection for: {cam}.{kp}.{selection} Sample {idx}"
         self.state_samples: dict[KPTuple, dict[str, list[Image.Image]]] = {
             triple: {state: [] for state in triple.kp.cfg.states}
             for triple in self.kp_tuples
         }
-        self.kp_samples: dict[KPTuple, tuple[Image.Image, int, int, int, int]] = {}
+        self.kp_samples: dict[KPTuple, list[tuple[Image.Image, int, int, int, int]]] = (
+            {}
+        )
 
     def reset(self) -> TDScene:
         obs = self._reset()
@@ -189,8 +193,8 @@ class Scene(Persistable):
         all_masks = []
         all_scores = []
 
-        for td_image in td_image_dict.values():
-            kps, states, info = self.extractors[""].encode(td_image)
+        for cam, td_image in td_image_dict.items():
+            kps, states, info = self.extractors[cam].encode(td_image)
             all_kps.append(kps)
             all_states.append(states)
             all_infos.append(info)
@@ -266,7 +270,7 @@ class Scene(Persistable):
 
     def _load(self, path: Path):
         dc_pattern = re.compile(
-            rf"{re.escape(self.cfg.dc_label)}_xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png"
+            rf"{re.escape(self.cfg.dc_label)}_sample(\d+)_xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png"
         )
         sample_postfix = r"_sample(\d+)\.png"
         for kpt in self.kp_tuples:
@@ -278,21 +282,26 @@ class Scene(Persistable):
                         self.state_samples[kpt][state].append(
                             Image.open(file),
                         )
-            for file in edir.glob(f"{self.cfg.dc_label}_xk*_yk*_xs*_ys*.png"):
+            if kpt not in self.kp_samples:
+                self.kp_samples[kpt] = []
+            for file in edir.glob(f"{self.cfg.dc_label}_sample*_xk*_yk*_xs*_ys*.png"):
                 match = dc_pattern.fullmatch(file.name)
                 if match:
-                    self.kp_samples[kpt] = (
-                        Image.open(file),
-                        int(match.group(1)),
-                        int(match.group(2)),
-                        int(match.group(3)),
-                        int(match.group(4)),
+
+                    self.kp_samples[kpt].append(
+                        (
+                            Image.open(file),
+                            int(match.group(1)),
+                            int(match.group(2)),
+                            int(match.group(3)),
+                            int(match.group(4)),
+                        )
                     )
 
-            dc_sample = self.kp_samples.get(kpt)
+            dc_samples = self.kp_samples.get(kpt)
             state_samples = self.state_samples.get(kpt)
 
-            if dc_sample is None or state_samples is None:
+            if dc_samples is None or state_samples is None:
                 logger.warning(
                     f"Missing samples for {kpt.cam} and {kpt.kp.cfg.label}. Skipping."
                 )
@@ -306,10 +315,23 @@ class Scene(Persistable):
                     f"Expected {expected_states}, got {loaded_states}. Skipping."
                 )
                 continue
+            extr = self.extractors[kpt.cam]
 
-            self.extractors[kpt.cam].add_entity_sample_for_cam(
+            if len(dc_samples) != extr.cfg.sample_per_reference or any(
+                len(state_samples[state]) != extr.cfg.sample_per_reference
+                for state in kpt.kp.cfg.states
+            ):
+                logger.warning(
+                    f"Sample count mismatch for {kpt.cam} and {kpt.kp.cfg.label}. "
+                    f"Expected {extr.cfg.sample_per_reference} samples per reference, "
+                    f"got {len(dc_samples)} DC samples and "
+                    f"{[len(state_samples[state]) for state in kpt.kp.cfg.states]} state samples. Skipping."
+                )
+                continue
+
+            extr.add_entity_sample_for_cam(
                 kpt.kp,
-                dc_sample,
+                dc_samples,
                 state_samples,
             )
 
@@ -324,10 +346,11 @@ class Scene(Persistable):
                     )  # e.g., "open_sample0.png"
             kps = self.kp_samples.get(kpt)
             if kps is not None:
-                img, x1, y1, x2, y2 = kps
-                img.save(
-                    entity_dir / f"{self.cfg.dc_label}_xk{x1}_yk{y1}_xs{x2}_ys{y2}.png"
-                )
+                for idx, (img, x1, y1, x2, y2) in enumerate(kps):
+                    img.save(
+                        entity_dir
+                        / f"{self.cfg.dc_label}_sample{idx}_xk{x1}_yk{y1}_xs{x2}_ys{y2}.png"
+                    )
 
     def delete_from_canvas(self, marker: str):
         if marker == "manual":
@@ -341,6 +364,16 @@ class Scene(Persistable):
         elif marker == "line":
             if self.line_marker is not None:
                 self.canvas.delete(self.line_marker)
+            self.line_marker = None
+        elif marker == "all":
+            if self.manual_marker is not None:
+                self.canvas.delete(self.manual_marker)
+            if self.pred_marker is not None:
+                self.canvas.delete(self.pred_marker)
+            if self.line_marker is not None:
+                self.canvas.delete(self.line_marker)
+            self.manual_marker = None
+            self.pred_marker = None
             self.line_marker = None
         else:
             logger.warning(f"Unknown marker type: {marker}")
@@ -371,16 +404,6 @@ class Scene(Persistable):
             y + self.cfg.marker_radius,
             fill=color,
         )
-        # if label != "":
-        #    self.canvas.create_text(
-        #        x + self.cfg.marker_radius + 5,
-        #        y - self.cfg.marker_radius,
-        #        text=label,
-        #        fill=color,
-        #        anchor="w",
-        #        font=("Arial", 8),
-        #    )
-
         if marker == "manual":
             self.delete_from_canvas("manual")
             self.manual_marker = ref
@@ -402,13 +425,6 @@ class Scene(Persistable):
         assert self.label is not None
 
         obs = self._reset()
-        # num_actions = 10  # TODO: Tune this number based on the environment dynamics
-        # for _ in range(num_actions):
-        #    pos = torch.zeros(3)
-        #    quat = torch.tensor([0, 0, 0, 1])
-        #    gripper = torch.tensor(0.0)
-        #    action = torch.cat([pos, quat, gripper]).numpy()
-        #    obs = self._step(action)
         np_images_dict = self.image_numpy(obs)
         picture = np_images_dict[self.selection.cam]
         self.img = Image.fromarray(picture)
@@ -437,54 +453,28 @@ class Scene(Persistable):
             anchor="nw",
             image=self.img_tk,
         )
-        if not self.dc_selection:
-            ref_img, dc_x, dc_y, sel_x, sel_y = self.kp_samples[self.selection]
-            pred_dc_x, pred_dc_y, pred_canvas_x, pred_canvas_y = self.predict_dc_point(
-                self.img,
-                ref_img,
-                dc_x,
-                dc_y,
-            )
-            logger.info(
-                f"Predicted DC point: ({pred_dc_x}, {pred_dc_y}), "
-                f"Reference DC point: ({dc_x}, {dc_y}), "
-                f"Selected point: ({sel_x}, {sel_y})"
-            )
-            rel_x, rel_y = self.make_relative_canvas_point(dc_x, dc_y, sel_x, sel_y)
-            sel_canvas_x = pred_canvas_x - rel_x
-            sel_canvas_y = pred_canvas_y - rel_y
 
-            self.place_marker(pred_canvas_x, pred_canvas_y, "blue", "pred")
-            self.place_marker(sel_canvas_x, sel_canvas_y, "red", "manual")
+        img_rel_only = [(kpt[3], kpt[4]) for kpt in self.kp_samples[self.selection]]
+        pred_dc_x, pred_dc_y, pred_cvs_x, pred_cvs_y = self.predict_dc_point(self.img)
+        logger.info(f"Predicted DC point: ({pred_dc_x}, {pred_dc_y})")
+        mean_rel_x = int(np.mean([rel[0] for rel in img_rel_only]))
+        mean_rel_y = int(np.mean([rel[1] for rel in img_rel_only]))
 
-    def predict_dc_point(
-        self, image: Image.Image, ref_image: Image.Image, ref_x: int, ref_y: int
-    ) -> tuple[int, int, int, int]:
+        sel_x = pred_dc_x - mean_rel_x
+        sel_y = pred_dc_y - mean_rel_y
+        sel_cvs_x, sel_cvs_y = self.scale_point_to_canvas(sel_x, sel_y)
+        self.place_marker(pred_cvs_x, pred_cvs_y, "blue", "pred")
+        self.place_marker(sel_cvs_x, sel_cvs_y, "red", "manual")
+
+    def predict_dc_point(self, image: Image.Image) -> tuple[int, int, int, int]:
         assert self.selection is not None
         extractor = self.extractors[self.selection.cam]
-        y, x = extractor.encode_direct(
-            image=image, ref_image=ref_image, y=ref_y, x=ref_x
-        )
+        img_pos_only = [
+            (kpt[0], kpt[1], kpt[2]) for kpt in self.kp_samples[self.selection]
+        ]
+        y, x = extractor.encode_direct(image, img_pos_only)
         dc_x, dc_y = self.scale_point_to_canvas(int(x), int(y))
         return int(x), int(y), dc_x, dc_y
-
-    def update_add_button_visibility(self):
-        assert self.label is not None
-        if self.label == self.cfg.dc_label:
-            if self.add_btn.winfo_ismapped():
-                self.add_btn.pack_forget()
-        else:
-            if not self.add_btn.winfo_ismapped():
-                self.add_btn.pack(side="left")
-
-    def make_relative_canvas_point(
-        self, dc_x: int, dc_y: int, sel_x: int, sel_y: int
-    ) -> tuple[int, int]:
-        dc_x_canvas, dc_y_canvas = self.scale_point_to_canvas(dc_x, dc_y)
-        sel_x_canvas, sel_y_canvas = self.scale_point_to_canvas(sel_x, sel_y)
-        rel_x = dc_x_canvas - sel_x_canvas
-        rel_y = dc_y_canvas - sel_y_canvas
-        return rel_x, rel_y
 
     def place_relative_marker(self, x: int, y: int, rel_x: int, rel_y: int):
         abs_x = x + rel_x
@@ -493,28 +483,27 @@ class Scene(Persistable):
 
     def on_click(self, event: tk.Event):
         assert self.selection is not None
-        self.point = self.scale_point_to_image(event.x, event.y)
-        self.place_marker(event.x, event.y, "red", "manual")
-        if self.label == self.cfg.dc_label:
-            if self.dc_selection:
-                self.dc_selection = False
+        assert self.label is not None
+        if self.label == self.cfg.dc_label:  # else ignore
+            self.point = self.scale_point_to_image(event.x, event.y)
+            self.place_marker(event.x, event.y, "red", "manual")
+            if self.first_click:
+                self.first_click = False
                 logger.debug(f"First Click point={self.point}")
                 x, y = self.point
-                self.kp_samples[self.selection] = (self.img, x, y, 0, 0)
-                _, _, pred_canvas_x, pred_canvas_y = self.predict_dc_point(
-                    self.img, self.img, x, y
-                )
+                self.kp_samples[self.selection].append((self.img, x, y, 0, 0))
+                _, _, pred_canvas_x, pred_canvas_y = self.predict_dc_point(self.img)
                 self.place_marker(pred_canvas_x, pred_canvas_y, "blue", "pred")
                 return
-        logger.debug(f"Updated point={self.point} for selection {self.selection}")
-        self.update_kp_sample_with_selection(self.point)
-
-    def update_kp_sample_with_selection(self, point: tuple[int, int]):
-        assert self.selection is not None
-        if self.selection in self.kp_samples:
-            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection]
-            x, y = point
-            self.kp_samples[self.selection] = (img, dc_x, dc_y, x, y)
+            logger.debug(f"Updated point={self.point} for selection {self.selection}")
+            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection][self.sample_idx]
+            self.kp_samples[self.selection][self.sample_idx] = (
+                img,
+                dc_x,
+                dc_y,
+                dc_x - self.point[0],
+                dc_y - self.point[1],
+            )
 
     def scale_point_to_canvas(self, x: int, y: int) -> tuple[int, int]:
         # Scale the point according to the display size
@@ -627,34 +616,50 @@ class Scene(Persistable):
         tk.Button(
             btn_frame, text="Next", bg="#FECACA", command=self.load_next_or_finish
         ).pack(side="left")
-        tk.Button(
-            btn_frame, text="Resample", bg="#BFDBFE", command=self.make_rnd_image
-        ).pack(side="left")
+        tk.Button(btn_frame, text="Resample", bg="#BFDBFE", command=self.refresh).pack(
+            side="left"
+        )
 
-        self.entity_labels: list[str] = []
         self.selection_iter = iter(self.kp_tuples)
-        self.label_iter = iter(self.entity_labels)
+        self.label_iter = iter([])
+        self.selection = next(self.selection_iter, None)
+        self.load_labels_for_selection()
         self.load_next_or_finish()
         self.window.mainloop()
 
+    def load_labels_for_selection(self):
+        assert self.selection is not None
+        self.label_iter = iter(self.selection.kp.cfg.states)
+        self.label = self.cfg.dc_label
+
+    def refresh(self):
+        assert self.selection is not None
+        assert self.label is not None
+        if self.label == self.cfg.dc_label:
+            self.first_click = True
+            self.delete_from_canvas("all")
+
+        self.make_rnd_image()
+
     def load_next_or_finish(self):
-        self.label = next(self.label_iter, None)
-        if self.label is None:
-            self.selection = next(self.selection_iter, None)
-            if self.selection is None:
-                self.window.quit()
-                return
-            else:
-                self.label_iter = iter(self.selection.kp.cfg.states)
-                self.label = self.cfg.dc_label
-                self.dc_selection = True
+        if self.sample_idx >= self.max_samples_per_label:
+            self.sample_idx = 0
+            self.label = next(self.label_iter, None)
+            if self.label is None:
+                self.selection = next(self.selection_iter, None)
+                if self.selection is None:
+                    self.window.quit()
+                    return
+                else:
+                    self.load_labels_for_selection()
         assert self.label is not None
         assert self.selection is not None
         title = self.title.format(
             cam=self.selection.cam,
             kp=self.selection.kp.cfg.label,
             selection=self.label,
+            idx=self.sample_idx,
         )
+        self.first_click = True
         self.window.title(title)
-        self.update_add_button_visibility()
         self.make_rnd_image()
