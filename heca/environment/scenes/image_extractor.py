@@ -242,7 +242,7 @@ class ImageExtractor(Configurable):
 
         states, scores = self.compute_kps_states(
             kps_raw_2d, image_desc
-        )  # (1, num_states), (1, num_states)
+        )  # (1, Nref), (1, Nref)
 
         info = {
             "descriptor": image_desc,
@@ -254,6 +254,8 @@ class ImageExtractor(Configurable):
             "sm": sm,
             "post": post,
             "state_scores": scores,
+            "y_pixel": y_pixel,
+            "x_pixel": x_pixel,
         }
 
         return kps, states, info

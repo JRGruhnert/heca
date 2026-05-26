@@ -69,7 +69,7 @@ class Scene(Persistable):
         self.manual_marker: int | None = None
         self.selection: KPTuple | None = None
         self.point: tuple[int, int] | None = None
-        self.dc_values: tuple[Image.Image, int, int] | None = None
+        # self.dc_values: tuple[Image.Image, int, int] | None = None
         self.title: str = "Selection for: {cam}.{kp}.{selection}"
         self.state_samples: dict[KPTuple, dict[str, list[Image.Image]]] = {
             triple: {state: [] for state in triple.kp.cfg.states}
@@ -322,17 +322,31 @@ class Scene(Persistable):
                     img.save(
                         entity_dir / f"{state}_sample{idx}.png"
                     )  # e.g., "open_sample0.png"
-            kps = self.kp_samples.get(kpt, None)
+            kps = self.kp_samples.get(kpt)
             if kps is not None:
                 img, x1, y1, x2, y2 = kps
                 img.save(
                     entity_dir / f"{self.cfg.dc_label}_xk{x1}_yk{y1}_xs{x2}_ys{y2}.png"
                 )
 
-    def update_line_marker(self):
-        if self.line_marker is not None:
-            self.canvas.delete(self.line_marker)
+    def delete_from_canvas(self, marker: str):
+        if marker == "manual":
+            if self.manual_marker is not None:
+                self.canvas.delete(self.manual_marker)
+            self.manual_marker = None
+        elif marker == "pred":
+            if self.pred_marker is not None:
+                self.canvas.delete(self.pred_marker)
+            self.pred_marker = None
+        elif marker == "line":
+            if self.line_marker is not None:
+                self.canvas.delete(self.line_marker)
             self.line_marker = None
+        else:
+            logger.warning(f"Unknown marker type: {marker}")
+
+    def update_line_marker(self):
+        self.delete_from_canvas("line")
 
         if self.manual_marker is None or self.pred_marker is None:
             return
@@ -348,6 +362,37 @@ class Scene(Persistable):
         self.line_marker = self.canvas.create_line(
             mx, my, px, py, fill="yellow", width=2
         )
+
+    def place_marker(self, x: int, y: int, color: str, marker: str, label: str = ""):
+        ref = self.canvas.create_oval(
+            x - self.cfg.marker_radius,
+            y - self.cfg.marker_radius,
+            x + self.cfg.marker_radius,
+            y + self.cfg.marker_radius,
+            fill=color,
+        )
+        # if label != "":
+        #    self.canvas.create_text(
+        #        x + self.cfg.marker_radius + 5,
+        #        y - self.cfg.marker_radius,
+        #        text=label,
+        #        fill=color,
+        #        anchor="w",
+        #        font=("Arial", 8),
+        #    )
+
+        if marker == "manual":
+            self.delete_from_canvas("manual")
+            self.manual_marker = ref
+        elif marker == "pred":
+            self.delete_from_canvas("pred")
+            self.pred_marker = ref
+        else:
+            logger.warning(f"Unknown marker type: {marker}")
+            self.canvas.delete(ref)
+            return
+
+        self.update_line_marker()
 
     def make_rnd_image(self):
         self.pred_marker = None
@@ -376,6 +421,8 @@ class Scene(Persistable):
         )
         display_w = int(orig_w * self.scale)
         display_h = int(orig_h * self.scale)
+        self.offset_x = (self.cfg.vis_size[0] - display_w) // 2
+        self.offset_y = (self.cfg.vis_size[1] - display_h) // 2
 
         self.display_img = self.img.resize(
             (display_w, display_h),
@@ -384,31 +431,42 @@ class Scene(Persistable):
         self.img_tk = ImageTk.PhotoImage(self.display_img)
         self.canvas.delete("all")
 
-        self.offset_x = (self.cfg.vis_size[0] - display_w) // 2
-        self.offset_y = (self.cfg.vis_size[1] - display_h) // 2
         self.canvas.create_image(
             self.offset_x,
             self.offset_y,
             anchor="nw",
             image=self.img_tk,
         )
-        if self.dc_values is not None:
-            self.place_predicted_marker(
-                self.img, self.dc_values[0], self.dc_values[1], self.dc_values[2]
+        if not self.dc_selection:
+            ref_img, dc_x, dc_y, sel_x, sel_y = self.kp_samples[self.selection]
+            pred_dc_x, pred_dc_y, pred_canvas_x, pred_canvas_y = self.predict_dc_point(
+                self.img,
+                ref_img,
+                dc_x,
+                dc_y,
             )
+            logger.info(
+                f"Predicted DC point: ({pred_dc_x}, {pred_dc_y}), "
+                f"Reference DC point: ({dc_x}, {dc_y}), "
+                f"Selected point: ({sel_x}, {sel_y})"
+            )
+            rel_x, rel_y = self.make_relative_canvas_point(dc_x, dc_y, sel_x, sel_y)
+            sel_canvas_x = pred_canvas_x - rel_x
+            sel_canvas_y = pred_canvas_y - rel_y
 
-    def place_predicted_marker(
-        self, image: Image.Image, ref_image: Image.Image, x: int, y: int
-    ):
+            self.place_marker(pred_canvas_x, pred_canvas_y, "blue", "pred")
+            self.place_marker(sel_canvas_x, sel_canvas_y, "red", "manual")
+
+    def predict_dc_point(
+        self, image: Image.Image, ref_image: Image.Image, ref_x: int, ref_y: int
+    ) -> tuple[int, int, int, int]:
         assert self.selection is not None
         extractor = self.extractors[self.selection.cam]
-        logger.debug(f"Using extractor {extractor} ")
-        y, x = extractor.encode_direct(image=image, ref_image=ref_image, y=y, x=x)
-        logger.debug(f"Predicted DC point (x={x}, y={y}) in image coordinates")
-        x, y = self.scale_point_to_canvas(int(x), int(y))
-        logger.debug(f"Predicted DC point (x={x}, y={y}) in canvas coordinates")
-        self.pred_marker = self.place_marker(x, y, "blue", self.pred_marker)
-        self.update_line_marker()
+        y, x = extractor.encode_direct(
+            image=image, ref_image=ref_image, y=ref_y, x=ref_x
+        )
+        dc_x, dc_y = self.scale_point_to_canvas(int(x), int(y))
+        return int(x), int(y), dc_x, dc_y
 
     def update_add_button_visibility(self):
         assert self.label is not None
@@ -419,42 +477,44 @@ class Scene(Persistable):
             if not self.add_btn.winfo_ismapped():
                 self.add_btn.pack(side="left")
 
+    def make_relative_canvas_point(
+        self, dc_x: int, dc_y: int, sel_x: int, sel_y: int
+    ) -> tuple[int, int]:
+        dc_x_canvas, dc_y_canvas = self.scale_point_to_canvas(dc_x, dc_y)
+        sel_x_canvas, sel_y_canvas = self.scale_point_to_canvas(sel_x, sel_y)
+        rel_x = dc_x_canvas - sel_x_canvas
+        rel_y = dc_y_canvas - sel_y_canvas
+        return rel_x, rel_y
+
+    def place_relative_marker(self, x: int, y: int, rel_x: int, rel_y: int):
+        abs_x = x + rel_x
+        abs_y = y + rel_y
+        self.place_marker(abs_x, abs_y, "red", "manual")
+
     def on_click(self, event: tk.Event):
         assert self.selection is not None
         self.point = self.scale_point_to_image(event.x, event.y)
-        self.manual_marker = self.place_marker(
-            event.x, event.y, "red", self.manual_marker
-        )
-        self.update_line_marker()
+        self.place_marker(event.x, event.y, "red", "manual")
+        if self.label == self.cfg.dc_label:
+            if self.dc_selection:
+                self.dc_selection = False
+                logger.debug(f"First Click point={self.point}")
+                x, y = self.point
+                self.kp_samples[self.selection] = (self.img, x, y, 0, 0)
+                _, _, pred_canvas_x, pred_canvas_y = self.predict_dc_point(
+                    self.img, self.img, x, y
+                )
+                self.place_marker(pred_canvas_x, pred_canvas_y, "blue", "pred")
+                return
+        logger.debug(f"Updated point={self.point} for selection {self.selection}")
+        self.update_kp_sample_with_selection(self.point)
 
-        if self.label == self.cfg.dc_label and self.dc_values is None:
-            # First click on new kp selection
-            logger.debug(f"First Click point={self.point}")
-            self.dc_values = (self.img, self.point[0], self.point[1])
-            self.place_predicted_marker(
-                self.img, self.dc_values[0], self.dc_values[1], self.dc_values[2]
-            )
-            if self.manual_marker is not None:
-                self.canvas.delete(self.manual_marker)
-                self.manual_marker = None
-            if self.line_marker is not None:
-                self.canvas.delete(self.line_marker)
-                self.line_marker = None
-
-        elif self.dc_values is not None:
-            # Second click on same selection, update DC values
-            logger.debug(f"Second Click point={self.point}")
-            self.kp_samples[self.selection] = (
-                self.img,
-                self.dc_values[1],
-                self.dc_values[2],
-                self.point[0],
-                self.point[1],
-            )
-        else:
-            raise NotImplementedError(
-                f"Unexpected click state: label={self.label}, dc_values={self.dc_values}"
-            )
+    def update_kp_sample_with_selection(self, point: tuple[int, int]):
+        assert self.selection is not None
+        if self.selection in self.kp_samples:
+            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection]
+            x, y = point
+            self.kp_samples[self.selection] = (img, dc_x, dc_y, x, y)
 
     def scale_point_to_canvas(self, x: int, y: int) -> tuple[int, int]:
         # Scale the point according to the display size
@@ -468,20 +528,6 @@ class Scene(Persistable):
         real_y = int((y - self.offset_y) / self.scale)
         return real_x, real_y
 
-    def place_marker(self, x: int, y: int, color: str, marker: int | None) -> int:
-        if marker is not None:
-            self.canvas.delete(marker)
-
-        # Draw a marker at the specified point
-        marker = self.canvas.create_oval(
-            x - self.cfg.marker_radius,
-            y - self.cfg.marker_radius,
-            x + self.cfg.marker_radius,
-            y + self.cfg.marker_radius,
-            fill=color,
-        )
-        return marker
-
     def add_image(self):
         assert self.selection is not None
         assert self.label is not None
@@ -492,6 +538,74 @@ class Scene(Persistable):
 
         self.state_samples[self.selection][self.label].append(self.img)
         self.make_rnd_image()
+
+    def make_rnd_image2(self):
+        cam = "front"
+        obs = self._reset()
+        td_dict = self.to_td_image_dict(obs)
+        td_image = td_dict[cam]
+        np_images_dict = self.image_numpy(obs)
+        picture = np_images_dict[cam]
+        self.img = Image.fromarray(picture)
+
+        orig_w, orig_h = self.img.size
+
+        self.scale = min(
+            self.cfg.vis_size[0] / orig_w,
+            self.cfg.vis_size[1] / orig_h,
+        )
+        display_w = int(orig_w * self.scale)
+        display_h = int(orig_h * self.scale)
+        self.offset_x = (self.cfg.vis_size[0] - display_w) // 2
+        self.offset_y = (self.cfg.vis_size[1] - display_h) // 2
+
+        self.display_img = self.img.resize(
+            (display_w, display_h),
+            Image.Resampling.NEAREST,
+        )
+        self.img_tk = ImageTk.PhotoImage(self.display_img)
+        self.canvas.delete("all")
+
+        self.canvas.create_image(
+            self.offset_x,
+            self.offset_y,
+            anchor="nw",
+            image=self.img_tk,
+        )
+        _, states, info = self.extractors[cam].encode(td_image)
+        n_states = states.squeeze().tolist()
+        y_pixel = info["y_pixel"].squeeze().tolist()
+        x_pixel = info["x_pixel"].squeeze().tolist()
+        logger.info(f"Predicted states: {n_states}, at pixels: ({x_pixel}, {y_pixel})")
+
+        for idx, entity in enumerate(self.entities):
+            if idx >= len(n_states):
+                break
+            state = n_states[idx]
+            y_e = y_pixel[idx]
+            x_e = x_pixel[idx]
+            logger.info(
+                f"Entity: {entity.cfg.label}, State: {state}, at pixels: ({x_e}, {y_e})"
+            )
+            y_canvas, x_canvas = self.scale_point_to_canvas(x_e, y_e)
+            self.place_marker(x_canvas, y_canvas, "blue", "pred")
+
+    def show_predictions(self):
+        self.window = tk.Tk()
+        self.canvas = tk.Canvas(
+            self.window,
+            width=self.cfg.vis_size[0],
+            height=self.cfg.vis_size[1],
+        )
+        self.canvas.pack()
+        btn_frame = tk.Frame(self.window)
+        btn_frame.pack(side="top")
+        # controls
+        tk.Button(
+            btn_frame, text="Sample", bg="#BFDBFE", command=self.make_rnd_image2
+        ).pack(side="left")
+
+        self.window.mainloop()
 
     def sample_selection(self):
         self.window = tk.Tk()
@@ -533,7 +647,7 @@ class Scene(Persistable):
             else:
                 self.label_iter = iter(self.selection.kp.cfg.states)
                 self.label = self.cfg.dc_label
-                self.dc_values = None
+                self.dc_selection = True
         assert self.label is not None
         assert self.selection is not None
         title = self.title.format(

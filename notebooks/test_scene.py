@@ -4,8 +4,15 @@ from heca.environment.scenes.scene import Scene
 import inspect
 from heca.misc import logger
 
+query = CalvinScene.Query()
+location = CalvinScene.Location()
+
 print(inspect.getfile(Scene))
-scene = Scene.load(CalvinScene.Query(), CalvinScene.Location())
+scene = Scene.load(query, location)
 logger.info("Loaded scene")
 scene.sample_selection()
-Scene.save(CalvinScene.Query(), CalvinScene.Location())
+Scene.save(query, location)
+
+scene = Scene.load(query, location)
+logger.info("Loaded scene")
+scene.show_predictions()
