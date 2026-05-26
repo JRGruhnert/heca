@@ -233,7 +233,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="slider",
-                states={"open", "closed", "half-open"},
+                states={"left", "right", "middle"},
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
@@ -253,17 +253,17 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="red_block",
-                states={"grabbed", "drawer", "table"},
+                states={"grabbed", "drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
             Entity.Config(
                 label="pink_block",
-                states={"grabbed", "drawer", "table"},
+                states={"grabbed", "drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
             Entity.Config(
                 label="blue_block",
-                states={"grabbed", "drawer", "table"},
+                states={"grabbed", "drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
         ]

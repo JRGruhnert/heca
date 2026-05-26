@@ -417,6 +417,10 @@ class Scene(Persistable):
 
         self.update_line_marker()
 
+    def sample_image(self) -> dict[str, np.ndarray]:
+        obs = self._reset()
+        return self.image_numpy(obs)
+
     def make_rnd_image(self):
         self.pred_marker = None
         self.manual_marker = None
