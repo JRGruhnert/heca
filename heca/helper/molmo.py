@@ -36,8 +36,8 @@ def get_properties_description(properties: dict[str, str]) -> str:
 def get_prompt(entity: str, data: dict) -> str:
     properties = get_properties_description(data["properties"])
     missing_property = data["missing_property"]
-    question = f"Given the following properties of the {entity}:\n{properties}\n What is the {missing_property} of the {entity}?"
-    task = f"You can choose from the following options for the {missing_property}:\n{get_choices_description(data['classes'])}\nAnswer with exactly one of the letters {get_choices(data['classes'])} corresponding to the correct answer."
+    question = f"Given the following properties of a {entity}:\n{properties}\n\nLocate the {entity} and decide what {missing_property} it has."
+    task = f"You can choose from the following options for the {missing_property}:\n{get_choices_description(data['classes'])}\n\nAnswer with exactly one of the letters {get_choices(data['classes'])} corresponding to the correct answer."
     return f"{question}\n{task}"
 
 
@@ -45,18 +45,24 @@ def get_letters(states: int) -> set[str]:
     return set(ALPHABET[:states])
 
 
-def get_data() -> (
-    tuple[list[Image.Image], list[str], list[str], list[str], dict[str, set[str]]]
-):
+def get_data() -> tuple[
+    list[Image.Image],
+    list[str],
+    list[str],
+    list[str],
+    dict[str, dict[str, list[str]]],
+]:
     images = []
     prompts = []
     ground_truth = []
     task_names = []
-    letters_per_task = {}
+    letters_per_task: dict[str, dict[str, list[str]]] = {}
 
     # Build dataset
     for entity, data in TASKS_V2.items():
         prompt = get_prompt(entity, data)
+        entity_maps = {"states": data["states"], "classes": data["classes"]}
+        letters_per_task[entity] = entity_maps
         print(f"Prompt for {entity}:\n{prompt}\n")
         for state in data["states"]:
             for i in range(10):
@@ -66,7 +72,6 @@ def get_data() -> (
                 prompts.append(prompt)
                 ground_truth.append(state)
                 task_names.append(entity)
-                letters_per_task[entity] = set(ALPHABET[: len(data["states"])])
     return images, prompts, ground_truth, task_names, letters_per_task
 
 
@@ -143,6 +148,3 @@ def plot_probabilities(predictions, task_names, ground_truth, probs_predicted):
 
         plt.tight_layout()
         plt.show()
-
-
-get_data()
