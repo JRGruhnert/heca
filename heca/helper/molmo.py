@@ -3,55 +3,11 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import numpy as np
 
+from heca.helper.descriptions import TASKS_V1, TASKS_V2
+
 ALPHABET = ["A", "B", "C"]
 choice_template = "{choice}: {state}"
 prompt_template = "{question}\n{choices}\nAnswer with exactly one of the letters {letters} corresponding to the correct answer."
-
-
-TASKS = {
-    # "drawer": {
-    #    "question": "Is the wooden, brown drawer under the wooden, brown table:",
-    #    "classes": ["open", "closed"],
-    #    "states": ["open", "closed"],
-    # },
-    # "light": {
-    #    "question": "Is the rectangular shaped light on the top left:",
-    #    "classes": ["green ", "white"],
-    #    "states": ["on", "off"],
-    # },
-    "slider": {
-        "question": "Is the horizontal slider door, with a grey handle, in the back of the table:",
-        "classes": ["moved to the left", "moved to the right"],
-        "states": ["left", "right"],
-    },
-    "red_block": {
-        "question": "Is the red block:",
-        "classes": [
-            "visible and on the brown, wooden table",
-            "visible and in the brown, wooden drawer",
-            "not visible anywhere",
-        ],
-        "states": ["table", "drawer", "mia"],
-    },
-    "pink_block": {
-        "question": "Is the pink block:",
-        "classes": [
-            "visible and on the brown, wooden table",
-            "visible and in the brown, wooden drawer",
-            "not visible anywhere",
-        ],
-        "states": ["table", "drawer", "mia"],
-    },
-    "blue_block": {
-        "question": "Is the blue block:",
-        "classes": [
-            "visible and on the brown, wooden table",
-            "visible and in the brown, wooden drawer",
-            "not visible anywhere",
-        ],
-        "states": ["table", "drawer", "mia"],
-    },
-}
 
 
 def get_choices_description(classes: list[str]) -> str:
@@ -62,15 +18,27 @@ def get_choices(classes: list[str]) -> str:
     return f"[{', '.join(ALPHABET[:len(classes)])}]"
 
 
-def get_prompt(entity: str) -> str:
-    question = TASKS[entity]["question"]
-    classes = TASKS[entity]["classes"]
-    choices_with_text = get_choices_description(classes)
-    letters = get_letters(len(classes))
+# def get_prompt(entity: str, data: dict) -> str:
+#     question = TASKS_V1[entity]["question"]
+#     classes = TASKS_V1[entity]["classes"]
+#     choices_with_text = get_choices_description(classes)
+#     letters = get_letters(len(classes))
 
-    return prompt_template.format(
-        question=question, choices=choices_with_text, letters=letters
-    )
+#     return prompt_template.format(
+#         question=question, choices=choices_with_text, letters=letters
+#     )
+
+
+def get_properties_description(properties: dict[str, str]) -> str:
+    return "\n".join([f"- {key}: {value}" for key, value in properties.items()])
+
+
+def get_prompt(entity: str, data: dict) -> str:
+    properties = get_properties_description(data["properties"])
+    missing_property = data["missing_property"]
+    question = f"Given the following properties of the {entity}:\n{properties}\n What is the {missing_property} of the {entity}?"
+    task = f"You can choose from the following options for the {missing_property}:\n{get_choices_description(data['classes'])}\nAnswer with exactly one of the letters {get_choices(data['classes'])} corresponding to the correct answer."
+    return f"{question}\n{task}"
 
 
 def get_letters(states: int) -> set[str]:
@@ -87,8 +55,9 @@ def get_data() -> (
     letters_per_task = {}
 
     # Build dataset
-    for entity, data in TASKS.items():
-        prompt = get_prompt(entity)
+    for entity, data in TASKS_V2.items():
+        prompt = get_prompt(entity, data)
+        print(f"Prompt for {entity}:\n{prompt}\n")
         for state in data["states"]:
             for i in range(10):
                 dir = "../data/samples/front"
@@ -106,11 +75,11 @@ def plot_predictions(
 ):
     # Evaluate
     correct = 0
-    correct_per_task = {entity: 0 for entity in TASKS}
-    wrong_per_task = {entity: 0 for entity in TASKS}
+    correct_per_task = {entity: 0 for entity in TASKS_V1}
+    wrong_per_task = {entity: 0 for entity in TASKS_V1}
     for i in range(len(predicted_letters)):
         entity = task_names[i]
-        states = TASKS[entity]["states"]
+        states = TASKS_V1[entity]["states"]
         letter_to_state = {ALPHABET[j]: state for j, state in enumerate(states)}
         predicted_state = letter_to_state.get(predicted_letters[i])
 
@@ -128,7 +97,7 @@ def plot_predictions(
 
     acc = correct / max(len(predicted_letters), 1)
     print(f"\nAccuracy: {acc:.3f} ({correct}/{len(predicted_letters)})")
-    for entity in TASKS:
+    for entity in TASKS_V1:
         task_acc = correct_per_task[entity] / max(
             correct_per_task[entity] + wrong_per_task[entity], 1
         )
@@ -174,3 +143,6 @@ def plot_probabilities(predictions, task_names, ground_truth, probs_predicted):
 
         plt.tight_layout()
         plt.show()
+
+
+get_data()
