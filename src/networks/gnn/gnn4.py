@@ -2,12 +2,15 @@ import torch
 from torch import nn
 from torch_geometric.data import Batch, HeteroData
 from torch_geometric.nn import GINConv, GINEConv
+from torch_geometric.explain import (
+    Explainer,
+    CaptumExplainer,
+    Explanation,
+    HeteroExplanation,
+)
 from src.observation.observation import StateValueDict
 from src.networks.actor_critic import GnnBase, PPOType
-from src.networks.layers.mlp import (
-    GinStandardMLP,
-    UnactivatedMLP,
-)
+from src.networks.layers.mlp import GinStandardMLP, UnactivatedMLP
 from src.hardware import device
 
 
@@ -103,6 +106,47 @@ class Gnn(GnnBase):
             dim_skill=self.dim_skills,
             ppo_type=PPOType.CRITIC,
         )
+
+        self.actor_explainer = Explainer(
+            self.actor,  # It is assumed that model outputs a single tensor.
+            algorithm=CaptumExplainer("IntegratedGradients"),
+            explanation_type="model",
+            node_mask_type="attributes",
+            edge_mask_type="object",
+            model_config=dict(
+                mode="multiclass_classification",
+                task_level="node",
+                return_type="probs",  # Model returns probabilities.
+            ),
+        )
+
+        self.critic_explainer = Explainer(
+            self.critic,  # It is assumed that model outputs a single tensor.
+            algorithm=CaptumExplainer("IntegratedGradients"),
+            explanation_type="model",
+            node_mask_type="attributes",
+            edge_mask_type="object",
+            model_config=dict(
+                mode="multiclass_classification",
+                task_level="node",
+                return_type="probs",  # Model returns probabilities.
+            ),
+        )
+
+    def explain(
+        self, batch: Batch
+    ) -> tuple[Explanation | HeteroExplanation, Explanation | HeteroExplanation]:
+        actor_explanation = self.actor_explainer(
+            batch.get_example(0).x_dict,
+            batch.get_example(0).edge_index_dict,
+            index=self.indices,
+        )
+        critic_explanation = self.critic_explainer(
+            batch.get_example(0).x_dict,
+            batch.get_example(0).edge_index_dict,
+            index=self.indices,
+        )
+        return actor_explanation, critic_explanation
 
     def forward(
         self,

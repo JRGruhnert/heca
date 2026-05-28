@@ -1,3 +1,5 @@
 {
-  "python.analysis.extraPaths": ["./dependencies/tacorl/src", "./dependencies"]
+  "python.analysis.extraPaths": ["./dependencies/tacorl/src", "./dependencies"],
+  "python-envs.defaultEnvManager": "ms-python.python:conda",
+  "python-envs.defaultPackageManager": "ms-python.python:conda"
 }
