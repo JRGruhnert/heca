@@ -85,6 +85,31 @@ class GinReadoutNetwork(nn.Module):
             return value.squeeze(-1)
 
 
+class _ExplainerWrapper(nn.Module):
+    def __init__(self, model: nn.Module):
+        super().__init__()
+        self.model = model
+        self._edge_attr_dict: dict = {}
+
+    def set_edge_attrs(self, edge_attr_dict: dict):
+        self._edge_attr_dict = edge_attr_dict
+
+    def forward(self, x_dict: dict, edge_index_dict: dict, index: int):
+        data = HeteroData()
+        for key, x in x_dict.items():
+            data[key].x = x
+        for key, edge_index in edge_index_dict.items():
+            data[key].edge_index = edge_index
+        for key, edge_attr in self._edge_attr_dict.items():
+            data[key].edge_attr = edge_attr
+        batch = Batch.from_data_list([data])
+        logits = self.model(batch)
+        # critic returns a 1-D value tensor; actor returns [1, dim_skills]
+        if logits.dim() == 1:
+            return logits
+        return logits[:, index]
+
+
 class Gnn(GnnBase):
 
     def __init__(
@@ -108,7 +133,7 @@ class Gnn(GnnBase):
         )
 
         self.actor_explainer = Explainer(
-            self.actor,  # It is assumed that model outputs a single tensor.
+            _ExplainerWrapper(self.actor),
             algorithm=CaptumExplainer("IntegratedGradients"),
             explanation_type="model",
             node_mask_type="attributes",
@@ -121,7 +146,7 @@ class Gnn(GnnBase):
         )
 
         self.critic_explainer = Explainer(
-            self.critic,  # It is assumed that model outputs a single tensor.
+            _ExplainerWrapper(self.critic),
             algorithm=CaptumExplainer("IntegratedGradients"),
             explanation_type="model",
             node_mask_type="attributes",
@@ -134,19 +159,37 @@ class Gnn(GnnBase):
         )
 
     def explain(
-        self, batch: Batch
-    ) -> tuple[Explanation | HeteroExplanation, Explanation | HeteroExplanation]:
+        self,
+        obs: StateValueDict,
+        goal: StateValueDict,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Explanation | HeteroExplanation,
+        Explanation | HeteroExplanation,
+    ]:
+        # Resolve the action first (same logic as act())
+        action, logprob, value = self.act(obs, goal)
+
+        # Build the graph for the current observation
+        data = self.to_data(obs, goal)
+
+        # Edge attributes are not perturbed by the explainer; store them in the wrappers
+        self.actor_explainer.model.set_edge_attrs(data.edge_attr_dict)
+        self.critic_explainer.model.set_edge_attrs(data.edge_attr_dict)
+
         actor_explanation = self.actor_explainer(
-            batch.get_example(0).x_dict,
-            batch.get_example(0).edge_index_dict,
-            index=self.indices,
+            data.x_dict,
+            data.edge_index_dict,
+            index=int(action.item()),  # explain the chosen skill
         )
         critic_explanation = self.critic_explainer(
-            batch.get_example(0).x_dict,
-            batch.get_example(0).edge_index_dict,
-            index=self.indices,
+            data.x_dict,
+            data.edge_index_dict,
+            index=0,  # critic has a single scalar output
         )
-        return actor_explanation, critic_explanation
+        return action, logprob, value, actor_explanation, critic_explanation
 
     def forward(
         self,

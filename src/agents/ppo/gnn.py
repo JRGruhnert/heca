@@ -1,12 +1,14 @@
 from dataclasses import dataclass
 from loguru import logger
 import torch
+from src.observation.observation import StateValueDict
 from src.agents.ppo.ppo import PPOAgent, PPOAgentConfig
 from src.hardware import device
 
 from src.modules.buffer import Buffer
 from src.modules.storage import Storage
-from src.networks.gnn.gnn4 import Gnn
+from src.networks.gnn.gnn4 import Explanation, Gnn
+from src.skills.skill import Skill
 
 
 @dataclass
@@ -50,3 +52,19 @@ class GNNAgent(PPOAgent):
 
         self.policy_old.load_state_dict(checkpoint["model_state"], strict=False)
         self.policy_new.load_state_dict(checkpoint["model_state"], strict=False)
+
+    def explain(
+        self,
+        obs: StateValueDict,
+        goal: StateValueDict,
+    ) -> tuple[Skill, Explanation | None, Explanation | None]:
+        action, action_logprob, state_val, actor_expl, critic_expl = (
+            self.policy_old.explain(obs, goal)
+        )
+        skill = self.storage.skills[int(action.item())]
+        logger.info(
+            f"Chosen skill: {skill.name} | "
+            f"actor node masks: {actor_expl.node_mask_dict if hasattr(actor_expl, 'node_mask_dict') else actor_expl.node_mask}"
+        )
+        self.buffer.act_values(obs, goal, action, action_logprob, state_val)
+        return skill, actor_expl, critic_expl

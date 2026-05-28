@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from omegaconf import OmegaConf, SCMode
 
-from tapas_gmm.utils.argparse import parse_and_build_config
+from tapas_gmm_modified.utils.argparse import parse_and_build_config
+from src.agents.ppo.gnn import GNNAgent
 from src.modules.logger import LoggerConfig, Logger
 from src.modules.buffer import BufferConfig, Buffer
 from src.modules.evaluators.evaluator import EvaluatorConfig
@@ -27,6 +28,7 @@ class TrainConfig:
     evaluator: EvaluatorConfig
     experiment: ExperimentConfig
     environment: EnvironmentConfig
+    explain: bool = False
 
 
 class Trainer:
@@ -41,6 +43,7 @@ class Trainer:
         env = select_environment(config.environment, evaluator, self.storage)
         self.experiment = select_experiment(config.experiment, env, self.storage)
         self.agent = select_agent(config.agent, self.storage, self.buffer)
+        self.explain = config.explain
 
     def collect_batch(self) -> bool:
         """Collect experiences until batch is ready"""
@@ -48,7 +51,13 @@ class Trainer:
             obs, goal = self.experiment.sample_task()
             episode_ended = False
             while not episode_ended:
-                skill = self.agent.act(obs, goal)
+                skill = None
+                if self.explain:
+                    if isinstance(self.agent, GNNAgent):
+                        skill, actor_expl, critic_expl = self.agent.explain(obs, goal)
+                else:
+                    skill = self.agent.act(obs, goal)
+
                 if skill:
                     obs, reward, done, episode_ended = self.experiment.step(skill)
                 if self.agent.feedback(reward, done, episode_ended):
