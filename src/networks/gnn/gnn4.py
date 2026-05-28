@@ -141,7 +141,7 @@ class Gnn(GnnBase):
             model_config=dict(
                 mode="multiclass_classification",
                 task_level="node",
-                return_type="probs",  # Model returns probabilities.
+                return_type="raw",  # Model returns raw logits.
             ),
         )
 
@@ -152,9 +152,9 @@ class Gnn(GnnBase):
             node_mask_type="attributes",
             edge_mask_type="object",
             model_config=dict(
-                mode="multiclass_classification",
+                mode="regression",  # Critic estimates a scalar value, not a class.
                 task_level="node",
-                return_type="probs",  # Model returns probabilities.
+                return_type="raw",  # Model returns a raw scalar.
             ),
         )
 
