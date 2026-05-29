@@ -57,15 +57,16 @@ class TapasSkill(Skill):
     def _policy_checkpoint_name(self) -> pathlib.Path:
         return (
             pathlib.Path("data")
-            / "skills"
+            / "models"
             / "tapas"
+            / "calvin"
             / self.name
             / ("demos" + "_" + "gmm" + "_policy" + "-release")
         ).with_suffix(".pt")
 
     def _get_config(self) -> GMMPolicyConfig:
         """
-        Get the configuration for the OpenDrawer policy.
+        Get the configuration for the Tapas policy.
         """
         return GMMPolicyConfig(
             suffix="release",

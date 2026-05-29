@@ -94,7 +94,7 @@ class _ExplainerWrapper(nn.Module):
     def set_edge_attrs(self, edge_attr_dict: dict):
         self._edge_attr_dict = edge_attr_dict
 
-    def forward(self, x_dict: dict, edge_index_dict: dict, index: int):
+    def forward(self, x_dict: dict, edge_index_dict: dict):
         data = HeteroData()
         for key, x in x_dict.items():
             data[key].x = x
@@ -103,11 +103,7 @@ class _ExplainerWrapper(nn.Module):
         for key, edge_attr in self._edge_attr_dict.items():
             data[key].edge_attr = edge_attr
         batch = Batch.from_data_list([data])
-        logits = self.model(batch)
-        # critic returns a 1-D value tensor; actor returns [1, dim_skills]
-        if logits.dim() == 1:
-            return logits
-        return logits[:, index]
+        return self.model(batch)
 
 
 class Gnn(GnnBase):
@@ -135,13 +131,13 @@ class Gnn(GnnBase):
         self.actor_explainer = Explainer(
             _ExplainerWrapper(self.actor),
             algorithm=CaptumExplainer("IntegratedGradients"),
-            explanation_type="model",
+            explanation_type="phenomenon",
             node_mask_type="attributes",
-            edge_mask_type="object",
+            edge_mask_type=None,
             model_config=dict(
                 mode="multiclass_classification",
-                task_level="node",
-                return_type="raw",  # Model returns raw logits.
+                task_level="graph",
+                return_type="raw",
             ),
         )
 
@@ -150,11 +146,11 @@ class Gnn(GnnBase):
             algorithm=CaptumExplainer("IntegratedGradients"),
             explanation_type="model",
             node_mask_type="attributes",
-            edge_mask_type="object",
+            edge_mask_type=None,
             model_config=dict(
-                mode="regression",  # Critic estimates a scalar value, not a class.
-                task_level="node",
-                return_type="raw",  # Model returns a raw scalar.
+                mode="regression",
+                task_level="graph",
+                return_type="raw",
             ),
         )
 
@@ -179,16 +175,31 @@ class Gnn(GnnBase):
         self.actor_explainer.model.set_edge_attrs(data.edge_attr_dict)
         self.critic_explainer.model.set_edge_attrs(data.edge_attr_dict)
 
+        actor_x = {k: v for k, v in data.x_dict.items() if k != "critic"}
+        actor_ei = {
+            k: v
+            for k, v in data.edge_index_dict.items()
+            if k[0] != "critic" and k[2] != "critic"
+        }
+
         actor_explanation = self.actor_explainer(
-            data.x_dict,
-            data.edge_index_dict,
-            index=int(action.item()),  # explain the chosen skill
+            actor_x,
+            actor_ei,
+            target=torch.tensor([int(action.item())]),
         )
+
+        critic_x = {k: v for k, v in data.x_dict.items() if k != "actor"}
+        critic_ei = {
+            k: v
+            for k, v in data.edge_index_dict.items()
+            if k[0] != "actor" and k[2] != "actor"
+        }
+
         critic_explanation = self.critic_explainer(
-            data.x_dict,
-            data.edge_index_dict,
-            index=0,  # critic has a single scalar output
+            critic_x,
+            critic_ei,
         )
+
         return action, logprob, value, actor_explanation, critic_explanation
 
     def forward(

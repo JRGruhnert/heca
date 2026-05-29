@@ -43,6 +43,20 @@ class Evaluator(ABC):
         self.percentage_done = finished_states / max(len(self.storage.eval_states), 1)
         return finished_states == len(self.storage.eval_states)
 
+    def is_equal_dict(
+        self,
+        current: StateValueDict,
+        goal: StateValueDict,
+    ) -> dict[str, bool]:
+        """Returns a dictionary indicating which states match the target conditions."""
+        result = {}
+        for state in self.storage.eval_states:
+            if state.name in current.keys():
+                result[state.name] = state.evaluate(
+                    current[state.name], goal[state.name]
+                )
+        return result
+
     def is_good_sample(
         self,
         current: StateValueDict,

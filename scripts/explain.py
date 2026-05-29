@@ -1,28 +1,12 @@
-"""
-Run a small number of explain steps with a trained GNN agent and visualize
-the Integrated-Gradients node-importance attributions for each decision.
-
-Usage (same config as train.py):
-    python scripts/explain.py --config-name <cfg> [overrides...]
-"""
-
-import os
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import numpy as np
 from dataclasses import dataclass
 from omegaconf import OmegaConf, SCMode
 
-from tapas_gmm_modified.utils.argparse import parse_and_build_config
+from tapas_gmm.utils.argparse import parse_and_build_config
+
+from scripts.train import TrainConfig
 from src.agents.ppo.gnn import GNNAgent
-from src.modules.buffer import BufferConfig, Buffer
-from src.modules.storage import Storage, StorageConfig
-from src.environments.environment import EnvironmentConfig
-from src.agents.agent import AgentConfig
-from src.experiments.experiment import ExperimentConfig
-from src.modules.evaluators.evaluator import EvaluatorConfig
+from src.modules.buffer import Buffer
+from src.modules.storage import Storage
 from src.factory import (
     select_agent,
     select_environment,
@@ -30,167 +14,70 @@ from src.factory import (
     select_evaluator,
 )
 
-N_STEPS = 10
-OUTPUT_DIR = "results/explanations"
-
 
 @dataclass
 class ExplainConfig:
-    agent: AgentConfig
-    buffer: BufferConfig
-    storage: StorageConfig
-    evaluator: EvaluatorConfig
-    experiment: ExperimentConfig
-    environment: EnvironmentConfig
+    source: TrainConfig
+    target: TrainConfig
 
 
-def _node_importance(mask) -> np.ndarray:
-    """Sum feature-dim of a node mask to get per-node scalar importance."""
-    if mask is None:
-        return np.array([])
-    t = mask.detach().cpu()
-    if t.dim() == 2:
-        return t.abs().sum(dim=-1).numpy()
-    return t.abs().numpy()
+def run_explain(config: ExplainConfig):
+    s_storage = Storage(config.source.storage)
+    s_buffer = Buffer(config.source.buffer)
 
+    s_evaluator = select_evaluator(config.source.evaluator, s_storage)
+    s_env = select_environment(config.source.environment, s_evaluator, s_storage)
+    s_experiment = select_experiment(config.source.experiment, s_env, s_storage)
+    s_agent = select_agent(config.source.agent, s_storage, s_buffer)
 
-def visualize_explanation(
-    step_idx: int,
-    skill_name: str,
-    actor_expl,
-    critic_expl,
-    state_names: list[str],
-    skill_names: list[str],
-    save_dir: str,
-):
-    """
-    Save a side-by-side bar-chart of node importances for the actor and critic
-    explainer outputs.
+    t_storage = Storage(config.target.storage)
+    t_buffer = Buffer(config.target.buffer)
+    t_evaluator = select_evaluator(config.target.evaluator, t_storage)
+    t_env = select_environment(config.target.environment, t_evaluator, t_storage)
+    t_experiment = select_experiment(config.target.experiment, t_env, t_storage)
+    t_agent = select_agent(config.target.agent, t_storage, t_buffer)
+    assert isinstance(s_agent, GNNAgent) and isinstance(
+        t_agent, GNNAgent
+    ), "Agents must be GNNAgent for explanation"
 
-    Node types and their labels:
-      - goal   → state_names
-      - obs    → state_names
-      - task   → skill_names
-      - actor  → skill_names  (actor head only)
-      - critic → ["value"]    (critic head only)
-    """
-    node_label_map = {
-        "goal": state_names,
-        "obs": state_names,
-        "task": skill_names,
-        "actor": skill_names,
-        "critic": ["value"],
-    }
+    s_obs, s_goal = s_experiment.sample_task()
+    t_obs, t_goal = t_experiment.sample_task()
+    while not s_evaluator.is_equal(s_obs, s_goal) or not t_evaluator.is_equal(
+        t_obs, t_goal
+    ):
+        s_obs, s_goal = s_experiment.sample_task()
+        t_obs, t_goal = t_experiment.sample_task()
 
-    def extract(expl) -> dict[str, np.ndarray]:
-        if hasattr(expl, "node_mask_dict"):  # HeteroExplanation
-            return {k: _node_importance(v) for k, v in expl.node_mask_dict.items()}
-        if hasattr(expl, "node_mask") and expl.node_mask is not None:
-            # Flat explanation – create a single entry
-            return {"nodes": _node_importance(expl.node_mask)}
-        return {}
+    s_step = 0
+    s_skills_list = []
+    s_done = False
+    s_episode_ended = False
+    while not s_episode_ended:
+        state_diff = s_evaluator.is_equal_dict(s_obs, s_goal)
+        skill = s_agent.explain(s_obs, s_goal, step=s_step, state_diff=state_diff)
+        # print(f"[step {s_step}] skill = {skill.name}")
+        s_skills_list.append(skill.name)
+        s_obs, reward, s_done, s_episode_ended = s_experiment.step(skill)
+        s_agent.feedback(reward, s_done, s_episode_ended)
+        s_step += 1
+    s_experiment.close()
 
-    actor_masks = extract(actor_expl)
-    critic_masks = extract(critic_expl)
+    t_step = 0
+    t_skills_list = []
+    t_done = False
+    t_episode_ended = False
+    while not t_episode_ended:
+        state_diff = t_evaluator.is_equal_dict(t_obs, t_goal)
+        skill = t_agent.explain(t_obs, t_goal, step=t_step, state_diff=state_diff)
+        # print(f"[step {t_step}] skill = {skill.name}")
+        t_skills_list.append(skill.name)
+        t_obs, reward, t_done, t_episode_ended = t_experiment.step(skill)
+        t_agent.feedback(reward, t_done, t_episode_ended)
+        t_step += 1
 
-    all_types = sorted(set(actor_masks) | set(critic_masks))
-    if not all_types:
-        print(f"[step {step_idx}] No node masks available, skipping plot.")
-        return
-
-    fig, axes = plt.subplots(
-        len(all_types),
-        2,
-        figsize=(14, max(3 * len(all_types), 4)),
-        squeeze=False,
-    )
-    fig.suptitle(f"Step {step_idx}  –  chosen skill: {skill_name}", fontsize=13)
-
-    for row, ntype in enumerate(all_types):
-        labels = node_label_map.get(ntype, None)
-
-        for col, (masks, title) in enumerate(
-            [(actor_masks, "Actor"), (critic_masks, "Critic")]
-        ):
-            ax = axes[row][col]
-            imp = masks.get(ntype, np.array([]))
-
-            if imp.size == 0:
-                ax.set_visible(False)
-                continue
-
-            xs = np.arange(len(imp))
-            ax.bar(xs, imp, color="steelblue" if col == 0 else "darkorange")
-            ax.set_ylabel("Importance")
-            ax.set_title(f"{title} – {ntype}")
-
-            if labels and len(labels) == len(imp):
-                ax.set_xticks(xs)
-                ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=8)
-            else:
-                ax.set_xticks(xs)
-                ax.set_xticklabels([str(i) for i in xs], fontsize=8)
-
-    plt.tight_layout()
-    os.makedirs(save_dir, exist_ok=True)
-    path = os.path.join(save_dir, f"step_{step_idx:03d}_{skill_name}.png")
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.close(fig)
-    print(f"  saved → {path}")
-
-
-def run_explain(config: ExplainConfig, n_steps: int = N_STEPS):
-    storage = Storage(config.storage)
-    buffer = Buffer(config.buffer)
-
-    evaluator = select_evaluator(config.evaluator, storage)
-    env = select_environment(config.environment, evaluator, storage)
-    experiment = select_experiment(config.experiment, env, storage)
-    agent = select_agent(config.agent, storage, buffer)
-
-    if not isinstance(agent, GNNAgent):
-        raise TypeError(
-            f"explain.py only supports GNNAgent, got {type(agent).__name__}"
-        )
-
-    # Put the network in eval mode so argmax is used instead of sampling
-    agent.policy_old.eval()
-
-    state_names = [s.name for s in agent.policy_old.states]
-    skill_names = [s.name for s in agent.policy_old.skills]
-
-    save_dir = os.path.join(OUTPUT_DIR, storage.config.tag)
-
-    print(f"Running {n_steps} explain steps, saving plots to '{save_dir}' …")
-
-    obs, goal = experiment.sample_task()
-    episode_ended = False
-    step = 0
-
-    while step < n_steps:
-        if episode_ended:
-            obs, goal = experiment.sample_task()
-            episode_ended = False
-
-        skill, actor_expl, critic_expl = agent.explain(obs, goal)
-
-        print(f"[step {step}] skill = {skill.name}")
-        visualize_explanation(
-            step_idx=step,
-            skill_name=skill.name,
-            actor_expl=actor_expl,
-            critic_expl=critic_expl,
-            state_names=state_names,
-            skill_names=skill_names,
-            save_dir=save_dir,
-        )
-
-        obs, reward, done, episode_ended = experiment.step(skill)
-        agent.feedback(reward, done, episode_ended)
-        step += 1
-
-    experiment.close()
-    print("Done.")
+    t_experiment.close()
+    print(f"Executed skills: {s_skills_list}")
+    print(f"Done: {s_done}, episode_ended: {s_episode_ended}")
 
 
 def entry_point():

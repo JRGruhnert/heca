@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from omegaconf import OmegaConf, SCMode
 
-from tapas_gmm_modified.utils.argparse import parse_and_build_config
+from tapas_gmm.utils.argparse import parse_and_build_config
 from src.agents.ppo.gnn import GNNAgent
 from src.modules.logger import LoggerConfig, Logger
 from src.modules.buffer import BufferConfig, Buffer
