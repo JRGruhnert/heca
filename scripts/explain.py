@@ -48,13 +48,19 @@ def run_explain(config: ExplainConfig):
         s_obs, s_goal = s_experiment.sample_task()
         t_obs, t_goal = t_experiment.sample_task()
 
+    s_state_diff = s_evaluator.is_equal_dict(s_obs, s_goal)
+    t_state_diff = t_evaluator.is_equal_dict(t_obs, t_goal)
+    assert (
+        s_state_diff == t_state_diff
+    ), "State differences must be the same for explanation"
+    print(f"State differences: {s_state_diff}")
+
     s_step = 0
     s_skills_list = []
     s_done = False
     s_episode_ended = False
     while not s_episode_ended:
-        state_diff = s_evaluator.is_equal_dict(s_obs, s_goal)
-        skill = s_agent.explain(s_obs, s_goal, step=s_step, state_diff=state_diff)
+        skill = s_agent.explain(s_obs, s_goal, s_step)
         # print(f"[step {s_step}] skill = {skill.name}")
         s_skills_list.append(skill.name)
         s_obs, reward, s_done, s_episode_ended = s_experiment.step(skill)
@@ -67,8 +73,7 @@ def run_explain(config: ExplainConfig):
     t_done = False
     t_episode_ended = False
     while not t_episode_ended:
-        state_diff = t_evaluator.is_equal_dict(t_obs, t_goal)
-        skill = t_agent.explain(t_obs, t_goal, step=t_step, state_diff=state_diff)
+        skill = t_agent.explain(t_obs, t_goal, t_step)
         # print(f"[step {t_step}] skill = {skill.name}")
         t_skills_list.append(skill.name)
         t_obs, reward, t_done, t_episode_ended = t_experiment.step(skill)

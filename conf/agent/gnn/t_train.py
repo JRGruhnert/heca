@@ -6,46 +6,49 @@ from src.modules.storage import StorageConfig
 from src.experiments.pepr import PePrConfig
 from scripts.train import TrainConfig
 from conf.common.evaluator import dense3_evaluator
-from conf.common.evaluator import sparse_evaluator
 
-mode = LogMode.WANDB
+mode = LogMode.TERMINAL
 render = False
-eval = False
+retrain = False
+eval = True
+
+source_tag = "red"
+target_tag = "red"
+
 network = "gnn"
-prefix = "s"
+checkpoint_tag = f"t_{target_tag}_{target_tag}_pe0.0_pr0.0"
 
-skills_eval_states = "sr"
-used_states = "srpb"
-p_empty = 0.0
-p_rand = 0.0
 
-tag = f"{prefix}_{used_states}_{skills_eval_states}"
+prefix = "re"
+tag = f"{prefix}_{source_tag}_{target_tag}"
 wandb_tag = f"{network}_{tag}"
 
 t_train_config = TrainConfig(
     agent=GNNAgentConfig(
         eval=eval,
-        max_batches=750,
-        early_stop_patience=50,
-        min_batches=250,
+        max_batches=1,
+        early_stop_patience=1,
+        min_batches=1,
+        retrain=retrain,
         use_ema_for_early_stopping=False,
     ),
-    buffer=BufferConfig(steps=1024),
+    buffer=BufferConfig(steps=2048),
     logger=LoggerConfig(
         mode=mode,
         wandb_tag=wandb_tag,
     ),
     storage=StorageConfig(
-        used_skills=skills_eval_states,
-        used_states=used_states,
-        eval_states=skills_eval_states,
+        used_skills=source_tag,
+        used_states=source_tag,
+        eval_states=source_tag,
         tag=tag,
         network=network,
+        checkpoint_path=f"results/{network}/{checkpoint_tag}/model_cp_best.pth",
     ),
     experiment=PePrConfig(
-        p_empty=p_empty,
-        p_rand=p_rand,
+        p_empty=0.0,
+        p_rand=0.0,
     ),
     environment=CalvinEnvironmentConfig(render=render),
-    evaluator=sparse_evaluator,
+    evaluator=dense3_evaluator,
 )
