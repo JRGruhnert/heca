@@ -8,18 +8,12 @@ from typing import Any, NamedTuple
 import numpy as np
 import torch
 from PIL import Image, ImageTk
-from tensordict import TensorDict
 
 from heca.classes.persist import Persistable
 from heca.entities.entity import Entity, Mobility
-from heca.environment.scenes.image_extractor import ImageExtractor
+from heca.image_extractors.image_extractor import ImageExtractor
 from heca.misc import logger
-from heca.misc.td import (
-    TDEntities,
-    TDEntity,
-    TDImage,
-    TDScene,
-)
+from heca.misc.td import TDScene, TDSceneVision
 
 
 class KPTuple(NamedTuple):
@@ -34,8 +28,6 @@ class Scene(Persistable):
 
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        gt: bool = False
-
         dc_label: str = "dc_pose"
         marker_radius: int = 3
         extractors: dict[str, ImageExtractor.Config]
@@ -81,38 +73,28 @@ class Scene(Persistable):
             {}
         )
 
-    def reset(self) -> TDScene:
+    def from_internal(self, data) -> tuple[TDScene, TDSceneVision]:
+        tdscene = self.heca_td(data)
+        tdimage = self.to_td_scene_vision(data)
+        return tdscene, tdimage
+
+    def reset(self) -> tuple[TDScene, TDSceneVision]:
         obs = self._reset()
-        return self.make_full_td(obs)
+        return self.from_internal(obs)
 
-    def step(self, action: np.ndarray) -> Any:
-        return self._step(action)
-
-    def make_full_td(self, obs) -> TDScene:
-        if self.cfg.gt:
-            data = {
-                "tapas": self.tapas_td(obs),
-                "heca": self.heca_td(obs),
-            }
-        else:
-            image_dict = self.to_td_image_dict(obs)
-            pos, rot, state = self.get_cursor(obs)
-            extracted = self.stitch_together(image_dict, pos, rot, state)
-            data = {
-                "tapas": self.tapas_td(obs, extracted),
-                "heca": extracted,
-            }
-        return TDScene(data)
+    def step(self, action: np.ndarray) -> tuple[TDScene, TDSceneVision]:
+        obs = self._step(action)
+        return self.from_internal(obs)
 
     @abc.abstractmethod
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
-    def sample(self) -> TDScene:
-        x = self.reset()
-        while self.is_bad_sample(x):
-            x = self.reset()
-        return x
+    def sample(self) -> tuple[TDScene, TDSceneVision]:
+        scene, vision = self.reset()
+        while self.is_bad_sample(scene):
+            scene, vision = self.reset()
+        return scene, vision
 
     def is_bad_sample(self, obs: TDScene) -> bool:
         return False  # By default, no sample is bad. Override in specific scenes if needed.
@@ -123,11 +105,7 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def tapas_td(self, obs, extracted: TDEntities | None = None) -> TensorDict:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def heca_td(self, obs) -> TDEntities:
+    def heca_td(self, obs) -> TDScene:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -135,7 +113,7 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def to_td_image_dict(self, obs) -> dict[str, TDImage]:
+    def to_td_scene_vision(self, obs) -> TDSceneVision:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -149,124 +127,6 @@ class Scene(Persistable):
     @abc.abstractmethod
     def _step(self, action: np.ndarray) -> Any:
         raise NotImplementedError()
-
-    def _relative_quaternion(
-        self, q: torch.Tensor, q_ref: torch.Tensor
-    ) -> torch.Tensor:
-        """
-        Compute the relative quaternion q_rel such that: q = q_rel * q_ref
-        Returns q_rel = q * q_ref_conj
-        """
-
-        # q, q_ref: (..., 4) in (w, x, y, z) or (x, y, z, w) format
-        # Assume (x, y, z, w) format as is common in PyTorch/robotics
-        # Convert to (w, x, y, z) for computation if needed
-        # Here, we assume (x, y, z, w)
-        def quat_conj(q):
-            return torch.tensor(
-                [-q[0], -q[1], -q[2], q[3]], device=q.device, dtype=q.dtype
-            )
-
-        def quat_mult(q1, q2):
-            x1, y1, z1, w1 = q1
-            x2, y2, z2, w2 = q2
-            w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
-            x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
-            y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
-            z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-            return torch.stack([x, y, z, w])
-
-        q_ref_conj = quat_conj(q_ref)
-        q_rel = quat_mult(q, q_ref_conj)
-        return q_rel
-
-    def stitch_together(
-        self,
-        td_image_dict: dict[str, TDImage],
-        cursor_pos: torch.Tensor,
-        cursor_rot: torch.Tensor,
-        cursor_state: torch.Tensor,
-    ) -> TDEntities:
-        all_kps = []
-        all_states = []
-        all_infos = []
-        all_masks = []
-        all_scores = []
-
-        for cam, td_image in td_image_dict.items():
-            kps, states, info = self.extractors[cam].encode(td_image)
-            all_kps.append(kps)
-            all_states.append(states)
-            all_infos.append(info)
-            all_masks.append(info["kp_mask"])
-            all_scores.append(info["state_scores"])
-
-        kps_stack = torch.stack(all_kps)  # (C, K, D)
-        kps_mask = torch.stack(all_masks)  # (C, K)
-        scores = torch.stack(all_scores)  # (C, K)
-        states_stack = torch.stack(all_states)  # (C, K, S)
-
-        # Aggregate keypoints of different cameras
-        num_kps = kps_stack.shape[1]
-        final_kps = []
-        final_states = []
-        for k in range(num_kps):
-            present = kps_mask[:, k] > 0
-            if present.sum() == 0:
-                # Not present in any camera
-                final_kps.append(torch.full_like(kps_stack[0, k], float("nan")))
-                final_states.append(torch.full_like(states_stack[0, k], float("nan")))
-            elif present.sum() == 1:
-                # Present in only one camera
-                idx = present.nonzero(as_tuple=True)[0][0]
-                final_kps.append(kps_stack[idx, k])
-                final_states.append(states_stack[idx, k])
-            else:
-                # Present in multiple cameras
-                # Mean for keypoints
-                # Best score for states
-                vals = kps_stack[present, k]
-                final_kps.append(vals.mean(dim=0))
-                valid_scores = scores[:, k].clone()
-                valid_scores[~present] = float("-inf")
-                idx = torch.argmax(valid_scores)
-                final_states.append(states_stack[idx, k])
-        final_kps = torch.stack(final_kps)  # (K, D)
-        final_states = torch.stack(final_states)  # (K, S)
-
-        td_entities: dict[str, TDEntity] = {}
-        # Find the index of the end effector (ee) entity in self.entities
-        num_present = min(final_kps.shape[0], final_states.shape[0], len(self.entities))
-        for idx, entity in enumerate(self.entities):
-            if idx >= num_present:
-                # No keypoint or descriptor for this entity, skip
-                # Assuming keypoints are ordered the same as entities
-                continue
-
-            tg_kp = final_kps[idx]
-            rel_pos = tg_kp[:3] - cursor_pos
-            rel_rot = self._relative_quaternion(
-                tg_kp[3:7],
-                cursor_rot,
-            )
-            td_rel = TDEntity(
-                position=rel_pos,
-                rotation=rel_rot,
-                state=final_states[idx],
-            )
-            td = TDEntity(
-                position=tg_kp[:3],
-                rotation=tg_kp[3:7],
-                state=final_states[idx],
-            )
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-            td_entities[entity.cfg.label] = td
-        td_entities["cursor"] = TDEntity(
-            position=cursor_pos,
-            rotation=cursor_rot,
-            state=cursor_state,
-        )
-        return TDEntities(td_entities)
 
     def _load(self, path: Path):
         dc_pattern = re.compile(
@@ -535,7 +395,7 @@ class Scene(Persistable):
     def make_rnd_image2(self):
         cam = "front"
         obs = self._reset()
-        td_dict = self.to_td_image_dict(obs)
+        td_dict = self.to_td_scene_vision(obs)
         td_image = td_dict[cam]
         np_images_dict = self.image_numpy(obs)
         picture = np_images_dict[cam]

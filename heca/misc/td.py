@@ -1,4 +1,3 @@
-from functools import cached_property
 from typing import cast
 
 import numpy as np
@@ -12,18 +11,28 @@ class TDEntity(TensorDict):
 
     def __init__(
         self,
-        # domain: torch.Tensor,
         position: torch.Tensor,
         rotation: torch.Tensor,
         state: torch.Tensor,
     ):
         data = {
-            # "domain": domain,
             "position": position,
             "rotation": rotation,
             "state": state,
         }
         super().__init__(data, batch_size=empty_bs)
+
+    @property
+    def position(self) -> torch.Tensor:
+        return self["position"]
+
+    @property
+    def rotation(self) -> torch.Tensor:
+        return self["rotation"]
+
+    @property
+    def state(self) -> torch.Tensor:
+        return self["state"]
 
 
 class TDProperties(TensorDict):
@@ -55,16 +64,13 @@ class TDEntities(TensorDict):
 
 
 class TDScene(TensorDict):
-    def __init__(self, formats: dict[str, TensorDict]):
-        super().__init__(formats, batch_size=empty_bs)
+    def __init__(self, entities: dict[str, TDEntity]):
+        super().__init__(entities, batch_size=empty_bs)
 
-    def heca_format(self) -> TDEntities:
-        assert "heca" in self.keys()
-        return cast(TDEntities, self["heca"])
-
-    def tapas_format(self) -> TDProperties:
-        assert "tapas" in self.keys()
-        return cast(TDProperties, self["tapas"])
+    def __getitem__(self, key: str) -> TDEntity:
+        if key not in self.keys():
+            raise KeyError(f"Entity {key} not found in TDScene")
+        return cast(TDEntity, super().__getitem__(key))
 
 
 class TDWorld(TensorDict):
@@ -270,3 +276,55 @@ class TDImage(TensorDict):
     @property
     def intr(self) -> torch.Tensor:
         return cast(torch.Tensor, self["intr"])
+
+
+class TDSceneVision(TensorDict):
+    def __init__(self, images: dict[str, TDImage]):
+        super().__init__(images, batch_size=empty_bs)
+
+
+def relative_quaternion(q: torch.Tensor, q_ref: torch.Tensor) -> torch.Tensor:
+    """
+    Compute the relative quaternion q_rel such that: q = q_rel * q_ref
+    Returns q_rel = q * q_ref_conj
+    """
+
+    # q, q_ref: (..., 4) in (w, x, y, z) or (x, y, z, w) format
+    # Assume (x, y, z, w) format as is common in PyTorch/robotics
+    # Convert to (w, x, y, z) for computation if needed
+    # Here, we assume (x, y, z, w)
+    def quat_conj(q):
+        return torch.tensor([-q[0], -q[1], -q[2], q[3]], device=q.device, dtype=q.dtype)
+
+    def quat_mult(q1, q2):
+        x1, y1, z1, w1 = q1
+        x2, y2, z2, w2 = q2
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+        return torch.stack([x, y, z, w])
+
+    q_ref_conj = quat_conj(q_ref)
+    q_rel = quat_mult(q, q_ref_conj)
+    return q_rel
+
+
+def make_abs_and_rel_td_entity(
+    position: torch.Tensor,
+    rotation: torch.Tensor,
+    state: torch.Tensor,
+    cursor_pos: torch.Tensor,
+    cursor_rot: torch.Tensor,
+) -> tuple[TDEntity, TDEntity]:
+    td_rel = TDEntity(
+        position=position - cursor_pos,
+        rotation=relative_quaternion(rotation, cursor_rot),
+        state=state,
+    )
+    td_abs = TDEntity(
+        position=position,
+        rotation=rotation,
+        state=state,
+    )
+    return td_abs, td_rel

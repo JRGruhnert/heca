@@ -9,9 +9,9 @@ from PIL import Image
 from timm.data import create_transform, resolve_model_data_config  # type: ignore
 from torch import nn
 
-from heca.classes.config import Configurable
 from heca.entities.entity import Entity
-from heca.environment.scenes.knn import (
+from heca.image_extractors.image_extractor import ImageExtractor
+from heca.image_extractors.knn import (
     CompareMode,
     EntityStateKNN,
     ScoreMode,
@@ -28,9 +28,13 @@ class StateExtractionMode(Enum):
     COORDINATE = "coordinate"
 
 
-class ImageExtractor(Configurable):
+class DinoExtractor(ImageExtractor):
+    @dataclass(kw_only=True, frozen=True)
+    class Query(ImageExtractor.Query):
+        label: str = "dino_extractor"
+
     @dataclass(kw_only=True)
-    class Config(Configurable.Config):
+    class Config(ImageExtractor.Config):
         stride: int = 8
         thresh: float = 0.5
         center_crop: bool = False
@@ -53,11 +57,9 @@ class ImageExtractor(Configurable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.model = timm.create_model(
-            "vit_base_patch16_dinov3.lvd1689m",
-            pretrained=True,
-            # num_classes=0,  # remove classifier nn.Linear
+            "vit_base_patch16_dinov3.lvd1689m", pretrained=True
         )
-        self.model, self.patch_size = ImageExtractor.patch_vit_resolution(
+        self.model, self.patch_size = DinoExtractor.patch_vit_resolution(
             self.model, self.cfg.stride
         )
         self.model.eval()
@@ -70,14 +72,6 @@ class ImageExtractor(Configurable):
         self.kp_patch_descr: torch.Tensor | None = None
         self.entity_state_coords: torch.Tensor | None = None
         self.image_size: tuple[int, int] = (0, 0)
-
-    def scale_normalized_coords(
-        self, norm_coords: torch.Tensor, size_hw: tuple[int, int]
-    ) -> torch.Tensor:
-        height, width = size_hw
-        scale_yx = torch.tensor([height - 1, width - 1])
-        pixel_coordinates_yx = (norm_coords + 1.0) * 0.5 * scale_yx
-        return pixel_coordinates_yx.round().long()
 
     def get_image_size(self, image: Image.Image | torch.Tensor) -> tuple[int, int]:
         if isinstance(image, Image.Image):
@@ -117,106 +111,24 @@ class ImageExtractor(Configurable):
 
         return descr
 
-    def kps_raw_2d_to_image_coords(
-        self, kps_raw_2d: torch.Tensor, size_hw: tuple[int, int]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        u_norm, v_norm = kps_raw_2d.chunk(2, dim=-1)
-        norm_uv = torch.stack((v_norm, u_norm), dim=-1)
-        pixel_yx = self.scale_normalized_coords(norm_uv, size_hw)
-        y_pixel = pixel_yx[..., 0]  # (B, Nref)
-        x_pixel = pixel_yx[..., 1]  # (B, Nref)
-        return y_pixel, x_pixel
-
-    def hard_pixels_to_3D_world(
-        self,
-        y_pixel: torch.Tensor,  # B, Nref
-        x_pixel: torch.Tensor,  # B, Nref
-        depth: torch.Tensor,  # N, H, W
-        extr: torch.Tensor,  # N, 4, 4
-        intr: torch.Tensor,  # N, 3, 3
-    ):
-
-        B, N_kp = x_pixel.shape
-        batch_indices = torch.arange(
-            B, device=depth.device, dtype=torch.long
-        ).repeat_interleave(N_kp)
-        z = depth[batch_indices, x_pixel.flatten(), y_pixel.flatten()]
-        z = z.reshape(B, N_kp)
-
-        pos = self.batched_pinhole_projection_image_to_world_coordinates_orig(
-            y_pixel, x_pixel, z, intr, extr
-        )
-
-        return pos.permute(0, 2, 1).reshape((B, -1))
-
-    def batched_pinhole_projection_image_to_camera_coordinates_orig(self, u, v, z, K):
-        uv1 = torch.stack((u, v, torch.ones(u.shape, device=u.device)), dim=-1)
-        K_inv = K.inverse()
-
-        pos = torch.transpose(torch.matmul(K_inv, torch.transpose(uv1, -1, -2)), -1, -2)
-
-        pos = z.unsqueeze(2).repeat(1, 1, 3) * pos
-        return pos
-
-    def batched_pinhole_projection_image_to_world_coordinates_orig(
-        self, u, v, z, K, camera_to_world
-    ):
-        pos_in_camera_frame = (
-            self.batched_pinhole_projection_image_to_camera_coordinates_orig(u, v, z, K)
-        )
-        pos_in_camera_frame_homog = torch.cat(
-            (
-                pos_in_camera_frame,
-                torch.ones(
-                    (*pos_in_camera_frame.shape[:-1], 1),
-                    device=pos_in_camera_frame.device,
-                ),
-            ),
-            dim=-1,
-        )
-
-        pos_in_world_homog = torch.transpose(
-            torch.matmul(
-                camera_to_world, torch.transpose(pos_in_camera_frame_homog, -1, -2)
-            ),
-            -1,
-            -2,
-        )
-
-        return pos_in_world_homog[..., :3]
-
-    def normalize_coords(
-        self, coords: torch.Tensor, size_hw: tuple[int, int]
-    ) -> torch.Tensor:
-        return torch.stack(
-            [
-                2.0 * coords[..., 0] / max(size_hw[0] - 1, 1) - 1.0,
-                2.0 * coords[..., 1] / max(size_hw[1] - 1, 1) - 1.0,
-            ],
-            dim=-1,
-        )  # (..., 2)
-
     def encode_direct(
         self,
         image: Image.Image,
-        ref_images: list[tuple[Image.Image, int, int]],
+        ref_image: Image.Image,
+        ref_coords: tuple[int, int],
     ) -> tuple[int, int]:
         logger.debug(f"Starting encoder")
         img_desc = self.compute_descriptor(image)  # (1, D, H, W)
-        sample_patch_descs = []
-        for i, (dc_img, dc_x, dc_y) in enumerate(ref_images):
-            dc_img_desc = self.compute_descriptor(dc_img)  # (1, D, H, W)
-            NSample, D, H, W = dc_img_desc.shape
-            dc_py, dc_px = self.transform_coords(
-                dc_x, dc_y, dc_img.height, dc_img.width, H, W
-            )
-            sample_patch_descs.append(dc_img_desc[0, :, dc_py, dc_px])  # (D,)
+        ref_img_desc = self.compute_descriptor(ref_image)  # (1, D, H, W)
+        NSample, D, H, W = ref_img_desc.shape
+        dc_py, dc_px = self.transform_coords(
+            ref_coords[0], ref_coords[1], ref_image.height, ref_image.width, H, W
+        )
+        ref_patch = ref_img_desc[0, :, dc_py, dc_px]  # (D,)
 
-        dc_ref_patch_desc = torch.stack(sample_patch_descs, dim=0).unsqueeze(
-            0
-        )  # (1, NSample, D)
+        ref_patch = ref_patch.unsqueeze(0)  # (1, D)
 
-        kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, dc_ref_patch_desc)
+        kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, ref_patch)
         assert kps_raw_2d.shape == (1, 2)
         y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
             kps_raw_2d, (image.height, image.width)
@@ -224,7 +136,9 @@ class ImageExtractor(Configurable):
 
         return int(y_pixel.squeeze(0).item()), int(x_pixel.squeeze(0).item())
 
-    def encode(self, td_img: TDImage) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    def extract_entities(
+        self, td_img: TDImage, entities: list[Entity]
+    ) -> tuple[torch.Tensor, torch.Tensor, dict]:
         image_desc = self.compute_descriptor(td_img.rgb)  # (1, D, H, W)
 
         kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(
@@ -498,17 +412,9 @@ class ImageExtractor(Configurable):
         model.patch_embed.proj.stride = stride
         # fix the positional encoding code
         model.interpolate_pos_encoding = types.MethodType(  # type: ignore
-            ImageExtractor._fix_pos_enc(patch_size, (stride, stride)), model
+            DinoExtractor._fix_pos_enc(patch_size, (stride, stride)), model
         )
         return model, patch_size
-
-    def transform_coords(
-        self, y: int, x: int, origin_h: int, origin_w: int, target_h: int, target_w: int
-    ) -> tuple[int, int]:
-        # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
-        ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
-        target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
-        return int(target_yx[0].item()), int(target_yx[1].item())
 
     def add_entity_reference_sample(
         self, dc_ref_patch_desc: torch.Tensor, state_coords: torch.Tensor
