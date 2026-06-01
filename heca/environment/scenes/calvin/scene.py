@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from dataclasses import dataclass, field
 from heca.entities.entity import Entity, Mobility
-from heca.image_extractors.image_extractor import ImageExtractor
 from heca.environment.scenes.scene import Scene
 from heca.misc.state import State
 from heca.misc.area import Area
@@ -14,7 +13,7 @@ from heca.misc.td import (
     TDProperties,
     TDEntities,
     TDScene,
-    TDSceneVision,
+    TDSceneImages,
     make_abs_and_rel_td_entity,
 )
 
@@ -50,12 +49,6 @@ class CalvinScene(Scene):
 
     @dataclass(kw_only=True)
     class Config(Scene.Config):
-        extractors: dict[str, ImageExtractor.Config] = field(
-            default_factory=lambda: {
-                # "wrist": ImageExtractor.Config(),
-                "front": ImageExtractor.Config(),
-            }
-        )
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),
@@ -109,7 +102,7 @@ class CalvinScene(Scene):
     def image_numpy(self, obs: CalvinEnvObservation) -> dict[str, np.ndarray]:
         return obs.rgb
 
-    def to_td_scene_vision(self, obs: CalvinEnvObservation) -> TDSceneVision:
+    def to_td_scene_vision(self, obs: CalvinEnvObservation) -> TDSceneImages:
         camera_obs = {}
         for cam in obs.camera_names:
             rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
@@ -123,7 +116,7 @@ class CalvinScene(Scene):
                 intr=torch.Tensor(obs.intr[cam]),
             )
             camera_obs[cam] = record
-        return TDSceneVision(camera_obs)
+        return TDSceneImages(camera_obs)
 
     def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
         state_dict = {}
@@ -197,7 +190,16 @@ class CalvinScene(Scene):
         ]
         return [Entity.create(e) for e in ents]
 
-    def get_cursor(
+    @cached_property
+    def cursor(self) -> Entity:
+        config = Entity.Config(
+            label="cursor",
+            states={"open", "closed"},
+            mobility=Mobility.FREE,
+        )
+        return Entity.create(config)
+
+    def get_gt_cursor_values(
         self, obs: CalvinEnvObservation
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)

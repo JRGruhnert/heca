@@ -278,7 +278,7 @@ class TDImage(TensorDict):
         return cast(torch.Tensor, self["intr"])
 
 
-class TDSceneVision(TensorDict):
+class TDSceneImages(TensorDict):
     def __init__(self, images: dict[str, TDImage]):
         super().__init__(images, batch_size=empty_bs)
 

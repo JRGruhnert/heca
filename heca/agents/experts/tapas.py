@@ -1,4 +1,3 @@
-from enum import Enum
 import sys
 import numpy as np
 import tapas_gmm_modified
@@ -18,18 +17,7 @@ import torch
 from heca.agents.agent import AgentFeedback, Cursor
 from heca.agents.experts.expert import ExpertAgent
 from heca.entities.entity import Entity
-from heca.environment.scenes.scene import Scene
-from heca.environment.world import MetaWorld
-from heca.misc.td import (
-    TDEntity,
-    TDImage,
-    TDScene,
-    TDSceneVision,
-    TDSceneVision,
-    TDWorld,
-    make_abs_and_rel_td_entity,
-    empty_bs,
-)
+from heca.misc.td import TDEntity, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device
 
@@ -40,32 +28,10 @@ class TapasAgent(ExpertAgent):
     @dataclass(kw_only=True)
     class Config(ExpertAgent.Config):
         policy: GMMPolicyConfig
-        extraction_mode: ExtractionMode = ExtractionMode.MOLMO
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.state = Cursor.IDLE
-        self.scene: Scene = MetaWorld.get(self.cfg.scene)
-
-        if self.cfg.extraction_mode == ExtractionMode.MOLMO:
-            from heca.environment.scenes.calvin.image_extractors.molmo import (
-                MolmoExtractor,
-            )
-
-            self.extractors = {
-                cam: MolmoExtractor(cam_cfg)
-                for cam, cam_cfg in self.scene.cfg.extractors.items()
-            }
-        elif self.cfg.extraction_mode == ExtractionMode.DINO:
-            from heca.environment.scenes.calvin.image_extractors.dino import (
-                DINOExtractor,
-            )
-
-            self.extractors = {
-                cam: DINOExtractor(cam_cfg)
-                for cam, cam_cfg in self.scene.cfg.extractors.items()
-            }
 
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         self.policy.reset_episode()
@@ -86,7 +52,7 @@ class TapasAgent(ExpertAgent):
             pred = predictions.step()
             action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
             td_scene, td_vision = self.scene.step(action)
-        if self.cfg.extraction_mode == ExtractionMode.GT:
+        if self.cfg.use_gt:
             z = td_scene
         else:
             z = self.from_vision(td_vision)

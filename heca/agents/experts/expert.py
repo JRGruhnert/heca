@@ -1,15 +1,17 @@
 from abc import abstractmethod
 from dataclasses import dataclass
-from enum import Enum
-from heca.agents.agent import Agent
+
+import torch
+from heca.agents.agent import Agent, Cursor
 from heca.environment.scenes.scene import Scene
-from heca.misc.td import TDEntity, TDImage, TDScene, TDSceneVision
-
-
-class ExtractionMode(Enum):
-    MOLMO = "molmo"
-    DINO = "dino"
-    GT = "gt"
+from heca.image_extractors.image_extractor import ImageExtractor
+from heca.misc.td import (
+    TDEntity,
+    TDImage,
+    TDScene,
+    TDSceneImages,
+    make_abs_and_rel_td_entity,
+)
 
 
 class ExpertAgent(Agent):
@@ -20,11 +22,17 @@ class ExpertAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         scene: Scene.Query
-        kp_extraction: ExtractionMode = ExtractionMode.MOLMO
-        state_extraction: ExtractionMode = ExtractionMode.MOLMO
+        kp_extraction: ImageExtractor.Query
+        state_extraction: ImageExtractor.Query
+        score_threshold: float = 0.5
+        use_gt: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+        self.state = Cursor.IDLE
+        self.scene = Scene.search(self.cfg.scene)
+        self.kp_extractor = ImageExtractor.search(self.cfg.kp_extraction)
+        self.state_extractor = ImageExtractor.search(self.cfg.state_extraction)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> TDScene:
@@ -33,76 +41,107 @@ class ExpertAgent(Agent):
     def required_scenes(self) -> list[Scene.Query]:
         return [self.cfg.scene]
 
-    def from_vision(self, vision: TDSceneVision) -> TDScene:
-        all_kps = []
+    def from_vision(self, td_images: TDSceneImages) -> TDScene:
+        all_kps_3d = []
         all_states = []
-        all_infos = []
-        all_masks = []
-        all_scores = []
+        all_kp_scores = []
+        all_state_scores = []
 
-        for cam, td_image in vision.items():
-            assert isinstance(td_image, TDImage)
-            kps, states, info = self.extractors[cam].encode(td_image)
-            all_kps.append(kps)
-            all_states.append(states)
-            all_infos.append(info)
-            all_masks.append(info["kp_mask"])
-            all_scores.append(info["state_scores"])
+        all_cursor_kps_3d = []
+        all_cursor_states = []
+        all_cursor_kps_scores = []
+        all_cursor_state_scores = []
 
-        kps_stack = torch.stack(all_kps)  # (C, K, D)
-        kps_mask = torch.stack(all_masks)  # (C, K)
-        scores = torch.stack(all_scores)  # (C, K)
-        states_stack = torch.stack(all_states)  # (C, K, S)
+        for cam, image in td_images.items():
+            assert isinstance(image, TDImage)
+            if cam.endswith("cursor"):
+                kp3d_cursor, kp_cursor, kp_cursor_score = (
+                    self.kp_extractor.extract_entities(image, [self.scene.cursor])
+                )
+                kp_cursor_state, cursor_state_scores = (
+                    self.state_extractor.extract_entity_states(
+                        image, [self.scene.cursor], kp_cursor
+                    )
+                )
 
-        # Aggregate keypoints of different cameras
-        num_kps = kps_stack.shape[1]
-        final_kps = []
-        final_states = []
-        for k in range(num_kps):
-            present = kps_mask[:, k] > 0
-            if present.sum() == 0:
-                # Not present in any camera
-                final_kps.append(torch.full_like(kps_stack[0, k], float("nan")))
-                final_states.append(torch.full_like(states_stack[0, k], float("nan")))
-            elif present.sum() == 1:
-                # Present in only one camera
-                idx = present.nonzero(as_tuple=True)[0][0]
-                final_kps.append(kps_stack[idx, k])
-                final_states.append(states_stack[idx, k])
+                all_cursor_kps_3d.append(kp3d_cursor)
+                all_cursor_states.append(kp_cursor_state)
+                all_cursor_kps_scores.append(kp_cursor_score)
+                all_cursor_state_scores.append(cursor_state_scores)
+
             else:
-                # Present in multiple cameras
-                # Mean for keypoints
-                # Best score for states
-                vals = kps_stack[present, k]
-                final_kps.append(vals.mean(dim=0))
-                valid_scores = scores[:, k].clone()
-                valid_scores[~present] = float("-inf")
-                idx = torch.argmax(valid_scores)
-                final_states.append(states_stack[idx, k])
-        final_kps = torch.stack(final_kps)  # (K, D)
-        final_states = torch.stack(final_states)  # (K, S)
+                kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(
+                    image, self.scene.entities
+                )
+                states, state_scores = self.state_extractor.extract_entity_states(
+                    image, self.scene.entities, kps2d
+                )
+
+                all_kps_3d.append(kps3d)
+                all_states.append(states)
+                all_kp_scores.append(kp_scores)
+                all_state_scores.append(state_scores)
+
+        kps_3d_stack = torch.stack(all_kps_3d)  # (C, K, D)
+        states_stack = torch.stack(all_states)  # (C, K, S)
+        kp_3d_scores_stack = torch.stack(all_kp_scores)  # (C, K)
+        state_scores_stack = torch.stack(all_state_scores)  # (C, K)
+
+        # For cursor
+        cursor_kps_3d_stack = torch.stack(all_cursor_kps_3d)  # (C, 1, D)
+        cursor_states_stack = torch.stack(all_cursor_states)  # (C, 1, S)
+        cursor_kp_scores_stack = torch.stack(all_cursor_kps_scores)  # (C, 1)
+        cursor_state_scores_stack = torch.stack(all_cursor_state_scores)  # (C, 1)
+
+        # Sanity check on dimensions
+        assert kps_3d_stack.shape[1] == len(self.scene.entities)
 
         td_entities: dict[str, TDEntity] = {}
-        # Find the index of the end effector (ee) entity in self.entities
-        num_present = min(final_kps.shape[0], final_states.shape[0], len(self.entities))
-        for idx, entity in enumerate(self.scene.entities):
-            if idx >= num_present:
-                # No keypoint or descriptor for this entity, skip
-                # Assuming keypoints are ordered the same as entities
-                continue
-            tg_kp = final_kps[idx]
-            td_abs, td_rel = make_abs_and_rel_td_entity(
-                position=tg_kp[:3],
-                rotation=tg_kp[3:7],
-                state=final_states[idx],
-                cursor_pos=cursor_pos,
-                cursor_rot=cursor_rot,
-            )
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-            td_entities[entity.cfg.label] = td_abs
-        td_entities["cursor"] = TDEntity(
-            position=cursor_pos,
-            rotation=cursor_rot,
-            state=cursor_state,
+        c_pos, c_rot, c_state = self.get_entity_pose_and_state(
+            cursor_kps_3d_stack[:, 0],
+            cursor_kp_scores_stack[:, 0],
+            cursor_states_stack[:, 0],
+            cursor_state_scores_stack[:, 0],
         )
+        for idx, entity in enumerate(self.scene.entities):
+            pos, rot, state = self.get_entity_pose_and_state(
+                kps_3d_stack[:, idx],
+                kp_3d_scores_stack[:, idx],
+                states_stack[:, idx],
+                state_scores_stack[:, idx],
+            )
+
+            td_abs, td_rel = make_abs_and_rel_td_entity(
+                position=pos,
+                rotation=rot,
+                state=state,
+                cursor_pos=c_pos,
+                cursor_rot=c_rot,
+            )
+            td_entities[entity.cfg.label] = td_abs
+            td_entities[f"{entity.cfg.label}_rel"] = td_rel
+        td_entities["cursor"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
         return TDScene(td_entities)
+
+    def get_entity_pose_and_state(
+        self,
+        poses: torch.Tensor,
+        poses_scores: torch.Tensor,
+        states: torch.Tensor,
+        state_scores: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        present = poses_scores > self.cfg.score_threshold
+        if present.sum() == 0:
+            # Not present in any camera
+            # TODO: handle missing keypoint, e.g. by interpolation or using a default value
+            pass
+        elif present.sum() == 1:
+            # Present in only one camera
+            idxx = present.nonzero(as_tuple=True)[0][0]
+            pose = poses[idxx]
+            state = states[idxx]
+        else:
+            # Present in multiple cameras
+            # TODO: Different cameras have different viewpoints. How to best aggregate the keypoints?
+            pass
+        return pose[:3], pose[3:7], state

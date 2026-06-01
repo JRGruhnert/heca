@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from heca.classes.register import Registerable
 from heca.entities.entity import Entity
 from heca.misc.td import TDImage
+from PIL import Image
 
 
 class ImageExtractor(Registerable):
@@ -19,30 +20,54 @@ class ImageExtractor(Registerable):
 
     @abc.abstractmethod
     def extract_entities(
-        self,
-        td_img: TDImage,
-        entities: list[Entity],
-    ) -> torch.Tensor:
+        self, image: TDImage, entities: list[Entity]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def extract_states(
-        self,
-        td_img: TDImage,
-        entities: list[Entity],
-        kps_raw_2d: torch.Tensor,
+    def extract_entity_states(
+        self, image: TDImage, entities: list[Entity], kps: torch.Tensor
     ) -> torch.Tensor:
         raise NotImplementedError()
 
-    def kps_raw_2d_to_image_coords(
-        self, kps_raw_2d: torch.Tensor, size_hw: tuple[int, int]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def normalize_coords(
+        self, coords: torch.Tensor, size_hw: tuple[int, int]
+    ) -> torch.Tensor:
+        return torch.stack(
+            [
+                2.0 * coords[..., 0] / max(size_hw[0] - 1, 1) - 1.0,
+                2.0 * coords[..., 1] / max(size_hw[1] - 1, 1) - 1.0,
+            ],
+            dim=-1,
+        )  # (..., 2)
+
+    def transform_coords(
+        self, y: int, x: int, origin_h: int, origin_w: int, target_h: int, target_w: int
+    ) -> tuple[int, int]:
+        # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
+        ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
+        target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
+        return int(target_yx[0].item()), int(target_yx[1].item())
+
+    def scale_normalized_coords(
+        self, norm_coords: torch.Tensor, size_hw: tuple[int, int]
+    ) -> torch.Tensor:
+        height, width = size_hw
+        scale_yx = torch.tensor([height - 1, width - 1])
+        pixel_coordinates_yx = (norm_coords + 1.0) * 0.5 * scale_yx
+        return pixel_coordinates_yx.round().long()
+
+    def kps_2d_to_3d(self, image: TDImage, kps_raw_2d: torch.Tensor) -> torch.Tensor:
         u_norm, v_norm = kps_raw_2d.chunk(2, dim=-1)
         norm_uv = torch.stack((v_norm, u_norm), dim=-1)
+        size_hw = (image.rgb.shape[1], image.rgb.shape[2])
         pixel_yx = self.scale_normalized_coords(norm_uv, size_hw)
         y_pixel = pixel_yx[..., 0]  # (B, Nref)
         x_pixel = pixel_yx[..., 1]  # (B, Nref)
-        return y_pixel, x_pixel
+
+        return self.hard_pixels_to_3D_world(
+            y_pixel, x_pixel, image.d, image.extr, image.intr
+        )
 
     def hard_pixels_to_3D_world(
         self,
@@ -102,29 +127,19 @@ class ImageExtractor(Registerable):
 
         return pos_in_world_homog[..., :3]
 
-    def normalize_coords(
-        self, coords: torch.Tensor, size_hw: tuple[int, int]
-    ) -> torch.Tensor:
-        return torch.stack(
-            [
-                2.0 * coords[..., 0] / max(size_hw[0] - 1, 1) - 1.0,
-                2.0 * coords[..., 1] / max(size_hw[1] - 1, 1) - 1.0,
-            ],
-            dim=-1,
-        )  # (..., 2)
-
-    def transform_coords(
-        self, y: int, x: int, origin_h: int, origin_w: int, target_h: int, target_w: int
-    ) -> tuple[int, int]:
-        # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
-        ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
-        target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
-        return int(target_yx[0].item()), int(target_yx[1].item())
-
-    def scale_normalized_coords(
-        self, norm_coords: torch.Tensor, size_hw: tuple[int, int]
-    ) -> torch.Tensor:
-        height, width = size_hw
-        scale_yx = torch.tensor([height - 1, width - 1])
-        pixel_coordinates_yx = (norm_coords + 1.0) * 0.5 * scale_yx
-        return pixel_coordinates_yx.round().long()
+    def prepare_references(
+        self,
+        entities: list[Entity],
+        kp_references: list[tuple[Image.Image, int, int, int, int]],
+        state_references: list[dict[str, list[Image.Image]]],
+    ):
+        assert len(entities) == len(kp_references) == len(state_references)
+        for entity, kp_refs, state_refs in zip(
+            entities, kp_references, state_references
+        ):
+            self.kp_extractor.register(entity.cfg.label, kp_refs)
+            for state_label, state_imgs in state_refs.items():
+                for state_img in state_imgs:
+                    self.state_extractor.register(
+                        entity.cfg.label, state_label, state_img
+                    )

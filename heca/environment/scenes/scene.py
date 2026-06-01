@@ -13,7 +13,7 @@ from heca.classes.persist import Persistable
 from heca.entities.entity import Entity, Mobility
 from heca.image_extractors.image_extractor import ImageExtractor
 from heca.misc import logger
-from heca.misc.td import TDScene, TDSceneVision
+from heca.misc.td import TDScene, TDSceneImages
 
 
 class KPTuple(NamedTuple):
@@ -30,20 +30,10 @@ class Scene(Persistable):
     class Config(Persistable.Config):
         dc_label: str = "dc_pose"
         marker_radius: int = 3
-        extractors: dict[str, ImageExtractor.Config]
         vis_size: tuple[int, int] = (512, 512)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.cursor = Entity.Config(
-            label="cursor",
-            states={"open", "closed"},
-            mobility=Mobility.FREE,
-        )
-        self.extractors = {
-            name: ImageExtractor.create(extractor)
-            for name, extractor in cfg.extractors.items()
-        }
 
         # Kp selection
         self.kp_tuples: list[KPTuple] = []
@@ -73,16 +63,16 @@ class Scene(Persistable):
             {}
         )
 
-    def from_internal(self, data) -> tuple[TDScene, TDSceneVision]:
+    def from_internal(self, data) -> tuple[TDScene, TDSceneImages]:
         tdscene = self.heca_td(data)
         tdimage = self.to_td_scene_vision(data)
         return tdscene, tdimage
 
-    def reset(self) -> tuple[TDScene, TDSceneVision]:
+    def reset(self) -> tuple[TDScene, TDSceneImages]:
         obs = self._reset()
         return self.from_internal(obs)
 
-    def step(self, action: np.ndarray) -> tuple[TDScene, TDSceneVision]:
+    def step(self, action: np.ndarray) -> tuple[TDScene, TDSceneImages]:
         obs = self._step(action)
         return self.from_internal(obs)
 
@@ -90,7 +80,7 @@ class Scene(Persistable):
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
-    def sample(self) -> tuple[TDScene, TDSceneVision]:
+    def sample(self) -> tuple[TDScene, TDSceneImages]:
         scene, vision = self.reset()
         while self.is_bad_sample(scene):
             scene, vision = self.reset()
@@ -104,6 +94,11 @@ class Scene(Persistable):
     def entities(self) -> list[Entity]:
         raise NotImplementedError()
 
+    @property
+    @abc.abstractmethod
+    def cursor(self) -> Entity:
+        raise NotImplementedError()
+
     @abc.abstractmethod
     def heca_td(self, obs) -> TDScene:
         raise NotImplementedError()
@@ -113,7 +108,7 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def to_td_scene_vision(self, obs) -> TDSceneVision:
+    def to_td_scene_vision(self, obs) -> TDSceneImages:
         raise NotImplementedError()
 
     @abc.abstractmethod

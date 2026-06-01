@@ -1,14 +1,14 @@
 import math
 import types
 from dataclasses import dataclass
-from enum import Enum
 
-import timm
 import torch
-from PIL import Image
+import timm
 from timm.data import create_transform, resolve_model_data_config  # type: ignore
 from torch import nn
+from PIL import Image
 
+from heca.misc.td import TDImage
 from heca.entities.entity import Entity
 from heca.image_extractors.image_extractor import ImageExtractor
 from heca.image_extractors.knn import (
@@ -17,15 +17,8 @@ from heca.image_extractors.knn import (
     ScoreMode,
     SelectionMode,
 )
-from heca.misc import logger
-from heca.misc.td import TDImage
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
-
-
-class StateExtractionMode(Enum):
-    IMAGE = "image"
-    COORDINATE = "coordinate"
 
 
 class DinoExtractor(ImageExtractor):
@@ -52,7 +45,6 @@ class DinoExtractor(ImageExtractor):
         sample_per_reference: int = 5
         kp_selection_threshold: float = 0.2
         interpolate_descriptors: bool = False
-        state_extraction_mode: StateExtractionMode = StateExtractionMode.IMAGE
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -66,12 +58,11 @@ class DinoExtractor(ImageExtractor):
         data_config = resolve_model_data_config(self.model)
         self.transforms = create_transform(**data_config, is_training=False)
 
-        self.entities: list[Entity] = []
-        self.cams: set[str] = set()
         self.entity_state_knn = EntityStateKNN.create(self.cfg.state_knn_config)
         self.kp_patch_descr: torch.Tensor | None = None
         self.entity_state_coords: torch.Tensor | None = None
         self.image_size: tuple[int, int] = (0, 0)
+        self.image_desc: torch.Tensor | None = None
 
     def get_image_size(self, image: Image.Image | torch.Tensor) -> tuple[int, int]:
         if isinstance(image, Image.Image):
@@ -111,75 +102,41 @@ class DinoExtractor(ImageExtractor):
 
         return descr
 
-    def encode_direct(
-        self,
-        image: Image.Image,
-        ref_image: Image.Image,
-        ref_coords: tuple[int, int],
-    ) -> tuple[int, int]:
-        logger.debug(f"Starting encoder")
-        img_desc = self.compute_descriptor(image)  # (1, D, H, W)
-        ref_img_desc = self.compute_descriptor(ref_image)  # (1, D, H, W)
-        NSample, D, H, W = ref_img_desc.shape
-        dc_py, dc_px = self.transform_coords(
-            ref_coords[0], ref_coords[1], ref_image.height, ref_image.width, H, W
-        )
-        ref_patch = ref_img_desc[0, :, dc_py, dc_px]  # (D,)
-
-        ref_patch = ref_patch.unsqueeze(0)  # (1, D)
-
-        kps_raw_2d, _, _, _ = self.compute_keypoints(img_desc, ref_patch)
-        assert kps_raw_2d.shape == (1, 2)
-        y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
-            kps_raw_2d, (image.height, image.width)
-        )  # (1, 1), (1, 1)
-
-        return int(y_pixel.squeeze(0).item()), int(x_pixel.squeeze(0).item())
-
     def extract_entities(
-        self, td_img: TDImage, entities: list[Entity]
-    ) -> tuple[torch.Tensor, torch.Tensor, dict]:
-        image_desc = self.compute_descriptor(td_img.rgb)  # (1, D, H, W)
+        self, image: TDImage, entities: list[Entity]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
+        kps, scores = self.compute_keypoints(self.image_desc)  # (1, 2*Nref), (1, Nref)
+        kps3d = self.kps_2d_to_3d(image, kps)  # (1, Nref, 3)
+        return kps3d, kps, scores
 
-        kps_raw_2d, kps_mask, sm, post = self.compute_keypoints(
-            image_desc
-        )  # (1, 2*Nref), (1, Nref), (1, Nref, H, W), (1, Nref, H, W)
-
-        y_pixel, x_pixel = self.kps_raw_2d_to_image_coords(
-            kps_raw_2d, (td_img.rgb.shape[1], td_img.rgb.shape[2])
-        )  # (1, Nref), (1, Nref)
-
-        kps = self.hard_pixels_to_3D_world(
-            y_pixel,
-            x_pixel,
-            td_img.d,
-            td_img.extr,
-            td_img.intr,
-        )
-
-        states, scores = self.compute_kps_states(
-            kps_raw_2d, image_desc
-        )  # (1, Nref), (1, Nref)
-
-        info = {
-            "descriptor": image_desc,
-            "distance": None,
-            "kp_raw_2d": kps_raw_2d,
-            "depth": td_img.d,
-            "prior": None,
-            "kp_mask": kps_mask,
-            "sm": sm,
-            "post": post,
-            "state_scores": scores,
-            "y_pixel": y_pixel,
-            "x_pixel": x_pixel,
-        }
-
-        return kps, states, info
+    def extract_entity_states(
+        self, image: TDImage, entities: list[Entity], kps: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        #
+        if self.image_desc is None:
+            self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
+        # kps_raw_2d is (1, 2*Nref)
+        # image_desc is (1, C, H, W)
+        assert self.entity_state_coords is not None
+        kernels = self.get_state_kernel(
+            self.image_desc, kps, self.entity_state_coords
+        )  # (1, C, k, k)
+        one_hots = []
+        scores = []
+        for idx, entity in enumerate(entities):
+            prediction, score = self.entity_state_knn.query(
+                entity_label=entity.cfg.label,
+                state_desc_kernel=kernels[idx],
+            )
+            one_hot_state = entity.state.make_one_hot(prediction)
+            one_hots.append(one_hot_state)
+            scores.append(score)
+        return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
 
     def compute_keypoints(
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         # image_desc is (B, D, H, W) and ref_patch_desc is (Nref, D)
         sm = self.softmax_of_reference_descriptors(image_desc, ref_patch_desc)
         # sm is similarity map
@@ -191,15 +148,12 @@ class DinoExtractor(ImageExtractor):
         # # normalize to sum to one
         post /= torch.sum(post, dim=(-1, -2)).unsqueeze(-1).unsqueeze(-1)
 
-        # Find max similarity for each keypoint (N, Nref)
-        max_sim = torch.amax(sm, dim=(-1, -2))  # shape: (N, Nref)
-        kp_mask = (
-            max_sim > self.cfg.kp_selection_threshold
-        ).float()  # 1 if present, 0 if not
+        # Find max similarity for each keypoint (N, Nref) with its score
+        confidence = torch.amax(sm, dim=(-1, -2))  # shape: (N, Nref)
 
         kp_raw_2d = self.get_mode(post)  # (N, 2*Nref)
 
-        return kp_raw_2d, kp_mask, sm, post
+        return kp_raw_2d, confidence  # sm, post
 
     def softmax_of_reference_descriptors(
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
@@ -320,29 +274,6 @@ class DinoExtractor(ImageExtractor):
 
         return torch.stack(kernels, dim=0)  # (Nref, C, k, k)
 
-    def compute_kps_states(
-        self, kps_raw_2d: torch.Tensor, image_desc: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        # kps_raw_2d is (1, 2*Nref)
-        # image_desc is (1, C, H, W)
-        assert self.entity_state_coords is not None
-        kernels = self.get_state_kernel(
-            image_desc,
-            kps_raw_2d,
-            self.entity_state_coords,
-        )  # (1, C, k, k)
-        one_hots = []
-        scores = []
-        for idx, entity in enumerate(self.entities):
-            prediction, score = self.entity_state_knn.query(
-                entity_label=entity.cfg.label,
-                state_desc_kernel=kernels[idx],
-            )
-            one_hot_state = entity.state.make_one_hot(prediction)
-            one_hots.append(one_hot_state)
-            scores.append(score)
-        return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
-
     @staticmethod
     def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
         def interpolate_pos_encoding(
@@ -432,7 +363,6 @@ class DinoExtractor(ImageExtractor):
 
     def add_entity_sample_for_cam(
         self,
-        entity: Entity,
         kpt: list[tuple[Image.Image, int, int, int, int]],
         kps: dict[str, list[Image.Image]],
     ):
@@ -443,7 +373,6 @@ class DinoExtractor(ImageExtractor):
             len(kps[state]) == self.cfg.sample_per_reference
             for state in entity.cfg.states
         )
-        self.entities.append(entity)
         sample_patch_descs = []
         sample_state_coords = []
         for i, (dc_img, dc_x, dc_y, state_x, state_y) in enumerate(kpt):
