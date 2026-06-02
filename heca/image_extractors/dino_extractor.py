@@ -24,7 +24,7 @@ from heca.image_extractors.knn import (
 class DinoExtractor(ImageExtractor):
     @dataclass(kw_only=True, frozen=True)
     class Query(ImageExtractor.Query):
-        label: str = "dino_extractor"
+        label: str = "calvin"
 
     @dataclass(kw_only=True)
     class Config(ImageExtractor.Config):
@@ -346,75 +346,3 @@ class DinoExtractor(ImageExtractor):
             DinoExtractor._fix_pos_enc(patch_size, (stride, stride)), model
         )
         return model, patch_size
-
-    def add_entity_reference_sample(
-        self, dc_ref_patch_desc: torch.Tensor, state_coords: torch.Tensor
-    ):
-        if self.kp_patch_descr is None or self.entity_state_coords is None:
-            self.kp_patch_descr = dc_ref_patch_desc
-            self.entity_state_coords = state_coords
-        else:
-            self.kp_patch_descr = torch.cat(
-                (self.kp_patch_descr, dc_ref_patch_desc), dim=0
-            )
-            self.entity_state_coords = torch.cat(
-                (self.entity_state_coords, state_coords), dim=0
-            )
-
-    def add_entity_sample_for_cam(
-        self,
-        kpt: list[tuple[Image.Image, int, int, int, int]],
-        kps: dict[str, list[Image.Image]],
-    ):
-        assert len(kpt) == self.cfg.sample_per_reference
-        assert len(kps) == len(entity.cfg.states)
-        assert all(state in kps for state in entity.cfg.states)
-        assert all(
-            len(kps[state]) == self.cfg.sample_per_reference
-            for state in entity.cfg.states
-        )
-        sample_patch_descs = []
-        sample_state_coords = []
-        for i, (dc_img, dc_x, dc_y, state_x, state_y) in enumerate(kpt):
-            dc_img_desc = self.compute_descriptor(dc_img)  # (1, D, H, W)
-            NSample, D, H, W = dc_img_desc.shape
-            dc_py, dc_px = self.transform_coords(
-                dc_x, dc_y, dc_img.height, dc_img.width, H, W
-            )
-            state_py, state_px = self.transform_coords(
-                state_x, state_y, dc_img.height, dc_img.width, H, W
-            )
-            sample_patch_descs.append(dc_img_desc[0, :, dc_py, dc_px])  # (D,)
-
-            dc_norm = self.normalize_coords(
-                torch.tensor([dc_py, dc_px]), self.image_size
-            )
-            state_norm = self.normalize_coords(
-                torch.tensor([state_py, state_px]), self.image_size
-            )
-            sample_state_coords.append(state_norm - dc_norm)  # (2,)
-
-        dc_ref_patch_desc = torch.stack(sample_patch_descs, dim=0)  # (NSample, D)
-        # Average relative state offset across samples → single (1, 2) per entity
-        state_coords = (
-            torch.stack(sample_state_coords, dim=0).mean(dim=0).unsqueeze(0)
-        )  # (1, 2)
-
-        self.add_entity_reference_sample(dc_ref_patch_desc, state_coords)
-
-        for state, images in kps.items():
-            for img in images:
-                state_img_desc = self.compute_descriptor(img)  # (1, D, H, W)
-                kps_raw_2d, _, _, _ = self.compute_keypoints(
-                    state_img_desc, dc_ref_patch_desc
-                )  # (1, 2)
-                kernel = self.get_state_kernel(
-                    state_img_desc,
-                    kps_raw_2d,
-                    state_coords,
-                )  # (1, C, k, k)
-                self.entity_state_knn.register(
-                    entity.cfg.label,
-                    state,
-                    kernel,
-                )

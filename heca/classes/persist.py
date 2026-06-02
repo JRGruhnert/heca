@@ -30,6 +30,8 @@ class PersistableMeta(RegisterableMeta):
 
 
 class Persistable(Registerable, metaclass=PersistableMeta):
+    _loaded: bool = False
+
     @dataclass(frozen=True, kw_only=True)
     class Query(Registerable.Query):
         pass
@@ -57,8 +59,10 @@ class Persistable(Registerable, metaclass=PersistableMeta):
     ) -> P:
         path = location.resolve(query)
         persistable = cls.search(query)
-        logger.info(f"Loading {type(persistable)} {query.label} data from {path}")
-        persistable._load(path)
+        if not persistable._loaded:
+            logger.info(f"Loading {type(persistable)} {query.label} data from {path}")
+            persistable._load(path)
+            persistable._loaded = True
         return persistable
 
     @classmethod
