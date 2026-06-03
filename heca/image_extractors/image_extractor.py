@@ -1,11 +1,9 @@
 import abc
-from pathlib import Path
-import re
 import torch
 
 from dataclasses import dataclass
 
-from heca.classes.persist import Persistable
+from heca.misc.base import Registerable
 from heca.entities.entity import Entity
 from heca.environment.scenes.scene import Scene
 from heca.misc import logger
@@ -13,13 +11,10 @@ from heca.misc.td import TDImage
 from PIL import Image
 
 
-class ImageExtractor(Persistable):
-    @dataclass(frozen=True, kw_only=True)
-    class Location(Persistable.Location):
-        folder: str = "references"
-
+class ImageExtractor(Registerable):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
+    class Config(Registerable.Config):
+        label: str
         kp_selection_threshold: float = 0.2
         image_size: tuple[int, int] = (256, 256)
 

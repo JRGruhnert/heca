@@ -22,8 +22,8 @@ class ExpertAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         scene: Scene.Query
-        kp_extraction: ImageExtractor.Query
-        state_extraction: ImageExtractor.Query
+        kp_extraction: ImageExtractor.Config
+        state_extraction: ImageExtractor.Config
         score_threshold: float = 0.5
         use_gt: bool = False
 
@@ -33,10 +33,10 @@ class ExpertAgent(Agent):
         self.scene = Scene.load(self.cfg.scene)
 
         if not self.cfg.use_gt:
-            self.kp_extractor = ImageExtractor.search(self.cfg.kp_extraction)
-            self.state_extractor = ImageExtractor.search(self.cfg.state_extraction)
-            self.kp_extractor.prepare_for_scene(self.scene.)
-            self.state_extractor.prepare_for_scene(self.cfg.scene)
+            self.kp_extractor = ImageExtractor.get(self.cfg.kp_extraction)
+            self.state_extractor = ImageExtractor.get(self.cfg.state_extraction)
+            self.kp_extractor.prepare_for_scene(self.scene)
+            self.state_extractor.prepare_for_scene(self.scene)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> TDScene:

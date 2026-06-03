@@ -10,7 +10,7 @@ TASKS_V1 = {
         "states": ["on", "off"],
     },
     "slider": {
-        "question": "Is the horizontal slider door, with a grey handle, in the back of the table:",
+        "question": "Is the horizontal sliding door, with a grey handle, in the back of the table:",
         "classes": ["moved to the left", "moved to the right"],
         "states": ["left", "right"],
     },
@@ -73,7 +73,7 @@ TASKS_V2 = {
             "material": "wood",
             "color": "brown",
             "position": "Located at the back of the workbench and to the left a grey lever.",
-            "extra": "The slider has a grey handle to move it left or right. If it is moved to the left, then the right side of the cabinet is open. If it is moved to the right, then the left side of the cabinet is open. Don't mix it up with the lever or drawer. Each of these have grey handles aswell.",
+            "extra": "The sliding door has a grey handle to move it left or right. If it is moved to the left, then the right side of the cabinet is open. If it is moved to the right, then the left side of the cabinet is open. Don't mix it up with the lever or drawer. Each of these have grey handles aswell.",
         },
         "missing_property": "state",
         "classes": ["moved to the left", "moved to the right"],
