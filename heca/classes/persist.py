@@ -30,7 +30,9 @@ class PersistableMeta(RegisterableMeta):
 
 
 class Persistable(Registerable, metaclass=PersistableMeta):
-    _loaded: bool = False
+    registry: dict[
+        tuple["Persistable.Query", "Persistable.Location"], "Registerable"
+    ] = {}
 
     @dataclass(frozen=True, kw_only=True)
     class Query(Registerable.Query):
@@ -57,13 +59,21 @@ class Persistable(Registerable, metaclass=PersistableMeta):
         query: "Persistable.Query",
         location: "Persistable.Location",
     ) -> P:
-        path = location.resolve(query)
-        persistable = cls.search(query)
-        if not persistable._loaded:
-            logger.info(f"Loading {type(persistable)} {query.label} data from {path}")
-            persistable._load(path)
-            persistable._loaded = True
-        return persistable
+
+        if (query, location) not in cls.registry:
+            target_cls = PersistableMeta.from_disk(location)
+            cls.registry[(query, location)] = cast(P, target_cls(target_cls.Config()))
+        return cast(P, cls.registry[(query, location)])
+
+        key = (query, location)
+        if key not in cls._location_registry:
+            target_cls = RegisterableMeta.from_query(query)
+            instance = cast(P, target_cls(target_cls.Config()))
+            path = location.resolve(query)
+            logger.info(f"Loading {type(instance)} {query.label} data from {path}")
+            instance._load(path)
+            cls._location_registry[key] = instance
+        return cast(P, cls._location_registry[key])
 
     @classmethod
     def save(
@@ -71,8 +81,12 @@ class Persistable(Registerable, metaclass=PersistableMeta):
         query: "Persistable.Query",
         location: "Persistable.Location",
     ) -> bool:
+        key = (query, location)
+        if key in cls._location_registry:
+            persistable = cast(P, cls._location_registry[key])
+        else:
+            persistable = cls.search(query)
         path = location.resolve(query)
-        persistable = cls.search(query)
         logger.info(f"Saving {type(persistable)} {query.label} data to {path}")
         persistable._save(path)
         return True

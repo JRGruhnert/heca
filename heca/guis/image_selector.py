@@ -1,12 +1,9 @@
 from dataclasses import dataclass
-import os
-import re
 from PIL import Image, ImageTk
 import tkinter as tk
 from pathlib import Path
 from typing import NamedTuple
 
-import numpy as np
 
 from heca.entities.entity import Entity
 from heca.classes.config import Configurable
@@ -89,19 +86,6 @@ class ImageSelector(Configurable):
     def run(self):
         self.load_next_or_finish()
         self.window.mainloop()
-
-    def _save(self, path: Path):
-        for kpt, state_dict in self.state_samples.items():
-            entity_dir = path / kpt.cam / kpt.kp.cfg.label
-            entity_dir.mkdir(parents=True, exist_ok=True)
-            for state, samples in state_dict.items():
-                for idx, img in enumerate(samples):
-                    img.save(
-                        entity_dir / f"{state}_sample{idx}.png"
-                    )  # e.g., "open_sample0.png"
-            kp = self.kp_samples[kpt]
-            img, x1, y1, x2, y2 = kp
-            img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
 
     def delete_from_canvas(self, marker: str):
         if marker == "manual":

@@ -40,8 +40,7 @@ class Registerable(Configurable, metaclass=RegisterableMeta):
 
     @classmethod
     def search(cls: Type[S], query: "Registerable.Query") -> S:
-        target_cls = RegisterableMeta.from_query(query)
-
         if query not in cls.registry:
+            target_cls = RegisterableMeta.from_query(query)
             cls.registry[query] = cast(S, target_cls(target_cls.Config()))
         return cast(S, cls.registry[query])

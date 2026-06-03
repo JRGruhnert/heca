@@ -78,6 +78,30 @@ class TDWorld(TensorDict):
         super().__init__(scenes, batch_size=empty_bs)
 
 
+class TDSceneReferences(TensorDict):
+    def __init__(self):
+        super().__init__({}, batch_size=empty_bs)
+
+    def add_scene(
+        self, label: str, references: torch.Tensor, state_coords: torch.Tensor
+    ):
+        self[label] = references
+        self[f"{label}_state_coords"] = state_coords
+
+    def get_references(self, label: str) -> torch.Tensor:
+        if label not in self.keys():
+            raise KeyError(f"Scene {label} not found in TDSceneReferences")
+        return cast(torch.Tensor, self[label])
+
+    def get_state_coords(self, label: str) -> torch.Tensor:
+        key = f"{label}_state_coords"
+        if key not in self.keys():
+            raise KeyError(
+                f"State coordinates for scene {label} not found in TDSceneReferences"
+            )
+        return cast(torch.Tensor, self[key])
+
+
 # class TDStateReferences(TensorDict):
 #     # Each B here stands for one state
 #     def __init__(self):

@@ -30,9 +30,13 @@ class ExpertAgent(Agent):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.state = Cursor.IDLE
-        self.scene = Scene.search(self.cfg.scene)
-        self.kp_extractor = ImageExtractor.search(self.cfg.kp_extraction)
-        self.state_extractor = ImageExtractor.search(self.cfg.state_extraction)
+        self.scene = Scene.load(self.cfg.scene)
+
+        if not self.cfg.use_gt:
+            self.kp_extractor = ImageExtractor.search(self.cfg.kp_extraction)
+            self.state_extractor = ImageExtractor.search(self.cfg.state_extraction)
+            self.kp_extractor.prepare_for_scene(self.scene.)
+            self.state_extractor.prepare_for_scene(self.cfg.scene)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> TDScene:

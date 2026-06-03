@@ -66,7 +66,6 @@ class CalvinScene(Scene):
         )
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.env = Calvin(self.cfg.cc)
 
@@ -102,7 +101,7 @@ class CalvinScene(Scene):
     def image_numpy(self, obs: CalvinEnvObservation) -> dict[str, np.ndarray]:
         return obs.rgb
 
-    def to_td_scene_vision(self, obs: CalvinEnvObservation) -> TDSceneImages:
+    def to_td_scene_images(self, obs: CalvinEnvObservation) -> TDSceneImages:
         camera_obs = {}
         for cam in obs.camera_names:
             rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255

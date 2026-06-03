@@ -1,30 +1,132 @@
 import math
-import types
-from dataclasses import dataclass
-
+import re
 import torch
 import timm
+import types
+
+from dataclasses import dataclass
+from pathlib import Path
+
 from timm.data import create_transform, resolve_model_data_config  # type: ignore
 from torch import nn
 from PIL import Image
 
-from heca.misc.td import TDImage
+from heca.environment.scenes.scene import Scene
+from heca.misc import logger
+from heca.misc.td import TDImage, TDSceneReferences
 from heca.entities.entity import Entity
 from heca.image_extractors.image_extractor import ImageExtractor
-from heca.image_extractors.knn import (
-    CompareMode,
-    EntityStateKNN,
-    ScoreMode,
-    SelectionMode,
-)
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
+
+from dataclasses import dataclass
+from enum import Enum
+import torch
+import torch.nn.functional as F
+
+from heca.classes.config import Configurable
+
+
+class ScoreMode(Enum):
+    HIGHEST = "highest"
+    AVERAGE = "average"
+    RAW = "raw"
+
+
+class CompareMode(Enum):
+    COSINE = "cosine"
+    CROSS = "cross_correlation"
+
+
+class SelectionMode(Enum):
+    WEIGHTED_VOTE = "weighted_vote"
+    MAJORITY_VOTE = "majority_vote"
+
+
+class EntityStateKNN(Configurable):
+    @dataclass(kw_only=True)
+    class Config(Configurable.Config):
+        top_k: int
+        score_mode: ScoreMode
+        compare_mode: CompareMode
+        selection_mode: SelectionMode
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        assert (
+            self.cfg.compare_mode is CompareMode.COSINE
+        ), "Only cosine compare mode is currently implemented."
+        assert self.cfg.top_k % 2 == 1, "top_k must be odd."
+
+        self.ref_descs: dict[str, torch.Tensor] = {}
+        self.ref_states: dict[str, list[str]] = {}
+
+    def _process_kernel(self, state_desc_kernel: torch.Tensor) -> torch.Tensor:
+        state_desc = state_desc_kernel.flatten().unsqueeze(0)  # (1, D)
+        state_desc = F.normalize(state_desc, dim=1)
+        return state_desc
+
+    def register(
+        self,
+        entity_label: str,
+        state_label: str,
+        state_desc_kernel: torch.Tensor,
+    ):
+        state_desc = self._process_kernel(state_desc_kernel)
+        if entity_label not in self.ref_descs:
+            self.ref_descs[entity_label] = state_desc
+            self.ref_states[entity_label] = [state_label]
+        else:
+            self.ref_descs[entity_label] = torch.cat(
+                [self.ref_descs[entity_label], state_desc],
+                dim=0,
+            )
+            self.ref_states[entity_label].append(state_label)
+
+    def query(
+        self,
+        entity_label: str,
+        state_desc_kernel: torch.Tensor,
+    ) -> tuple[str, float]:
+        state_desc = self._process_kernel(state_desc_kernel)
+        ref_descriptors = self.ref_descs[entity_label]
+        state_labels = self.ref_states[entity_label]
+        scores = torch.matmul(ref_descriptors, state_desc.T).squeeze(1)
+        top_scores, top_indices = torch.topk(scores, k=self.cfg.top_k)
+
+        state_scores = {state: [] for state in state_labels}
+        for k_idx, k_score in zip(top_indices.tolist(), top_scores.tolist()):
+            state_label = state_labels[k_idx]
+            state_scores[state_label].append(float(k_score))
+
+        if self.cfg.selection_mode == SelectionMode.WEIGHTED_VOTE:
+            votes = {
+                state_label: sum(state_scores[state_label])
+                for state_label in state_labels
+            }
+        elif self.cfg.selection_mode == SelectionMode.MAJORITY_VOTE:
+            votes = {
+                state_label: len(state_scores[state_label])
+                for state_label in state_labels
+            }
+        else:
+            raise ValueError(f"Unsupported selection mode: {self.cfg.selection_mode}")
+
+        prediction = max(votes.items(), key=lambda x: x[1])[0]
+
+        if self.cfg.score_mode == ScoreMode.HIGHEST:
+            confidence = max(state_scores[prediction])
+        elif self.cfg.score_mode == ScoreMode.AVERAGE:
+            confidence = sum(state_scores[prediction]) / len(state_scores[prediction])
+        elif self.cfg.score_mode == ScoreMode.RAW:
+            confidence = sum(state_scores[prediction])
+        return prediction, confidence
 
 
 class DinoExtractor(ImageExtractor):
     @dataclass(kw_only=True, frozen=True)
     class Query(ImageExtractor.Query):
-        label: str = "calvin"
+        label: str = "dino"
 
     @dataclass(kw_only=True)
     class Config(ImageExtractor.Config):
@@ -58,11 +160,76 @@ class DinoExtractor(ImageExtractor):
         data_config = resolve_model_data_config(self.model)
         self.transforms = create_transform(**data_config, is_training=False)
 
-        self.entity_state_knn = EntityStateKNN.create(self.cfg.state_knn_config)
-        self.kp_patch_descr: torch.Tensor | None = None
-        self.entity_state_coords: torch.Tensor | None = None
-        self.image_size: tuple[int, int] = (0, 0)
+        self.state_knn = EntityStateKNN.create(self.cfg.state_knn_config)
+        self.kp_patch_descr: TDSceneReferences = TDSceneReferences()
+        # Temp save for extraction to not recompute descriptors for states after computing them for keypoints.
         self.image_desc: torch.Tensor | None = None
+
+    @staticmethod
+    def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
+        def interpolate_pos_encoding(
+            self, x: torch.Tensor, w: int, h: int
+        ) -> torch.Tensor:
+            npatch = x.shape[1] - 1
+            N = self.pos_embed.shape[1] - 1
+            if npatch == N and w == h:
+                return self.pos_embed
+            class_pos_embed = self.pos_embed[:, 0]
+            patch_pos_embed = self.pos_embed[:, 1:]
+            dim = x.shape[-1]
+            # compute number of tokens taking stride into account
+            w0 = 1 + (w - patch_size) // stride_hw[1]
+            h0 = 1 + (h - patch_size) // stride_hw[0]
+            assert (
+                w0 * h0 == npatch
+            ), f"""got wrong grid size for {h}x{w} with patch_size {patch_size} and
+                                            stride {stride_hw} got {h0}x{w0}={h0 * w0} expecting {npatch}"""
+            # we add a small number to avoid floating point error in the interpolation
+            # see discussion at https://github.com/facebookresearch/dino/issues/8
+            w0, h0 = w0 + 0.1, h0 + 0.1
+            patch_pos_embed = nn.functional.interpolate(
+                patch_pos_embed.reshape(
+                    1, int(math.sqrt(N)), int(math.sqrt(N)), dim
+                ).permute(0, 3, 1, 2),
+                scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
+                mode="bicubic",
+                align_corners=False,
+                recompute_scale_factor=False,
+            )
+            assert (
+                int(w0) == patch_pos_embed.shape[-2]
+                and int(h0) == patch_pos_embed.shape[-1]
+            )
+            patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
+            return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
+
+        return interpolate_pos_encoding
+
+    @staticmethod
+    def patch_vit_resolution(
+        model: nn.Module,
+        stride: int,
+    ) -> tuple[nn.Module, int]:
+        patch_size = model.patch_embed.patch_size
+        # print(f"Original patch size: {patch_size}, stride: {stride}")
+        assert (
+            patch_size[0] == patch_size[1]
+        ), "currently only support square patches. else implement ..."
+        patch_size = patch_size[0]
+
+        assert stride <= patch_size, "stride cannot be larger than patch size"
+        assert patch_size % stride == 0, "patch size must be divisible by stride"
+
+        if stride == patch_size:  # nothing to do
+            return model, patch_size
+
+        # fix the stride
+        model.patch_embed.proj.stride = stride
+        # fix the positional encoding code
+        model.interpolate_pos_encoding = types.MethodType(  # type: ignore
+            DinoExtractor._fix_pos_enc(patch_size, (stride, stride)), model
+        )
+        return model, patch_size
 
     def get_image_size(self, image: Image.Image | torch.Tensor) -> tuple[int, int]:
         if isinstance(image, Image.Image):
@@ -125,7 +292,7 @@ class DinoExtractor(ImageExtractor):
         one_hots = []
         scores = []
         for idx, entity in enumerate(entities):
-            prediction, score = self.entity_state_knn.query(
+            prediction, score = self.state_knn.query(
                 entity_label=entity.cfg.label,
                 state_desc_kernel=kernels[idx],
             )
@@ -274,46 +441,6 @@ class DinoExtractor(ImageExtractor):
 
         return torch.stack(kernels, dim=0)  # (Nref, C, k, k)
 
-    @staticmethod
-    def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
-        def interpolate_pos_encoding(
-            self, x: torch.Tensor, w: int, h: int
-        ) -> torch.Tensor:
-            npatch = x.shape[1] - 1
-            N = self.pos_embed.shape[1] - 1
-            if npatch == N and w == h:
-                return self.pos_embed
-            class_pos_embed = self.pos_embed[:, 0]
-            patch_pos_embed = self.pos_embed[:, 1:]
-            dim = x.shape[-1]
-            # compute number of tokens taking stride into account
-            w0 = 1 + (w - patch_size) // stride_hw[1]
-            h0 = 1 + (h - patch_size) // stride_hw[0]
-            assert (
-                w0 * h0 == npatch
-            ), f"""got wrong grid size for {h}x{w} with patch_size {patch_size} and
-                                            stride {stride_hw} got {h0}x{w0}={h0 * w0} expecting {npatch}"""
-            # we add a small number to avoid floating point error in the interpolation
-            # see discussion at https://github.com/facebookresearch/dino/issues/8
-            w0, h0 = w0 + 0.1, h0 + 0.1
-            patch_pos_embed = nn.functional.interpolate(
-                patch_pos_embed.reshape(
-                    1, int(math.sqrt(N)), int(math.sqrt(N)), dim
-                ).permute(0, 3, 1, 2),
-                scale_factor=(w0 / math.sqrt(N), h0 / math.sqrt(N)),
-                mode="bicubic",
-                align_corners=False,
-                recompute_scale_factor=False,
-            )
-            assert (
-                int(w0) == patch_pos_embed.shape[-2]
-                and int(h0) == patch_pos_embed.shape[-1]
-            )
-            patch_pos_embed = patch_pos_embed.permute(0, 2, 3, 1).view(1, -1, dim)
-            return torch.cat((class_pos_embed.unsqueeze(0), patch_pos_embed), dim=1)
-
-        return interpolate_pos_encoding
-
     def compute_patch_grid_size(self, image_size: tuple[int, int]) -> tuple[int, int]:
         # Compute the number of patches along height and width
         h, w = image_size
@@ -321,28 +448,88 @@ class DinoExtractor(ImageExtractor):
         grid_w = 1 + (w - self.patch_size) // self.cfg.stride
         return grid_h, grid_w
 
-    @staticmethod
-    def patch_vit_resolution(
-        model: nn.Module,
-        stride: int,
-    ) -> tuple[nn.Module, int]:
-        patch_size = model.patch_embed.patch_size
-        # print(f"Original patch size: {patch_size}, stride: {stride}")
-        assert (
-            patch_size[0] == patch_size[1]
-        ), "currently only support square patches. else implement ..."
-        patch_size = patch_size[0]
+    def prepare_for_scene(
+        self,
+        kp_references: dict[Entity, tuple[Image.Image, int, int, int, int]],
+        state_references: dict[Entity, dict[str, list[Image.Image]]],
+    ):
+        assert len(kp_references) == len(state_references)
+        for kp_refs, state_refs in zip(kp_references, state_references):
+            self.register(entity.cfg.label, kp_refs)
+            for state_label, state_imgs in state_refs.items():
+                for state_img in state_imgs:
+                    self.state_extractor.register(
+                        entity.cfg.label, state_label, state_img
+                    )
 
-        assert stride <= patch_size, "stride cannot be larger than patch size"
-        assert patch_size % stride == 0, "patch size must be divisible by stride"
+    def add_entity_reference_sample(
+        self, dc_ref_patch_desc: torch.Tensor, state_coords: torch.Tensor
+    ):
+        if self.kp_patch_descr is None or self.entity_state_coords is None:
+            self.kp_patch_descr = dc_ref_patch_desc
+            self.entity_state_coords = state_coords
+        else:
+            self.kp_patch_descr = torch.cat(
+                (self.kp_patch_descr, dc_ref_patch_desc), dim=0
+            )
+            self.entity_state_coords = torch.cat(
+                (self.entity_state_coords, state_coords), dim=0
+            )
 
-        if stride == patch_size:  # nothing to do
-            return model, patch_size
-
-        # fix the stride
-        model.patch_embed.proj.stride = stride
-        # fix the positional encoding code
-        model.interpolate_pos_encoding = types.MethodType(  # type: ignore
-            DinoExtractor._fix_pos_enc(patch_size, (stride, stride)), model
+    def add_entity_sample_for_cam(
+        self,
+        kpt: list[tuple[Image.Image, int, int, int, int]],
+        kps: dict[str, list[Image.Image]],
+    ):
+        assert len(kpt) == self.cfg.sample_per_reference
+        assert len(kps) == len(entity.cfg.states)
+        assert all(state in kps for state in entity.cfg.states)
+        assert all(
+            len(kps[state]) == self.cfg.sample_per_reference
+            for state in entity.cfg.states
         )
-        return model, patch_size
+        sample_patch_descs = []
+        sample_state_coords = []
+        for i, (dc_img, dc_x, dc_y, state_x, state_y) in enumerate(kpt):
+            dc_img_desc = self.compute_descriptor(dc_img)  # (1, D, H, W)
+            NSample, D, H, W = dc_img_desc.shape
+            dc_py, dc_px = self.transform_coords(
+                dc_x, dc_y, dc_img.height, dc_img.width, H, W
+            )
+            state_py, state_px = self.transform_coords(
+                state_x, state_y, dc_img.height, dc_img.width, H, W
+            )
+            sample_patch_descs.append(dc_img_desc[0, :, dc_py, dc_px])  # (D,)
+
+            dc_norm = self.normalize_coords(
+                torch.tensor([dc_py, dc_px]), self.image_size
+            )
+            state_norm = self.normalize_coords(
+                torch.tensor([state_py, state_px]), self.image_size
+            )
+            sample_state_coords.append(state_norm - dc_norm)  # (2,)
+
+        dc_ref_patch_desc = torch.stack(sample_patch_descs, dim=0)  # (NSample, D)
+        # Average relative state offset across samples → single (1, 2) per entity
+        state_coords = (
+            torch.stack(sample_state_coords, dim=0).mean(dim=0).unsqueeze(0)
+        )  # (1, 2)
+
+        self.add_entity_reference_sample(dc_ref_patch_desc, state_coords)
+
+        for state, images in kps.items():
+            for img in images:
+                state_img_desc = self.compute_descriptor(img)  # (1, D, H, W)
+                kps_raw_2d, _, _, _ = self.compute_keypoints(
+                    state_img_desc, dc_ref_patch_desc
+                )  # (1, 2)
+                kernel = self.get_state_kernel(
+                    state_img_desc,
+                    kps_raw_2d,
+                    state_coords,
+                )  # (1, C, k, k)
+                self.state_knn.register(
+                    entity.cfg.label,
+                    state,
+                    kernel,
+                )
