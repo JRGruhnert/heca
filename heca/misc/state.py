@@ -3,7 +3,7 @@ from typing import Callable
 
 import torch
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.misc.area import Area
 
 

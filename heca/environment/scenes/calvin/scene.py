@@ -43,12 +43,9 @@ class CalvinAreaConfig(Area.Config):
 
 
 class CalvinScene(Scene):
-    @dataclass(frozen=True, kw_only=True)
-    class Query(Scene.Query):
-        label: str = "calvin"
-
     @dataclass(kw_only=True)
     class Config(Scene.Config):
+        label: str = "calvin"
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),

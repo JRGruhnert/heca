@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from heca.agents.hecas.heca import Heca
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 from heca.runners.plotter import HecaPlotter
 
@@ -19,7 +19,7 @@ class HecaRunner(Configurable):
     def train(self):
         assert self.cfg.heca
         assert self.cfg.episodes > 0
-        self.heca = Heca.search(self.cfg.heca.network)
+        self.heca = Heca.get(self.cfg.heca.network)
         for ep in range(self.cfg.episodes):
             x, y = self.heca.sample(self.meta)
             terminal = False
@@ -42,7 +42,7 @@ class HecaRunner(Configurable):
             plotter = HecaPlotter(plot_cfg)
             plotter.plot()
 
-        self.heca = Heca.search(self.cfg.heca.network)
+        self.heca = Heca.get(self.cfg.heca.network)
         self.make_content(plot, *args, **kwargs)
         plt.title(self.config.title)
         plt.tight_layout()
@@ -59,7 +59,7 @@ class HecaRunner(Configurable):
 
     def explain(self):
         assert self.cfg.heca
-        self.heca = Heca.search(self.cfg.heca.network)
+        self.heca = Heca.get(self.cfg.heca.network)
         self.heca.explain()
 
     def explain(self):

@@ -13,5 +13,5 @@ class PositionProperty(Property):
     @dataclass(kw_only=True)
     class Config(Property.Config):
         ruler: PropertyRuler.Config = EuclideanRuler.Config()
-        encoder: PropertyEncoder.Query = PositionEncoder.Query()
+        encoder: PropertyEncoder.Config = PositionEncoder.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()

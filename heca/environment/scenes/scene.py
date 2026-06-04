@@ -7,23 +7,16 @@ from PIL import Image
 import numpy as np
 import torch
 
-from heca.classes.persist import Persistable
 from heca.entities.entity import Entity
 from heca.misc.td import TDScene, TDSceneImages
+from heca.misc.base import Persistable
 
 
 class Scene(Persistable):
-    @dataclass(kw_only=True, frozen=True)
-    class Query(Persistable.Query):
-        label: str
-
-    @dataclass(kw_only=True, frozen=True)
-    class Location(Persistable.Location):
-        folder: str = "scenes"
-
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        pass
+        label: str
+        folder: str = "samples"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -133,3 +126,7 @@ class Scene(Persistable):
                     )  # e.g., "open_sample0.png"
             img, x1, y1, x2, y2 = self.kp_references[entity]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
+
+    @abc.abstractmethod
+    def test(self):
+        raise NotImplementedError()

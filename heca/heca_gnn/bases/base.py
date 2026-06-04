@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 
 class BaseNetwork(Configurable, nn.Module):

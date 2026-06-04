@@ -13,5 +13,5 @@ class DomainProperty(Property):
     @dataclass(kw_only=True)
     class Config(Property.Config):
         ruler: PropertyRuler.Config = DomainRuler.Config()
-        encoder: PropertyEncoder.Query = DomainEncoder.Query()
+        encoder: PropertyEncoder.Config = DomainEncoder.Config()
         evaluator: PropertyEvaluator.Config = DomainEvaluator.Config()

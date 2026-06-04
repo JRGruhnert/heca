@@ -10,7 +10,7 @@ from heca.runners.runner import HecaRunner
 plot1 = SpawnAreaPlotterConfig()
 plotters: list[HecaPlotterConfig] = [plot1]
 
-heca = RedMPHeca.search_config(query=RedMPHeca.Query(label="red"))
+heca = RedMPHeca.get_config(query=RedMPHeca.Query(label="red"))
 assert isinstance(heca, Heca.Config)
 cfg = HecaRunner.Config(
     heca=heca,

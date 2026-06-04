@@ -3,11 +3,13 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 
-from heca.classes.register import Registerable
 from heca.entities.entity import Entity
 from heca.entities.precon import Precon
 from heca.environment.scenes.scene import Scene
 from heca.misc.td import TDEntity, TDScene
+from heca.misc.base import Persistable
+
+from torch_geometric.data import HeteroData
 
 
 class Cursor(Enum):
@@ -25,9 +27,9 @@ class AgentFeedback:
     terminal: bool
 
 
-class Agent(Registerable):
+class Agent(Persistable):
     @dataclass(kw_only=True)
-    class Config(Registerable.Config):
+    class Config(Persistable.Config):
         pass
 
     def __init__(self, cfg: Config):
@@ -62,7 +64,7 @@ class Agent(Registerable):
         return self.gen_post()
 
     @abstractmethod
-    def required_scenes(self) -> list[Scene.Query]:
+    def required_scenes(self) -> list[Scene.Config]:
         raise NotImplementedError()
 
     def make_options(self, x: TDScene, y: TDScene, con: Precon) -> list[HeteroData]:

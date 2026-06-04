@@ -1,9 +1,10 @@
 from abc import abstractmethod
+import abc
 import torch
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 
-class PropertyRuler(Configurable):
+class PropertyRuler(Configurable, abc.ABC):
 
     def __call__(self, a: torch.Tensor, b: torch.Tensor) -> float:
         value = self.distance(a, b)
@@ -11,6 +12,6 @@ class PropertyRuler(Configurable):
         assert 0.0 <= value <= 1.0, "Distance must be in [0.0, 1.0]"
         return value
 
-    @abstractmethod
+    @abc.abstractmethod
     def distance(self, a: torch.Tensor, b: torch.Tensor) -> float:
         raise NotImplementedError("Subclasses must implement the distance method.")

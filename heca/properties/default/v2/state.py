@@ -14,7 +14,7 @@ class StateProperty(Property):
     @dataclass(kw_only=True)
     class Config(Property.Config):
         ruler: PropertyRuler.Config = StateRuler.Config()
-        encoder: PropertyEncoder.Query = StateEncoder.Query()
+        encoder: PropertyEncoder.Config = StateEncoder.Config()
         evaluator: PropertyEvaluator.Config = StateEvaluator.Config()
         values: set[str]
 

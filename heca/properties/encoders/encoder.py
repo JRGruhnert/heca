@@ -4,26 +4,18 @@ from pathlib import Path
 from torch import nn
 import torch
 
-from heca.classes.persist import Persistable
+from heca.misc.base import Persistable
 from heca.heca_gnn.mlp import StandardMLP
 from heca.misc import hardware
 
 
 class PropertyEncoder(Persistable, nn.Module):
-
-    @dataclass(frozen=True, kw_only=True)
-    class Query(Persistable.Query):
-        label: str
-
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
+        folder: str = "encoder"
         in_dim: int = 16
         out_dim: int = 32
         hidden_dim: int | None = None
-
-    @dataclass(frozen=True, kw_only=True)
-    class Location(Persistable.Location):
-        pass
 
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)

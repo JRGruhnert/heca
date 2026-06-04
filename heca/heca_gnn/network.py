@@ -5,7 +5,7 @@ from torch import nn
 
 from heca.misc.td import TDWorld
 from heca.misc import hardware, logger
-from heca.classes.persist import Persistable
+from heca.misc.base import Persistable
 from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.bases.base import BaseNetwork
 from heca.heca_gnn.critic import CriticReadoutNetwork
@@ -91,7 +91,7 @@ class HecaNetwork(Persistable, nn.Module):
     @classmethod
     def load(cls, query: "HecaNetwork.Query") -> "HecaNetwork":
         file = cls.File.get_latest(query)
-        model = cls.search(query)
+        model = cls.get(query)
         if file:
             logger.info(f"Loading weights from: {file}")
             ckpt = torch.load(file, map_location=hardware.device)
@@ -102,6 +102,6 @@ class HecaNetwork(Persistable, nn.Module):
     def save(cls, query: "HecaNetwork.Query", tag: str, epoch: int) -> bool:
         path = cls.File.resolve(query)
         file = cls.File.file_name(epoch, tag)
-        torch.save({"model_state": cls.search(query).state_dict()}, path / file)
+        torch.save({"model_state": cls.get(query).state_dict()}, path / file)
         logger.info(f"Saved model for epoch {epoch} with tag: {tag}.")
         return True

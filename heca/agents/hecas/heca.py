@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from pathlib import Path
-from typing import Type
 
 import torch
 from torch.distributions import Categorical
@@ -34,7 +32,7 @@ class Heca(Agent):
         generator: HecaGenerator.Config
         evaluator: HecaEvaluator.Config
         network: HecaNetwork.Query
-        agents: set[Agent.Query]
+        agents: set[Agent.Config]
         mode: HecaMode
         ppo: PPO.Query
 
@@ -63,7 +61,7 @@ class Heca(Agent):
         self.generator = HecaGenerator.create(cfg.generator)
         self.evaluator = HecaEvaluator.create(cfg.evaluator)
 
-        MetaWorld.search_and_register(list(self.cfg.agents))
+        MetaWorld.get_and_register(list(self.cfg.agents))
 
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         # z = self.apply_expert_knowledge(y)
@@ -81,7 +79,7 @@ class Heca(Agent):
             action = logits.argmax(dim=-1)
 
         agent, entity = variants[action]
-        z, fb = Agent.search(agent).act(x, z)
+        z, fb = Agent.get(agent).act(x, z)
         reward, done, terminal = self.evaluator.step(z, fb)
         if self.cfg.mode == HecaMode.TRAIN:
             logprob: torch.Tensor = dist.log_prob(action)
@@ -95,16 +93,11 @@ class Heca(Agent):
                 done,
                 terminal,
             )
-        return z, AgentFeedback(
-            reward=reward,
-            done=done,
-            terminal=terminal,
-            learn=learn,
-        )
+        return z, fb
 
     def predict(
         self, x: TDScene, y: TDScene
-    ) -> tuple[list[tuple[Agent.Query, Entity]], torch.Tensor, torch.Tensor]:
+    ) -> tuple[list[tuple[Agent.Config, Entity]], torch.Tensor, torch.Tensor]:
         x, y = self.network.encode(x, y)
         options, data = self.generator(x, y)
         logits = self.network.actor(data)
@@ -143,20 +136,10 @@ class Heca(Agent):
     def postcons(self) -> list[Entity]:
         raise NotImplementedError()
 
-    @classmethod
-    def resolve_path(cls: Type[V], query: "Heca.Query") -> Path:
-        raise NotImplementedError()
-
-    def load(self, path: Path, label: str) -> None:
-        raise NotImplementedError()
-
-    def save(self, path: Path, label: str) -> None:
-        raise NotImplementedError()
-
-    def required_scenes(self) -> list[Scene.Query]:
+    def required_scenes(self) -> list[Scene.Config]:
         scenes = set()
-        for agent_query in self.cfg.agents:
-            agent = Agent.search(agent_query)
-            for scene_query in agent.required_scenes():
-                scenes.add(scene_query)
+        for agent_config in self.cfg.agents:
+            agent = Agent.get(agent_config)
+            for scene_config in agent.required_scenes():
+                scenes.add(scene_config)
         return list(scenes)

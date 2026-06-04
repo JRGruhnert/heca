@@ -83,9 +83,9 @@ class TDSceneReferences(TensorDict):
         super().__init__({}, batch_size=empty_bs)
 
     def add_scene(
-        self, label: str, references: torch.Tensor, state_coords: torch.Tensor
+        self, label: str, patch_desc: torch.Tensor, state_coords: torch.Tensor
     ):
-        self[label] = references
+        self[label] = patch_desc
         self[f"{label}_state_coords"] = state_coords
 
     def get_references(self, label: str) -> torch.Tensor:

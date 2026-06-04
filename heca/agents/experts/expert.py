@@ -15,13 +15,9 @@ from heca.misc.td import (
 
 
 class ExpertAgent(Agent):
-    @dataclass(frozen=True, kw_only=True)
-    class Query(Agent.Query):
-        type: str
-
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        scene: Scene.Query
+        scene: Scene.Config
         kp_extraction: ImageExtractor.Config
         state_extraction: ImageExtractor.Config
         score_threshold: float = 0.5
@@ -35,14 +31,14 @@ class ExpertAgent(Agent):
         if not self.cfg.use_gt:
             self.kp_extractor = ImageExtractor.get(self.cfg.kp_extraction)
             self.state_extractor = ImageExtractor.get(self.cfg.state_extraction)
-            self.kp_extractor.prepare_for_scene(self.scene)
-            self.state_extractor.prepare_for_scene(self.scene)
+            self.kp_extractor.prepare_for_scene(self.cfg.scene)
+            self.state_extractor.prepare_for_scene(self.cfg.scene)
 
     @abstractmethod
     def act(self, x: TDScene, y: TDScene) -> TDScene:
         raise NotImplementedError()
 
-    def required_scenes(self) -> list[Scene.Query]:
+    def required_scenes(self) -> list[Scene.Config]:
         return [self.cfg.scene]
 
     def from_vision(self, td_images: TDSceneImages) -> TDScene:

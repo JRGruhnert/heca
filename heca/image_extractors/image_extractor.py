@@ -14,7 +14,7 @@ from PIL import Image
 class ImageExtractor(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
-        label: str
+        label: str = "default"
         kp_selection_threshold: float = 0.2
         image_size: tuple[int, int] = (256, 256)
 
@@ -131,5 +131,5 @@ class ImageExtractor(Registerable):
         return pos_in_world_homog[..., :3]
 
     @abc.abstractmethod
-    def prepare_for_scene(self, scene: Scene.Query):
+    def prepare_for_scene(self, scene: Scene.Config):
         raise NotImplementedError()

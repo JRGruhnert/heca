@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 
 class Area(Configurable):

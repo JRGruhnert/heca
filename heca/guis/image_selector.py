@@ -6,7 +6,7 @@ from typing import NamedTuple
 
 
 from heca.entities.entity import Entity
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.environment.scenes.scene import Scene
 from heca.misc import logger
 
@@ -27,7 +27,7 @@ class ImageSelector(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.search(self.cfg.scene)
+        self.scene = Scene.get(self.cfg.scene)
         self.window = tk.Tk()
         self.canvas = tk.Canvas(
             self.window,

@@ -10,7 +10,7 @@ class MetaWorld:
     @classmethod
     def search_and_register(cls, queries: list[Agent.Query]):
         for aq in queries:
-            agent = Agent.search(aq)
+            agent = Agent.get(aq)
             for sq in agent.required_scenes():
                 cls.register.add(sq)
 
@@ -18,13 +18,13 @@ class MetaWorld:
     def sample(cls) -> TDWorld:
         scenes = dict()
         for query in cls.register:
-            scenes[query.label] = Scene.search(query).sample()
+            scenes[query.label] = Scene.get(query).sample()
         return TDWorld(scenes=scenes)
 
     @classmethod
     def get(cls, query: Scene.Query) -> Scene:
         if query.label in cls.register:
-            return Scene.search(query)
+            return Scene.get(query)
         else:
             raise ValueError(f"Scene {query.label} not found in MetaWorld.")
 

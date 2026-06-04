@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 import torch
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
 from heca.properties.normalizers.boundary import BoundaryNormalizer
 from heca.misc.area import Area

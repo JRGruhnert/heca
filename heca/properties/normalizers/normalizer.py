@@ -2,7 +2,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 import torch
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 
 class PropertyNormalizer(Configurable):

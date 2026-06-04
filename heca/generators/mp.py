@@ -19,7 +19,7 @@ class MPGenerator(HecaGenerator):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.agents = [ExpertAgent.search(query) for query in self.cfg.agents]
+        self.agents = [ExpertAgent.get(query) for query in self.cfg.agents]
 
     def __call__(
         self, x: TDScene, y: TDScene, z: TDScene
@@ -58,7 +58,7 @@ class MPGenerator(HecaGenerator):
     def st_distance(
         self, x: TDScene, query: ExpertAgent.Query, pad: bool, sparse: bool
     ) -> torch.Tensor:
-        agent = ExpertAgent.search(query)
+        agent = ExpertAgent.get(query)
         task_features: list[torch.Tensor] = []
         for key in x.scenes.get("mp").keys():
             if pre := agent.ppre.get(key):

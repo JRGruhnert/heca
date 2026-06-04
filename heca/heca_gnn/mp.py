@@ -7,7 +7,7 @@ from torch_geometric.data import HeteroData
 from heca.heca_gnn.network import HecaNetwork
 from heca.properties.encoders.encoder import PropertyEncoder
 from heca.misc import hardware, logger
-from heca.classes.persist import Persistable
+from heca.misc.base import Persistable
 from heca.misc.td import TDWorld
 from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.bases.base import BaseNetwork
@@ -47,7 +47,7 @@ class MPNetwork(HecaNetwork):
 
         self.encoders = nn.ModuleDict(
             {
-                encoder.label: PropertyEncoder.search(encoder)
+                encoder.label: PropertyEncoder.get(encoder)
                 for encoder in self.cfg.encoders
             }
         )
@@ -80,17 +80,17 @@ class MPNetwork(HecaNetwork):
         if path:
             logger.info(f"Loading weights from: {path}")
             ckpt = torch.load(path, map_location=hardware.device)
-            model = cls.search(query)
+            model = cls.get(query)
             model.load_state_dict(ckpt["model_state"], strict=False)
             return model
         else:
-            return cls.search(query)
+            return cls.get(query)
 
     @classmethod
     def save(cls, query: "HecaNetwork.Query", epoch: int, tag: str) -> bool:
         path = cls.Disk.resolve_path(query, epoch, tag)
         path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save({"model_state": cls.search(query).state_dict()}, path)
+        torch.save({"model_state": cls.get(query).state_dict()}, path)
         logger.info(f"Saved {tag} for epoch {epoch}.")
         return True
 

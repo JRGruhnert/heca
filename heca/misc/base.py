@@ -5,6 +5,7 @@ from typing import ClassVar, Type, TypeVar, cast
 
 from heca.misc import logger
 
+C = TypeVar("C", bound="Configurable")
 R = TypeVar("R", bound="Registerable")
 P = TypeVar("P", bound="Persistable")
 
@@ -16,6 +17,10 @@ class Configurable(abc.ABC):
 
     def __init__(self, cfg: "Configurable.Config"):
         self.cfg = cfg
+
+    @classmethod
+    def create(cls: Type[C], cfg: "Configurable.Config") -> C:
+        return cls(cfg)
 
 
 class Registerable(Configurable):

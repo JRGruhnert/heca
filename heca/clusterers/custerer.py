@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from heca.agents.agent import Agent
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.entities.precon import Precon
 from heca.misc.td import TDScene
 

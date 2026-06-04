@@ -63,9 +63,9 @@ class TrainingPlot(HecaPlotter):
 
     def load_network_results(self, nt: str):
         for path in glob(f"results/{nt}//*", recursive=True):
-            file_match = self.config.file_pattern.search(path)
+            file_match = self.config.file_pattern.get(path)
             if file_match:
-                tag_match = self.config.tag_pattern.search(file_match.group("tag"))
+                tag_match = self.config.tag_pattern.get(file_match.group("tag"))
                 if tag_match:
                     metadata = {
                         "nt": nt,

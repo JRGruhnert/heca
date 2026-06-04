@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.properties.default.v2.position import PositionProperty
 from heca.properties.default.v2.state import StateProperty
 

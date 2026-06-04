@@ -8,7 +8,7 @@ import matplotlib.patches as mpatches
 
 from heca.misc import logger
 from heca.entities.entity import Entity
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 from heca.properties.property import PropertyV1
 from heca.agents.agent import Agent
 

@@ -13,5 +13,5 @@ class RotationProperty(Property):
     @dataclass(kw_only=True)
     class Config(Property.Config):
         ruler: PropertyRuler.Config = AngularRuler.Config()
-        encoder: PropertyEncoder.Query = RotationEncoder.Query()
+        encoder: PropertyEncoder.Config = RotationEncoder.Config()
         evaluator: PropertyEvaluator.Config = ThresholdEvaluator.Config()

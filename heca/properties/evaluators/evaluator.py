@@ -1,7 +1,7 @@
 from abc import abstractmethod
 import torch
 
-from heca.classes.config import Configurable
+from heca.misc.base import Configurable
 
 
 class PropertyEvaluator(Configurable):

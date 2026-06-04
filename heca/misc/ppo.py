@@ -3,7 +3,7 @@ import torch
 import copy
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.classes.persist import Persistable
+from heca.misc.base import Persistable
 from heca.heca_gnn.network import HecaNetwork
 from heca.misc.hardware import device
 from heca.misc import logger
@@ -313,7 +313,7 @@ class PPO(Persistable):
 
     @classmethod
     def load(cls, query: "PPO.Query", network: HecaNetwork.Query) -> "PPO":
-        ppo = cls.search(query)  # type: ignore
+        ppo = cls.get(query)  # type: ignore
         ppo.load_network(network)
         return ppo
 

@@ -4,15 +4,7 @@ from heca.properties.encoders.encoder import PropertyEncoder
 
 
 class PositionEncoder(PropertyEncoder):
-    @dataclass(frozen=True, kw_only=True)
-    class Query(PropertyEncoder.Query):
-        label: str = "position"
-
     @dataclass(kw_only=True)
     class Config(PropertyEncoder.Config):
+        label: str = "position"
         in_dim: int = 3
-
-    @dataclass(frozen=True, kw_only=True)
-    class File(PropertyEncoder.Location):
-        folder: str = "position"
-        ending: str = ".pt"
