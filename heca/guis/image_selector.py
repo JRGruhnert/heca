@@ -19,7 +19,7 @@ class KPTuple(NamedTuple):
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        scene: Scene.Query
+        scene: Scene.Config
         dc_label: str = "dc_pose"
         cam_label: str = "front"
         marker_radius: int = 3
