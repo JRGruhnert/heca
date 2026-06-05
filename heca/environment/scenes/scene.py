@@ -1,11 +1,12 @@
+import re
 import abc
+import torch
+import numpy as np
 from dataclasses import dataclass
 from pathlib import Path
-import re
 from typing import Any
 from PIL import Image
-import numpy as np
-import torch
+
 
 from heca.entities.entity import Entity
 from heca.misc.td import TDScene, TDSceneImages
@@ -29,26 +30,30 @@ class Scene(Persistable):
         tdimage = self.to_td_scene_images(data)
         return tdscene, tdimage
 
-    def reset(self) -> tuple[TDScene, TDSceneImages]:
-        obs = self._reset()
-        return self.from_internal(obs)
-
     def step(self, action: np.ndarray) -> tuple[TDScene, TDSceneImages]:
         obs = self._step(action)
         return self.from_internal(obs)
 
     @abc.abstractmethod
+    def _step(self, action: np.ndarray) -> Any:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def sample_task(
+        self,
+    ) -> tuple[
+        tuple[TDScene, TDSceneImages],
+        tuple[TDScene, TDSceneImages],
+    ]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
-    def sample(self) -> tuple[TDScene, TDSceneImages]:
-        scene, vision = self.reset()
-        while self.is_bad_sample(scene):
-            scene, vision = self.reset()
-        return scene, vision
-
-    def is_bad_sample(self, obs: TDScene) -> bool:
-        return False  # By default, no sample is bad. Override in specific scenes if needed.
+    @abc.abstractmethod
+    def heca_td(self, obs) -> TDScene:
+        raise NotImplementedError()
 
     @property
     @abc.abstractmethod
@@ -61,32 +66,12 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def heca_td(self, obs) -> TDScene:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def image_tensors(self, obs) -> dict[str, torch.Tensor]:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def to_td_scene_images(self, obs) -> TDSceneImages:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def image_numpy(self, obs) -> dict[str, np.ndarray]:
+    def sample_image(self) -> np.ndarray:
         raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _reset(self) -> Any:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _step(self, action: np.ndarray) -> Any:
-        raise NotImplementedError()
-
-    def sample_image(self) -> dict[str, np.ndarray]:
-        obs = self._reset()
-        return self.image_numpy(obs)
 
     def _load(self, path: Path):
         dc_pattern = re.compile(rf"xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png")

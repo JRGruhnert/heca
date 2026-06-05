@@ -65,6 +65,7 @@ class CalvinScene(Scene):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.env = Calvin(self.cfg.cc)
+        # self.scene_evaluator = SceneEvaluator(self)
 
         # v1 stuff
         self.overrides = set(
@@ -81,22 +82,28 @@ class CalvinScene(Scene):
             ),
         )
 
-        self.valid = True
-
     def close(self):
         self.env.close()
 
-    def _reset(self) -> CalvinEnvObservation:
-        return self.env.reset()[0]
+    def reset(self) -> tuple[TDScene, TDSceneImages]:
+        obs = self.env.reset()[0]
+        return self.from_internal(obs)
 
     def _step(self, action: np.ndarray) -> CalvinEnvObservation:
         return self.env.step(action, render=False)[0]
 
-    def is_bad_sample(self, obs: TDScene) -> bool:
-        return not self.valid
+    def sample_task(
+        self,
+    ) -> tuple[
+        tuple[TDScene, TDSceneImages],
+        tuple[TDScene, TDSceneImages],
+    ]:
+        s_scene, s_images = self.reset()
+        g_scene, g_images = self.reset()
+        return (s_scene, s_images), (g_scene, g_images)
 
-    def image_numpy(self, obs: CalvinEnvObservation) -> dict[str, np.ndarray]:
-        return obs.rgb
+    def sample_image(self, obs: CalvinEnvObservation) -> np.ndarray:
+        return obs.rgb["front"]
 
     def to_td_scene_images(self, obs: CalvinEnvObservation) -> TDSceneImages:
         camera_obs = {}
@@ -113,32 +120,6 @@ class CalvinScene(Scene):
             )
             camera_obs[cam] = record
         return TDSceneImages(camera_obs)
-
-    def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
-        state_dict = {}
-        state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
-        state_dict["ee_rotation"] = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
-        state_dict["ee_scalar"] = torch.tensor(
-            np.array([obs.ee_state]), dtype=torch.float32
-        )
-
-        for label, value in obs.object_poses.items():
-            k = label.removeprefix("base__")
-            state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
-            state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
-
-        for label, value in obs.object_states.items():
-            k = label.removeprefix("base__")
-            state_dict[f"{k}_scalar"] = torch.tensor(
-                np.array([value]), dtype=torch.float32
-            )
-
-        self.valid = True
-        for k in self.overrides:
-            state_dict[k] = torch.cat([state_dict[k], self.area_state(state_dict[k])])
-            if torch.all(state_dict[k][3:] == 0):
-                self.valid = False
-        return TDProperties(state_dict)
 
     @cached_property
     def entities(self) -> list[Entity]:
@@ -268,3 +249,29 @@ class CalvinScene(Scene):
             state=state,
         )
         return TDEntities(td_entities)
+
+    # def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
+    #     state_dict = {}
+    #     state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
+    #     state_dict["ee_rotation"] = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
+    #     state_dict["ee_scalar"] = torch.tensor(
+    #         np.array([obs.ee_state]), dtype=torch.float32
+    #     )
+
+    #     for label, value in obs.object_poses.items():
+    #         k = label.removeprefix("base__")
+    #         state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
+    #         state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
+
+    #     for label, value in obs.object_states.items():
+    #         k = label.removeprefix("base__")
+    #         state_dict[f"{k}_scalar"] = torch.tensor(
+    #             np.array([value]), dtype=torch.float32
+    #         )
+
+    #     self.valid = True
+    #     for k in self.overrides:
+    #         state_dict[k] = torch.cat([state_dict[k], self.area_state(state_dict[k])])
+    #         if torch.all(state_dict[k][3:] == 0):
+    #             self.valid = False
+    #     return TDProperties(state_dict)
