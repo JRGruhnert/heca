@@ -116,3 +116,9 @@ class OGBenchScene(Scene):
 
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
+
+
+# encoder Fix
+# Dino Encoder Fix (padding)
+# Encoder loading refs
+# Image selector fix

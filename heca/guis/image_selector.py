@@ -11,80 +11,81 @@ from heca.environment.scenes.scene import Scene
 from heca.misc import logger
 
 
-class KPTuple(NamedTuple):
-    cam: str
-    kp: Entity
-
-
 class ImageSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         scene: Scene.Config
         dc_label: str = "dc_pose"
-        cam_label: str = "front"
+        cam: str = "front"
         marker_radius: int = 3
         vis_size: tuple[int, int] = (512, 512)
+        img_size: tuple[int, int] = (256, 256)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.scene = Scene.get(self.cfg.scene)
+        self.scale = min(
+            self.cfg.vis_size[0] / self.cfg.img_size[0],
+            self.cfg.vis_size[1] / self.cfg.img_size[1],
+        )
+        self.display_w = int(self.cfg.img_size[0] * self.scale)
+        self.display_h = int(self.cfg.img_size[1] * self.scale)
+        self.offset_x = (self.cfg.vis_size[0] - self.display_w) // 2
+        self.offset_y = (self.cfg.vis_size[1] - self.display_h) // 2
+
         self.window = tk.Tk()
         self.canvas = tk.Canvas(
             self.window,
             width=self.cfg.vis_size[0],
             height=self.cfg.vis_size[1],
         )
+        self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.pack()
         btn_frame = tk.Frame(self.window)
         btn_frame.pack(side="top")
-        # controls
-        self.canvas.bind("<Button-1>", self.on_click)
-        self.canvas.pack()
         self.add_btn = tk.Button(
-            btn_frame, text="Add", bg="#D1FAE5", command=self.add_image
+            btn_frame,
+            text="Add",
+            bg="#D1FAE5",
+            command=self.on_add_btn,
+        )
+        self.next_btn = tk.Button(
+            btn_frame,
+            text="Next",
+            bg="#FECACA",
+            command=self.on_next_btn,
+        )
+        self.resample_btn = tk.Button(
+            btn_frame,
+            text="Resample",
+            bg="#BFDBFE",
+            command=self.on_resample_btn,
         )
         self.add_btn.pack(side="left")
-        tk.Button(
-            btn_frame, text="Next", bg="#FECACA", command=self.load_next_or_finish
-        ).pack(side="left")
-        tk.Button(btn_frame, text="Resample", bg="#BFDBFE", command=self.refresh).pack(
-            side="left"
-        )
-
-        # new
-        # Kp selection
-        self.kp_tuples: list[KPTuple] = []
-
-        for entity in self.scene.entities:
-            self.kp_tuples.append(
-                KPTuple(
-                    cam=self.cfg.cam_label,
-                    kp=entity,
-                ),
-            )
+        self.next_btn.pack(side="left")
+        self.resample_btn.pack(side="left")
 
         self.line_marker: int | None = None
         self.pred_marker: int | None = None
         self.manual_marker: int | None = None
-        self.selection: KPTuple | None = None
+        self.selection: Entity | None = None
         self.sample_idx: int = 0
         self.max_samples_per_label: int = 5
         self.point: tuple[int, int] | None = None
-        # self.dc_values: tuple[Image.Image, int, int] | None = None
-        self.title: str = "Selection for: {cam}.{kp}.{selection} Sample {idx}"
-        self.state_samples: dict[KPTuple, dict[str, list[Image.Image]]] = {
-            triple: {state: [] for state in triple.kp.cfg.states}
-            for triple in self.kp_tuples
+        self.title: str = "Selection for: {entity}.{state} Sample {idx}"
+        self.state_samples: dict[Entity, dict[str, list[Image.Image]]] = {
+            entity: {state: [] for state in entity.cfg.states}
+            for entity in self.scene.entities
         }
-        self.kp_samples: dict[KPTuple, tuple[Image.Image, int, int, int, int]] = {}
+        self.kp_samples: dict[Entity, tuple[Image.Image, int, int, int, int]] = {}
 
-        self.selection_iter = iter(self.kp_tuples)
+        self.selection_iter = iter(self.scene.entities)
         self.label_iter = iter([])
         self.selection = next(self.selection_iter, None)
         self.load_labels_for_selection()
 
     def run(self):
-        self.load_next_or_finish()
+        self.on_next_btn()
         self.window.mainloop()
 
     def delete_from_canvas(self, marker: str):
@@ -160,22 +161,13 @@ class ImageSelector(Configurable):
         assert self.label is not None
 
         obs = self.scene.sample_image()
-        picture = obs[self.selection.cam]
-        self.img = Image.fromarray(picture)
-
-        orig_w, orig_h = self.img.size
-
-        self.scale = min(
-            self.cfg.vis_size[0] / orig_w,
-            self.cfg.vis_size[1] / orig_h,
-        )
-        display_w = int(orig_w * self.scale)
-        display_h = int(orig_h * self.scale)
-        self.offset_x = (self.cfg.vis_size[0] - display_w) // 2
-        self.offset_y = (self.cfg.vis_size[1] - display_h) // 2
+        self.img = Image.fromarray(obs[self.cfg.cam])
+        assert (
+            self.img.size == self.cfg.img_size
+        ), f"Expected image size {self.cfg.img_size}, got {self.img.size}"
 
         self.display_img = self.img.resize(
-            (display_w, display_h),
+            (self.display_w, self.display_h),
             Image.Resampling.NEAREST,
         )
         self.img_tk = ImageTk.PhotoImage(self.display_img)
@@ -193,7 +185,7 @@ class ImageSelector(Configurable):
         abs_y = y + rel_y
         self.place_marker(abs_x, abs_y, "red", "manual")
 
-    def on_click(self, event: tk.Event):
+    def on_canvas_click(self, event: tk.Event):
         assert self.selection is not None
         assert self.label is not None
         if self.label == self.cfg.dc_label:  # else ignore
@@ -227,7 +219,7 @@ class ImageSelector(Configurable):
         real_y = int((y - self.offset_y) / self.scale)
         return real_x, real_y
 
-    def add_image(self):
+    def on_add_btn(self):
         assert self.selection is not None
         assert self.label is not None
 
@@ -243,7 +235,7 @@ class ImageSelector(Configurable):
         self.label_iter = iter(self.selection.kp.cfg.states)
         self.label = self.cfg.dc_label
 
-    def refresh(self):
+    def on_resample_btn(self):
         assert self.selection is not None
         assert self.label is not None
         if self.label == self.cfg.dc_label:
@@ -252,7 +244,7 @@ class ImageSelector(Configurable):
 
         self.make_rnd_image()
 
-    def load_next_or_finish(self):
+    def on_next_btn(self):
         if self.sample_idx >= self.max_samples_per_label:
             self.sample_idx = 0
             self.label = next(self.label_iter, None)
