@@ -87,19 +87,47 @@ class TDSceneReferences(TensorDict):
     ):
         self[label] = patch_desc
         self[f"{label}_state_coords"] = state_coords
+        self["patches"] = torch.cat(
+            (
+                [self["patches"], patch_desc.unsqueeze(0)]
+                if "patches" in self.keys()
+                else [patch_desc.unsqueeze(0)]
+            ),
+            dim=0,
+        )
+        self["state_coords"] = torch.cat(
+            (
+                [self["state_coords"], state_coords.unsqueeze(0)]
+                if "state_coords" in self.keys()
+                else [state_coords.unsqueeze(0)]
+            ),
+            dim=0,
+        )
 
-    def get_references(self, label: str) -> torch.Tensor:
+    def get_reference(self, label: str) -> torch.Tensor:
         if label not in self.keys():
             raise KeyError(f"Scene {label} not found in TDSceneReferences")
         return cast(torch.Tensor, self[label])
 
-    def get_state_coords(self, label: str) -> torch.Tensor:
+    def get_state_coord(self, label: str) -> torch.Tensor:
         key = f"{label}_state_coords"
         if key not in self.keys():
             raise KeyError(
                 f"State coordinates for scene {label} not found in TDSceneReferences"
             )
         return cast(torch.Tensor, self[key])
+
+    @property
+    def patches(self) -> torch.Tensor:
+        if "patches" not in self.keys():
+            raise KeyError("No patches found in TDSceneReferences")
+        return cast(torch.Tensor, self["patches"])
+
+    @property
+    def state_coords(self) -> torch.Tensor:
+        if "state_coords" not in self.keys():
+            raise KeyError("No state coordinates found in TDSceneReferences")
+        return cast(torch.Tensor, self["state_coords"])
 
 
 # class TDStateReferences(TensorDict):

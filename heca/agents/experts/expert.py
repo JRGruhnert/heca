@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import torch
 from heca.agents.agent import Agent, Cursor
 from heca.environment.scenes.scene import Scene
-from heca.image_extractors.image_extractor import ImageExtractor
+from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.td import (
     TDEntity,
     TDImage,
@@ -18,8 +18,8 @@ class ExpertAgent(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         scene: Scene.Config
-        kp_extraction: ImageExtractor.Config
-        state_extraction: ImageExtractor.Config
+        kp_extraction: ImageEncoder.Config
+        state_extraction: ImageEncoder.Config
         score_threshold: float = 0.5
         use_gt: bool = False
 
@@ -29,8 +29,8 @@ class ExpertAgent(Agent):
         self.scene = Scene.load(self.cfg.scene)
 
         if not self.cfg.use_gt:
-            self.kp_extractor = ImageExtractor.get(self.cfg.kp_extraction)
-            self.state_extractor = ImageExtractor.get(self.cfg.state_extraction)
+            self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
+            self.state_extractor = ImageEncoder.get(self.cfg.state_extraction)
             self.kp_extractor.prepare_for_scene(self.cfg.scene)
             self.state_extractor.prepare_for_scene(self.cfg.scene)
 

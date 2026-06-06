@@ -1,9 +1,6 @@
 from dataclasses import dataclass
 from PIL import Image, ImageTk
 import tkinter as tk
-from pathlib import Path
-from typing import NamedTuple
-
 
 from heca.entities.entity import Entity
 from heca.misc.base import Configurable
@@ -18,6 +15,7 @@ class ImageSelector(Configurable):
         dc_label: str = "dc_pose"
         cam: str = "front"
         marker_radius: int = 3
+        sample_count: int = 5
         vis_size: tuple[int, int] = (512, 512)
         img_size: tuple[int, int] = (256, 256)
 
@@ -61,28 +59,36 @@ class ImageSelector(Configurable):
             bg="#BFDBFE",
             command=self.on_resample_btn,
         )
+        self.clear_vanvas_btn = tk.Button(
+            btn_frame,
+            text="Clear Canvas",
+            bg="#E5E7EB",
+            command=self.on_clear_btn,
+        )
+
         self.add_btn.pack(side="left")
         self.next_btn.pack(side="left")
         self.resample_btn.pack(side="left")
+        self.clear_vanvas_btn.pack(side="left")
+
+        self.selection: tuple[Entity | None, str] = (None, "")
+        self.sample_idx: int = 0
 
         self.line_marker: int | None = None
-        self.pred_marker: int | None = None
-        self.manual_marker: int | None = None
-        self.selection: Entity | None = None
-        self.sample_idx: int = 0
-        self.max_samples_per_label: int = 5
-        self.point: tuple[int, int] | None = None
+        self.kp_marker: int | None = None
+        self.state_marker: int | None = None
         self.title: str = "Selection for: {entity}.{state} Sample {idx}"
         self.state_samples: dict[Entity, dict[str, list[Image.Image]]] = {
             entity: {state: [] for state in entity.cfg.states}
             for entity in self.scene.entities
         }
         self.kp_samples: dict[Entity, tuple[Image.Image, int, int, int, int]] = {}
-
-        self.selection_iter = iter(self.scene.entities)
-        self.label_iter = iter([])
-        self.selection = next(self.selection_iter, None)
-        self.load_labels_for_selection()
+        selection_tuples: list[tuple[Entity, str]] = []
+        for entity in self.scene.entities:
+            selection_tuples.append((entity, self.cfg.dc_label))
+            for state in entity.cfg.states:
+                selection_tuples.append((entity, state))
+        self.selection_iter = iter(selection_tuples)
 
     def run(self):
         self.on_next_btn()
@@ -90,38 +96,36 @@ class ImageSelector(Configurable):
 
     def delete_from_canvas(self, marker: str):
         if marker == "manual":
-            if self.manual_marker is not None:
-                self.canvas.delete(self.manual_marker)
-            self.manual_marker = None
+            if self.state_marker is not None:
+                self.canvas.delete(self.state_marker)
+            self.state_marker = None
         elif marker == "pred":
-            if self.pred_marker is not None:
-                self.canvas.delete(self.pred_marker)
-            self.pred_marker = None
+            if self.kp_marker is not None:
+                self.canvas.delete(self.kp_marker)
+            self.kp_marker = None
         elif marker == "line":
             if self.line_marker is not None:
                 self.canvas.delete(self.line_marker)
             self.line_marker = None
         elif marker == "all":
-            if self.manual_marker is not None:
-                self.canvas.delete(self.manual_marker)
-            if self.pred_marker is not None:
-                self.canvas.delete(self.pred_marker)
+            if self.state_marker is not None:
+                self.canvas.delete(self.state_marker)
+            if self.kp_marker is not None:
+                self.canvas.delete(self.kp_marker)
             if self.line_marker is not None:
                 self.canvas.delete(self.line_marker)
-            self.manual_marker = None
-            self.pred_marker = None
+            self.state_marker = None
+            self.kp_marker = None
             self.line_marker = None
         else:
             logger.warning(f"Unknown marker type: {marker}")
 
-    def update_line_marker(self):
-        self.delete_from_canvas("line")
-
-        if self.manual_marker is None or self.pred_marker is None:
+    def place_line_marker(self):
+        if self.state_marker is None or self.kp_marker is None:
             return
 
-        mx1, my1, mx2, my2 = self.canvas.coords(self.manual_marker)
-        px1, py1, px2, py2 = self.canvas.coords(self.pred_marker)
+        mx1, my1, mx2, my2 = self.canvas.coords(self.state_marker)
+        px1, py1, px2, py2 = self.canvas.coords(self.kp_marker)
 
         mx = (mx1 + mx2) / 2.0
         my = (my1 + my2) / 2.0
@@ -132,33 +136,19 @@ class ImageSelector(Configurable):
             mx, my, px, py, fill="yellow", width=2
         )
 
-    def place_marker(self, x: int, y: int, color: str, marker: str, label: str = ""):
-        ref = self.canvas.create_oval(
+    def place_marker(self, x: int, y: int, color: str) -> int:
+        return self.canvas.create_oval(
             x - self.cfg.marker_radius,
             y - self.cfg.marker_radius,
             x + self.cfg.marker_radius,
             y + self.cfg.marker_radius,
             fill=color,
         )
-        if marker == "manual":
-            self.delete_from_canvas("manual")
-            self.manual_marker = ref
-        elif marker == "pred":
-            self.delete_from_canvas("pred")
-            self.pred_marker = ref
-        else:
-            logger.warning(f"Unknown marker type: {marker}")
-            self.canvas.delete(ref)
-            return
-
-        self.update_line_marker()
 
     def make_rnd_image(self):
-        self.pred_marker = None
-        self.manual_marker = None
+        self.kp_marker = None
+        self.state_marker = None
         self.line_marker = None
-        assert self.selection is not None
-        assert self.label is not None
 
         obs = self.scene.sample_image()
         self.img = Image.fromarray(obs[self.cfg.cam])
@@ -180,33 +170,6 @@ class ImageSelector(Configurable):
             image=self.img_tk,
         )
 
-    def place_relative_marker(self, x: int, y: int, rel_x: int, rel_y: int):
-        abs_x = x + rel_x
-        abs_y = y + rel_y
-        self.place_marker(abs_x, abs_y, "red", "manual")
-
-    def on_canvas_click(self, event: tk.Event):
-        assert self.selection is not None
-        assert self.label is not None
-        if self.label == self.cfg.dc_label:  # else ignore
-            self.point = self.scale_point_to_image(event.x, event.y)
-            self.place_marker(event.x, event.y, "red", "manual")
-            if self.first_click:
-                self.first_click = False
-                logger.debug(f"First Click point={self.point}")
-                x, y = self.point
-                self.kp_samples[self.selection] = (self.img, x, y, 0, 0)
-                return
-            logger.debug(f"Updated point={self.point} for selection {self.selection}")
-            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection]
-            self.kp_samples[self.selection] = (
-                img,
-                dc_x,
-                dc_y,
-                dc_x - self.point[0],
-                dc_y - self.point[1],
-            )
-
     def scale_point_to_canvas(self, x: int, y: int) -> tuple[int, int]:
         # Scale the point according to the display size
         scaled_x = int(x * self.scale) + self.offset_x
@@ -219,50 +182,73 @@ class ImageSelector(Configurable):
         real_y = int((y - self.offset_y) / self.scale)
         return real_x, real_y
 
+    def on_canvas_click(self, event: tk.Event):
+        assert self.selection[0] is not None
+        point = self.scale_point_to_image(event.x, event.y)
+
+        if self.kp_marker is not None:
+            # Kp Marker already placed
+            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection[0]]
+            self.kp_samples[self.selection[0]] = (
+                img,
+                dc_x,
+                dc_y,
+                dc_x - point[0],
+                dc_y - point[1],
+            )
+            self.state_marker = self.place_marker(event.x, event.y, "red")
+            self.place_line_marker()
+        else:
+            # Kp Marker not placed yet, place it and save the image and point
+            self.kp_marker = self.place_marker(event.x, event.y, "blue")
+            self.kp_samples[self.selection[0]] = (self.img, point[0], point[1], 0, 0)
+
+    def on_clear_btn(self):
+        self.delete_from_canvas("all")
+        if self.selection[0] is not None and self.selection[1] == self.cfg.dc_label:
+            self.kp_samples.pop(self.selection[0])
+
     def on_add_btn(self):
-        assert self.selection is not None
-        assert self.label is not None
-
-        if self.label == self.cfg.dc_label:
-            logger.warning("Cannot add sample for DC label. Ignoring.")
-            return
-
-        self.state_samples[self.selection][self.label].append(self.img)
+        assert self.selection[0] is not None, "No entity selected"
+        assert self.selection[1] != "", "No state selected"
+        assert (
+            self.selection[1] != self.cfg.dc_label
+        ), "Use 'Next' to save DC pose samples"
+        self.state_samples[self.selection[0]][self.selection[1]].append(self.img)
         self.make_rnd_image()
 
-    def load_labels_for_selection(self):
-        assert self.selection is not None
-        self.label_iter = iter(self.selection.kp.cfg.states)
-        self.label = self.cfg.dc_label
+    def load_for_next_entity(self):
+        self.selection = next(self.selection_iter, (None, ""))
+        if self.selection[0] is None:
+            self.window.quit()
+            self.scene.kp_references = self.kp_samples
+            self.scene.state_references = self.state_samples
+            Scene.save(self.scene.cfg)
+            return
 
     def on_resample_btn(self):
-        assert self.selection is not None
-        assert self.label is not None
-        if self.label == self.cfg.dc_label:
-            self.first_click = True
-            self.delete_from_canvas("all")
-
+        self.delete_from_canvas("all")
         self.make_rnd_image()
 
     def on_next_btn(self):
-        if self.sample_idx >= self.max_samples_per_label:
-            self.sample_idx = 0
-            self.label = next(self.label_iter, None)
-            if self.label is None:
-                self.selection = next(self.selection_iter, None)
-                if self.selection is None:
-                    self.window.quit()
-                    return
-                else:
-                    self.load_labels_for_selection()
-        assert self.label is not None
-        assert self.selection is not None
+        if self.selection[0] is None:  # First call, initialize selection
+            self.load_for_next_entity()
+        assert self.selection[0] is not None
+        idx = 0
+        if self.selection[1] == self.cfg.dc_label:
+            self.add_btn.config(state="disabled")
+        else:
+            self.add_btn.config(state="normal")
+            idx = len(self.state_samples[self.selection[0]][self.selection[1]])
+
+            if idx >= self.cfg.sample_count:
+                self.load_for_next_entity()
+                idx = 0
+
         title = self.title.format(
-            cam=self.selection.cam,
-            kp=self.selection.kp.cfg.label,
-            selection=self.label,
-            idx=self.sample_idx,
+            kp=self.selection[0].cfg.label,
+            selection=self.selection[1],
+            idx=idx,
         )
-        self.first_click = True
         self.window.title(title)
-        self.make_rnd_image()
+        self.on_resample_btn()

@@ -4,13 +4,13 @@ from dataclasses import dataclass
 
 from heca.entities.entity import Entity
 from heca.environment.scenes.scene import Scene
-from heca.image_extractors.image_extractor import ImageExtractor
+from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.td import TDImage
 
 
-class MolmoExtractor(ImageExtractor):
+class MolmoEncoder(ImageEncoder):
     @dataclass(kw_only=True)
-    class Config(ImageExtractor.Config):
+    class Config(ImageEncoder.Config):
         kp_selection_threshold: float = 0.2
         image_size: tuple[int, int] = (256, 256)
 

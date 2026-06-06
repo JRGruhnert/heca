@@ -6,12 +6,10 @@ from dataclasses import dataclass
 from heca.misc.base import Registerable
 from heca.entities.entity import Entity
 from heca.environment.scenes.scene import Scene
-from heca.misc import logger
 from heca.misc.td import TDImage
-from PIL import Image
 
 
-class ImageExtractor(Registerable):
+class ImageEncoder(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
         label: str = "default"
@@ -47,7 +45,6 @@ class ImageExtractor(Registerable):
     def transform_coords(
         self, y: int, x: int, origin_h: int, origin_w: int, target_h: int, target_w: int
     ) -> tuple[int, int]:
-        # logger.debug(f"get_patch_index_from_img_coords: size: {img_desc.shape}")
         ref_norm_yx = self.normalize_coords(torch.tensor([y, x]), (origin_h, origin_w))
         target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
         return int(target_yx[0].item()), int(target_yx[1].item())

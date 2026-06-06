@@ -16,7 +16,7 @@ from heca.misc import logger
 from heca.misc.base import Configurable
 from heca.misc.td import TDImage, TDSceneReferences
 from heca.entities.entity import Entity
-from heca.image_extractors.image_extractor import ImageExtractor
+from heca.image_encoders.image_encoder import ImageEncoder
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
 
@@ -122,9 +122,9 @@ class EntityStateKNN(Configurable):
         return prediction, confidence
 
 
-class DinoExtractor(ImageExtractor):
+class DinoEncoder(ImageEncoder):
     @dataclass(kw_only=True)
-    class Config(ImageExtractor.Config):
+    class Config(ImageEncoder.Config):
         stride: int = 8
         thresh: float = 0.5
         center_crop: bool = False
@@ -148,7 +148,7 @@ class DinoExtractor(ImageExtractor):
         self.model = timm.create_model(
             "vit_base_patch16_dinov3.lvd1689m", pretrained=True
         )
-        self.model, self.patch_size = DinoExtractor.patch_vit_resolution(
+        self.model, self.patch_size = DinoEncoder.patch_vit_resolution(
             self.model, self.cfg.stride
         )
         self.model.eval()
@@ -222,7 +222,7 @@ class DinoExtractor(ImageExtractor):
         model.patch_embed.proj.stride = stride
         # fix the positional encoding code
         model.interpolate_pos_encoding = types.MethodType(  # type: ignore
-            DinoExtractor._fix_pos_enc(patch_size, (stride, stride)), model
+            DinoEncoder._fix_pos_enc(patch_size, (stride, stride)), model
         )
         return model, patch_size
 
@@ -280,9 +280,10 @@ class DinoExtractor(ImageExtractor):
             self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
         # kps_raw_2d is (1, 2*Nref)
         # image_desc is (1, C, H, W)
-        assert self.entity_state_coords is not None
         kernels = self.get_state_kernel(
-            self.image_desc, kps, self.entity_state_coords
+            self.image_desc,
+            kps,
+            self.kp_patch_descr.state_coords,
         )  # (1, C, k, k)
         one_hots = []
         scores = []
