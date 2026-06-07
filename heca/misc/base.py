@@ -11,21 +11,11 @@ P = TypeVar("P", bound="Persistable")
 
 
 class Configurable(abc.ABC):
+    _config_registry: ClassVar[dict[type, type]] = {}
+
     @dataclass(kw_only=True)
     class Config:
         pass
-
-    def __init__(self, cfg: "Configurable.Config"):
-        self.cfg = cfg
-
-    @classmethod
-    def create(cls: Type[C], cfg: "Configurable.Config") -> C:
-        return cls(cfg)
-
-
-class Registerable(Configurable):
-    _config_registry: ClassVar[dict[type, type]] = {}
-    _instances: ClassVar[dict[tuple[type, str], "Registerable"]] = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -34,11 +24,25 @@ class Registerable(Configurable):
         # Register cls.Config -> cls into every Registerable ancestor's registry,
         # so A.get(B.Config(...)) resolves B even when called on A.
         own_config = cls.__dict__.get("Config")
-        if own_config is not None:
-            for base in cls.__mro__[1:]:
-                if base is Registerable or not issubclass(base, Registerable):
-                    break
+        if own_config is None:
+            # raise TypeError(f"{cls.__name__} must define a nested Config dataclass.")
+            return
+
+        for base in cls.__mro__[1:]:
+            if issubclass(base, Configurable):
                 base._config_registry[own_config] = cls
+
+    def __init__(self, cfg: "Configurable.Config"):
+        self.cfg = cfg
+
+    @classmethod
+    def create(cls: Type[C], cfg: "Configurable.Config") -> C:
+        target_cls = cls._config_registry.get(type(cfg), cls)
+        return target_cls(cfg)
+
+
+class Registerable(Configurable):
+    _instances: ClassVar[dict[tuple[type, str], "Registerable"]] = {}
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):

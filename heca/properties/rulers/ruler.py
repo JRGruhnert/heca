@@ -1,4 +1,3 @@
-from abc import abstractmethod
 import abc
 import torch
 from heca.misc.base import Configurable
