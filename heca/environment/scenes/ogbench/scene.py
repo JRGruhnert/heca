@@ -1,12 +1,12 @@
-from functools import cached_property
 import pathlib
+from dataclasses import dataclass
 from typing import Any, cast
 
 import numpy as np
-from dataclasses import dataclass
-
-from tensordict import TensorDict
+import ogbench
 import torch
+from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
+from tensordict import TensorDict
 
 from heca.entities.entity import Entity, Mobility
 from heca.environment.scenes.scene import Scene
@@ -17,8 +17,6 @@ from heca.misc.td import (
     TDSceneImages,
     make_abs_and_rel_td_entity,
 )
-import ogbench
-from ogbench.manipspace.envs.scene_env import SceneEnv
 
 
 class OGBenchScene(Scene):
@@ -38,7 +36,7 @@ class OGBenchScene(Scene):
         self.cfg = cfg
         self.reset_options = {"render_goal": True}
         self.env = cast(
-            SceneEnv,
+            ManipSpaceEnv,
             ogbench.make_env_and_datasets(
                 dataset_name=cfg.id,
                 env_only=True,
@@ -54,7 +52,7 @@ class OGBenchScene(Scene):
     def close(self):
         self.env.close()
 
-    @cached_property
+    @property
     def entities(self) -> list[Entity]:
         ents = [
             Entity.Config(
@@ -85,7 +83,7 @@ class OGBenchScene(Scene):
         ]
         return [Entity.create(e) for e in ents]
 
-    @cached_property
+    @property
     def cursor(self) -> Entity:
         config = Entity.Config(
             label="cursor",
@@ -94,10 +92,13 @@ class OGBenchScene(Scene):
         )
         return Entity.create(config)
 
-    def heca_td(self, obs) -> TDEntities:
+    def heca_td(self, obs: dict) -> TDEntities:
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
-        # for entity in self.entities:
+        for entity in self.entities:
+            e_pos = obs[f""]
+            e_rot = obs[f""]
+            e_state = obs
         # e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
         # e_state = obs.object_states.get(f"base__{entity.cfg.label}", None)
         # assert e_pose is not None, f"Missing pose for entity {entity.cfg.label}"
@@ -120,16 +121,20 @@ class OGBenchScene(Scene):
         )
         return TDEntities(td_entities)
 
-    def to_td_scene_images(self, obs) -> TDSceneImages:
+    def to_td_scene_images(self, obs: dict) -> TDSceneImages:
         raise NotImplementedError()
 
     def sample_image(self) -> np.ndarray:
         raise NotImplementedError()
 
-    def to_internal_obs(self, obs: Any, info: dict[str, Any]) -> Any:
+    def to_internal(self, obs: Any, info: dict[str, Any]) -> Any:
         goal = info["goal"]
         goal_rendered = info["goal_rendered"]
-        return obs
+        info.pop("goal")
+        info.pop("goal_rendered")
+        info["image"] = obs
+        goal["image"] = goal_rendered
+        return info, goal
 
     def to_internal_goal(self, obs: Any, info: dict[str, Any]) -> Any:
         return obs
@@ -141,12 +146,7 @@ class OGBenchScene(Scene):
         tuple[TDScene, TDSceneImages],
     ]:
         ob, info = self.env.reset(options=self.reset_options)
-        print(ob)
-        print(info.keys())
-        print(info["goal"])
-        print(info["goal_rendered"])
-        obs = self.to_internal_obs(ob, info)
-        goal = self.to_internal_goal(ob, info)
+        obs, goal = self.to_internal(ob, info)
         s_scene, s_images = self.from_internal(obs)
         g_scene, g_images = self.from_internal(goal)
         return (s_scene, s_images), (g_scene, g_images)
@@ -191,7 +191,7 @@ class OGBenchScene(Scene):
     def _step(self, action: np.ndarray) -> Any:
         action = self.to_internal_action(action)
         ob, reward, terminated, truncated, info = self.env.step(action)  # type: ignore
-        return self.to_internal_obs(ob, info)
+        return self.to_internal(ob, info)
 
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
