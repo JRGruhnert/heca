@@ -82,13 +82,16 @@ class TapasAgent(ExpertAgent):
             logger.debug(f"General error in prediction: {e}")
             return None
 
-    def from_disk(self, path: str):
+    def _load(self, path: str):
         logger.info(f"Loading tapas policy from: {path}")
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         temp.from_disk(path)
         temp.eval()
         self.policy = temp.to(device)
+
+    def _save(self, path: str):
+        raise NotImplementedError("Saving not implemented for TapasAgent yet.")
 
     @cached_property
     def model(self) -> AutoTPGMM:

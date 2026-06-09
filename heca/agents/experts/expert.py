@@ -1,4 +1,4 @@
-from abc import abstractmethod
+import abc
 from dataclasses import dataclass
 
 import torch
@@ -14,7 +14,7 @@ from heca.misc.td import (
 )
 
 
-class ExpertAgent(Agent):
+class ExpertAgent(Agent, abc.ABC):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
         scene: Scene.Config
@@ -34,12 +34,12 @@ class ExpertAgent(Agent):
             self.kp_extractor.prepare_for_scene(self.cfg.scene)
             self.state_extractor.prepare_for_scene(self.cfg.scene)
 
-    @abstractmethod
-    def act(self, x: TDScene, y: TDScene) -> TDScene:
-        raise NotImplementedError()
-
     def required_scenes(self) -> list[Scene.Config]:
         return [self.cfg.scene]
+
+    def from_image(self, td_image: TDImage) -> TDScene:
+        td_images = TDSceneImages({self.scene.cfg.cam: td_image})
+        return self.from_vision(td_images)
 
     def from_vision(self, td_images: TDSceneImages) -> TDScene:
         all_kps_3d = []

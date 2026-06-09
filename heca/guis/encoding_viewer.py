@@ -21,7 +21,9 @@ class EncodingViewer(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.get(self.cfg.scene)
+        self.scene = Scene.get(self.cfg.scene)  #
+        self.kp_encoder = ImageEncoder.get(self.cfg.kp_encoder)
+        self.state_encoder = ImageEncoder.get(self.cfg.state_encoder)
         self.scale = min(
             self.cfg.vis_size[0] / self.cfg.img_size[0],
             self.cfg.vis_size[1] / self.cfg.img_size[1],
@@ -71,24 +73,51 @@ class EncodingViewer(Configurable):
         )
 
     def make_rnd_image(self):
-        obs = self.scene.sample_image()
-        (s_scene, s_images), (g_scene, g_images) = self.scene.sample_task()
+        (s_image, s_td_image), (g_image, g_td_image) = self.scene.sample_task_imaged()
+        left_kp3d, left_kp2d, left_scores = self.kp_encoder.extract_entities(
+            s_td_image, self.scene.entities
+        )
+        left_states = self.state_encoder.extract_entity_states(
+            s_td_image, self.scene.entities, left_kp2d
+        )
+        right_kp3d, right_kp2d, right_scores = self.kp_encoder.extract_entities(
+            g_td_image, self.scene.entities
+        )
+        right_states = self.state_encoder.extract_entity_states(
+            g_td_image, self.scene.entities, right_kp2d
+        )
 
-        self.display_img = self.img.resize(
+        # scale kp2d to canvas coordinates
+        # make tensor to (int, int)
+        # mark them on the canvas
+        s_img = Image.fromarray(s_image)
+        g_img = Image.fromarray(g_image)
+        self.left_display_img = s_img.resize(
             (self.display_w, self.display_h),
             Image.Resampling.NEAREST,
         )
-        self.img_tk = ImageTk.PhotoImage(self.display_img)
-
-        self.canvas.create_image(
+        self.right_display_img = g_img.resize(
+            (self.display_w, self.display_h),
+            Image.Resampling.NEAREST,
+        )
+        left_img_tk = ImageTk.PhotoImage(self.left_display_img)
+        right_img_tk = ImageTk.PhotoImage(self.right_display_img)
+        self.left_canvas.create_image(
             self.offset_x,
             self.offset_y,
             anchor="nw",
-            image=self.img_tk,
+            image=left_img_tk,
+        )
+        self.right_canvas.create_image(
+            self.offset_x,
+            self.offset_y,
+            anchor="nw",
+            image=right_img_tk,
         )
 
     def on_resample_btn(self):
-        self.canvas.delete("all")
+        self.left_canvas.delete("all")
+        self.right_canvas.delete("all")
         self.make_rnd_image()
 
     def scale_point_to_canvas(self, x: int, y: int) -> tuple[int, int]:

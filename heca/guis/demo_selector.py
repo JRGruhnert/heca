@@ -17,7 +17,7 @@ class DemoSelector(Configurable):
         dataset_name: str
         base_path: Path = Path("data/demos")
         scene_name: str = "ogbench"
-        file_name: str = "demos.pkl"
+        file_name: str = "demos.h5"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -25,22 +25,25 @@ class DemoSelector(Configurable):
         self.dataset_path = cfg.base_path / cfg.scene_name / "full" / cfg.dataset_name
         print(self.dataset_path.resolve())
         self.train_dataset = h5py.File(self.dataset_path, "r")
-        self.observations = self.train_dataset["observations"]  # type: ignore
+        self.observations = self.train_dataset["observations/rgb"]  # type: ignore
         self.actions = self.train_dataset["actions"]  # type: ignore
         self.terminals = np.asarray(self.train_dataset["terminals"])  # type: ignore
+        self.episode_slices, self.demo_lengths = self._make_episode_slices()
 
-        self.episode_slices = self._make_episode_slices()
-
-        self.saved_segments: list[dict] = []
+        self.demo_dataset: dict = {key: [] for key in self.train_dataset.keys()}
+        self.demo_dataset["demo"] = []
+        # self.saved_segments: list[dict] = []
         self.pending_start: int | None = None
 
-    def _make_episode_slices(self) -> list[slice]:
+    def _make_episode_slices(self) -> tuple[list[slice], list[int]]:
         terminal_idxs = np.where(self.terminals == 1.0)[0]
         slices, start = [], 0
+        demo_lengths = []
         for end in terminal_idxs:
             slices.append(slice(start, end + 1))
+            demo_lengths.append(end - start + 1)
             start = end + 1
-        return slices
+        return slices, demo_lengths
 
     def _build_ui(self):
         self.fig = plt.figure(figsize=(14, 8))
@@ -147,15 +150,11 @@ class DemoSelector(Configurable):
         self.fig.canvas.draw_idle()
 
     def _update_segments_view(self):
-        if not self.saved_segments:
+        unique_demos = np.unique(self.demo_dataset["demo"])
+        if len(unique_demos) == 0:
             self.segments_text.set_text("No segments selected yet.")
         else:
-            lines = [f"{len(self.saved_segments)} segment(s):"]
-            for i, seg in enumerate(self.saved_segments):
-                lines.append(
-                    f"[{i}] ep={seg['episode']}  frames={seg['start']}–{seg['end']}"
-                    f"  ({seg['end'] - seg['start'] + 1} steps)"
-                )
+            lines = [f"{len(unique_demos)} segment(s):"]
             self.segments_text.set_text("\n".join(lines))
         self.fig.canvas.draw_idle()
 
@@ -178,20 +177,18 @@ class DemoSelector(Configurable):
             return
         ep_idx = int(self.ep_slider.val)
         sl = self.episode_slices[ep_idx]
-        self.saved_segments.append(
-            {
-                "episode": ep_idx,
-                "start": self.pending_start,
-                "end": end,
-                "observations": self.observations[sl][  # type: ignore
-                    self.pending_start : end + 1
-                ].copy(),  # type: ignore
-                "actions": self.actions[sl][self.pending_start : end + 1].copy(),  # type: ignore
-            }
-        )
+        dl = self.demo_lengths[ep_idx]
+        episode_data = {
+            key: self.train_dataset[key][sl][self.pending_start : end + 1].copy()  # type: ignore
+            for key in self.train_dataset.keys()
+        }
+        demo_data = np.full(dl, ep_idx)
+        for key in self.demo_dataset.keys():
+            self.demo_dataset[key].append(episode_data[key])
+        self.demo_dataset["demo"].append(demo_data)
+
         self.status_text.set_text(
-            f"✓ Segment added (ep={ep_idx}, frames {self.pending_start}–{end}). "
-            f"Total: {len(self.saved_segments)}"
+            f"✓ Segment added (ep={ep_idx}, frames {self.pending_start}–{end}, length={dl})."
         )
         self.pending_start = None
         self._update_segments_view()
@@ -203,29 +200,21 @@ class DemoSelector(Configurable):
         self._render_frame(int(self.frame_slider.val))
 
     def on_save(self, _event):
-        if not self.saved_segments:
+        unique_demos = np.unique(self.demo_dataset["demo"])
+        if len(unique_demos) == 0:
             self.status_text.set_text("⚠ No segments to save!")
             self.fig.canvas.draw_idle()
             return
         self.save_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.save_path, "wb") as f:
-            pickle.dump(self.saved_segments, f)
+        file = h5py.File(self.save_path, "w")
+        for k, rows in self.demo_dataset.items():
+            arr = np.array(rows)
+            maxshape = (None,) + arr.shape[1:]
+            file.create_dataset(
+                k, data=arr, maxshape=maxshape, chunks=(1,) + arr.shape[1:]
+            )
+        file.close()
         self.status_text.set_text(
-            f"✓ Saved {len(self.saved_segments)} segments to {self.save_path}"
+            f"✓ Saved {len(unique_demos)} segments to {self.save_path}"
         )
         self.fig.canvas.draw_idle()
-
-    # ------------------------------------------------------------------
-    # Utility
-    # ------------------------------------------------------------------
-
-    def load_segments(self) -> list[dict]:
-        with open(self.cfg.base_path, "rb") as f:
-            loaded = pickle.load(f)
-        print(f"{len(loaded)} segments loaded:")
-        for i, seg in enumerate(loaded):
-            print(
-                f"  [{i}] episode={seg['episode']}  frames={seg['start']}–{seg['end']}"
-                f"  obs={seg['observations'].shape}  actions={seg['actions'].shape}"
-            )
-        return loaded

@@ -1,4 +1,4 @@
-from abc import abstractmethod
+import abc
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
@@ -27,7 +27,7 @@ class AgentFeedback:
     terminal: bool
 
 
-class Agent(Persistable):
+class Agent(Persistable, abc.ABC):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
         pass
@@ -35,23 +35,23 @@ class Agent(Persistable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    @abstractmethod
+    @abc.abstractmethod
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         raise NotImplementedError()
 
-    @abstractmethod
+    @abc.abstractmethod
     def evaluate(self, x: TDScene, y: TDScene) -> AgentFeedback:
         raise NotImplementedError()
 
-    @abstractmethod
+    @abc.abstractmethod
     def sample(self) -> tuple[TDScene, TDScene]:
         raise NotImplementedError()
 
-    @abstractmethod
+    @abc.abstractmethod
     def gen_pre(self) -> list[tuple[Entity, TDEntity]]:
         raise NotImplementedError()
 
-    @abstractmethod
+    @abc.abstractmethod
     def gen_post(self) -> list[tuple[Entity, TDEntity]]:
         raise NotImplementedError()
 
@@ -63,7 +63,7 @@ class Agent(Persistable):
     def postcons(self) -> list[tuple[Entity, TDEntity]]:
         return self.gen_post()
 
-    @abstractmethod
+    @abc.abstractmethod
     def required_scenes(self) -> list[Scene.Config]:
         raise NotImplementedError()
 

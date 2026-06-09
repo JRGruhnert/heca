@@ -46,6 +46,7 @@ class CalvinScene(Scene):
     @dataclass(kw_only=True)
     class Config(Scene.Config):
         label: str = "calvin"
+        cam: str = "front"
         cc: CalvinConfig = CalvinConfig(
             task="Undefined",
             cameras=("wrist", "front"),

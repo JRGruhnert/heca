@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from PIL import Image, ImageTk
 import tkinter as tk
 
+import h5py
+
 from heca.entities.entity import Entity
 from heca.misc.base import Configurable
 from heca.environment.scenes.scene import Scene
@@ -13,7 +15,7 @@ class ImageSelector(Configurable):
     class Config(Configurable.Config):
         scene: Scene.Config
         dc_label: str = "dc_pose"
-        cam: str = "front"
+        demo_data_path: str = "data/demo.hdf5"
         marker_radius: int = 3
         sample_count: int = 5
         vis_size: tuple[int, int] = (512, 512)
@@ -21,7 +23,7 @@ class ImageSelector(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.get(self.cfg.scene)
+        self.scene = Scene.load(self.cfg.scene, skip_loading=True)
         self.scale = min(
             self.cfg.vis_size[0] / self.cfg.img_size[0],
             self.cfg.vis_size[1] / self.cfg.img_size[1],
@@ -78,17 +80,20 @@ class ImageSelector(Configurable):
         self.kp_marker: int | None = None
         self.state_marker: int | None = None
         self.title: str = "Selection for: {entity}.{state} Sample {idx}"
-        self.state_samples: dict[Entity, dict[str, list[Image.Image]]] = {
-            entity: {state: [] for state in entity.cfg.states}
+        self.state_samples: dict[str, dict[str, list[Image.Image]]] = {
+            entity.cfg.label: {state: [] for state in entity.cfg.states}
             for entity in self.scene.entities
         }
-        self.kp_samples: dict[Entity, tuple[Image.Image, int, int, int, int]] = {}
+        self.kp_samples: dict[str, tuple[Image.Image, int, int, int, int]] = {}
         selection_tuples: list[tuple[Entity, str]] = []
         for entity in self.scene.entities:
             selection_tuples.append((entity, self.cfg.dc_label))
             for state in entity.cfg.states:
                 selection_tuples.append((entity, state))
         self.selection_iter = iter(selection_tuples)
+
+        demo_dataset = h5py.File(self.cfg.demo_data_path, "r")
+        self.observations = demo_dataset["rgb"]  # type: ignore
 
     def run(self):
         self.on_next_btn()
@@ -149,9 +154,9 @@ class ImageSelector(Configurable):
         self.kp_marker = None
         self.state_marker = None
         self.line_marker = None
-
-        obs = self.scene.sample_image()
-        self.img = Image.fromarray(obs[self.cfg.cam])
+        idx = random.randint(0, len(self.observations) - 1)  # type: ignore
+        obs: np.ndarray = self.observations[idx]  # type: ignore
+        self.img = Image.fromarray(obs)
         assert (
             self.img.size == self.cfg.img_size
         ), f"Expected image size {self.cfg.img_size}, got {self.img.size}"
@@ -188,8 +193,8 @@ class ImageSelector(Configurable):
 
         if self.kp_marker is not None:
             # Kp Marker already placed
-            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection[0]]
-            self.kp_samples[self.selection[0]] = (
+            img, dc_x, dc_y, _, _ = self.kp_samples[self.selection[0].cfg.label]
+            self.kp_samples[self.selection[0].cfg.label] = (
                 img,
                 dc_x,
                 dc_y,
@@ -201,23 +206,61 @@ class ImageSelector(Configurable):
         else:
             # Kp Marker not placed yet, place it and save the image and point
             self.kp_marker = self.place_marker(event.x, event.y, "blue")
-            self.kp_samples[self.selection[0]] = (self.img, point[0], point[1], 0, 0)
+            self.kp_samples[self.selection[0].cfg.label] = (
+                self.img,
+                point[0],
+                point[1],
+                0,
+                0,
+            )
 
     def on_clear_btn(self):
         self.delete_from_canvas("all")
         if self.selection[0] is not None and self.selection[1] == self.cfg.dc_label:
-            self.kp_samples.pop(self.selection[0])
+            self.kp_samples.pop(self.selection[0].cfg.label)
 
-    def on_add_btn(self):
-        assert self.selection[0] is not None, "No entity selected"
-        assert self.selection[1] != "", "No state selected"
-        assert (
-            self.selection[1] != self.cfg.dc_label
-        ), "Use 'Next' to save DC pose samples"
-        self.state_samples[self.selection[0]][self.selection[1]].append(self.img)
+    def on_resample_btn(self):
+        self.delete_from_canvas("all")
         self.make_rnd_image()
 
-    def load_for_next_entity(self):
+    def on_add_btn(self):
+        entity = self.selection[0]
+        state = self.selection[1]
+        assert entity is not None, "No entity selected"
+        assert state != "", "No state selected"
+        assert state != self.cfg.dc_label, "Should not happen"
+        elabel = entity.cfg.label
+        self.state_samples[elabel][state].append(self.img)
+        idx = len(self.state_samples[elabel][state])
+        if idx >= self.cfg.sample_count:
+            self.on_next_btn()
+        else:
+            self.update_title(entity=elabel, state=state, idx=idx)
+            self.on_resample_btn()
+
+    def on_next_btn(self):
+        self.load_next_selection()
+        assert self.selection[0] is not None, "Should not happen"
+        if self.selection[1] == self.cfg.dc_label:
+            self.add_btn.config(state="disabled")
+        else:
+            self.add_btn.config(state="normal")
+        self.update_title(
+            entity=self.selection[0].cfg.label,
+            state=self.selection[1],
+            idx=0,
+        )
+        self.on_resample_btn()
+
+    def update_title(self, entity: str, state: str, idx: int):
+        title = self.title.format(
+            entity=entity,
+            state=state,
+            idx=idx,
+        )
+        self.window.title(title)
+
+    def load_next_selection(self):
         self.selection = next(self.selection_iter, (None, ""))
         if self.selection[0] is None:
             self.window.quit()
@@ -225,30 +268,3 @@ class ImageSelector(Configurable):
             self.scene.state_references = self.state_samples
             Scene.save(self.scene.cfg)
             return
-
-    def on_resample_btn(self):
-        self.delete_from_canvas("all")
-        self.make_rnd_image()
-
-    def on_next_btn(self):
-        if self.selection[0] is None:  # First call, initialize selection
-            self.load_for_next_entity()
-        assert self.selection[0] is not None
-        idx = 0
-        if self.selection[1] == self.cfg.dc_label:
-            self.add_btn.config(state="disabled")
-        else:
-            self.add_btn.config(state="normal")
-            idx = len(self.state_samples[self.selection[0]][self.selection[1]])
-
-            if idx >= self.cfg.sample_count:
-                self.load_for_next_entity()
-                idx = 0
-
-        title = self.title.format(
-            kp=self.selection[0].cfg.label,
-            selection=self.selection[1],
-            idx=idx,
-        )
-        self.window.title(title)
-        self.on_resample_btn()

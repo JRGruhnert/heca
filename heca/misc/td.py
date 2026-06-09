@@ -58,19 +58,20 @@ class TDProperties(TensorDict):
         return self[label]
 
 
-class TDEntities(TensorDict):
-    def __init__(self, entities: dict[str, TDEntity]):
-        super().__init__(entities, batch_size=empty_bs)
-
-
 class TDScene(TensorDict):
-    def __init__(self, entities: dict[str, TDEntity]):
-        super().__init__(entities, batch_size=empty_bs)
+    def __init__(
+        self, entities: dict[str, TDEntity], extras: dict[str, torch.Tensor] = {}
+    ):
+        super().__init__({**entities, "extras": extras}, batch_size=empty_bs)
 
     def __getitem__(self, key: str) -> TDEntity:
         if key not in self.keys():
             raise KeyError(f"Entity {key} not found in TDScene")
         return cast(TDEntity, super().__getitem__(key))
+
+    @property
+    def extras(self) -> dict[str, torch.Tensor]:
+        return self.get("extras", {})
 
 
 class TDWorld(TensorDict):
