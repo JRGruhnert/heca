@@ -1,41 +1,47 @@
 from dataclasses import dataclass
-
+import random
 import numpy as np
-import pickle
-from pathlib import Path
 import h5py
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 
+from heca.agents.experts.expert import ExpertAgent
+from heca.environment.scenes.scene import Scene
 from heca.misc.base import Configurable
 
 
 class DemoSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        demos_name: str
+        agent: ExpertAgent.Config
         dataset_name: str
-        base_path: Path = Path("data/demos")
-        scene_name: str = "ogbench"
         file_name: str = "demos.h5"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.save_path = cfg.base_path / cfg.scene_name / cfg.demos_name / cfg.file_name
-        self.dataset_path = cfg.base_path / cfg.scene_name / "full" / cfg.dataset_name
-        print(self.dataset_path.resolve())
-        self.train_dataset = h5py.File(self.dataset_path, "r")
-        self.observations = self.train_dataset["observations/rgb"]  # type: ignore
+        self.load_path = (
+            Scene.resolve_base(cfg.agent.scene) / "demos" / cfg.dataset_name
+        )
+        self.save_path = ExpertAgent.resolve(cfg.agent) / cfg.file_name
+        self.train_dataset = h5py.File(self.load_path, "r")
+        self.demos_file = h5py.File(self.save_path, "w")
+        self.observations = self.train_dataset["rgb"]  # type: ignore
         self.actions = self.train_dataset["actions"]  # type: ignore
         self.terminals = np.asarray(self.train_dataset["terminals"])  # type: ignore
-        self.episode_slices, self.demo_lengths = self._make_episode_slices()
+        self.ep_slices, self.ep_lengths, self.total_episodes = self._make_episode_meta()
 
-        self.demo_dataset: dict = {key: [] for key in self.train_dataset.keys()}
-        self.demo_dataset["demo"] = []
-        # self.saved_segments: list[dict] = []
-        self.pending_start: int | None = None
+        self.start_idx = 0
+        self.ep_idx = 0
+        self.key_pressed = set()
 
-    def _make_episode_slices(self) -> tuple[list[slice], list[int]]:
+        self.demo_counter = 0
+        self.out_datasets = {}
+
+        self.btn_start_text = "Mark Start"
+        self.btn_end_text = "Mark End & Add"
+        self.btn_save_text = "Save & Close"
+
+    def _make_episode_meta(self) -> tuple[list[slice], list[int], int]:
         terminal_idxs = np.where(self.terminals == 1.0)[0]
         slices, start = [], 0
         demo_lengths = []
@@ -43,178 +49,198 @@ class DemoSelector(Configurable):
             slices.append(slice(start, end + 1))
             demo_lengths.append(end - start + 1)
             start = end + 1
-        return slices, demo_lengths
+        return (slices, demo_lengths, len(slices))
 
     def _build_ui(self):
         self.fig = plt.figure(figsize=(14, 8))
-        self.fig.canvas.manager.set_window_title("Demo Selector")  # type: ignore
+        self.fig.canvas.manager.set_window_title(f"Demo Selector: {self.cfg.agent.label}")  # type: ignore
 
         # Image panel (right)
         self.ax_img = self.fig.add_axes((0.45, 0.08, 0.52, 0.88))
         self.ax_img.axis("off")
 
+        # demos text
+        self.demos_text = self.fig.text(
+            0.23,
+            0.95,
+            "No demos saved yet.",
+            fontsize=14,
+            ha="center",
+            va="top",
+            family="monospace",
+        )
+
         # Episode slider
         ax_ep = self.fig.add_axes((0.08, 0.88, 0.30, 0.04))
         self.ep_slider = Slider(
-            ax_ep,
-            "Episode",
-            0,
-            max(1, len(self.episode_slices) - 1),
-            valinit=0,
+            ax=ax_ep,
+            label="Episode",
+            valmin=0,
+            valmax=max(1, len(self.ep_slices) - 1),
+            valinit=self.ep_idx,
             valstep=1,
         )
 
         # Frame slider
         ax_frame = self.fig.add_axes((0.08, 0.78, 0.30, 0.04))
-        self.frame_slider = Slider(ax_frame, "Frame", 0, 1, valinit=0, valstep=1)
-
-        # Buttons
-        ax_bstart = self.fig.add_axes((0.05, 0.65, 0.13, 0.07))
-        self.btn_start = Button(ax_bstart, "Mark Start", color="lightblue")
-
-        ax_bend = self.fig.add_axes((0.22, 0.65, 0.17, 0.07))
-        self.btn_end = Button(ax_bend, "Mark End & Add", color="lightgreen")
-
-        ax_bclear = self.fig.add_axes((0.05, 0.55, 0.13, 0.07))
-        self.btn_clear = Button(ax_bclear, "Clear Pending", color="lightyellow")
-
-        ax_bsave = self.fig.add_axes((0.22, 0.55, 0.17, 0.07))
-        self.btn_save = Button(ax_bsave, "Save Segments", color="lightsalmon")
-
-        # Status and segments text
-        self.status_text = self.fig.text(0.05, 0.48, "", fontsize=9, va="top")
-        self.segments_text = self.fig.text(
-            0.05,
-            0.42,
-            "No segments selected yet.",
-            fontsize=8,
-            va="top",
-            family="monospace",
+        self.frame_slider = Slider(
+            ax=ax_frame,
+            label="Frame",
+            valmin=0,
+            valmax=max(1, self.ep_lengths[self.ep_idx]),
+            valinit=self.start_idx,
+            valstep=1,
         )
 
+        # Buttons
+        ax_bstart = self.fig.add_axes((0.05, 0.65, 0.16, 0.07))
+        self.btn_start = Button(
+            ax_bstart,
+            self.btn_start_text,
+            color="lightblue",
+        )
+
+        ax_bend = self.fig.add_axes((0.22, 0.65, 0.16, 0.07))
+        self.btn_end = Button(
+            ax_bend,
+            self.btn_end_text,
+            color="lightsalmon",
+        )
+
+        # Status text
+        self.status_text = self.fig.text(
+            0.05,
+            0.60,
+            "",
+            fontsize=14,
+            va="top",
+        )
+        self._update_to_default_status()
+
         self.ep_slider.on_changed(lambda v: self._on_episode_change(int(v)))
-        self.frame_slider.on_changed(lambda v: self._render_frame(int(v)))
+        self.frame_slider.on_changed(lambda v: self._on_frame_change(int(v)))
         self.btn_start.on_clicked(self.on_mark_start)
         self.btn_end.on_clicked(self.on_mark_end)
-        self.btn_clear.on_clicked(self.on_clear)
-        self.btn_save.on_clicked(self.on_save)
 
         self.fig.canvas.mpl_connect("key_press_event", self._on_key_press)
+        self.fig.canvas.mpl_connect("key_release_event", self._on_key_release)
+        self.fig.canvas.mpl_connect("close_event", self._on_close)
+
+    def _update_demos_status(self):
+        if self.demo_counter == 0:
+            self.demos_text.set_text("No demos saved yet.")
+        else:
+            self.demos_text.set_text(f"{self.demo_counter} demo(s) saved.")
+        self.fig.canvas.draw_idle()
+
+    def _update_to_default_status(self):
+        self.status_text.set_text(
+            f"Current start frame {self.start_idx}.\n\n"
+            f"Pick a new start frame and press: '{self.btn_start_text}'\n\n"
+            f"or pick the end frame and press:  '{self.btn_end_text}'"
+        )
+        self.fig.canvas.draw_idle()
+
+    def _update_to_idx_error_status(self, end_idx: int):
+        self.status_text.set_text(
+            "⚠ End frame must be after start frame!\n"
+            f"Start frame is {self.start_idx} and end frame is {end_idx}"
+        )
+        self.fig.canvas.draw_idle()
 
     def _on_key_press(self, event):
-        if event.key in ("right"):
+        if event.key in self.key_pressed:
+            return  # ignore key repeat
+
+        self.key_pressed.add(event.key)
+
+        if event.key == "right":
             value = min(int(self.frame_slider.val) + 1, int(self.frame_slider.valmax))
             self.frame_slider.set_val(value)
-        elif event.key in ("left"):
+        elif event.key == "left":
             value = max(int(self.frame_slider.val) - 1, 0)
             self.frame_slider.set_val(value)
-        elif event.key in ("up"):
+
+        elif event.key == "up":
             value = min(int(self.ep_slider.val) + 1, int(self.ep_slider.valmax))
             self.ep_slider.set_val(value)
-        elif event.key in ("down"):
+
+        elif event.key == "down":
             value = max(int(self.ep_slider.val) - 1, 0)
             self.ep_slider.set_val(value)
+
+    def _on_key_release(self, event):
+        self.key_pressed.discard(event.key)
+
+    def _on_episode_change(self, ep_idx: int):
+        self.ep_idx = ep_idx
+        self.start_idx = 0
+        ep_len = self.ep_lengths[ep_idx]  # type: ignore
+        self.frame_slider.valmax = ep_len - 1
+        self.frame_slider.ax.set_xlim(0, ep_len - 1)
+        self.frame_slider.set_val(0)
+        self._update_to_default_status()
+        self._on_frame_change(self.start_idx)
+
+    def _on_frame_change(self, frame_idx: int):
+        ep_slice = self.ep_slices[self.ep_idx]
+        frame = self.observations[ep_slice][frame_idx]  # type: ignore
+        self.ax_img.clear()
+        self.ax_img.imshow(frame)  # type: ignore
+        self.fig.canvas.draw_idle()
+
+    def _on_close(self, event):
+        self.train_dataset.close()
+        self.demos_file.close()
+
+    def on_mark_start(self, _event):
+        self.start_idx = int(self.frame_slider.val)
+        self._update_to_default_status()
+
+    def on_mark_end(self, _event):
+        end_idx = int(self.frame_slider.val)
+        if end_idx <= self.start_idx:
+            self._update_to_idx_error_status(end_idx)
+            return
+        self.save_demo(start=self.start_idx, end=end_idx, episode=self.ep_idx)
+        self._random_new_episode()
+        self._update_demos_status()
+        self._update_to_default_status()
+
+    def _random_new_episode(self):
+        ep_idx = random.randrange(self.total_episodes - 1)
+        self._on_episode_change(ep_idx)
+
+    def save_demo(self, start: int, end: int, episode: int):
+        sl = self.ep_slices[episode]
+        length = end - start + 1
+
+        for key in self.train_dataset.keys():
+            data = self.train_dataset[key][sl][start : end + 1]  # type: ignore
+            self._append_dataset(key, data)
+
+        demo_ids = np.full(length, self.demo_counter, dtype=np.int32)
+        self._append_dataset("demo", demo_ids)
+
+        self.demo_counter += 1
+
+    def _append_dataset(self, name, data):
+        n = len(data)
+
+        if name not in self.out_datasets:
+            self.out_datasets[name] = self.demos_file.create_dataset(
+                name,
+                data=data,
+                maxshape=(None,) + data.shape[1:],
+                chunks=True,
+            )
+        else:
+            ds = self.out_datasets[name]
+            old_n = ds.shape[0]
+            ds.resize(old_n + n, axis=0)
+            ds[old_n : old_n + n] = data
 
     def run(self):
         self._build_ui()
         self._on_episode_change(0)
         plt.show()
-
-    def _on_episode_change(self, ep_idx: int):
-        self.pending_start = None
-        sl = self.episode_slices[ep_idx]
-        ep_len = len(self.observations[sl])  # type: ignore
-        self.frame_slider.valmax = ep_len - 1
-        self.frame_slider.ax.set_xlim(0, ep_len - 1)
-        self.frame_slider.set_val(0)
-        self.status_text.set_text(f"Episode {ep_idx}: {ep_len} frames")
-        self._render_frame(0)
-
-    def _render_frame(self, frame_idx: int):
-        ep_idx = int(self.ep_slider.val)
-        sl = self.episode_slices[ep_idx]
-        ep_obs = self.observations[sl]  # type: ignore
-        ep_len = len(ep_obs)  # type: ignore
-
-        self.ax_img.clear()
-        self.ax_img.imshow(ep_obs[frame_idx])  # type: ignore
-        title = f"Episode {ep_idx} | Frame {frame_idx}/{ep_len - 1}"
-        if self.pending_start is not None:
-            title += f" | Start: {self.pending_start}"
-            color = "green" if frame_idx >= self.pending_start else "red"
-            for spine in self.ax_img.spines.values():
-                spine.set_edgecolor(color)
-                spine.set_linewidth(4)
-        self.ax_img.set_title(title)
-        self.ax_img.axis("off")
-        self.fig.canvas.draw_idle()
-
-    def _update_segments_view(self):
-        unique_demos = np.unique(self.demo_dataset["demo"])
-        if len(unique_demos) == 0:
-            self.segments_text.set_text("No segments selected yet.")
-        else:
-            lines = [f"{len(unique_demos)} segment(s):"]
-            self.segments_text.set_text("\n".join(lines))
-        self.fig.canvas.draw_idle()
-
-    def on_mark_start(self, _event):
-        self.pending_start = int(self.frame_slider.val)
-        self.status_text.set_text(
-            f"Start marked at frame {self.pending_start}. Pick end frame and click 'Mark End & Add'."
-        )
-        self._render_frame(self.pending_start)
-
-    def on_mark_end(self, _event):
-        if self.pending_start is None:
-            self.status_text.set_text("⚠ Mark a start frame first!")
-            self.fig.canvas.draw_idle()
-            return
-        end = int(self.frame_slider.val)
-        if end <= self.pending_start:
-            self.status_text.set_text("⚠ End frame must be after start frame!")
-            self.fig.canvas.draw_idle()
-            return
-        ep_idx = int(self.ep_slider.val)
-        sl = self.episode_slices[ep_idx]
-        dl = self.demo_lengths[ep_idx]
-        episode_data = {
-            key: self.train_dataset[key][sl][self.pending_start : end + 1].copy()  # type: ignore
-            for key in self.train_dataset.keys()
-        }
-        demo_data = np.full(dl, ep_idx)
-        for key in self.demo_dataset.keys():
-            self.demo_dataset[key].append(episode_data[key])
-        self.demo_dataset["demo"].append(demo_data)
-
-        self.status_text.set_text(
-            f"✓ Segment added (ep={ep_idx}, frames {self.pending_start}–{end}, length={dl})."
-        )
-        self.pending_start = None
-        self._update_segments_view()
-        self._render_frame(int(self.frame_slider.val))
-
-    def on_clear(self, _event):
-        self.pending_start = None
-        self.status_text.set_text("Pending start cleared.")
-        self._render_frame(int(self.frame_slider.val))
-
-    def on_save(self, _event):
-        unique_demos = np.unique(self.demo_dataset["demo"])
-        if len(unique_demos) == 0:
-            self.status_text.set_text("⚠ No segments to save!")
-            self.fig.canvas.draw_idle()
-            return
-        self.save_path.parent.mkdir(parents=True, exist_ok=True)
-        file = h5py.File(self.save_path, "w")
-        for k, rows in self.demo_dataset.items():
-            arr = np.array(rows)
-            maxshape = (None,) + arr.shape[1:]
-            file.create_dataset(
-                k, data=arr, maxshape=maxshape, chunks=(1,) + arr.shape[1:]
-            )
-        file.close()
-        self.status_text.set_text(
-            f"✓ Saved {len(unique_demos)} segments to {self.save_path}"
-        )
-        self.fig.canvas.draw_idle()

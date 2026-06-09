@@ -445,9 +445,9 @@ class DinoEncoder(ImageEncoder):
         return grid_h, grid_w
 
     def prepare_for_scene(self, config: Scene.Config):
-        scene = Scene.get(config)
+        scene = Scene.load(config)
         for entity in scene.entities:
-            image, x1, y1, x2, y2 = scene.kp_references[entity]
+            image, x1, y1, x2, y2 = scene.kp_references[entity.cfg.label]
             image_desc = self.compute_descriptor(image)  # (1, D, H, W)
             dc_py, dc_px = self.transform_coords(
                 x1,
@@ -467,7 +467,9 @@ class DinoEncoder(ImageEncoder):
             self.kp_patch_descr.add_scene(
                 entity.cfg.label, dc_ref_patch_desc, state_coords
             )
-            for state_label, state_imgs in scene.state_references[entity].items():
+            for state_label, state_imgs in scene.state_references[
+                entity.cfg.label
+            ].items():
                 for state_img in state_imgs:
                     state_img_desc = self.compute_descriptor(state_img)  # (1, D, H, W)
                     kp_2d, _ = self.compute_keypoints(

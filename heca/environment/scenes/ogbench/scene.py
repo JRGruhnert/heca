@@ -95,10 +95,10 @@ class OGBenchScene(Scene):
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:
-            e_pos = obs[f"privileged/{entity.cfg.label}_pos"]
-            wxyz = obs[f"privileged/{entity.cfg.label}_quat"]
+            e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
+            wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
-            e_label = obs[f"privileged/{entity.cfg.label}_state"]
+            e_label = obs[f"privileged_{entity.cfg.label}_state"]
             td_abs, td_rel = make_abs_and_rel_td_entity(
                 position=torch.tensor(e_pos, dtype=torch.float32),
                 rotation=torch.tensor(e_rot, dtype=torch.float32),
@@ -133,15 +133,15 @@ class OGBenchScene(Scene):
         )
 
     def get_extras(self, obs: dict) -> dict[str, Any]:
-        action_raw = obs["proprio/action"]
+        action_raw = obs["proprio_action"]
         yaw = action_raw[3]
         quat = self.yaw_to_quat(yaw)
         action = np.concatenate([action_raw[:3], quat, action_raw[5]], axis=0)
         return {
             "action": action,
-            "reward": obs["proprio/reward"],
-            "joint_pos": obs["proprio/joint_pos"],
-            "joint_vel": obs["proprio/joint_vel"],
+            "reward": obs["proprio_reward"],
+            "joint_pos": obs["proprio_joint_pos"],
+            "joint_vel": obs["proprio_joint_vel"],
         }
 
     def to_internal(self, obs: Any, info: dict[str, Any]) -> Any:
@@ -186,12 +186,12 @@ class OGBenchScene(Scene):
         return obs
 
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        pos = torch.tensor(obs["proprio/effector_pos"], dtype=torch.float32)
+        pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
         # wxyz = obs["proprio/effector_quat"]
-        yaw = obs["proprio/effector_yaw"]
+        yaw = obs["proprio_effector_yaw"]
         rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
-        label = obs["proprio/gripper_state"]
+        label = obs["proprio_gripper_state"]
         state = self.cursor.state.make_one_hot(label)
         return pos, rot, state
 
@@ -214,24 +214,23 @@ class OGBenchScene(Scene):
         return np.concatenate([pos, [yaw], [gripper]], axis=0)
 
     def load_dataset(
-        self, data_root: str
+        self, file: h5py.File
     ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
-        demo_dataset = h5py.File(data_root, "r")
-        demo_indices: h5py.Dataset = demo_dataset["demo"][:]  # type: ignore
+        demo_indices: h5py.Dataset = file["demo"][:]  # type: ignore
         demo_length = len(demo_indices)
         pp_demos_scene: list[TDScene] = []
         pp_demos_image: list[TDImage] = []
         for i in range(demo_length):
             image = dict(
-                rgb=demo_dataset["rgb"][i],  # type: ignore
-                depth=demo_dataset["depth"][i],  # type: ignore
-                mask=demo_dataset["mask"][i],  # type: ignore
-                extrinsics=demo_dataset["extrinsics"][i],  # type: ignore
-                intrinsics=demo_dataset["intrinsics"][i],  # type: ignore
+                rgb=file["rgb"][i],  # type: ignore
+                depth=file["depth"][i],  # type: ignore
+                mask=file["mask"][i],  # type: ignore
+                extrinsics=file["extrinsics"][i],  # type: ignore
+                intrinsics=file["intrinsics"][i],  # type: ignore
             )  # type: ignore
             ob: dict = {
-                key: demo_dataset[key][i]  # type: ignore
-                for key in demo_dataset.keys()
+                key: file[key][i]  # type: ignore
+                for key in file.keys()
                 if key
                 not in [
                     "rgb",
@@ -242,8 +241,8 @@ class OGBenchScene(Scene):
                     "demo",
                 ]
             }  # type: ignore
-            ob.update({"image": image})
-            obs, _ = self.to_internal(ob, {})
+            print(ob.keys())
+            obs, _ = self.to_internal(image, ob)
             td_scene, td_image = self.from_internal(obs)
             pp_demos_scene.append(td_scene)
             pp_demos_image.append(td_image)
@@ -261,7 +260,3 @@ class OGBenchScene(Scene):
             segments_scene.append(segment_scene)
             segments_image.append(segment_image)
         return segments_scene, segments_image
-
-
-# encoder Fix
-# Dino Encoder Fix (padding)

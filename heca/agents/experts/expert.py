@@ -4,7 +4,9 @@ from dataclasses import dataclass
 import torch
 from heca.agents.agent import Agent, Cursor
 from heca.environment.scenes.scene import Scene
+from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
+from heca.image_encoders.molmo_encoder import MolmoEncoder
 from heca.misc.td import (
     TDEntity,
     TDImage,
@@ -17,9 +19,10 @@ from heca.misc.td import (
 class ExpertAgent(Agent, abc.ABC):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
+        subroot: str = "experts"
         scene: Scene.Config
-        kp_extraction: ImageEncoder.Config
-        state_extraction: ImageEncoder.Config
+        kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
+        state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
         score_threshold: float = 0.5
         use_gt: bool = False
 

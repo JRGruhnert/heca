@@ -6,5 +6,5 @@ from heca.properties.encoders.encoder import PropertyEncoder
 class StateEncoder(PropertyEncoder):
     @dataclass(kw_only=True)
     class Config(PropertyEncoder.Config):
-        label: str = "state"
+        folder: str = "state"
         in_dim: int = 1

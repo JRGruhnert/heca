@@ -78,6 +78,7 @@ class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
 
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
+        subroot: str
         folder: str
 
     def __init__(self, cfg: "Persistable.Config"):
@@ -101,7 +102,8 @@ class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
         key = (cfg.folder, cfg.label)
         if key not in cls._persisted_instances:
             instance = target_cls(cfg)
-            path = cls.resolve(cfg.folder, cfg.label)
+            assert isinstance(instance, Persistable)
+            path = cls.resolve(cfg)
             if not skip_loading:
                 logger.info(f"Loading {type(instance)} {cfg.label} data from {path}")
                 instance._load(path)
@@ -116,13 +118,19 @@ class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
                 f"No instance found for folder={cfg.folder!r}, label={cfg.label!r}"
             )
         persistable = cast(P, cls._persisted_instances[key])
-        path = cls.resolve(cfg.folder, cfg.label)
+        path = cls.resolve(cfg)
         logger.info(f"Saving {type(persistable)} {cfg.label} data to {path}")
         persistable._save(path)
 
     @classmethod
-    def resolve(cls, folder: str, label: str) -> Path:
-        path = cls.root / folder / label
+    def resolve_base(cls, cfg: "Persistable.Config") -> Path:
+        path = cls.root / cfg.subroot / cfg.label
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @classmethod
+    def resolve(cls, cfg: "Persistable.Config") -> Path:
+        path = cls.resolve_base(cfg) / cfg.folder
         path.mkdir(parents=True, exist_ok=True)
         return path
 

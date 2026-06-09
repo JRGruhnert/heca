@@ -12,7 +12,8 @@ from heca.misc import hardware
 class PropertyEncoder(Persistable, nn.Module):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        folder: str = "encoder"
+        subroot: str = "heca"
+        label: str = "encoder"
         in_dim: int = 16
         out_dim: int = 32
         hidden_dim: int | None = None

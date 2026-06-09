@@ -18,6 +18,7 @@ class Scene(Persistable):
     class Config(Persistable.Config):
         cam: str
         label: str
+        subroot: str = "scenes"
         folder: str = "samples"
 
     def __init__(self, cfg: Config):
@@ -117,7 +118,3 @@ class Scene(Persistable):
                     )  # e.g., "open_sample0.png"
             img, x1, y1, x2, y2 = self.kp_references[entity.cfg.label]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
-
-    @abc.abstractmethod
-    def test(self):
-        raise NotImplementedError()
