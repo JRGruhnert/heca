@@ -39,10 +39,10 @@ class Heca(Agent):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         if self.cfg.mode == HecaMode.TRAIN:
-            self.ppo = PPO.load(self.cfg.ppo, self.cfg.network)
+            self.ppo = PPO.get(self.cfg.ppo, self.cfg.network)
             self.network = self.ppo.collector()
         else:
-            self.network = HecaNetwork.load(cfg.network)
+            self.network = HecaNetwork.get(cfg.network)
 
         if self.cfg.mode == HecaMode.EXPLAIN:
             self.explainer = Explainer(
@@ -58,8 +58,8 @@ class Heca(Agent):
                 ),
             )
 
-        self.generator = HecaGenerator.create(cfg.generator)
-        self.evaluator = HecaEvaluator.create(cfg.evaluator)
+        self.generator = HecaGenerator.get(cfg.generator)
+        self.evaluator = HecaEvaluator.get(cfg.evaluator)
 
         MetaWorld.get_and_register(list(self.cfg.agents))
 

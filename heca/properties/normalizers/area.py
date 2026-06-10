@@ -40,7 +40,7 @@ class AreaNormalizer(BoundaryNormalizer):
         self.cfg = cfg
         self.lower = torch.tensor(cfg.lower, dtype=torch.float32)
         self.upper = torch.tensor(cfg.upper, dtype=torch.float32)
-        self.modifier = AreaGTModifier.create(cfg.modifier)
+        self.modifier = AreaGTModifier.get(cfg.modifier)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         cx = torch.clamp(x, self.lower, self.upper)

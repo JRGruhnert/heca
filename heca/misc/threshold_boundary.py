@@ -16,7 +16,7 @@ class BoundaryThreshold:
         cfg: Config,
     ):
         self.cfg = cfg
-        self.boundary = BoundaryNormalizer.create(cfg.boundary)
+        self.boundary = BoundaryNormalizer.get(cfg.boundary)
 
     @cached_property
     def relative(self) -> torch.Tensor:

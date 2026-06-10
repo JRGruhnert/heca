@@ -21,11 +21,11 @@ class PropertyV1(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.ruler = PropertyRuler.create(cfg.ruler)
-        self.encoder = PropertyEncoder.create(cfg.encoder)
-        self.evaluator = PropertyEvaluator.create(cfg.evaluator)
-        self.extractor = PropertyExtractor.create(cfg.extractor)
-        self.normalizer = PropertyNormalizer.create(cfg.normalizer)
+        self.ruler = PropertyRuler.get(cfg.ruler)
+        self.encoder = PropertyEncoder.get(cfg.encoder)
+        self.evaluator = PropertyEvaluator.get(cfg.evaluator)
+        self.extractor = PropertyExtractor.get(cfg.extractor)
+        self.normalizer = PropertyNormalizer.get(cfg.normalizer)
 
     def read(self, x: torch.Tensor) -> torch.Tensor:
         """Extracts the property value from the given modality."""

@@ -31,7 +31,7 @@ class Entity(Mergeable):
 
         weights = self.cfg.weights or [1.0 / len(self.cfg.props)] * len(self.cfg.props)
         self.properties: dict[str, tuple[Property, float]] = {
-            v.label: (Property.create(v), w) for v, w in zip(self.cfg.props, weights)
+            v.label: (Property.get(v), w) for v, w in zip(self.cfg.props, weights)
         }
 
     @staticmethod

@@ -166,7 +166,7 @@ class CalvinScene(Scene):
                 mobility=Mobility.FREE,
             ),
         ]
-        return [Entity.create(e) for e in ents]
+        return [Entity.get(e) for e in ents]
 
     @cached_property
     def cursor(self) -> Entity:
@@ -175,7 +175,7 @@ class CalvinScene(Scene):
             states={"open", "closed"},
             mobility=Mobility.FREE,
         )
-        return Entity.create(config)
+        return Entity.get(config)
 
     def get_gt_cursor_values(
         self, obs: CalvinEnvObservation

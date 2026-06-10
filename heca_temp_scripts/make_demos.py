@@ -9,6 +9,6 @@ cfg = DemoSelector.Config(
     ),
     dataset_name="visual-scene-play-256-v0.h5",
 )
-selector = DemoSelector.create(cfg)
+selector = DemoSelector.get(cfg)
 
 selector.run()

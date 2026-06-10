@@ -80,7 +80,7 @@ class OGBenchScene(Scene):
                 mobility=Mobility.FREE,
             ),
         ]
-        return [Entity.create(e) for e in ents]
+        return [Entity.get(e) for e in ents]
 
     @property
     def cursor(self) -> Entity:
@@ -89,7 +89,7 @@ class OGBenchScene(Scene):
             states={"open", "closed"},
             mobility=Mobility.FREE,
         )
-        return Entity.create(config)
+        return Entity.get(config)
 
     def heca_td(self, obs: dict) -> TDScene:
         pos, rot, state = self.get_cursor(obs)
@@ -188,7 +188,7 @@ class OGBenchScene(Scene):
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
         # wxyz = obs["proprio/effector_quat"]
-        yaw = obs["proprio_effector_yaw"]
+        yaw = obs["proprio_effector_yaw"].item()
         rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         label = obs["proprio_gripper_state"]

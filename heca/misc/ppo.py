@@ -64,7 +64,7 @@ class PPO(Persistable):
         self.highscore = float("-inf")
 
     def load_network(self, query: HecaNetwork.Query):
-        self.network = HecaNetwork.load(query)
+        self.network = HecaNetwork.get(query)
         self.optim = torch.optim.AdamW(self.network.parameters(), lr=self.cfg.lr)
 
     def learn(self, progress: float) -> tuple[dict, bool]:

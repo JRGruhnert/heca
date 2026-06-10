@@ -62,7 +62,7 @@ class HecaNetwork(Persistable, nn.Module):
         nn.Module.__init__(self)
         self.cfg = cfg
 
-        self.base = BaseNetwork.create(self.cfg.base)
+        self.base = BaseNetwork.get(self.cfg.base)
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
         self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
 

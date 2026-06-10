@@ -1,6 +1,7 @@
 import torch
 
 from dataclasses import dataclass
+from transformers import AutoProcessor, AutoModelForImageTextToText
 
 from heca.entities.entity import Entity
 from heca.environment.scenes.scene import Scene
@@ -13,9 +14,21 @@ class MolmoEncoder(ImageEncoder):
     class Config(ImageEncoder.Config):
         kp_selection_threshold: float = 0.2
         image_size: tuple[int, int] = (256, 256)
+        tag: str = "allenai/Molmo2-4B"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+
+        self.processor = AutoProcessor.from_pretrained(
+            self.cfg.tag, trust_remote_code=True
+        )
+        self.model = AutoModelForImageTextToText.from_pretrained(
+            self.cfg.tag,
+            trust_remote_code=True,
+            dtype=torch.float32,
+            device_map="auto",
+        )
+        self.model.eval()
 
     def extract_entities(
         self,

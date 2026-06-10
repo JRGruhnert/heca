@@ -29,7 +29,7 @@ class ExpertAgent(Agent, abc.ABC):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.state = Cursor.IDLE
-        self.scene = Scene.load(self.cfg.scene)
+        self.scene = Scene.get(self.cfg.scene)
 
         if not self.cfg.use_gt:
             self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)

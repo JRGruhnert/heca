@@ -23,7 +23,7 @@ class ImageSelector(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.load(self.cfg.scene, skip_loading=True)
+        self.scene = Scene.get(self.cfg.scene, load=False)
         self.scale = min(
             self.cfg.vis_size[0] / self.cfg.img_size[0],
             self.cfg.vis_size[1] / self.cfg.img_size[1],

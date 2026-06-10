@@ -23,9 +23,9 @@ class Entity(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.position = PositionProperty.create(cfg.position)
-        self.rotation = PositionProperty.create(cfg.rotation)
-        self.state = StateProperty.create(
+        self.position = PositionProperty.get(cfg.position)
+        self.rotation = PositionProperty.get(cfg.rotation)
+        self.state = StateProperty.get(
             StateProperty.Config(
                 values=cfg.states,
             )

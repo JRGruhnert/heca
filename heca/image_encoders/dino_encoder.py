@@ -445,7 +445,7 @@ class DinoEncoder(ImageEncoder):
         return grid_h, grid_w
 
     def prepare_for_scene(self, config: Scene.Config):
-        scene = Scene.load(config)
+        scene = Scene.get(config)
         for entity in scene.entities:
             image, x1, y1, x2, y2 = scene.kp_references[entity.cfg.label]
             image_desc = self.compute_descriptor(image)  # (1, D, H, W)

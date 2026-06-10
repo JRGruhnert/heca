@@ -16,9 +16,9 @@ class Property(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.ruler = PropertyRuler.create(cfg.ruler)
+        self.ruler = PropertyRuler.get(cfg.ruler)
         # self.encoder = PropertyEncoder.get(cfg.encoder)
-        self.evaluator = PropertyEvaluator.create(cfg.evaluator)
+        self.evaluator = PropertyEvaluator.get(cfg.evaluator)
 
     def distance(self, x: torch.Tensor, y: torch.Tensor) -> float:
         """Measures the distance between two values."""

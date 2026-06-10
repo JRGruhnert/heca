@@ -5,5 +5,5 @@ from heca.guis.image_selector import ImageSelector
 selector_cfg = ImageSelector.Config(
     scene=OGBenchScene.Config(),
 )
-selector = ImageSelector.create(selector_cfg)
+selector = ImageSelector.get(selector_cfg)
 selector.run()

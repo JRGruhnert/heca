@@ -36,7 +36,7 @@ class Configurable(abc.ABC):
         self.cfg = cfg
 
     @classmethod
-    def create(cls: Type[C], cfg: "Configurable.Config") -> C:
+    def get(cls: Type[C], cfg: "Configurable.Config") -> C:
         target_cls = cls._config_registry.get(type(cfg), cls)
         return target_cls(cfg)
 
@@ -50,12 +50,6 @@ class Registerable(Configurable):
 
     def __init__(self, cfg: "Registerable.Config"):
         super().__init__(cfg)
-
-    @classmethod
-    def create(cls, cfg):
-        raise RuntimeError(
-            f"{cls.__name__} is Registerable and must be instantiated via get()."
-        )
 
     @classmethod
     def get(cls: Type[R], cfg: "Registerable.Config") -> R:
@@ -85,26 +79,14 @@ class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
         super().__init__(cfg)
 
     @classmethod
-    def create(cls, cfg):
-        raise RuntimeError(
-            f"{cls.__name__} is Persistable and must be instantiated via load()."
-        )
-
-    @classmethod
-    def get(cls, cfg):
-        raise RuntimeError(
-            f"{cls.__name__} is Persistable and must be accessed via load()."
-        )
-
-    @classmethod
-    def load(cls: Type[P], cfg: "Persistable.Config", skip_loading: bool = False) -> P:
+    def get(cls: Type[P], cfg: "Persistable.Config", load: bool = True) -> P:
         target_cls = cls._config_registry.get(type(cfg), cls)
         key = (cfg.folder, cfg.label)
         if key not in cls._persisted_instances:
             instance = target_cls(cfg)
             assert isinstance(instance, Persistable)
             path = cls.resolve(cfg)
-            if not skip_loading:
+            if load:
                 logger.info(f"Loading {type(instance)} {cfg.label} data from {path}")
                 instance._load(path)
             cls._persisted_instances[key] = instance

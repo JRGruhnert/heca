@@ -13,7 +13,7 @@ class AreaEvaluator(PropertyEvaluator):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.area = Area.create(cfg.area)
+        self.area = Area.get(cfg.area)
 
     def __call__(self, x: torch.Tensor, y: torch.Tensor, distance: float) -> bool:
         return self.area.check_area_similarity(x, y)

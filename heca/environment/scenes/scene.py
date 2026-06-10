@@ -1,5 +1,6 @@
 import re
 import abc
+import h5py
 import torch
 import numpy as np
 from dataclasses import dataclass
@@ -50,15 +51,6 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def sample_task_imaged(
-        self,
-    ) -> tuple[
-        tuple[np.ndarray, TDImage],
-        tuple[np.ndarray, TDImage],
-    ]:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
@@ -78,6 +70,12 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def to_td_scene_images(self, obs) -> TDImage:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def load_dataset(
+        self, file: h5py.File
+    ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 
     def _load(self, path: Path):
@@ -118,3 +116,12 @@ class Scene(Persistable):
                     )  # e.g., "open_sample0.png"
             img, x1, y1, x2, y2 = self.kp_references[entity.cfg.label]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
+
+    @abc.abstractmethod
+    def sample_task_imaged(
+        self,
+    ) -> tuple[
+        tuple[np.ndarray, TDImage],
+        tuple[np.ndarray, TDImage],
+    ]:
+        raise NotImplementedError()
