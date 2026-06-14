@@ -4,10 +4,10 @@ from heca.guis.demo_selector import DemoSelector
 
 cfg = DemoSelector.Config(
     agent=TapasAgent.Config(
-        folder="press_right_button",
+        folder="press_left_button",
         scene=OGBenchScene.Config(),
     ),
-    dataset_name="visual-scene-play-256-v0.h5",
+    dataset_name="visual-scene-play-v0.h5",
 )
 selector = DemoSelector.get(cfg)
 

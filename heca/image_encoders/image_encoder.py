@@ -21,14 +21,12 @@ class ImageEncoder(Registerable):
 
     @abc.abstractmethod
     def extract_entities(
-        self, image: TDImage, entities: list[Entity]
+        self, image: TDImage
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def extract_entity_states(
-        self, image: TDImage, entities: list[Entity], kps: torch.Tensor
-    ) -> torch.Tensor:
+    def extract_entity_states(self, image: TDImage, kps: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError()
 
     def normalize_coords(

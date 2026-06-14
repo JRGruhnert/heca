@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from textwrap import dedent
 from typing import Any, cast
 
 import h5py
@@ -24,7 +25,7 @@ class OGBenchScene(Scene):
         folder: str = "samples"
         id: str = "visual-scene-play-v0"
         cam: str = "front"
-        mode: str = "task"  #
+        mode: str = "task"
         ob_type: str = "pixels"  # states, pixels
         width: int = 256
         height: int = 256
@@ -52,31 +53,84 @@ class OGBenchScene(Scene):
         self.env.close()
 
     @property
+    def description(self) -> str:
+        return dedent("""
+            Scene Description
+
+            The image shows a virtual robot manipulation environment.
+
+            Fixed properties:
+            - The robot arm is always semi-transparent and purple.
+            - The sliding window is always located on the right side of the scene.
+            - The drawer is always located on the left side of the scene.
+            - Two buttons are always located near the front-center of the scene:
+            - a left button,
+            - a right button.
+
+            Objects:
+            - A semi-transparent purple robot arm.
+            - A white sliding window with a white handle.
+                The window can be opened by pulling it toward the camera.
+            - A white drawer with a white handle.
+            - A red cube.
+
+            Variable properties:
+            - The window may be open or closed.
+            - The drawer may be open or closed.
+            - The red cube may be:
+                - on the floor,
+                - inside the drawer, or
+                - outside the camera's field of view.
+            - Each button may be either red or white.
+
+            Button color indicates state:
+            - Red = locked
+            - White = unlocked
+        """)
+
+    @property
     def entities(self) -> list[Entity]:
         ents = [
             Entity.Config(
                 label="drawer_handle",
-                states={"open", "closed"},
+                question="What describes the drawer the best?",
+                answers={"It is open", "It is closed"},
+                states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="window_handle",
-                states={"open", "closed"},
+                question="What describes the sliding window the best?",
+                answers={
+                    "it is open and therefore moved to the front",
+                    "it is closed and therefore moved to the back",
+                },
+                states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="button_0",
-                states={"free", "locked"},
+                question="What is the color of the left button?",
+                answers={"white", "red"},
+                states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="button_1",
-                states={"free", "locked"},
+                question="What is the color of the right button?",
+                answers={"white", "red"},
+                states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="block_0",
-                states={"grabbed", "drawer", "floor"},
+                question="Where is the red cube in the scene?",
+                answers={
+                    "inside the drawer",
+                    "on the floor",
+                    "unknown, cause it is not visible",
+                },
+                states={"drawer", "floor", "unknown"},  # 0, 1
                 mobility=Mobility.FREE,
             ),
         ]
@@ -86,7 +140,13 @@ class OGBenchScene(Scene):
     def cursor(self) -> Entity:
         config = Entity.Config(
             label="cursor",
-            states={"open", "closed"},
+            question="Where is the red cube in the scene?",
+            answers={
+                "on the floor",
+                "inside the drawer",
+                "unknown, cause it is not visible",
+            },
+            states={"open", "closed"},  # 0, 1
             mobility=Mobility.FREE,
         )
         return Entity.get(config)
@@ -98,11 +158,11 @@ class OGBenchScene(Scene):
             e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
-            e_label = obs[f"privileged_{entity.cfg.label}_state"]
+            e_state = obs[f"privileged_{entity.cfg.label}_state"]
             td_abs, td_rel = make_abs_and_rel_td_entity(
                 position=torch.tensor(e_pos, dtype=torch.float32),
                 rotation=torch.tensor(e_rot, dtype=torch.float32),
-                state=entity.state.make_one_hot(e_label),
+                state=entity.state.one_hot_from_idx(e_state),
                 cursor_pos=pos,
                 cursor_rot=rot,
             )
@@ -133,13 +193,21 @@ class OGBenchScene(Scene):
         )
 
     def get_extras(self, obs: dict) -> dict[str, Any]:
-        action_raw = obs["proprio_action"]
-        yaw = action_raw[3]
-        quat = self.yaw_to_quat(yaw)
-        action = np.concatenate([action_raw[:3], quat, action_raw[5]], axis=0)
+        if "actions" in obs.keys():  # is demo
+            action_raw = obs["actions"]
+            yaw = action_raw[3]
+            quat = self.yaw_to_quat(yaw)
+            action = np.concatenate([action_raw[:3], quat, np.array([action_raw[4]])])
+            reward = obs["success"]
+        else:
+            pos = obs["proprio_effector_pos"]
+            quat = obs["proprio_effector_quat"]
+            state = obs["proprio_gripper_state"]
+            action = np.concatenate([pos, quat, state])
+            reward = np.array([0])
         return {
             "action": action,
-            "reward": obs["proprio_reward"],
+            "reward": reward,
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
         }
@@ -191,8 +259,8 @@ class OGBenchScene(Scene):
         yaw = obs["proprio_effector_yaw"].item()
         rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
-        label = obs["proprio_gripper_state"]
-        state = self.cursor.state.make_one_hot(label)
+        idx = obs["proprio_gripper_state"]
+        state = self.cursor.state.one_hot_from_idx(idx)
         return pos, rot, state
 
     def yaw_to_quat(self, yaw: float) -> np.ndarray:

@@ -60,6 +60,11 @@ class Scene(Persistable):
 
     @property
     @abc.abstractmethod
+    def description(self) -> str:
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
     def entities(self) -> list[Entity]:
         raise NotImplementedError()
 

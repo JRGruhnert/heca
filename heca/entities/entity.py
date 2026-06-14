@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from textwrap import dedent
 
 from heca.misc.base import Configurable
 from heca.properties.default.v2.position import PositionProperty
@@ -17,6 +18,8 @@ class Entity(Configurable):
     class Config(Configurable.Config):
         label: str
         states: set[str]
+        question: str
+        answers: set[str]
         mobility: Mobility
         position: PositionProperty.Config = PositionProperty.Config()
         rotation: PositionProperty.Config = PositionProperty.Config()
