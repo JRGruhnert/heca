@@ -7,14 +7,12 @@ from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import AutoTPGMM
 from tapas_gmm_modified.utils.observation import (
-    CameraOrder,
-    SingleCamObservation,
     SceneObservation,
     dict_to_tensordict,
 )
 from tensordict import TensorDict
 import torch
-from heca.agents.agent import AgentFeedback, Cursor
+from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.entities.entity import Entity
 from heca.misc.td import TDEntity, TDScene, empty_bs
@@ -79,42 +77,28 @@ class TapasAgent(ExpertAgent):
 
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         self.policy.reset_episode()
-        xt = self.tapas_td(x)
-        yt = self.tapas_td(y)
-        predictions = self.make_prediction(xt, yt)
+        xt = self.tapas_td(x, y)
+        predictions = self.make_prediction(xt)
         if predictions is None:
-            return x, AgentFeedback(
-                reward=0.0,
-                done=True,
-                terminal=True,
-                state=Cursor.ERROR,
-                learn=False,
-            )
-        self.state = Cursor.ACTIVE
+            raise NotImplementedError()
 
         while not predictions.is_finished:
             pred = predictions.step()
             action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-            td_scene, td_vision = self.scene.step(action)
+            td_scene, td_image, reward, done, truncated = self.scene.step(action)
         if self.cfg.use_gt:
             z = td_scene
         else:
-            z = self.from_vision(td_vision)
+            z = self.from_image(td_image)
 
-        return z, self.evaluate(z, y)
-
-    def evaluate(self, x: TDScene, y: TDScene) -> AgentFeedback:
-        # TODO: implement evaluation logic
-        return AgentFeedback(
-            reward=0.0,
-            done=True,
-            terminal=True,
-            state=self.state,
-            learn=False,
+        return z, AgentFeedback(
+            reward=reward,
+            done=done,
+            terminal=truncated,
         )
 
     def make_prediction(
-        self, x: SceneObservation, y: SceneObservation  # type: ignore
+        self, x: SceneObservation  # type: ignore
     ) -> RobotTrajectory | None:
         try:
             prds, _ = self.policy.predict(x)  # type: ignore
@@ -149,12 +133,12 @@ class TapasAgent(ExpertAgent):
     def gen_post(self) -> list[tuple[Entity, TDEntity]]:
         raise NotImplementedError()
 
-    def tapas_td(self, td_scene: TDScene) -> TensorDict:
+    def tapas_td(self, x: TDScene, y: TDScene) -> TensorDict:
         action = None
         reward = torch.Tensor([0.0])
         # joint_pos = torch.Tensor(obs.joint_pos)
         # joint_vel = torch.Tensor(obs.joint_vel)
-        cursor = td_scene["cursor"]
+        cursor = x["cursor"]
         cursor_pos = cursor.position
         cursor_rot = cursor.rotation
         cursor_state = cursor.state
@@ -169,8 +153,8 @@ class TapasAgent(ExpertAgent):
             {
                 entity.cfg.label: torch.cat(
                     [
-                        td_scene[entity.cfg.label].position,
-                        td_scene[entity.cfg.label].rotation,
+                        x[entity.cfg.label].position,
+                        x[entity.cfg.label].rotation,
                     ],
                     dim=-1,
                 )
@@ -179,7 +163,7 @@ class TapasAgent(ExpertAgent):
         )
         object_states = dict_to_tensordict(
             {
-                entity.cfg.label: (torch.tensor(td_scene[entity.cfg.label].state))
+                entity.cfg.label: (torch.tensor(x[entity.cfg.label].state))
                 for entity in self.scene.entities
             },
         )

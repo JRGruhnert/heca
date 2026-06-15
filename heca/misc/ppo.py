@@ -3,7 +3,7 @@ import torch
 import copy
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.misc.base import Persistable
+from heca.misc.base import Registerable
 from heca.heca_gnn.network import HecaNetwork
 from heca.misc.hardware import device
 from heca.misc import logger
@@ -19,17 +19,9 @@ class AnnealingConfig:
     max_epochs: int = 1000
 
 
-class PPO(Persistable):
-    @dataclass(frozen=True, kw_only=True)
-    class Query(Persistable.Query):
-        pass
-
-    @dataclass(frozen=True, kw_only=True)
-    class File(Persistable.Directory):
-        pass
-
+class PPO(Registerable):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
+    class Config(Registerable.Config):
         batch_size: int = 2048
         mini_batch_size: int = 64
         learning_epochs: int = 5
@@ -63,8 +55,8 @@ class PPO(Persistable):
         # Statistics
         self.highscore = float("-inf")
 
-    def load_network(self, query: HecaNetwork.Query):
-        self.network = HecaNetwork.get(query)
+    def load_network(self, config: HecaNetwork.Config):
+        self.network = HecaNetwork.get(config)
         self.optim = torch.optim.AdamW(self.network.parameters(), lr=self.cfg.lr)
 
     def learn(self, progress: float) -> tuple[dict, bool]:
@@ -117,7 +109,7 @@ class PPO(Persistable):
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                 # Evaluate policy #TODO: how did evaluate change here
-                logprobs, state_values, dist_new = self.network.evauate(
+                logprobs, state_values, dist_new = self.network.evaluate(
                     mb_obs, mb_goal, mb_actions
                 )
 
@@ -310,13 +302,3 @@ class PPO(Persistable):
     def collector(self) -> "HecaNetwork":
         assert self.network is not None, "Network must be set before collecting"
         return copy.deepcopy(self.network)
-
-    @classmethod
-    def load(cls, query: "PPO.Query", network: HecaNetwork.Query) -> "PPO":
-        ppo = cls.get(query)  # type: ignore
-        ppo.load_network(network)
-        return ppo
-
-    @classmethod
-    def save(cls, query: "PPO.Query", epoch: int, tag: str) -> bool:
-        raise NotImplementedError()

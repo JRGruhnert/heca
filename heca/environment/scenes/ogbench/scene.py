@@ -151,7 +151,7 @@ class OGBenchScene(Scene):
         )
         return Entity.get(config)
 
-    def heca_td(self, obs: dict) -> TDScene:
+    def to_td_scene(self, obs: dict) -> TDScene:
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:
@@ -176,7 +176,7 @@ class OGBenchScene(Scene):
         extras = self.get_extras(obs)
         return TDScene(td_entities, extras=extras)
 
-    def to_td_scene_images(self, obs: dict) -> TDImage:
+    def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
         rgb = image_dict["rgb"].transpose((2, 0, 1)) / 255
         depth = image_dict["depth"]
@@ -191,6 +191,9 @@ class OGBenchScene(Scene):
             extr=torch.Tensor(extr),
             intr=torch.Tensor(intr),
         )
+
+    def to_np_image(self, obs: dict) -> np.ndarray:
+        return obs["image"]["rgb"]
 
     def get_extras(self, obs: dict) -> dict[str, Any]:
         if "actions" in obs.keys():  # is demo
@@ -220,9 +223,6 @@ class OGBenchScene(Scene):
             goal["image"] = goal_rendered
         return info, goal
 
-    def to_internal_goal(self, obs: Any, info: dict[str, Any]) -> Any:
-        return obs
-
     def sample_task(
         self,
     ) -> tuple[
@@ -231,27 +231,26 @@ class OGBenchScene(Scene):
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
-        s_scene, s_image = self.from_internal(obs)
-        g_scene, g_image = self.from_internal(goal)
+        s_scene, s_image, _ = self.from_internal(obs)
+        g_scene, g_image, _ = self.from_internal(goal)
         return (s_scene, s_image), (g_scene, g_image)
 
-    def sample_task_imaged(
-        self,
-    ) -> tuple[
-        tuple[np.ndarray, TDImage],
-        tuple[np.ndarray, TDImage],
+    def sample_task_vis(self) -> tuple[
+        tuple[TDScene, np.ndarray],
+        tuple[TDScene, np.ndarray],
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
-        _, s_image = self.from_internal(obs)
-        _, g_image = self.from_internal(goal)
-        return (obs["image"]["rgb"], s_image), (goal["image"]["rgb"], g_image)
+        s_scene, _, s_image = self.from_internal(obs)
+        g_scene, _, g_image = self.from_internal(goal)
+        return (s_scene, s_image), (g_scene, g_image)
 
-    def _step(self, action: np.ndarray) -> Any:
+    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
         action = self.to_internal_action(action)
         ob, reward, terminated, truncated, info = self.env.step(action)  # type: ignore
         obs, _ = self.to_internal(ob, info)
-        return obs
+        assert isinstance(reward, float)
+        return obs, reward, terminated, truncated
 
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
@@ -309,9 +308,8 @@ class OGBenchScene(Scene):
                     "demo",
                 ]
             }  # type: ignore
-            print(ob.keys())
             obs, _ = self.to_internal(image, ob)
-            td_scene, td_image = self.from_internal(obs)
+            td_scene, td_image, _ = self.from_internal(obs)
             pp_demos_scene.append(td_scene)
             pp_demos_image.append(td_image)
 

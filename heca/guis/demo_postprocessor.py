@@ -38,6 +38,7 @@ class DemoPostProcessor(Configurable):
 
         self.demo_idx = 0
         self.frame_idx = 0
+        self.key_pressed = set()
 
     def _build_demo_slices(self):
         slices = []
@@ -66,12 +67,14 @@ class DemoPostProcessor(Configurable):
         return s["start"] + self.frame_idx
 
     def build_ui(self):
-        self.fig = plt.figure(figsize=(15, 8))
+        self.fig = plt.figure(figsize=(14, 8))
+        self.fig.canvas.manager.set_window_title(f"Demo Postprocessor: {self.cfg.agent.folder}")  # type: ignore
 
-        self.ax_img = self.fig.add_axes((0.45, 0.05, 0.52, 0.9))
+        # Image panel (right)
+        self.ax_img = self.fig.add_axes((0.45, 0.08, 0.52, 0.88))
         self.ax_img.axis("off")
 
-        ax_demo = self.fig.add_axes((0.05, 0.90, 0.30, 0.04))
+        ax_demo = self.fig.add_axes((0.08, 0.88, 0.30, 0.04))
         self.demo_slider = Slider(
             ax_demo,
             "Demo",
@@ -81,7 +84,7 @@ class DemoPostProcessor(Configurable):
             valstep=1,
         )
 
-        ax_frame = self.fig.add_axes((0.05, 0.82, 0.30, 0.04))
+        ax_frame = self.fig.add_axes((0.08, 0.78, 0.30, 0.04))
         self.frame_slider = Slider(
             ax_frame,
             "Frame",
@@ -91,48 +94,32 @@ class DemoPostProcessor(Configurable):
             valstep=1,
         )
 
-        self.demo_slider.on_changed(lambda v: self.on_demo_change(int(v)))
-
-        self.frame_slider.on_changed(lambda v: self.on_frame_change(int(v)))
-
-        ax_repeat = self.fig.add_axes((0.05, 0.68, 0.12, 0.05))
+        ax_repeat = self.fig.add_axes((0.05, 0.68, 0.12, 0.06))
         self.repeat_box = TextBox(
             ax_repeat,
             "Copies",
-            initial="10",
+            initial="5",
         )
 
         ax_insert = self.fig.add_axes((0.20, 0.68, 0.15, 0.06))
         self.insert_btn = Button(
             ax_insert,
-            "Insert Copies",
+            "Repeat Frame",
         )
-        self.insert_btn.on_clicked(self.insert_frames)
-
-        ax_delete = self.fig.add_axes((0.05, 0.58, 0.30, 0.06))
+        ax_delete = self.fig.add_axes((0.20, 0.58, 0.15, 0.06))
         self.delete_btn = Button(
             ax_delete,
             "Delete Frame",
             color="salmon",
         )
+        self.insert_btn.on_clicked(self.insert_frames)
         self.delete_btn.on_clicked(self.delete_frame)
+        self.demo_slider.on_changed(lambda v: self.on_demo_change(int(v)))
+        self.frame_slider.on_changed(lambda v: self.on_frame_change(int(v)))
 
-        ax_save = self.fig.add_axes((0.05, 0.45, 0.30, 0.08))
-        self.save_btn = Button(
-            ax_save,
-            "Save demos_post.h5",
-            color="lightgreen",
-        )
-        self.save_btn.on_clicked(self.save)
-
-        self.status = self.fig.text(
-            0.05,
-            0.35,
-            "",
-            fontsize=12,
-        )
-
-        self.on_demo_change(0)
+        self.fig.canvas.mpl_connect("key_press_event", self._on_key_press)
+        self.fig.canvas.mpl_connect("key_release_event", self._on_key_release)
+        self.fig.canvas.mpl_connect("close_event", self._on_close)
 
     def on_demo_change(self, demo_idx):
         self.demo_idx = demo_idx
@@ -158,8 +145,6 @@ class DemoPostProcessor(Configurable):
         self.ax_img.clear()
         self.ax_img.imshow(frame)
         self.ax_img.axis("off")
-
-        self.status.set_text(f"Demo {self.demo_idx} | Frame {frame_idx}")
 
         self.fig.canvas.draw_idle()
 
@@ -202,7 +187,7 @@ class DemoPostProcessor(Configurable):
         self.demo_slices = self._build_demo_slices()
         self.on_demo_change(self.demo_idx)
 
-    def save(self, _):
+    def _on_close(self, event):
         with h5py.File(self.save_path, "w") as f:
             for key, value in self.data.items():
                 f.create_dataset(
@@ -210,10 +195,34 @@ class DemoPostProcessor(Configurable):
                     data=value,
                     compression="gzip",
                 )
-
-        print(f"Saved: {self.save_path}")
+            f.close()
+        self.file.close()
 
     def run(self):
         self.build_ui()
         self.on_frame_change(0)
         plt.show()
+
+    def _on_key_press(self, event):
+        if event.key in self.key_pressed:
+            return  # ignore key repeat
+
+        self.key_pressed.add(event.key)
+
+        if event.key == "right":
+            value = min(int(self.frame_slider.val) + 1, int(self.frame_slider.valmax))
+            self.frame_slider.set_val(value)
+        elif event.key == "left":
+            value = max(int(self.frame_slider.val) - 1, 0)
+            self.frame_slider.set_val(value)
+
+        elif event.key == "up":
+            value = min(int(self.demo_slider.val) + 1, int(self.demo_slider.valmax))
+            self.demo_slider.set_val(value)
+
+        elif event.key == "down":
+            value = max(int(self.demo_slider.val) - 1, 0)
+            self.demo_slider.set_val(value)
+
+    def _on_key_release(self, event):
+        self.key_pressed.discard(event.key)

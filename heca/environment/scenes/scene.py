@@ -28,25 +28,36 @@ class Scene(Persistable):
         self.kp_references: dict[str, tuple[Image.Image, int, int, int, int]] = {}
         self.state_references: dict[str, dict[str, list[Image.Image]]] = {}
 
-    def from_internal(self, data) -> tuple[TDScene, TDImage]:
-        tdscene = self.heca_td(data)
-        tdimage = self.to_td_scene_images(data)
-        return tdscene, tdimage
+    def from_internal(self, data) -> tuple[TDScene, TDImage, np.ndarray]:
+        tdscene = self.to_td_scene(data)
+        tdimage = self.to_td_image(data)
+        npimage = self.to_np_image(data)
+        return tdscene, tdimage, npimage
 
-    def step(self, action: np.ndarray) -> tuple[TDScene, TDImage]:
-        obs = self._step(action)
-        return self.from_internal(obs)
+    def step(self, action: np.ndarray) -> tuple[TDScene, TDImage, float, bool, bool]:
+        obs, reward, done, truncated = self._step(action)
+        tdscene, tdimage, _ = self.from_internal(obs)
+        return tdscene, tdimage, reward, done, truncated
+
+    def step_vis(self, action: np.ndarray) -> tuple[TDScene, np.ndarray]:
+        obs, _, _, _ = self._step(action)
+        tdscene, _, npimage = self.from_internal(obs)
+        return tdscene, npimage
 
     @abc.abstractmethod
-    def _step(self, action: np.ndarray) -> Any:
+    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def sample_task(
-        self,
-    ) -> tuple[
+    def sample_task(self) -> tuple[
         tuple[TDScene, TDImage],
         tuple[TDScene, TDImage],
+    ]:
+        raise NotImplementedError()
+
+    def sample_task_vis(self) -> tuple[
+        tuple[TDScene, np.ndarray],
+        tuple[TDScene, np.ndarray],
     ]:
         raise NotImplementedError()
 
@@ -55,26 +66,15 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def heca_td(self, obs) -> TDScene:
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def description(self) -> str:
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def entities(self) -> list[Entity]:
-        raise NotImplementedError()
-
-    @property
-    @abc.abstractmethod
-    def cursor(self) -> Entity:
+    def to_td_scene(self, obs) -> TDScene:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def to_td_scene_images(self, obs) -> TDImage:
+    def to_td_image(self, obs) -> TDImage:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def to_np_image(self, obs) -> np.ndarray:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -122,11 +122,17 @@ class Scene(Persistable):
             img, x1, y1, x2, y2 = self.kp_references[entity.cfg.label]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
 
+    @property
     @abc.abstractmethod
-    def sample_task_imaged(
-        self,
-    ) -> tuple[
-        tuple[np.ndarray, TDImage],
-        tuple[np.ndarray, TDImage],
-    ]:
+    def description(self) -> str:
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def entities(self) -> list[Entity]:
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
+    def cursor(self) -> Entity:
         raise NotImplementedError()

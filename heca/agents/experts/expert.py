@@ -42,9 +42,6 @@ class ExpertAgent(Agent, abc.ABC):
 
     def from_image(self, td_image: TDImage) -> TDScene:
         td_images = TDSceneImages({self.scene.cfg.cam: td_image})
-        return self.from_vision(td_images)
-
-    def from_vision(self, td_images: TDSceneImages) -> TDScene:
         all_kps_3d = []
         all_states = []
         all_kp_scores = []
@@ -59,12 +56,10 @@ class ExpertAgent(Agent, abc.ABC):
             assert isinstance(image, TDImage)
             if cam.endswith("cursor"):
                 kp3d_cursor, kp_cursor, kp_cursor_score = (
-                    self.kp_extractor.extract_entities(image, [self.scene.cursor])
+                    self.kp_extractor.extract_entities(image)
                 )
                 kp_cursor_state, cursor_state_scores = (
-                    self.state_extractor.extract_entity_states(
-                        image, [self.scene.cursor], kp_cursor
-                    )
+                    self.state_extractor.extract_entity_states(image, kp_cursor)
                 )
 
                 all_cursor_kps_3d.append(kp3d_cursor)
@@ -73,11 +68,9 @@ class ExpertAgent(Agent, abc.ABC):
                 all_cursor_state_scores.append(cursor_state_scores)
 
             else:
-                kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(
-                    image, self.scene.entities
-                )
+                kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
                 states, state_scores = self.state_extractor.extract_entity_states(
-                    image, self.scene.entities, kps2d
+                    image, kps2d
                 )
 
                 all_kps_3d.append(kps3d)

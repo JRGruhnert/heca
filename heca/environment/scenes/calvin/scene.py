@@ -225,7 +225,7 @@ class CalvinScene(Scene):
         else:
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
 
-    def heca_td(self, obs: CalvinEnvObservation) -> TDEntities:
+    def to_td_scene(self, obs: CalvinEnvObservation) -> TDEntities:
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:

@@ -5,7 +5,6 @@ from functools import cached_property
 import torch
 from torch.distributions import Categorical
 from heca.entities.entity import Entity
-from heca.environment.scenes.scene import Scene
 from heca.environment.world import MetaWorld
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
@@ -14,10 +13,6 @@ from heca.heca_gnn.network import HecaNetwork
 from heca.misc.ppo import PPO
 from heca.misc.td import TDScene, TDWorld
 from torch_geometric.explain import CaptumExplainer, Explainer
-
-from typing import TypeVar, Type
-
-V = TypeVar("V", bound="Heca")
 
 
 class HecaMode(Enum):
@@ -31,15 +26,16 @@ class Heca(Agent):
     class Config(Agent.Config):
         generator: HecaGenerator.Config
         evaluator: HecaEvaluator.Config
-        network: HecaNetwork.Query
+        network: HecaNetwork.Config
         agents: set[Agent.Config]
         mode: HecaMode
-        ppo: PPO.Query
+        ppo: PPO.Config
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         if self.cfg.mode == HecaMode.TRAIN:
-            self.ppo = PPO.get(self.cfg.ppo, self.cfg.network)
+            self.ppo = PPO.get(self.cfg.ppo)
+            self.ppo.load_network(self.cfg.network)
             self.network = self.ppo.collector()
         else:
             self.network = HecaNetwork.get(cfg.network)
@@ -61,31 +57,21 @@ class Heca(Agent):
         self.generator = HecaGenerator.get(cfg.generator)
         self.evaluator = HecaEvaluator.get(cfg.evaluator)
 
-        MetaWorld.get_and_register(list(self.cfg.agents))
-
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         # z = self.apply_expert_knowledge(y)
         z = y
         if self.cfg.mode == HecaMode.EXPLAIN:
-            variants, logits, value = self.predict(x, z)
+            agent, xl, yl = self.predict(x, z)
         else:
             with torch.no_grad():
-                variants, logits, value = self.predict(x, z)
+                agent, xl, yl = self.predict(x, z)
 
+        az, afb = Agent.get(agent).act(xl, yl)
+        reward, done, terminal = self.evaluator.step(az, afb)
         if self.cfg.mode == HecaMode.TRAIN:
-            dist = Categorical(logits=logits)
-            action = dist.sample()
-        else:
-            action = logits.argmax(dim=-1)
-
-        agent, entity = variants[action]
-        z, fb = Agent.get(agent).act(x, z)
-        reward, done, terminal = self.evaluator.step(z, fb)
-        if self.cfg.mode == HecaMode.TRAIN:
-            logprob: torch.Tensor = dist.log_prob(action)
             learn = self.ppo.step(
-                x,
-                y,
+                xl,
+                yl,
                 action.detach(),
                 logprob.detach(),
                 value.detach(),
@@ -93,22 +79,24 @@ class Heca(Agent):
                 done,
                 terminal,
             )
+            if learn:
+                raise NotImplementedError()
         return z, fb
 
-    def predict(
-        self, x: TDScene, y: TDScene
-    ) -> tuple[list[tuple[Agent.Config, Entity]], torch.Tensor, torch.Tensor]:
+    def predict(self, x: TDScene, y: TDScene) -> tuple[Agent.Config, TDScene, TDScene]:
         x, y = self.network.encode(x, y)
         options, data = self.generator(x, y)
         logits = self.network.actor(data)
         value = self.network.critic(data)
-        return options, logits, value
 
-    def cluster_precon(self) -> dict[str, Entity]:
-        raise NotImplementedError()
+        if self.cfg.mode == HecaMode.TRAIN:
+            dist = Categorical(logits=logits)
+            action = dist.sample()
+            logprob: torch.Tensor = dist.log_prob(action)
+        else:
+            action = logits.argmax(dim=-1)
 
-    def cluster_postcon(self) -> dict[str, Entity]:
-        raise NotImplementedError()
+        return options[action]
 
     def apply_expert_knowledge(self, x: TDScene, entity: Entity | None) -> TDScene:
         raise NotImplementedError()
@@ -135,11 +123,3 @@ class Heca(Agent):
     @cached_property
     def postcons(self) -> list[Entity]:
         raise NotImplementedError()
-
-    def required_scenes(self) -> list[Scene.Config]:
-        scenes = set()
-        for agent_config in self.cfg.agents:
-            agent = Agent.get(agent_config)
-            for scene_config in agent.required_scenes():
-                scenes.add(scene_config)
-        return list(scenes)

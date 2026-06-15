@@ -138,7 +138,7 @@ class TempScene(Scene):
         )
         return Entity.get(config)
 
-    def heca_td(self, obs: dict) -> TDScene:
+    def to_td_scene(self, obs: dict) -> TDScene:
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:

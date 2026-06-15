@@ -17,7 +17,7 @@ class HecaGenerator(Configurable):
 
     def __call__(
         self, x: TDScene, y: TDScene
-    ) -> tuple[list[tuple[Agent.Query, Entity]], HeteroData]:
+    ) -> tuple[list[tuple[Agent.Config, TDScene, TDScene]], HeteroData]:
         raise NotImplementedError()
 
     def to_batch(self, data: list[HeteroData]) -> Batch:
