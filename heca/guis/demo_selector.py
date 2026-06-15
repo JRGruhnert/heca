@@ -16,6 +16,7 @@ class DemoSelector(Configurable):
         agent: ExpertAgent.Config
         dataset_name: str
         file_name: str = "demos.h5"
+        random_ep: bool = True
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -53,7 +54,7 @@ class DemoSelector(Configurable):
 
     def _build_ui(self):
         self.fig = plt.figure(figsize=(14, 8))
-        self.fig.canvas.manager.set_window_title(f"Demo Selector: {self.cfg.agent.label}")  # type: ignore
+        self.fig.canvas.manager.set_window_title(f"Demo Selector: {self.cfg.agent.folder}")  # type: ignore
 
         # Image panel (right)
         self.ax_img = self.fig.add_axes((0.45, 0.08, 0.52, 0.88))
@@ -176,6 +177,7 @@ class DemoSelector(Configurable):
         self.ep_idx = ep_idx
         self.start_idx = 0
         ep_len = self.ep_lengths[ep_idx]  # type: ignore
+
         self.frame_slider.valmax = ep_len - 1
         self.frame_slider.ax.set_xlim(0, ep_len - 1)
         self.frame_slider.set_val(0)
@@ -203,13 +205,21 @@ class DemoSelector(Configurable):
             self._update_to_idx_error_status(end_idx)
             return
         self.save_demo(start=self.start_idx, end=end_idx, episode=self.ep_idx)
-        self._random_new_episode()
+        self._prepare_new_episode()
         self._update_demos_status()
         self._update_to_default_status()
 
-    def _random_new_episode(self):
-        ep_idx = random.randrange(self.total_episodes - 1)
-        self._on_episode_change(ep_idx)
+    def _prepare_new_episode(self):
+        if self.cfg.random_ep:
+            ep_idx = random.randrange(self.total_episodes - 1)
+        else:
+            old_ep_idx = self.ep_idx
+            if old_ep_idx == len(self.ep_slices) - 1:
+                ep_idx = 0
+            else:
+                ep_idx = old_ep_idx + 1
+
+        self.ep_slider.set_val(ep_idx)
 
     def save_demo(self, start: int, end: int, episode: int):
         sl = self.ep_slices[episode]

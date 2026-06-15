@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from textwrap import dedent
 from typing import Any, cast
 
 import h5py
@@ -39,31 +40,84 @@ class TempScene(Scene):
         raise NotImplementedError()
 
     @property
+    def description(self) -> str:
+        return dedent("""
+            Scene Description
+
+            The image shows a virtual robot manipulation environment.
+
+            Fixed properties:
+            - The robot arm is always semi-transparent and purple.
+            - The sliding window is always located on the right side of the scene.
+            - The drawer is always located on the left side of the scene.
+            - Two buttons are always located near the front-center of the scene:
+            - a left button,
+            - a right button.
+
+            Objects:
+            - A semi-transparent purple robot arm.
+            - A white sliding window with a white handle.
+                The window can be opened by pulling it toward the camera.
+            - A white drawer with a white handle.
+            - A red cube.
+
+            Variable properties:
+            - The window may be open or closed.
+            - The drawer may be open or closed.
+            - The red cube may be:
+                - on the floor,
+                - inside the drawer, or
+                - outside the camera's field of view.
+            - Each button may be either red or white.
+
+            Button color indicates state:
+            - Red = locked
+            - White = unlocked
+        """)
+
+    @property
     def entities(self) -> list[Entity]:
         ents = [
             Entity.Config(
                 label="drawer_handle",
-                states={"open", "closed"},
+                question="What describes the drawer the best?",
+                answers={"It is open", "It is closed"},
+                states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="window_handle",
-                states={"open", "closed"},
+                question="What describes the sliding window the best?",
+                answers={
+                    "it is open and therefore moved to the front",
+                    "it is closed and therefore moved to the back",
+                },
+                states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="button_0",
-                states={"free", "locked"},
+                question="What is the color of the left button?",
+                answers={"white", "red"},
+                states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="button_1",
-                states={"free", "locked"},
+                question="What is the color of the right button?",
+                answers={"white", "red"},
+                states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="block_0",
-                states={"grabbed", "drawer", "floor"},
+                question="Where is the red cube in the scene?",
+                answers={
+                    "inside the drawer",
+                    "on the floor",
+                    "unknown, cause it is not visible",
+                },
+                states={"drawer", "floor", "unknown"},  # 0, 1
                 mobility=Mobility.FREE,
             ),
         ]
@@ -73,7 +127,13 @@ class TempScene(Scene):
     def cursor(self) -> Entity:
         config = Entity.Config(
             label="cursor",
-            states={"open", "closed"},
+            question="Where is the red cube in the scene?",
+            answers={
+                "on the floor",
+                "inside the drawer",
+                "unknown, cause it is not visible",
+            },
+            states={"open", "closed"},  # 0, 1
             mobility=Mobility.FREE,
         )
         return Entity.get(config)
