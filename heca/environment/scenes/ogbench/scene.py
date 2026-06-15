@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from textwrap import dedent
 from typing import Any, cast
 
+import gymnasium
 import h5py
 import numpy as np
 import ogbench
@@ -41,13 +42,14 @@ class OGBenchScene(Scene):
                 dataset_name=cfg.id,
                 env_only=True,
                 dataset_only=False,
-                ob_type=cfg.ob_type,
-                mode=cfg.mode,
-                visualize_info=cfg.visualize_info,
-                width=cfg.width,
-                height=cfg.height,
+                # ob_type=cfg.ob_type,
+                # mode=cfg.mode,
+                # visualize_info=cfg.visualize_info,
+                # width=cfg.width,
+                # height=cfg.height,
             ),
         )
+        assert False
 
     def close(self):
         self.env.close()

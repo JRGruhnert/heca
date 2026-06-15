@@ -5,19 +5,11 @@ from heca.guis.agent_tester import AgentTester
 cfg = AgentTester.Config(
     agents=[
         TapasAgent.Config(
-            folder="move_block_drawer",
+            folder="open_drawer",
             scene=OGBenchScene.Config(),
         ),
         TapasAgent.Config(
-            folder="move_block_drawer",
-            scene=OGBenchScene.Config(),
-        ),
-        TapasAgent.Config(
-            folder="move_block_drawer",
-            scene=OGBenchScene.Config(),
-        ),
-        TapasAgent.Config(
-            folder="move_block_drawer",
+            folder="close_drawer",
             scene=OGBenchScene.Config(),
         ),
     ],

@@ -1,6 +1,4 @@
-import sys
 import numpy as np
-import tapas_gmm_modified
 from dataclasses import dataclass
 from functools import cached_property
 from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
@@ -14,7 +12,7 @@ from tensordict import TensorDict
 import torch
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
-from heca.entities.entity import Entity
+from heca.entities.entity import Entity, Mobility
 from heca.misc.td import TDEntity, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device
@@ -26,7 +24,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     TPGMMConfig,
 )
 
-sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
+# sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
 
 
 class TapasAgent(ExpertAgent):
@@ -111,6 +109,7 @@ class TapasAgent(ExpertAgent):
             return None
 
     def _load(self, path: str):
+        # logger.info()
         logger.info(f"Loading tapas policy from: {path}")
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
@@ -133,40 +132,60 @@ class TapasAgent(ExpertAgent):
     def gen_post(self) -> list[tuple[Entity, TDEntity]]:
         raise NotImplementedError()
 
-    def tapas_td(self, x: TDScene, y: TDScene) -> TensorDict:
-        action = None
-        reward = torch.Tensor([0.0])
-        # joint_pos = torch.Tensor(obs.joint_pos)
-        # joint_vel = torch.Tensor(obs.joint_vel)
-        cursor = x["cursor"]
+    def tapas_td(self, td_obs: TDScene, td_goal: TDScene) -> TensorDict:
+        action = td_obs.extras["action"]
+        reward = td_obs.extras["reward"]
+        joint_pos = td_obs.extras["joint_pos"]
+        joint_vel = td_obs.extras["joint_vel"]
+        cursor = td_obs["cursor"]
         cursor_pos = cursor.position
         cursor_rot = cursor.rotation
         cursor_state = cursor.state
         ee_pose = torch.cat((cursor_pos, cursor_rot), dim=-1)
         ee_state = cursor_state
-        # camera_obs = self.image_tensors(obs)
 
+        # camera_obs = self.image_tensors(obs)
         # multicam_obs = dict_to_tensordict(
         #    {"_order": CameraOrder._create(obs.camera_names)} | camera_obs  # type: ignore
         # )
-        object_poses = dict_to_tensordict(
-            {
-                entity.cfg.label: torch.cat(
-                    [
-                        x[entity.cfg.label].position,
-                        x[entity.cfg.label].rotation,
-                    ],
-                    dim=-1,
-                )
-                for entity in self.scene.entities
-            },
-        )
-        object_states = dict_to_tensordict(
-            {
-                entity.cfg.label: (torch.tensor(x[entity.cfg.label].state))
-                for entity in self.scene.entities
-            },
-        )
+        poses = {
+            entity.cfg.label: torch.cat(
+                [
+                    td_obs[entity.cfg.label].position,
+                    td_obs[entity.cfg.label].rotation,
+                ],
+                dim=-1,
+            )
+            for entity in self.scene.entities
+        }
+
+        states = {
+            entity.cfg.label: td_obs[entity.cfg.label].state
+            for entity in self.scene.entities
+        }
+
+        for entity in self.scene.entities:
+            # This adds target frames for mobile entities.
+            # Later can be used to set target for the tapas model
+            if entity.cfg.mobility == Mobility.FREE:
+                pos = td_goal[entity.cfg.label].position
+                rot = td_goal[entity.cfg.label].rotation
+                state = td_goal[entity.cfg.label].state
+                pose = torch.cat((pos, rot), dim=-1)
+                poses[f"{entity.cfg.label}_target"] = pose
+                states[f"{entity.cfg.label}_target"] = state
+
+        gcursor = td_goal["cursor"]
+        gcursor_pos = gcursor.position
+        gcursor_rot = gcursor.rotation
+        gcursor_state = gcursor.state
+        gee_pose = torch.cat((gcursor_pos, gcursor_rot), dim=-1)
+        gee_state = gcursor_state
+        poses[f"ee_target"] = gee_pose
+        states[f"ee_target"] = gee_state
+
+        object_poses = dict_to_tensordict(poses)
+        object_states = dict_to_tensordict(states)
 
         return SceneObservation(
             feedback=reward,
@@ -176,25 +195,7 @@ class TapasAgent(ExpertAgent):
             gripper_state=ee_state,
             object_poses=object_poses,
             object_states=object_states,
-            joint_pos=None,  # joint_pos,
-            joint_vel=None,  # joint_vel,
+            joint_pos=joint_pos,
+            joint_vel=joint_vel,
             batch_size=empty_bs,
         )
-
-    # def image_tensors(self, obs: CalvinEnvObservation) -> dict[str, TensorDict]:
-    #     camera_obs = {}
-    #     for cam in obs.camera_names:
-    #         rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
-    #         mask = obs.mask[cam].astype(int)
-
-    #         camera_obs[cam] = SingleCamObservation(
-    #             **{
-    #                 "rgb": torch.Tensor(rgb),
-    #                 "d": torch.Tensor(obs.depth[cam]),
-    #                 "mask": torch.Tensor(mask).to(torch.uint8),
-    #                 "extr": torch.Tensor(obs.extr[cam]),
-    #                 "intr": torch.Tensor(obs.intr[cam]),
-    #             },
-    #             batch_size=empty_bs,
-    #         )
-    #     return camera_obs

@@ -19,10 +19,8 @@ class AgentTester(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-
-        self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
         self.scene = Scene.get(self.cfg.scene)
-
+        self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
         assert all(
             agent.cfg.scene == self.cfg.scene for agent in self.agents
         ), "Every agent must use the same scene config as cfg.scene."
@@ -73,11 +71,14 @@ class AgentTester(Configurable):
         # self.x = agent.act(self.x, self.y)
         assert isinstance(agent, TapasAgent), "Currently only supports TapasAgent"
         agent.policy.reset_episode()
+        print("A")
         xt = agent.tapas_td(self.x, self.y)
+        print("B")
         predictions = agent.make_prediction(xt)
+        print("C")
         if predictions is None:
             raise NotImplementedError()
-
+        print("D")
         while not predictions.is_finished:
             pred = predictions.step()
             action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
@@ -86,15 +87,19 @@ class AgentTester(Configurable):
             self.fig.canvas.draw_idle()
             self.fig.canvas.flush_events()
             plt.pause(self.cfg.frame_time)
+        print("E")
 
     def reset(self):
+        print("Z")
         (self.x, x_image), (self.y, _) = self.scene.sample_task_vis()
+        print("Y")
         self.ax_img.clear()
         self.img_artist = self.ax_img.imshow(x_image)
         self.ax_img.axis("off")
         self.fig.canvas.draw_idle()
+        print("X")
 
     def run(self):
         self._build_ui()
-
+        self.reset()
         plt.show()
