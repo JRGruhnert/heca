@@ -1,0 +1,26 @@
+/home/jangruhnert/.conda/envs/hecarim/lib/python3.10/site-packages/riepybdlib/data.py:34: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import resource_listdir
+/home/jangruhnert/.conda/envs/hecarim/lib/python3.10/site-packages/gymnasium/spaces/box.py:231: UserWarning: [33mWARN: Box low's precision lowered by casting to float32, current low.dtype=float64[0m
+  gym.logger.warn(
+/home/jangruhnert/.conda/envs/hecarim/lib/python3.10/site-packages/gymnasium/spaces/box.py:297: UserWarning: [33mWARN: Box high's precision lowered by casting to float32, current high.dtype=float64[0m
+  gym.logger.warn(
+[32m2026-06-16 13:46:41.803[0m | [1mINFO    [0m |  [1mRunning on cpu[0m
+2026-06-16 13:46:47.918 | INFO     | heca.misc.logger:info:30 - Running on cpu
+Traceback (most recent call last):
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca_temp_scripts/test_agents.py", line 18, in <module>
+    tester = AgentTester.get(cfg)
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/misc/base.py", line 41, in get
+    return target_cls(cfg)
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/guis/agent_tester.py", line 23, in __init__
+    self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/guis/agent_tester.py", line 23, in <listcomp>
+    self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/misc/base.py", line 86, in get
+    instance = target_cls(cfg)
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/agents/experts/tapas.py", line 73, in __init__
+    super().__init__(cfg)
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/agents/experts/expert.py", line 36, in __init__
+    self.state_extractor = ImageEncoder.get(self.cfg.state_extraction)
+  File "/home/jangruhnert/Documents/GitHub/master-project/heca/misc/base.py", line 61, in get
+    cls._instances[key] = target_cls(cfg)
+TypeError: Can't instantiate abstract class MolmoEncoder with abstract method extract_entity_states

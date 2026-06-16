@@ -1,44 +1,17 @@
-from typing import cast
-from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
+print("TF side loaded")
 
-import gymnasium
-import ogbench
+print("OGBench loaded")
+import os
 
-from heca.agents.experts.expert import ExpertAgent
-from heca.agents.experts.tapas import TapasAgent
+# os.environ["TRANSFORMERS_NO_TF"] = "1"
+# os.environ["USE_TF"] = "0"
+# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 from heca.environment.scenes.ogbench.scene import OGBenchScene
+from heca.environment.scenes.scene import Scene
+from heca.image_encoders.molmo_encoder import MolmoEncoder
 
-print("before")
+print("before scene")
 
-env = gymnasium.make(
-    "visual-scene-v0",
-    ob_type="pixels",
-)
+scene = Scene.get(OGBenchScene.Config())
 
-print("after")
-
-env = cast(
-    ManipSpaceEnv,
-    ogbench.make_env_and_datasets(
-        dataset_name="visual-scene-play-v0",
-        env_only=True,
-        dataset_only=False,
-        # ob_type=cfg.ob_type,
-        # mode=cfg.mode,
-        # visualize_info=cfg.visualize_info,
-        # width=cfg.width,
-        # height=cfg.height,
-    ),
-)
-
-print("after2")
-
-
-agent = ExpertAgent.get(
-    TapasAgent.Config(
-        folder="close_drawer",
-        scene=OGBenchScene.Config(),
-    ),
-)
-
-print("after3")
+print("after scene")

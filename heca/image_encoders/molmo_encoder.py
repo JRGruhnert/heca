@@ -1,3 +1,9 @@
+import os
+
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["USE_TF"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# NOTE: this is needed cause tensorflow has an internal conflict with other packages
 from textwrap import dedent
 
 import torch
@@ -22,7 +28,8 @@ class MolmoEncoder(ImageEncoder):
         self.cfg = cfg
 
         self.processor = AutoProcessor.from_pretrained(
-            self.cfg.tag, trust_remote_code=True
+            self.cfg.tag,
+            trust_remote_code=True,
         )
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,

@@ -17,7 +17,6 @@ from heca.misc.base import Persistable
 class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        cam: str
         label: str
         subroot: str = "scenes"
         folder: str = "samples"
@@ -88,6 +87,7 @@ class Scene(Persistable):
         sample_postfix = r"_sample(\d+)\.png"
         for entity in self.entities:
             edir = path / entity.cfg.label
+            self.state_references[entity.cfg.label] = {}
             for state in entity.cfg.states:
                 self.state_references[entity.cfg.label][state] = []
                 state_pattern = re.compile(rf"{re.escape(state)}{sample_postfix}")

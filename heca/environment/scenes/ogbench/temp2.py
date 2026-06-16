@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from textwrap import dedent
 from typing import Any, cast
 
+import gymnasium
 import h5py
 import numpy as np
 import ogbench
@@ -18,12 +19,13 @@ from heca.misc.td import (
 )
 
 
-class OGBenchScene(Scene):
+class OGBenchScene:
     @dataclass(kw_only=True)
-    class Config(Scene.Config):
+    class Config:
         label: str = "ogbench"
         folder: str = "samples"
         id: str = "visual-scene-play-v0"
+        cam: str = "front"
         mode: str = "task"
         ob_type: str = "pixels"  # states, pixels
         width: int = 256
@@ -31,7 +33,6 @@ class OGBenchScene(Scene):
         visualize_info: bool = False
 
     def __init__(self, cfg: Config):
-        super().__init__(cfg)
         self.cfg = cfg
         self.reset_options = {"render_goal": True}
         self.env = cast(
@@ -47,6 +48,7 @@ class OGBenchScene(Scene):
                 # height=cfg.height,
             ),
         )
+        assert False
 
     def close(self):
         self.env.close()

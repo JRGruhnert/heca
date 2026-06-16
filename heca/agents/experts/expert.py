@@ -40,8 +40,8 @@ class ExpertAgent(Agent, abc.ABC):
     def required_scenes(self) -> list[Scene.Config]:
         return [self.cfg.scene]
 
-    def from_image(self, td_image: TDImage) -> TDScene:
-        td_images = TDSceneImages({self.scene.cfg.cam: td_image})
+    def from_images(self, td_image: TDImage) -> TDScene:
+        td_images = TDSceneImages({"front": td_image})
         all_kps_3d = []
         all_states = []
         all_kp_scores = []
@@ -119,6 +119,40 @@ class ExpertAgent(Agent, abc.ABC):
         td_entities["cursor"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
         return TDScene(td_entities)
 
+    def from_image(self, image: TDImage) -> TDScene:
+        kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
+        states, state_scores = self.state_extractor.extract_entity_states(image, kps2d)
+
+        # Sanity check on dimensions
+        assert kps3d.shape[1] == len(self.scene.entities) + 1  # cursor at index 0
+
+        td_entities: dict[str, TDEntity] = {}
+        c_pos, c_rot, c_state = self.get_entity_pose_and_state(
+            kps3d[:, 0],
+            kp_scores[:, 0],
+            states[:, 0],
+            state_scores[:, 0],
+        )
+        for idx, entity in enumerate(self.scene.entities):
+            pos, rot, state = self.get_entity_pose_and_state(
+                kps3d[:, idx + 1],
+                kp_scores[:, idx + 1],
+                states[:, idx + 1],
+                state_scores[:, idx + 1],
+            )
+
+            td_abs, td_rel = make_abs_and_rel_td_entity(
+                position=pos,
+                rotation=rot,
+                state=state,
+                cursor_pos=c_pos,
+                cursor_rot=c_rot,
+            )
+            td_entities[entity.cfg.label] = td_abs
+            td_entities[f"{entity.cfg.label}_rel"] = td_rel
+        td_entities["cursor"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
+        return TDScene(td_entities)
+
     def get_entity_pose_and_state(
         self,
         poses: torch.Tensor,
@@ -128,16 +162,12 @@ class ExpertAgent(Agent, abc.ABC):
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         present = poses_scores > self.cfg.score_threshold
         if present.sum() == 0:
-            # Not present in any camera
+            # Not present
             # TODO: handle missing keypoint, e.g. by interpolation or using a default value
             pass
         elif present.sum() == 1:
-            # Present in only one camera
+            # Present
             idxx = present.nonzero(as_tuple=True)[0][0]
             pose = poses[idxx]
             state = states[idxx]
-        else:
-            # Present in multiple cameras
-            # TODO: Different cameras have different viewpoints. How to best aggregate the keypoints?
-            pass
         return pose[:3], pose[3:7], state
