@@ -18,8 +18,11 @@ class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
         label: str
+        delta_actions: bool
         subroot: str = "scenes"
         folder: str = "samples"
+        width: int = 256
+        height: int = 256
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -38,10 +41,9 @@ class Scene(Persistable):
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, reward, done, truncated
 
-    def step_vis(self, action: np.ndarray) -> tuple[TDScene, np.ndarray]:
+    def step_vis(self, action: np.ndarray) -> tuple[TDScene, TDImage, np.ndarray]:
         obs, _, _, _ = self._step(action)
-        tdscene, _, npimage = self.from_internal(obs)
-        return tdscene, npimage
+        return self.from_internal(obs)
 
     @abc.abstractmethod
     def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
@@ -55,8 +57,8 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     def sample_task_vis(self) -> tuple[
-        tuple[TDScene, np.ndarray],
-        tuple[TDScene, np.ndarray],
+        tuple[TDScene, TDImage, np.ndarray],
+        tuple[TDScene, TDImage, np.ndarray],
     ]:
         raise NotImplementedError()
 

@@ -10,11 +10,11 @@ from heca.environment.scenes.scene import Scene
 from heca.misc.base import Configurable
 
 
-class DemoSelector(Configurable):
+class TapasDemoSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         agent: ExpertAgent.Config
-        dataset_name: str
+        dataset_name: str = "visual-scene-play-v0.h5"
         file_name: str = "demos.h5"
         random_ep: bool = True
 

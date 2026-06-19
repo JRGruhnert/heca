@@ -1,15 +1,14 @@
 from heca.agents.experts.tapas import TapasAgent
 from heca.environment.scenes.ogbench.scene import OGBenchScene
-from heca.guis.demo_selector import DemoSelector
+from heca.guis.tapas_demo_selector import TapasDemoSelector
 
-cfg = DemoSelector.Config(
+cfg = TapasDemoSelector.Config(
     agent=TapasAgent.Config(
         folder="move_block_drawer",
         scene=OGBenchScene.Config(),
     ),
-    dataset_name="visual-scene-play-v0.h5",
 )
-selector = DemoSelector.get(cfg)
+selector = TapasDemoSelector.get(cfg)
 
 selector.run()
 

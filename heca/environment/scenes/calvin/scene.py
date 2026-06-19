@@ -10,10 +10,7 @@ from heca.misc.area import Area
 from heca.misc.td import (
     TDEntity,
     TDImage,
-    TDProperties,
-    TDEntities,
     TDScene,
-    TDSceneImages,
     make_abs_and_rel_td_entity,
 )
 
@@ -86,7 +83,7 @@ class CalvinScene(Scene):
     def close(self):
         self.env.close()
 
-    def reset(self) -> tuple[TDScene, TDSceneImages]:
+    def reset(self) -> tuple[TDScene, TDImage, np.ndarray]:
         obs = self.env.reset()[0]
         return self.from_internal(obs)
 
@@ -96,73 +93,90 @@ class CalvinScene(Scene):
     def sample_task(
         self,
     ) -> tuple[
-        tuple[TDScene, TDSceneImages],
-        tuple[TDScene, TDSceneImages],
+        tuple[TDScene, TDImage],
+        tuple[TDScene, TDImage],
     ]:
-        s_scene, s_images = self.reset()
-        g_scene, g_images = self.reset()
+        s_scene, s_images, _ = self.reset()
+        g_scene, g_images, _ = self.reset()
         return (s_scene, s_images), (g_scene, g_images)
 
-    def sample_image(self, obs: CalvinEnvObservation) -> np.ndarray:
-        return obs.rgb["front"]
-
-    def to_td_scene_images(self, obs: CalvinEnvObservation) -> TDSceneImages:
-        camera_obs = {}
-        for cam in obs.camera_names:
-            rgb = obs.rgb[cam].transpose((2, 0, 1)) / 255
-            mask = obs.mask[cam].astype(int)
-
-            record = TDImage(
-                rgb=torch.Tensor(rgb),
-                d=torch.Tensor(obs.depth[cam]),
-                mask=torch.Tensor(mask).to(torch.uint8),
-                extr=torch.Tensor(obs.extr[cam]),
-                intr=torch.Tensor(obs.intr[cam]),
-            )
-            camera_obs[cam] = record
-        return TDSceneImages(camera_obs)
+    def sample_task_vis(
+        self,
+    ) -> tuple[
+        tuple[TDScene, TDImage, np.ndarray],
+        tuple[TDScene, TDImage, np.ndarray],
+    ]:
+        return self.reset(), self.reset()
 
     @cached_property
     def entities(self) -> list[Entity]:
         ents = [
             Entity.Config(
                 label="drawer",
+                question="Is the wooden, brown drawer under the wooden, brown table:",
+                answers={"open", "closed"},
                 states={"open", "closed"},
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="slider",
-                states={"left", "right", "middle"},
+                question="Is the horizontal sliding door, with a grey handle, in the back of the table:",
+                answers={"moved to the left", "moved to the right"},
+                states={"left", "right"},
                 mobility=Mobility.ARTICULATED,
             ),
             Entity.Config(
                 label="button",
-                states={"pressed", "released"},
+                question="Is the black button:",
+                answers={"pressed", "not pressed"},
+                states={"pressed", "not pressed"},
                 mobility=Mobility.STATIC,
             ),
-            # Entity.Config(
-            #    env="calvin",
-            #    label="switch",
-            #    states={"on", "off"},
-            # ),
+            Entity.Config(
+                label="switch",
+                question="Is the vertical switch:",
+                answers={"up", "down"},
+                states={"on", "off"},
+                mobility=Mobility.ARTICULATED,
+            ),
             Entity.Config(
                 label="light",
+                question="Is the rectangular shaped light on the top left:",
+                answers={"green ", "white"},
                 states={"on", "off"},
                 mobility=Mobility.STATIC,
             ),
             Entity.Config(
                 label="red_block",
-                states={"grabbed", "drawer", "table", "mia"},
+                question="Is the red block:",
+                answers={
+                    "visible and in the brown, wooden drawer",
+                    "visible and on the brown, wooden table",
+                    "not visible anywhere",
+                },
+                states={"drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
             Entity.Config(
-                label="pink_block",
-                states={"grabbed", "drawer", "table", "mia"},
+                label="Is the pink block:",
+                question="",
+                answers={
+                    "visible and in the brown, wooden drawer",
+                    "visible and on the brown, wooden table",
+                    "not visible anywhere",
+                },
+                states={"drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
             Entity.Config(
                 label="blue_block",
-                states={"grabbed", "drawer", "table", "mia"},
+                question="Is the blue block:",
+                answers={
+                    "visible and in the brown, wooden drawer",
+                    "visible and on the brown, wooden table",
+                    "not visible anywhere",
+                },
+                states={"drawer", "table", "mia"},
                 mobility=Mobility.FREE,
             ),
         ]
@@ -172,6 +186,8 @@ class CalvinScene(Scene):
     def cursor(self) -> Entity:
         config = Entity.Config(
             label="cursor",
+            question="Is the robot arms gripper:",
+            answers={"open", "closed"},
             states={"open", "closed"},
             mobility=Mobility.FREE,
         )
@@ -225,7 +241,7 @@ class CalvinScene(Scene):
         else:
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
 
-    def to_td_scene(self, obs: CalvinEnvObservation) -> TDEntities:
+    def to_td_scene(self, obs: CalvinEnvObservation) -> TDScene:
         pos, rot, state = self.get_cursor(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:
@@ -249,30 +265,18 @@ class CalvinScene(Scene):
             rotation=rot,
             state=state,
         )
-        return TDEntities(td_entities)
+        return TDScene(td_entities)
 
-    # def v1_td(self, obs: CalvinEnvObservation) -> TDProperties:
-    #     state_dict = {}
-    #     state_dict["ee_position"] = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
-    #     state_dict["ee_rotation"] = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
-    #     state_dict["ee_scalar"] = torch.tensor(
-    #         np.array([obs.ee_state]), dtype=torch.float32
-    #     )
+    def to_np_image(self, obs: CalvinEnvObservation) -> np.ndarray:
+        return obs.rgb["front"]
 
-    #     for label, value in obs.object_poses.items():
-    #         k = label.removeprefix("base__")
-    #         state_dict[f"{k}_position"] = torch.tensor(value[:3], dtype=torch.float32)
-    #         state_dict[f"{k}_rotation"] = torch.tensor(value[-4:], dtype=torch.float32)
-
-    #     for label, value in obs.object_states.items():
-    #         k = label.removeprefix("base__")
-    #         state_dict[f"{k}_scalar"] = torch.tensor(
-    #             np.array([value]), dtype=torch.float32
-    #         )
-
-    #     self.valid = True
-    #     for k in self.overrides:
-    #         state_dict[k] = torch.cat([state_dict[k], self.area_state(state_dict[k])])
-    #         if torch.all(state_dict[k][3:] == 0):
-    #             self.valid = False
-    #     return TDProperties(state_dict)
+    def to_td_image(self, obs: CalvinEnvObservation) -> TDImage:
+        rgb = obs.rgb["front"].transpose((2, 0, 1)) / 255
+        mask = obs.mask["front"].astype(int)
+        return TDImage(
+            rgb=torch.Tensor(rgb),
+            d=torch.Tensor(obs.depth["front"]),
+            mask=torch.Tensor(mask).to(torch.uint8),
+            extr=torch.Tensor(obs.extr["front"]),
+            intr=torch.Tensor(obs.intr["front"]),
+        )

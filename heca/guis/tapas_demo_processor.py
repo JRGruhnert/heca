@@ -3,17 +3,13 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 
-from matplotlib.widgets import (
-    Slider,
-    Button,
-    TextBox,
-)
+from matplotlib.widgets import Slider, Button, TextBox
 
 from heca.agents.experts.expert import ExpertAgent
 from heca.misc.base import Configurable
 
 
-class DemoPostProcessor(Configurable):
+class TapasDemoProcessor(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         agent: ExpertAgent.Config
@@ -32,8 +28,6 @@ class DemoPostProcessor(Configurable):
         for k in self.file.keys():
             self.data[k] = np.asarray(self.file[k])
 
-        self.demo_ids = self.data["demo"]
-
         self.demo_slices = self._build_demo_slices()
 
         self.demo_idx = 0
@@ -43,7 +37,7 @@ class DemoPostProcessor(Configurable):
     def _build_demo_slices(self):
         slices = []
 
-        ids = self.demo_ids
+        ids = self.data["demo"]
         unique_ids = np.unique(ids)
 
         for demo_id in unique_ids:
@@ -154,7 +148,10 @@ class DemoPostProcessor(Configurable):
         idx = self._current_global_idx()
 
         for key in self.data:
-            value = self.data[key][idx]
+            if key == "actions":
+                value = np.zeros(5)
+            else:
+                value = self.data[key][idx]
 
             repeated = np.repeat(
                 value[None],
@@ -164,9 +161,9 @@ class DemoPostProcessor(Configurable):
 
             self.data[key] = np.concatenate(
                 [
-                    self.data[key][: idx + 1],
+                    self.data[key][:idx],
                     repeated,
-                    self.data[key][idx + 1 :],
+                    self.data[key][idx:],
                 ],
                 axis=0,
             )

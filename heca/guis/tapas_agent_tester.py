@@ -27,7 +27,7 @@ class AgentTester(Configurable):
 
     def _build_ui(self):
         self.fig = plt.figure(figsize=(14, 8))
-        self.fig.canvas.manager.set_window_title(f"Agent Selector")  # type: ignore
+        self.fig.canvas.manager.set_window_title(f"Expert Agent Tester")  # type: ignore
 
         # Image panel (right)
         self.ax_img = self.fig.add_axes((0.45, 0.08, 0.52, 0.88))
@@ -35,17 +35,20 @@ class AgentTester(Configurable):
 
         self.buttons = []
 
-        n_cols = 4
-        n_agents = len(self.agents)
-        n_rows = math.ceil(n_agents / n_cols)
+        n_cols = 3
 
         # Layout parameters
         x0 = 0.05
-        y0 = 0.80
+        y0 = 0.74
         btn_w = 0.10
         btn_h = 0.10
         x_gap = 0.02
         y_gap = 0.02
+
+        # Single button above the grid
+        ax_extra = self.fig.add_axes((x0, y0 + btn_h + y_gap, btn_w, btn_h))
+        self.extra_button = Button(ax_extra, "Reset", color="lightblue")
+        self.extra_button.on_clicked(lambda event: self.reset())
 
         for i, agent in enumerate(self.agents):
             row = i // n_cols
@@ -71,33 +74,41 @@ class AgentTester(Configurable):
         # self.x = agent.act(self.x, self.y)
         assert isinstance(agent, TapasAgent), "Currently only supports TapasAgent"
         agent.policy.reset_episode()
-        print("A")
+        # print(f"drawer pose: {self.x['drawer_handle'].position}")
         xt = agent.tapas_td(self.x, self.y)
-        print("B")
-        predictions = agent.make_prediction(xt)
-        print("C")
-        if predictions is None:
-            raise NotImplementedError()
-        print("D")
-        while not predictions.is_finished:
-            pred = predictions.step()
-            action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-            self.x, npimage = self.scene.step_vis(action)
-            self.img_artist.set_data(npimage)
-            self.fig.canvas.draw_idle()
-            self.fig.canvas.flush_events()
-            plt.pause(self.cfg.frame_time)
-        print("E")
+        if agent.cfg.policy.return_full_batch:
+            predictions = agent.make_batch_prediction(xt)
+            if predictions is None:
+                raise NotImplementedError
+
+            while not predictions.is_finished:
+                pred = predictions.step()
+                action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
+                tdscene, tdimage, npimage = self.scene.step_vis(action)
+                self.gui_step(npimage)
+            self.x = agent.make_scene(tdscene, tdimage)
+        else:
+            while not (pred := agent.make_prediction(xt))[1]:
+                action, _ = pred
+                if action is None:
+                    raise NotImplementedError
+                tdscene, tdimage, npimage = self.scene.step_vis(action)
+                self.x = agent.make_scene(tdscene, tdimage)
+                xt = agent.tapas_td(self.x, self.y)
+                self.gui_step(npimage)
+
+    def gui_step(self, image: np.ndarray):
+        self.img_artist.set_data(image)
+        self.fig.canvas.draw_idle()
+        self.fig.canvas.flush_events()
+        plt.pause(self.cfg.frame_time)
 
     def reset(self):
-        print("Z")
-        (self.x, x_image), (self.y, _) = self.scene.sample_task_vis()
-        print("Y")
+        (self.x, _, x_image), (self.y, _, _) = self.scene.sample_task_vis()
         self.ax_img.clear()
         self.img_artist = self.ax_img.imshow(x_image)
         self.ax_img.axis("off")
         self.fig.canvas.draw_idle()
-        print("X")
 
     def run(self):
         self._build_ui()

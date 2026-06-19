@@ -2,20 +2,22 @@ from dataclasses import dataclass
 from PIL import Image, ImageTk
 import tkinter as tk
 
+import h5py
+
 from heca.entities.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.base import Configurable
 from heca.environment.scenes.scene import Scene
 
 
-class EncodingViewer(Configurable):
+class ImageEncodingViewer(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         scene: Scene.Config
         kp_encoder: ImageEncoder.Config
         state_encoder: ImageEncoder.Config
-        cam: str = "front"
         marker_radius: int = 3
+        dataset_name: str
         vis_size: tuple[int, int] = (512, 512)
         img_size: tuple[int, int] = (256, 256)
 
@@ -24,6 +26,7 @@ class EncodingViewer(Configurable):
         self.scene = Scene.get(self.cfg.scene)  #
         self.kp_encoder = ImageEncoder.get(self.cfg.kp_encoder)
         self.state_encoder = ImageEncoder.get(self.cfg.state_encoder)
+
         self.scale = min(
             self.cfg.vis_size[0] / self.cfg.img_size[0],
             self.cfg.vis_size[1] / self.cfg.img_size[1],
@@ -73,25 +76,20 @@ class EncodingViewer(Configurable):
         )
 
     def make_rnd_image(self):
-        (s_image, s_td_image), (g_image, g_td_image) = self.scene.sample_task_imaged()
-        left_kp3d, left_kp2d, left_scores = self.kp_encoder.extract_entities(
-            s_td_image, self.scene.entities
+        (s_scene, s_tdimage, s_npimage), (g_scene, g_tdimage, g_npimage) = (
+            self.scene.sample_task_vis()
         )
-        left_states = self.state_encoder.extract_entity_states(
-            s_td_image, self.scene.entities, left_kp2d
-        )
-        right_kp3d, right_kp2d, right_scores = self.kp_encoder.extract_entities(
-            g_td_image, self.scene.entities
-        )
-        right_states = self.state_encoder.extract_entity_states(
-            g_td_image, self.scene.entities, right_kp2d
-        )
+        l_kp3d, l_kp2d, l_scores = self.kp_encoder.extract_entities(s_tdimage)
+        l_states = self.state_encoder.extract_states(s_tdimage, l_kp2d)
+        r_kp3d, r_kp2d, r_scores = self.kp_encoder.extract_entities(g_tdimage)
+        r_states = self.state_encoder.extract_states(g_tdimage, r_kp2d)
 
+        # TODO:
         # scale kp2d to canvas coordinates
         # make tensor to (int, int)
         # mark them on the canvas
-        s_img = Image.fromarray(s_image)
-        g_img = Image.fromarray(g_image)
+        s_img = Image.fromarray(s_npimage)
+        g_img = Image.fromarray(g_npimage)
         self.left_display_img = s_img.resize(
             (self.display_w, self.display_h),
             Image.Resampling.NEAREST,

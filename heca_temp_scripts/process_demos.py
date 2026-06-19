@@ -1,13 +1,13 @@
 from heca.agents.experts.tapas import TapasAgent
 from heca.environment.scenes.ogbench.scene import OGBenchScene
-from heca.guis.demo_postprocessor import DemoPostProcessor
+from heca.guis.tapas_demo_processor import TapasDemoProcessor
 
-cfg = DemoPostProcessor.Config(
+cfg = TapasDemoProcessor.Config(
     agent=TapasAgent.Config(
-        folder="move_block_drawer",
+        folder="move_block",
         scene=OGBenchScene.Config(),
     )
 )
-selector = DemoPostProcessor.get(cfg)
+selector = TapasDemoProcessor.get(cfg)
 
 selector.run()

@@ -29,6 +29,7 @@ class OGBenchScene(Scene):
         width: int = 256
         height: int = 256
         visualize_info: bool = False
+        delta_actions: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -45,8 +46,13 @@ class OGBenchScene(Scene):
                 # visualize_info=cfg.visualize_info,
                 # width=cfg.width,
                 # height=cfg.height,
+                # control_timestep=0.5,
             ),
         )
+
+        self.last_pos = np.array([0, 0, 0])
+        self.last_rot = np.array([0, 0, 0, 1])
+        self.last_state = np.array([0])
 
     def close(self):
         self.env.close()
@@ -197,15 +203,26 @@ class OGBenchScene(Scene):
     def get_extras(self, obs: dict) -> dict[str, Any]:
         if "actions" in obs.keys():  # is demo
             action_raw = obs["actions"]
+            # qpos = obs["prev_qpos"]
+            # print(qpos)
+            # assert False
             yaw = action_raw[3]
-            quat = self.yaw_to_quat(yaw)
-            action = np.concatenate([action_raw[:3], quat, np.array([action_raw[4]])])
+            # quat = self.yaw_to_quat(yaw)
+            # = np.concatenate([action_raw[:3], quat, np.array([action_raw[4]])])
+            axis_angle = np.array([0, 0, yaw])
+            action = np.concatenate(
+                [action_raw[:3], axis_angle, np.array([action_raw[4]])]
+            )
             reward = obs["success"]
         else:
+            # print(obs.keys())
+            # assert False
             pos = obs["proprio_effector_pos"]
-            quat = obs["proprio_effector_quat"]
-            state = obs["proprio_gripper_state"]
-            action = np.concatenate([pos, quat, state])
+            # quat = obs["proprio_effector_quat"]
+            yaw = obs["proprio_effector_yaw"].item()
+            state = obs["proprio_gripper_opening"]
+            action = np.concatenate([pos, self.yaw_to_quat(yaw), state])
+            print(f"ogbench {action}")
             reward = np.array([0])
         return {
             "action": action,
@@ -230,26 +247,22 @@ class OGBenchScene(Scene):
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
+        g_scene, g_image, _ = self.from_internal(
+            goal
+        )  # TODO: cursor is dependent on the order of this call
         s_scene, s_image, _ = self.from_internal(obs)
-        g_scene, g_image, _ = self.from_internal(goal)
         return (s_scene, s_image), (g_scene, g_image)
 
     def sample_task_vis(self) -> tuple[
-        tuple[TDScene, np.ndarray],
-        tuple[TDScene, np.ndarray],
+        tuple[TDScene, TDImage, np.ndarray],
+        tuple[TDScene, TDImage, np.ndarray],
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
-        s_scene, _, s_image = self.from_internal(obs)
-        g_scene, _, g_image = self.from_internal(goal)
-        return (s_scene, s_image), (g_scene, g_image)
-
-    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
-        action = self.to_internal_action(action)
-        ob, reward, terminated, truncated, info = self.env.step(action)  # type: ignore
-        obs, _ = self.to_internal(ob, info)
-        assert isinstance(reward, float)
-        return obs, reward, terminated, truncated
+        goal = self.from_internal(goal)
+        start = self.from_internal(obs)
+        return start, goal
+        return self.from_internal(obs), self.from_internal(goal)
 
     def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
@@ -259,6 +272,12 @@ class OGBenchScene(Scene):
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         idx = obs["proprio_gripper_state"]
         state = self.cursor.state.one_hot_from_idx(idx)
+        self.last_pos = obs["proprio_effector_pos"]
+        self.last_rot = obs["proprio_effector_yaw"]
+        self.last_state = obs["proprio_gripper_opening"]
+        # print(
+        #    f"cursor {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
+        # )
         return pos, rot, state
 
     def yaw_to_quat(self, yaw: float) -> np.ndarray:
@@ -272,12 +291,31 @@ class OGBenchScene(Scene):
         yaw = np.arctan2(siny_cosp, cosy_cosp)
         return yaw
 
+    def wxyz_to_xyzw(self, q: np.ndarray):
+        return np.array([q[1], q[2], q[3], q[0]])
+
+    def xyzw_to_wxyz(self, q: np.ndarray):
+        return np.array([q[3], q[0], q[1], q[2]])
+
     def to_internal_action(self, action: np.ndarray) -> np.ndarray:
         pos = action[:3]
         quat = action[3:7]
         yaw = self.quat_to_yaw(quat)
-        gripper = action[7]
-        return np.concatenate([pos, [yaw], [gripper]], axis=0)
+        state = action[7]
+        if self.cfg.delta_actions:
+            delta_pos = pos - self.last_pos
+            delta_yaw = yaw - self.last_rot
+            delta_state = state - self.last_state
+            return np.concatenate([delta_pos, delta_yaw, delta_state], axis=0)
+        return np.concatenate([pos, [yaw], [state]], axis=0)
+
+    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
+        action = self.to_internal_action(action)
+        print(f"delta {action}")
+        ob, reward, terminated, truncated, info = self.env.step(action)  # type: ignore
+        obs, _ = self.to_internal(ob, info)
+        assert isinstance(reward, float)
+        return obs, reward, terminated, truncated
 
     def load_dataset(
         self, file: h5py.File

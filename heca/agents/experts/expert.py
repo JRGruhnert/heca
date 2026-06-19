@@ -59,7 +59,7 @@ class ExpertAgent(Agent, abc.ABC):
                     self.kp_extractor.extract_entities(image)
                 )
                 kp_cursor_state, cursor_state_scores = (
-                    self.state_extractor.extract_entity_states(image, kp_cursor)
+                    self.state_extractor.extract_states(image, kp_cursor)
                 )
 
                 all_cursor_kps_3d.append(kp3d_cursor)
@@ -69,9 +69,7 @@ class ExpertAgent(Agent, abc.ABC):
 
             else:
                 kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
-                states, state_scores = self.state_extractor.extract_entity_states(
-                    image, kps2d
-                )
+                states, state_scores = self.state_extractor.extract_states(image, kps2d)
 
                 all_kps_3d.append(kps3d)
                 all_states.append(states)
@@ -121,7 +119,7 @@ class ExpertAgent(Agent, abc.ABC):
 
     def from_image(self, image: TDImage) -> TDScene:
         kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
-        states, state_scores = self.state_extractor.extract_entity_states(image, kps2d)
+        states, state_scores = self.state_extractor.extract_states(image, kps2d)
 
         # Sanity check on dimensions
         assert kps3d.shape[1] == len(self.scene.entities) + 1  # cursor at index 0

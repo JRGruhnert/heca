@@ -272,7 +272,7 @@ class DinoEncoder(ImageEncoder):
         kps3d = self.kps_2d_to_3d(image, kps)  # (1, Nref, 3)
         return kps3d, kps, scores
 
-    def extract_entity_states(
+    def extract_states(
         self, image: TDImage, entities: list[Entity], kps: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor]:
         #

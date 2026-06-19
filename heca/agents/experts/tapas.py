@@ -1,21 +1,13 @@
+from pathlib import Path
+import torch
 import numpy as np
 from dataclasses import dataclass
 from functools import cached_property
+from tensordict import TensorDict
 from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import AutoTPGMM
-from tapas_gmm_modified.utils.observation import (
-    SceneObservation,
-    dict_to_tensordict,
-)
-from tensordict import TensorDict
-import torch
-from heca.agents.agent import AgentFeedback
-from heca.agents.experts.expert import ExpertAgent
-from heca.entities.entity import Entity, Mobility
-from heca.misc.td import TDEntity, TDScene, empty_bs
-from heca.misc import logger
-from heca.misc.hardware import device
+from tapas_gmm_modified.utils.observation import SceneObservation, dict_to_tensordict
 from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm_modified.policy.gmm import GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import (
@@ -24,7 +16,12 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     TPGMMConfig,
 )
 
-# sys.modules["tapas_gmm"] = tapas_gmm_modified  # alias for unpickling old checkpoints
+from heca.agents.agent import AgentFeedback
+from heca.agents.experts.expert import ExpertAgent
+from heca.entities.entity import Entity, Mobility
+from heca.misc.td import TDEntity, TDImage, TDScene, empty_bs
+from heca.misc import logger
+from heca.misc.hardware import device
 
 
 class TapasAgent(ExpertAgent):
@@ -58,16 +55,17 @@ class TapasAgent(ExpertAgent):
             ),
             time_based=True,
             predict_dx_in_xdx_models=False,
-            binary_gripper_action=True,
+            binary_gripper_action=False,
             binary_gripper_closed_threshold=0.95,
             dbg_prediction=False,
-            # the kinematics model in RLBench is just to unreliable -> leads to mistakes
-            topp_in_t_models=False,
             force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
             time_scale=1.0,
-            postprocess_prediction=False,  # TODO:  abs quaternions if False else delta quaternions
+            postprocess_prediction=True,  # TODO:  abs quaternions if False else delta quaternions
             invert_prediction_batch=False,
+            return_full_batch=True,
+            batch_predict_in_t_models=True,
         )
+        repeat_actions: int = 0
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -76,18 +74,32 @@ class TapasAgent(ExpertAgent):
     def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
         self.policy.reset_episode()
         xt = self.tapas_td(x, y)
-        predictions = self.make_prediction(xt)
-        if predictions is None:
-            raise NotImplementedError()
+        if self.cfg.policy.return_full_batch:
+            predictions = self.make_batch_prediction(xt)
+            if predictions is None:
+                return x, AgentFeedback(
+                    reward=0,
+                    done=False,
+                    terminal=True,
+                )  # Error
 
-        while not predictions.is_finished:
-            pred = predictions.step()
-            action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-            td_scene, td_image, reward, done, truncated = self.scene.step(action)
-        if self.cfg.use_gt:
-            z = td_scene
+            while not predictions.is_finished:
+                pred = predictions.step()
+                action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
+                tdscene, tdimage, reward, done, truncated = self.scene.step(action)
+            z = self.make_scene(tdscene, tdimage)
         else:
-            z = self.from_image(td_image)
+            while not (pred := self.make_prediction(xt))[1]:
+                action, _ = pred
+                if action is None:
+                    return x, AgentFeedback(
+                        reward=0,
+                        done=False,
+                        terminal=True,
+                    )  # Error
+                tdscene, tdimage, reward, done, truncated = self.scene.step(action)
+                z = self.make_scene(tdscene, tdimage)
+                xt = self.tapas_td(z, y)
 
         return z, AgentFeedback(
             reward=reward,
@@ -95,29 +107,47 @@ class TapasAgent(ExpertAgent):
             terminal=truncated,
         )
 
-    def make_prediction(
+    def make_scene(self, scene: TDScene, image: TDImage):
+        if self.cfg.use_gt:
+            return scene
+        else:
+            return self.from_image(image)
+
+    def make_batch_prediction(
         self, x: SceneObservation  # type: ignore
     ) -> RobotTrajectory | None:
+        # prds, _ = self.policy.predict(x)
         try:
             prds, _ = self.policy.predict(x)  # type: ignore
             return prds  # type: ignore
-        except FloatingPointError as e:
-            logger.debug(f"Numerical error in prediction: {e}")
-            return None
         except Exception as e:
-            logger.debug(f"General error in prediction: {e}")
+            logger.debug(f"Error: {e}")
             return None
 
-    def _load(self, path: str):
+    def make_prediction(self, x: SceneObservation) -> tuple[np.ndarray | None, bool]:  # type: ignore
+        # prds, _ = self.policy.predict(x)
+        try:
+            prds, info = self.policy.predict(x)  # type: ignore
+            return prds, info["done"]  # type: ignore
+        except Exception as e:
+            logger.debug(f"Error: {e}")
+            return None, True
+
+    def _load(self, path: Path):
         # logger.info()
-        logger.info(f"Loading tapas policy from: {path}")
+        if self.cfg.use_gt:
+            file_name = "policy_gt.pt"
+        else:
+            file_name = "policy_img.pt"
+        filepath = path / file_name
+        logger.info(f"Loading tapas policy from: {filepath}")
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
-        temp.from_disk(path)
+        temp.from_disk(str(filepath))
         temp.eval()
         self.policy = temp.to(device)
 
-    def _save(self, path: str):
+    def _save(self, path: Path):
         raise NotImplementedError("Saving not implemented for TapasAgent yet.")
 
     @cached_property

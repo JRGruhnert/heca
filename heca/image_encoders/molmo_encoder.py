@@ -84,6 +84,7 @@ class MolmoEncoder(ImageEncoder):
         return torch.tensor(states)
 
     def prepare_for_scene(self, cfg: Scene.Config):
+
         scene = Scene.get(cfg)
         for entity in scene.entities:
             letters = molmo.ALPHABET[: len(entity.cfg.answers)]

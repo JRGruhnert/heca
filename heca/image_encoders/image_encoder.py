@@ -26,7 +26,7 @@ class ImageEncoder(Registerable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def extract_entity_states(self, image: TDImage, kps: torch.Tensor) -> torch.Tensor:
+    def extract_states(self, image: TDImage, kps: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError()
 
     def normalize_coords(
