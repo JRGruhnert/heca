@@ -2,7 +2,7 @@ import abc
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from heca.misc.td import TDScene
+from heca.misc.td import TDAgentCon, TDScene
 from heca.misc.base import Persistable
 
 
@@ -32,9 +32,9 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError()
 
     @cached_property
-    def precons(self) -> list[Entity]:
+    def precons(self) -> TDAgentCon:
         raise NotImplementedError
 
     @cached_property
-    def postcons(self) -> list[Entity]:
+    def postcons(self) -> TDAgentCon:
         raise NotImplementedError

@@ -4,13 +4,12 @@ from functools import cached_property
 
 import torch
 from torch.distributions import Categorical
-from heca.misc.entity import Entity
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
 from heca.generators.generator import HecaGenerator
 from heca.heca_gnn.network import HecaNetwork
 from heca.misc.ppo import PPO
-from heca.misc.td import TDScene
+from heca.misc.td import TDAgentCon, TDScene
 from torch_geometric.explain import CaptumExplainer, Explainer
 
 
@@ -107,9 +106,9 @@ class Heca(Agent):
         # return x, y
 
     @cached_property
-    def precons(self) -> list[Entity]:
+    def precons(self) -> TDAgentCon:
         raise NotImplementedError
 
     @cached_property
-    def postcons(self) -> list[Entity]:
+    def postcons(self) -> TDAgentCon:
         raise NotImplementedError

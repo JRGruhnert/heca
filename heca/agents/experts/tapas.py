@@ -16,7 +16,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.misc.entity import Entity, Mobility
-from heca.misc.td import TDEntity, TDImage, TDScene, empty_bs
+from heca.misc.td import TDAgentCon, TDEntity, TDImage, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device
 
@@ -226,3 +226,11 @@ class TapasAgent(ExpertAgent):
             joint_vel=joint_vel,
             batch_size=empty_bs,
         )
+
+    @cached_property
+    def precons(self) -> TDAgentCon:
+        raise NotImplementedError
+
+    @cached_property
+    def postcons(self) -> TDAgentCon:
+        raise NotImplementedError
