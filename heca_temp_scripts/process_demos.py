@@ -4,7 +4,7 @@ from heca.guis.tapas_demo_processor import TapasDemoProcessor
 
 cfg = TapasDemoProcessor.Config(
     agent=TapasAgent.Config(
-        folder="move_block",
+        folder="move_ee",
         scene=OGBenchScene.Config(),
     )
 )

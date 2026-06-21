@@ -55,8 +55,8 @@ class TapasAgent(ExpertAgent):
             ),
             time_based=True,
             predict_dx_in_xdx_models=False,
-            binary_gripper_action=False,
-            binary_gripper_closed_threshold=0.95,
+            binary_gripper_action=True,
+            binary_gripper_closed_threshold=0.0,
             dbg_prediction=False,
             force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
             time_scale=1.0,

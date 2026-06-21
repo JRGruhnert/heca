@@ -2,24 +2,26 @@ import h5py
 import numpy as np
 
 from heca.agents.experts.expert import ExpertAgent
+from heca.agents.experts.tapas import TapasAgent
+from heca.environment.scenes.ogbench.scene import OGBenchScene
 
-cfg = ExpertAgent.Config()
+cfg = TapasAgent.Config(
+    folder="lock_left_button",
+    scene=OGBenchScene.Config(),
+)
 
-load_path = ExpertAgent.resolve(cfg) / "demos.h5"
-save_path = ExpertAgent.resolve(cfg) / "demos_new.h5"
+load_path = ExpertAgent.resolve(cfg) / "demos_post.h5"
+save_path = ExpertAgent.resolve(cfg) / "demos_post_new.h5"
 
 file = h5py.File(load_path, "r")
 
-data = {}
-for k in file.keys():
-    data[k] = np.asarray(file[k])
+with h5py.File(load_path, "r") as f:
+    data = {k: np.asarray(f[k]) for k in f.keys()}
 
-bs = []
-
-for value in data["priviliged_button0_state"]:
-    bs.append(value)
-
-data["priviliged_button0_state"] = np.array(bs)
+# Flip 0 <-> 1 for privileged_button_0_state
+data["privileged_button_0_pos_full"] = data["privileged_button_0_pos"]
+data["privileged_button_1_pos_full"] = data["privileged_button_1_pos"]
+# Save everything back
 with h5py.File(save_path, "w") as f:
     for key, value in data.items():
         f.create_dataset(
@@ -27,5 +29,5 @@ with h5py.File(save_path, "w") as f:
             data=value,
             compression="gzip",
         )
-    f.close()
-file.close()
+
+print(f"Saved modified dataset to {save_path}")
