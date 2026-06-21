@@ -18,7 +18,6 @@ class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
         label: str
-        delta_actions: bool
         subroot: str = "scenes"
         folder: str = "samples"
         width: int = 256
