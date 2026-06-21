@@ -4,7 +4,7 @@ from functools import cached_property
 import torch
 
 from heca.agents.experts.expert import ExpertAgent
-from heca.entities.entity import Entity
+from heca.misc.entity import Entity
 from heca.generators.generator import HecaGenerator
 from torch_geometric.data import HeteroData
 

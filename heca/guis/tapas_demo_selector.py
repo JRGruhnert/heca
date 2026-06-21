@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 
 from heca.agents.experts.expert import ExpertAgent
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 from heca.misc.base import Configurable
 
 

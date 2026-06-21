@@ -6,7 +6,7 @@ import numpy as np
 
 from heca.agents.experts.expert import ExpertAgent
 from heca.agents.experts.tapas import TapasAgent
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 from heca.misc.base import Configurable
 
 

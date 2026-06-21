@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from heca.agents.agent import Agent
-from heca.entities.entity import Entity
 from heca.misc.base import Configurable
 from heca.misc.td import TDScene
 from torch_geometric.data import Batch, HeteroData
@@ -10,13 +9,16 @@ from torch_geometric.data import Batch, HeteroData
 class HecaGenerator(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        pass
+        agents: set[Agent.Config]
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def __call__(
-        self, x: TDScene, y: TDScene
+    def reset(self, x: TDScene, y: TDScene) -> HeteroData:
+        raise NotImplementedError
+
+    def step(
+        self, x: TDScene
     ) -> tuple[list[tuple[Agent.Config, TDScene, TDScene]], HeteroData]:
         raise NotImplementedError()
 

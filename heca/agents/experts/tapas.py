@@ -8,17 +8,14 @@ from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import AutoTPGMM
 from tapas_gmm_modified.utils.observation import SceneObservation, dict_to_tensordict
-from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
-from tapas_gmm_modified.policy.gmm import GMMPolicyConfig
 from tapas_gmm_modified.policy.models.tpgmm import (
     AutoTPGMMConfig,
     ModelType,
     TPGMMConfig,
 )
-
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
-from heca.entities.entity import Entity, Mobility
+from heca.misc.entity import Entity, Mobility
 from heca.misc.td import TDEntity, TDImage, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device

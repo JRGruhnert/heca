@@ -4,7 +4,7 @@ from matplotlib.axes import Axes
 import matplotlib.pyplot as plt
 import numpy as np
 from heca.misc import logger
-from heca.entities.entity import Entity
+from heca.misc.entity import Entity
 from heca.observation.td_entity import TDEntity
 from heca.properties.states.area import AreaStateConfig
 from scipy.spatial.transform import Rotation as R

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from heca.agents.hecas.heca import Heca
+from heca.agents.heca import Heca
 from heca.misc.base import Configurable
 
 from heca.runners.plotter import HecaPlotter

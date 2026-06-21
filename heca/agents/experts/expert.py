@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import torch
 from heca.agents.agent import Agent, Cursor
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.image_encoders.molmo_encoder import MolmoEncoder

@@ -2,12 +2,10 @@ from dataclasses import dataclass
 from PIL import Image, ImageTk
 import tkinter as tk
 
-import h5py
-
-from heca.entities.entity import Entity
+from heca.misc.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.base import Configurable
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 
 
 class ImageEncodingViewer(Configurable):

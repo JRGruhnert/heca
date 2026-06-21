@@ -11,7 +11,7 @@ import torch
 from dataclasses import dataclass
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 from heca.helper import molmo
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.td import TDImage

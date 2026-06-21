@@ -1,4 +1,4 @@
-from heca.agents.hecas.heca import Heca
+from heca.agents.heca import Heca
 from heca.agents.hecas.mps.red import RedMPHeca
 from heca.runners.plotters.hecas.heca_plotter import HecaPlotterConfig
 from heca.runners.plotters.hecas.heca_sampling import (

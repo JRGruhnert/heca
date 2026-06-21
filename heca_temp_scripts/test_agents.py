@@ -1,5 +1,5 @@
 from heca.agents.experts.tapas import TapasAgent
-from heca.environment.scenes.ogbench.scene import OGBenchScene
+from heca.scenes.ogbench.scene import OGBenchScene
 from heca.guis.tapas_agent_tester import AgentTester
 import numpy as np
 

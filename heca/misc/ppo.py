@@ -8,8 +8,8 @@ from heca.heca_gnn.network import HecaNetwork
 from heca.misc.hardware import device
 from heca.misc import logger
 from thop import profile
-
-from heca.misc.td import TDScene, TDProperties
+from torch_geometric.data import HeteroData
+from heca.misc.td import TDScene
 
 
 @dataclass(kw_only=True)
@@ -43,8 +43,7 @@ class PPO(Registerable):
         self.optim: torch.optim.Optimizer | None = None
 
         # Rollout storage
-        self.current: list[TDScene] = []
-        self.goal: list[TDScene] = []
+        self.data: list[HeteroData] = []
         self.actions: list[torch.Tensor] = []
         self.logprobs: list[torch.Tensor] = []
         self.values: list[torch.Tensor] = []
@@ -63,7 +62,7 @@ class PPO(Registerable):
         assert self.network is not None
         assert self.optim is not None
         # Main PPO update loop
-        self.mini_batch_loop()
+        self._mini_batch_loop()
 
         # Update learning rate with linear annealing
         if self.cfg.lr_annealing:
@@ -74,7 +73,7 @@ class PPO(Registerable):
 
         return self.network.state_dict(), self.flush_and_rate()
 
-    def mini_batch_loop(self):
+    def _mini_batch_loop(self):
         assert self.network is not None
         assert self.optim is not None
         adv, rtn = self._compute_gae(
@@ -83,8 +82,7 @@ class PPO(Registerable):
             self.terminals,
         )
 
-        old_obs = self.current
-        old_goal = self.goal
+        old_data = self.data
         old_actions = torch.stack(self.actions, dim=0).detach().to(device).squeeze(-1)
         old_logprobs = torch.stack(self.logprobs, dim=0).detach().to(device).squeeze(-1)
         ### Training loop for network
@@ -98,8 +96,7 @@ class PPO(Registerable):
                 mb_idx_list = mb_idx.tolist()  # turn Tensor → Python list of ints
                 # Decided to save observations as objects instead of tensors
                 # Makes it easier to convert it based on network later on
-                mb_obs = [old_obs[i] for i in mb_idx_list]
-                mb_goal = [old_goal[i] for i in mb_idx_list]
+                mb_data = [old_data[i] for i in mb_idx_list]
                 mb_actions = old_actions[mb_idx]
                 mb_logprobs = old_logprobs[mb_idx]
                 mb_adv = adv[mb_idx]
@@ -110,7 +107,7 @@ class PPO(Registerable):
 
                 # Evaluate policy #TODO: how did evaluate change here
                 logprobs, state_values, dist_new = self.network.evaluate(
-                    mb_obs, mb_goal, mb_actions
+                    mb_data, mb_actions
                 )
 
                 assert logprobs.shape == mb_logprobs.shape, "Logprobs shape mismatch"
@@ -236,7 +233,7 @@ class PPO(Registerable):
             ),
         }
 
-    def measure_flops(self, obs: TDProperties, goal: TDProperties) -> tuple[int, int]:
+    def measure_flops(self, obs: TDScene, goal: TDScene) -> tuple[int, int]:
         assert self.network is not None, "Hoop must be set before measuring FLOPs"
         with torch.no_grad():
             obs_batch = [obs]
@@ -248,8 +245,7 @@ class PPO(Registerable):
 
     def flush_and_rate(self):
         current = len(self.success) / len(self.terminals)
-        self.current.clear()
-        self.goal.clear()
+        self.data.clear()
         self.actions.clear()
         self.logprobs.clear()
         self.rewards.clear()
@@ -278,26 +274,28 @@ class PPO(Registerable):
             "data/" + tag + f"/epoch_data_{0}.pt",
         )
 
-    def step(
+    def pre_action(
         self,
-        current: TDProperties,
-        goal: TDProperties,
+        data: HeteroData,
         action: torch.Tensor,
         logprob: torch.Tensor,
         value: torch.Tensor,
+    ):
+        self.data.append(data)
+        self.actions.append(action)
+        self.logprobs.append(logprob)
+        self.values.append(value)
+
+    def post_action(
+        self,
         reward: float,
         success: bool,
         terminal: bool,
     ) -> bool:
-        self.current.append(current)
-        self.goal.append(goal)
-        self.actions.append(action)
-        self.logprobs.append(logprob)
-        self.values.append(value)
         self.rewards.append(reward)
         self.success.append(success)
         self.terminals.append(terminal)
-        return len(self.current) >= self.cfg.batch_size
+        return len(self.data) >= self.cfg.batch_size
 
     def collector(self) -> "HecaNetwork":
         assert self.network is not None, "Network must be set before collecting"

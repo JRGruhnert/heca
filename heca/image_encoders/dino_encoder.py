@@ -11,11 +11,11 @@ from timm.data import create_transform, resolve_model_data_config  # type: ignor
 from torch import nn
 from PIL import Image
 
-from heca.environment.scenes.scene import Scene
+from heca.scenes.scene import Scene
 from heca.misc import logger
 from heca.misc.base import Configurable
 from heca.misc.td import TDImage, TDSceneReferences
-from heca.entities.entity import Entity
+from heca.misc.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)

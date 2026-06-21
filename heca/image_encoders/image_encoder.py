@@ -4,8 +4,8 @@ import torch
 from dataclasses import dataclass
 
 from heca.misc.base import Registerable
-from heca.entities.entity import Entity
-from heca.environment.scenes.scene import Scene
+from heca.misc.entity import Entity
+from heca.scenes.scene import Scene
 from heca.misc.td import TDImage
 
 

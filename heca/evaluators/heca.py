@@ -1,10 +1,7 @@
-from abc import abstractmethod
 from dataclasses import dataclass
 from heca.agents.agent import AgentFeedback
-from heca.entities.entity import Entity
-from heca.entities.meta import MetaEntity
 from heca.evaluators.evaluator import Evaluator
-from heca.misc.td import TDWorld
+from heca.misc.td import TDScene, TDWorld
 
 
 class HecaEvaluator(Evaluator):
@@ -25,19 +22,17 @@ class HecaEvaluator(Evaluator):
         self.progress: float = 0.0
         self.current_step: int = 0
 
-    def reset(self, x: TDWorld, y: TDWorld, e: Entity):
+    def reset(self, x: TDScene, y: TDScene):
         self.y = y
-        self.e = e
-        self.highscore = MetaEntity.distance(x, y, e)
+        self.highscore = 0.0
         self.progress = 0.0
         self.current_step = 0
 
-    def is_sample(self, x: TDWorld, y: TDWorld, e: Entity) -> bool:
-        self.reset(x, y, e)
+    def is_sample(self, x: TDWorld, y: TDWorld) -> bool:
+        self.reset(x, y)
         return not MetaEntity.evaluate(x, y, e)
 
-    @abstractmethod
-    def step(self, x: TDWorld, fb: AgentFeedback) -> tuple[float, bool, bool]:
+    def step(self, x: TDWorld) -> AgentFeedback:
         reward = 0.0 + self.cfg.step_penalty
         alltime = self.highscore
         last = self.progress
@@ -47,10 +42,10 @@ class HecaEvaluator(Evaluator):
 
         if done:
             reward += self.cfg.success_reward
-            return reward, done, True
+            return AgentFeedback(reward=reward, done=done, terminal=True)
 
         if self.current_step >= self.cfg.max_steps:
-            return reward, done, True
+            return AgentFeedback(reward=reward, done=done, terminal=True)
 
         improvement = self.progress - last
         reward += max(0.0, improvement * self.cfg.max_progress_reward)
@@ -59,4 +54,4 @@ class HecaEvaluator(Evaluator):
                 reward += (self.highscore - alltime) * self.cfg.max_progress_reward
 
         self.current_step += 1
-        return reward, done, False
+        return AgentFeedback(reward=reward, done=done, terminal=False)

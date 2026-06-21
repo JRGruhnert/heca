@@ -1,6 +1,5 @@
 from typing import cast
 
-import numpy as np
 from tensordict import TensorDict
 import torch
 
@@ -35,29 +34,6 @@ class TDEntity(TensorDict):
         return self["state"]
 
 
-class TDProperties(TensorDict):
-    def __init__(self, values: dict[str, torch.Tensor]):
-        super().__init__(values, batch_size=empty_bs)
-
-    @classmethod
-    def from_numpy_dict(cls, data: dict[str, np.ndarray]) -> "TDProperties":
-        return cls({k: torch.tensor(v, dtype=torch.float32) for k, v in data.items()})
-
-    def same_fields(self, other: "TDProperties") -> bool:
-        return set(self.keys()) == set(other.keys())  # type: ignore
-
-    def equal(self, other: "TDProperties") -> bool:
-        result = self == other
-        if isinstance(result, bool):
-            return result
-        return bool(result.all())
-
-    def get_by_label(self, label: str) -> torch.Tensor:
-        if label not in self.keys():
-            raise KeyError()
-        return self[label]
-
-
 class TDScene(TensorDict):
     def __init__(
         self, entities: dict[str, TDEntity], extras: dict[str, torch.Tensor] = {}
@@ -74,9 +50,45 @@ class TDScene(TensorDict):
         return self.get("extras", {})
 
 
-class TDWorld(TensorDict):
-    def __init__(self, scenes: dict[str, TDScene]):
-        super().__init__(scenes, batch_size=empty_bs)
+class TDImage(TensorDict):
+    def __init__(
+        self,
+        rgb: torch.Tensor,
+        d: torch.Tensor,
+        mask: torch.Tensor,
+        extr: torch.Tensor,
+        intr: torch.Tensor,
+    ):
+        super().__init__(
+            {
+                "rgb": rgb,
+                "d": d,
+                "mask": mask,
+                "extr": extr,
+                "intr": intr,
+            },
+            batch_size=empty_bs,
+        )
+
+    @property
+    def rgb(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["rgb"])
+
+    @property
+    def d(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["d"])
+
+    @property
+    def mask(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["mask"])
+
+    @property
+    def extr(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["extr"])
+
+    @property
+    def intr(self) -> torch.Tensor:
+        return cast(torch.Tensor, self["intr"])
 
 
 class TDSceneReferences(TensorDict):
@@ -289,51 +301,31 @@ class TDSceneReferences(TensorDict):
 #         assert isinstance(state_ref, TDStateReferences)
 #         state_ref.add_reference(img_raw)
 
+# class TDProperties(TensorDict):
+#     def __init__(self, values: dict[str, torch.Tensor]):
+#         super().__init__(values, batch_size=empty_bs)
 
-class TDImage(TensorDict):
-    def __init__(
-        self,
-        rgb: torch.Tensor,
-        d: torch.Tensor,
-        mask: torch.Tensor,
-        extr: torch.Tensor,
-        intr: torch.Tensor,
-    ):
-        super().__init__(
-            {
-                "rgb": rgb,
-                "d": d,
-                "mask": mask,
-                "extr": extr,
-                "intr": intr,
-            },
-            batch_size=empty_bs,
-        )
+#     @classmethod
+#     def from_numpy_dict(cls, data: dict[str, np.ndarray]) -> "TDProperties":
+#         return cls({k: torch.tensor(v, dtype=torch.float32) for k, v in data.items()})
 
-    @property
-    def rgb(self) -> torch.Tensor:
-        return cast(torch.Tensor, self["rgb"])
+#     def same_fields(self, other: "TDProperties") -> bool:
+#         return set(self.keys()) == set(other.keys())  # type: ignore
 
-    @property
-    def d(self) -> torch.Tensor:
-        return cast(torch.Tensor, self["d"])
+#     def equal(self, other: "TDProperties") -> bool:
+#         result = self == other
+#         if isinstance(result, bool):
+#             return result
+#         return bool(result.all())
 
-    @property
-    def mask(self) -> torch.Tensor:
-        return cast(torch.Tensor, self["mask"])
+#     def get_by_label(self, label: str) -> torch.Tensor:
+#         if label not in self.keys():
+#             raise KeyError()
+#         return self[label]
 
-    @property
-    def extr(self) -> torch.Tensor:
-        return cast(torch.Tensor, self["extr"])
-
-    @property
-    def intr(self) -> torch.Tensor:
-        return cast(torch.Tensor, self["intr"])
-
-
-class TDSceneImages(TensorDict):
-    def __init__(self, images: dict[str, TDImage]):
-        super().__init__(images, batch_size=empty_bs)
+# class TDWorld(TensorDict):
+#     def __init__(self, scenes: dict[str, TDScene]):
+#         super().__init__(scenes, batch_size=empty_bs)
 
 
 def relative_quaternion(q: torch.Tensor, q_ref: torch.Tensor) -> torch.Tensor:
