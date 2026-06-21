@@ -6,7 +6,7 @@ from heca.misc.td import TDAgentCon, TDScene
 from heca.misc.base import Persistable
 
 
-class Cursor(Enum):
+class EESate(Enum):
     IDLE = 1
     ERROR = 2
     ACTIVE = 3

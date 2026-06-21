@@ -62,7 +62,7 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_ee(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -135,5 +135,5 @@ class Scene(Persistable):
 
     @property
     @abc.abstractmethod
-    def cursor(self) -> Entity:
+    def ee(self) -> Entity:
         raise NotImplementedError()

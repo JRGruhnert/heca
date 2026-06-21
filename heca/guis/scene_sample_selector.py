@@ -82,7 +82,7 @@ class SceneSampleSelector(Configurable):
         self.kp_marker: int | None = None
         self.state_marker: int | None = None
         self.title: str = "Selection for: {entity}.{state} Sample {idx}"
-        self.entities = [self.scene.cursor] + self.scene.entities
+        self.entities = [self.scene.ee] + self.scene.entities
         self.state_samples: dict[str, dict[str, list[Image.Image]]] = {
             entity.cfg.label: {state: [] for state in entity.cfg.states}
             for entity in self.entities

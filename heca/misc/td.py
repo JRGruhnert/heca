@@ -369,12 +369,12 @@ def make_abs_and_rel_td_entity(
     position: torch.Tensor,
     rotation: torch.Tensor,
     state: torch.Tensor,
-    cursor_pos: torch.Tensor,
-    cursor_rot: torch.Tensor,
+    ee_pos: torch.Tensor,
+    ee_rot: torch.Tensor,
 ) -> tuple[TDEntity, TDEntity]:
     td_rel = TDEntity(
-        position=position - cursor_pos,
-        rotation=relative_quaternion(rotation, cursor_rot),
+        position=position - ee_pos,
+        rotation=relative_quaternion(rotation, ee_rot),
         state=state,
     )
     td_abs = TDEntity(

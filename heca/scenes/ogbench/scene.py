@@ -137,9 +137,9 @@ class OGBenchScene(Scene):
         return [Entity.get(e) for e in ents]
 
     @property
-    def cursor(self) -> Entity:
+    def ee(self) -> Entity:
         config = Entity.Config(
-            label="cursor",
+            label="ee",
             question="Where is the red cube in the scene?",
             answers={
                 "on the floor",
@@ -152,7 +152,7 @@ class OGBenchScene(Scene):
         return Entity.get(config)
 
     def to_td_scene(self, obs: dict) -> TDScene:
-        pos, rot, state = self.get_cursor(obs)
+        pos, rot, state = self.get_ee(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:
             if entity.cfg.label in [
@@ -169,12 +169,12 @@ class OGBenchScene(Scene):
                 position=torch.tensor(e_pos, dtype=torch.float32),
                 rotation=torch.tensor(e_rot, dtype=torch.float32),
                 state=entity.state.one_hot_from_idx(e_state),
-                cursor_pos=pos,
-                cursor_rot=rot,
+                ee_pos=pos,
+                ee_rot=rot,
             )
             td_entities[entity.cfg.label] = td_abs
             td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["cursor"] = TDEntity(
+        td_entities["ee"] = TDEntity(
             position=pos,
             rotation=rot,
             state=state,
@@ -211,8 +211,10 @@ class OGBenchScene(Scene):
             # quat = self.yaw_to_quat(yaw)
             # = np.concatenate([action_raw[:3], quat, np.array([action_raw[4]])])
             axis_angle = np.array([0, 0, yaw])
-            gripper = action_raw[4]
-            action = np.concatenate([action_raw[:3], axis_angle, np.array([gripper])])
+            # gripper = action_raw[4]
+            # action = np.concatenate([action_raw[:3], axis_angle, np.array([gripper])])
+            opening = obs["proprio_gripper_opening"]
+            action = np.concatenate([action_raw[:3], axis_angle, opening])
             reward = obs["success"]
         else:
             # print(obs.keys())
@@ -250,10 +252,8 @@ class OGBenchScene(Scene):
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
         self.last_state = obs["proprio_gripper_opening"]
-        g_scene, g_image, _ = self.from_internal(
-            goal
-        )  # TODO: cursor is dependent on the order of this call
         s_scene, s_image, _ = self.from_internal(obs)
+        g_scene, g_image, _ = self.from_internal(goal)
         return (s_scene, s_image), (g_scene, g_image)
 
     def sample_task_vis(self) -> tuple[
@@ -265,21 +265,18 @@ class OGBenchScene(Scene):
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
         self.last_state = obs["proprio_gripper_opening"]
-        goal = self.from_internal(goal)
-        start = self.from_internal(obs)
-        return start, goal
         return self.from_internal(obs), self.from_internal(goal)
 
-    def get_cursor(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_ee(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
         # wxyz = obs["proprio/effector_quat"]
         yaw = obs["proprio_effector_yaw"].item()
         rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         idx = obs["proprio_gripper_state"]
-        state = self.cursor.state.one_hot_from_idx(idx)
+        state = self.ee.state.one_hot_from_idx(idx)
         # print(
-        #    f"cursor {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
+        #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
         # )
         return pos, rot, state
 
@@ -309,7 +306,7 @@ class OGBenchScene(Scene):
 
     def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
         action = self.to_internal_action(action)
-        ob, reward, terminated, truncated, info = self.env.step(action)  # type: ignore
+        ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         assert isinstance(reward, float)
         return obs, reward, terminated, truncated

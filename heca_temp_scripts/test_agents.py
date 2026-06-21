@@ -39,6 +39,26 @@ cfg = AgentTester.Config(
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
+        TapasAgent.Config(
+            folder="unlock_left_button",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            folder="unlock_right_button",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            folder="move_block",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            folder="move_ee",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
     ],
     scene=OGBenchScene.Config(),
 )

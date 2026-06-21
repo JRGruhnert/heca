@@ -183,9 +183,9 @@ class CalvinScene(Scene):
         return [Entity.get(e) for e in ents]
 
     @cached_property
-    def cursor(self) -> Entity:
+    def ee(self) -> Entity:
         config = Entity.Config(
-            label="cursor",
+            label="ee",
             question="Is the robot arms gripper:",
             answers={"open", "closed"},
             states={"open", "closed"},
@@ -193,7 +193,7 @@ class CalvinScene(Scene):
         )
         return Entity.get(config)
 
-    def get_gt_cursor_values(
+    def get_gt_ee_values(
         self, obs: CalvinEnvObservation
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos = torch.tensor(obs.ee_pose[:3], dtype=torch.float32)
@@ -242,7 +242,7 @@ class CalvinScene(Scene):
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
 
     def to_td_scene(self, obs: CalvinEnvObservation) -> TDScene:
-        pos, rot, state = self.get_cursor(obs)
+        pos, rot, state = self.get_ee(obs)
         td_entities: dict[str, TDEntity] = {}
         for entity in self.entities:
             e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
@@ -255,12 +255,12 @@ class CalvinScene(Scene):
                 position=final_kps[:3],
                 rotation=final_kps[-4:],
                 state=final_state,
-                cursor_pos=pos,
-                cursor_rot=rot,
+                ee_pos=pos,
+                ee_rot=rot,
             )
             td_entities[entity.cfg.label] = td_abs
             td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["cursor"] = TDEntity(
+        td_entities["ee"] = TDEntity(
             position=pos,
             rotation=rot,
             state=state,

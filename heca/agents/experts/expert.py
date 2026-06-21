@@ -2,7 +2,7 @@ import abc
 from dataclasses import dataclass
 
 import torch
-from heca.agents.agent import Agent, Cursor
+from heca.agents.agent import Agent, EESate
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
@@ -27,7 +27,7 @@ class ExpertAgent(Agent, abc.ABC):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.state = Cursor.IDLE
+        self.state = EESate.IDLE
         self.scene = Scene.get(self.cfg.scene)
 
         if not self.cfg.use_gt:
@@ -44,7 +44,7 @@ class ExpertAgent(Agent, abc.ABC):
         states, state_scores = self.state_extractor.extract_states(image, kps2d)
 
         # Sanity check on dimensions
-        assert kps3d.shape[1] == len(self.scene.entities) + 1  # cursor at index 0
+        assert kps3d.shape[1] == len(self.scene.entities) + 1  # ee at index 0
 
         td_entities: dict[str, TDEntity] = {}
         c_pos, c_rot, c_state = self.get_entity_pose_and_state(
@@ -65,12 +65,12 @@ class ExpertAgent(Agent, abc.ABC):
                 position=pos,
                 rotation=rot,
                 state=state,
-                cursor_pos=c_pos,
-                cursor_rot=c_rot,
+                ee_pos=c_pos,
+                ee_rot=c_rot,
             )
             td_entities[entity.cfg.label] = td_abs
             td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["cursor"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
+        td_entities["ee"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
         return TDScene(td_entities)
 
     def get_entity_pose_and_state(

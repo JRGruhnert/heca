@@ -52,7 +52,7 @@ class TapasAgent(ExpertAgent):
             ),
             time_based=True,
             predict_dx_in_xdx_models=False,
-            binary_gripper_action=True,
+            binary_gripper_action=False,
             binary_gripper_closed_threshold=0.0,
             dbg_prediction=False,
             force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
@@ -164,12 +164,8 @@ class TapasAgent(ExpertAgent):
         reward = td_obs.extras["reward"]
         joint_pos = td_obs.extras["joint_pos"]
         joint_vel = td_obs.extras["joint_vel"]
-        cursor = td_obs["cursor"]
-        cursor_pos = cursor.position
-        cursor_rot = cursor.rotation
-        cursor_state = cursor.state
-        ee_pose = torch.cat((cursor_pos, cursor_rot), dim=-1)
-        ee_state = cursor_state
+        ee_state = td_obs["ee"].state
+        ee_pose = torch.cat((td_obs["ee"].position, td_obs["ee"].rotation), dim=-1)
 
         # camera_obs = self.image_tensors(obs)
         # multicam_obs = dict_to_tensordict(
@@ -202,12 +198,9 @@ class TapasAgent(ExpertAgent):
                 poses[f"{entity.cfg.label}_target"] = pose
                 states[f"{entity.cfg.label}_target"] = state
 
-        gcursor = td_goal["cursor"]
-        gcursor_pos = gcursor.position
-        gcursor_rot = gcursor.rotation
-        gcursor_state = gcursor.state
-        gee_pose = torch.cat((gcursor_pos, gcursor_rot), dim=-1)
-        gee_state = gcursor_state
+        gee_state = td_goal["ee"].state
+        gee_pose = torch.cat((td_goal["ee"].position, td_goal["ee"].rotation), dim=-1)
+
         poses[f"ee_target"] = gee_pose
         states[f"ee_target"] = gee_state
 
@@ -244,7 +237,8 @@ class TapasAgent(ExpertAgent):
             tapas_tp.add(rot_str)
         # TODO: Currently assumes tapas tps are euler and quaternion
         # My whole code does not generalize to other Task Parameterized models and state types
-        for idx, key in tpgmm._demos.idx_key_list:
+        assert tpgmm._demos is not None
+        for idx, key in enumerate(tpgmm._demos.idx_key_list):
             pre_value = state.run_addon(
                 "tapas",
                 tpgmm.start_values[state.name],
