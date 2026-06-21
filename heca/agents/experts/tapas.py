@@ -234,3 +234,45 @@ class TapasAgent(ExpertAgent):
     @cached_property
     def postcons(self) -> TDAgentCon:
         raise NotImplementedError
+        # https://distancia.readthedocs.io/en/latest/ChamferDistance.html
+        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
+        # Taskparameters of the AutoTPGMM model
+        tapas_tp: set[str] = set()
+        for frame_idx in tpgmm._used_frames:
+            pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
+            tapas_tp.add(pos_str)
+            tapas_tp.add(rot_str)
+        # TODO: Currently assumes tapas tps are euler and quaternion
+        # My whole code does not generalize to other Task Parameterized models and state types
+        for idx, key in tpgmm._demos.idx_key_list:
+            pre_value = state.run_addon(
+                "tapas",
+                tpgmm.start_values[state.name],
+                tpgmm.end_values[state.name],
+                self.reversed,
+                True if state.name in tapas_tp else False,
+            )
+            post_value = state.run_addon(
+                "tapas",
+                tpgmm.start_values[state.name],
+                tpgmm.end_values[state.name],
+                not self.reversed,
+                True if state.name in tapas_tp else False,
+            )
+            if pre_value is not None:
+                self.precons[state.name] = pre_value
+            if post_value is not None:
+                self.postcons[state.name] = post_value
+
+        def region_similarity(A: torch.Tensor, B: torch.Tensor):
+            muA = A.mean(axis=0)
+            muB = B.mean(axis=0)
+
+            varA = A.var(axis=0).mean()
+            varB = B.var(axis=0).mean()
+
+            sigma = varA + varB
+
+            dist2 = np.sum((muA - muB) ** 2)
+
+            return np.exp(-dist2 / sigma)
