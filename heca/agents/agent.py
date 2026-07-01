@@ -2,7 +2,8 @@ import abc
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from heca.misc.td import TDAgentCon, TDScene
+from heca.conditions.pair import ConditionPair
+from heca.misc.td import TDScene
 from heca.misc.base import Persistable
 
 
@@ -22,7 +23,7 @@ class AgentFeedback:
 class Agent(Persistable, abc.ABC):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        pass
+        n_con_samples: int = 1000
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -32,9 +33,5 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError()
 
     @cached_property
-    def precons(self) -> TDAgentCon:
-        raise NotImplementedError
-
-    @cached_property
-    def postcons(self) -> TDAgentCon:
-        raise NotImplementedError
+    def conditions(self) -> list[ConditionPair]:
+        raise NotImplementedError()

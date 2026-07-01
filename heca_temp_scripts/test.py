@@ -1,17 +1,69 @@
-print("TF side loaded")
+from heca.agents.agent import Agent
+from heca.agents.experts.tapas import TapasAgent
 
-print("OGBench loaded")
-import os
-
-# os.environ["TRANSFORMERS_NO_TF"] = "1"
-# os.environ["USE_TF"] = "0"
-# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# from heca.agents.heca import Heca
+from heca.agents.heca_base import HecaBase
 from heca.scenes.ogbench.scene import OGBenchScene
-from heca.scenes.scene import Scene
-from heca.image_encoders.molmo_encoder import MolmoEncoder
 
-print("before scene")
+agents = [
+    TapasAgent.Config(
+        folder="open_drawer",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="close_drawer",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="open_window",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="close_window",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="lock_left_button",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="lock_right_button",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="unlock_left_button",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="unlock_right_button",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    TapasAgent.Config(
+        folder="move_block",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+    # TapasAgent.Config(
+    #    folder="move_ee",
+    #    scene=OGBenchScene.Config(),
+    #    use_gt=True,
+    # ),
+]
 
-scene = Scene.get(OGBenchScene.Config())
 
-print("after scene")
+heca_cfg = HecaBase.Config(
+    subroot="heca_test",
+    folder="test",
+    agents=agents,
+)
+
+heca = Agent.get(heca_cfg, load=False)
+heca.conditions

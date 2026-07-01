@@ -4,12 +4,15 @@ from functools import cached_property
 
 import torch
 from torch.distributions import Categorical
+from heca.conditions.analyzer import ConditionAnalyzer
+from heca.conditions.pair import ConditionPair
 from heca.evaluators.heca import HecaEvaluator
 from heca.agents.agent import Agent, AgentFeedback
 from heca.generators.generator import HecaGenerator
 from heca.heca_gnn.network import HecaNetwork
+
 from heca.misc.ppo import PPO
-from heca.misc.td import TDAgentCon, TDScene
+from heca.misc.td import TDScene
 from torch_geometric.explain import CaptumExplainer, Explainer
 
 
@@ -25,8 +28,11 @@ class Heca(Agent):
         generator: HecaGenerator.Config
         evaluator: HecaEvaluator.Config
         network: HecaNetwork.Config
+        agents: set[Agent.Config]
         mode: HecaMode
         ppo: PPO.Config
+        label: str = "heca"
+        n_con_samples: int = 1000
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -53,6 +59,7 @@ class Heca(Agent):
 
         self.generator = HecaGenerator.get(cfg.generator)
         self.evaluator = HecaEvaluator.get(cfg.evaluator)
+        self.analyzer = ConditionAnalyzer()
 
     def predict(self, data, options) -> tuple[Agent.Config, TDScene, TDScene]:
         with torch.inference_mode():
@@ -106,9 +113,53 @@ class Heca(Agent):
         # return x, y
 
     @cached_property
-    def precons(self) -> TDAgentCon:
-        raise NotImplementedError
+    def conditions(self) -> list[ConditionPair]:
+        return self.merge_lower_conditions()
 
-    @cached_property
-    def postcons(self) -> TDAgentCon:
-        raise NotImplementedError
+    def merge_lower_conditions(self) -> list[ConditionPair]:
+        cons = []
+        for cfg in self.cfg.agents:
+            cons.append(Agent.get(cfg).conditions)
+
+        sets = [{i} for i in range(len(cons))]
+        while True:
+            merged = False
+            for i in range(len(cons)):
+                for j in range(i + 1, len(cons)):
+                    a = cons[i]
+                    b = cons[j]
+                    if self.should_merge(a, b):
+                        a_set = sets[i]
+                        b_set = sets[j]
+                        new_set = a_set | b_set
+                        new_pair = ConditionPair.merge(
+                            label=f"{self.cfg.label}".join(map(str, sorted(new_set))),
+                            a=a,
+                            b=b,
+                            n_samples=self.cfg.n_con_samples,
+                        )
+                        cons.pop(j)
+                        cons.pop(i)
+                        sets.pop(j)
+                        sets.pop(i)
+                        sets.append(new_set)
+                        cons.append(new_pair)
+
+                        merged = True
+                        break
+
+                if merged:
+                    break
+
+            if not merged:
+                break
+        return cons
+
+    def should_merge(self, a: ConditionPair, b: ConditionPair) -> bool:
+        path = Agent.resolve(self.cfg)
+        result = self.analyzer.analyze(a, b, path)
+        # for elabel in result.keys():
+        #    forward = result[elabel]["forward"]
+        #    backward = result[elabel]["backward"]
+
+        return False

@@ -9,7 +9,7 @@ from torch_geometric.data import Batch, HeteroData
 class HecaGenerator(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        agents: set[Agent.Config]
+        pass
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

@@ -15,8 +15,10 @@ from tapas_gmm_modified.policy.models.tpgmm import (
 )
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
+from heca.conditions.condition import Condition
+from heca.conditions.pair import ConditionPair
 from heca.misc.entity import Entity, Mobility
-from heca.misc.td import TDAgentCon, TDEntity, TDImage, TDScene, empty_bs
+from heca.misc.td import TDEntity, TDImage, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device
 
@@ -63,6 +65,7 @@ class TapasAgent(ExpertAgent):
             batch_predict_in_t_models=True,
         )
         repeat_actions: int = 0
+        n_con_samples: int = 1000
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -221,52 +224,41 @@ class TapasAgent(ExpertAgent):
         )
 
     @cached_property
-    def precons(self) -> TDAgentCon:
-        raise NotImplementedError
-
-    @cached_property
-    def postcons(self) -> TDAgentCon:
-        raise NotImplementedError
+    def conditions(self) -> list[ConditionPair]:
         # https://distancia.readthedocs.io/en/latest/ChamferDistance.html
         tpgmm: AutoTPGMM = self.policy.model  # type: ignore
-        # Taskparameters of the AutoTPGMM model
-        tapas_tp: set[str] = set()
-        for frame_idx in tpgmm._used_frames:
-            pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
-            tapas_tp.add(pos_str)
-            tapas_tp.add(rot_str)
-        # TODO: Currently assumes tapas tps are euler and quaternion
-        # My whole code does not generalize to other Task Parameterized models and state types
         assert tpgmm._demos is not None
+        path = ExpertAgent.resolve(self.cfg)
+        pre_data: dict[str, np.ndarray] = {}
+        post_data: dict[str, np.ndarray] = {}
         for idx, key in enumerate(tpgmm._demos.idx_key_list):
-            pre_value = state.run_addon(
-                "tapas",
-                tpgmm.start_values[state.name],
-                tpgmm.end_values[state.name],
-                self.reversed,
-                True if state.name in tapas_tp else False,
-            )
-            post_value = state.run_addon(
-                "tapas",
-                tpgmm.start_values[state.name],
-                tpgmm.end_values[state.name],
-                not self.reversed,
-                True if state.name in tapas_tp else False,
-            )
-            if pre_value is not None:
-                self.precons[state.name] = pre_value
-            if post_value is not None:
-                self.postcons[state.name] = post_value
+            if idx in tpgmm._used_frames:
+                # Use from h5 file
+                # # precon
+                # pre_pos = tpgmm._demos.start_pos[key].numpy()  # (N,3)
+                # pre_rot = tpgmm._demos.start_rot[key].numpy()  # (N,4)
+                # pre_state = tpgmm._demos.start_state[key].numpy()  # (N,C) or (N,)
+                # if pre_state.ndim == 2:
+                #     pre_state = np.argmax(pre_state, axis=1)
 
-        def region_similarity(A: torch.Tensor, B: torch.Tensor):
-            muA = A.mean(axis=0)
-            muB = B.mean(axis=0)
+                # pre_data[key] = np.concatenate(
+                #     (pre_pos, pre_rot, pre_state[:, None]), axis=1
+                # )
 
-            varA = A.var(axis=0).mean()
-            varB = B.var(axis=0).mean()
+                # # postcon
+                # post_pos = tpgmm._demos.end_pos[key].numpy()
+                # post_rot = tpgmm._demos.end_rot[key].numpy()
+                # post_state = tpgmm._demos.end_state[key].numpy()  # (N,C) or (N,)
+                # if post_state.ndim == 2:
+                #     post_state = np.argmax(post_state, axis=1)
 
-            sigma = varA + varB
-
-            dist2 = np.sum((muA - muB) ** 2)
-
-            return np.exp(-dist2 / sigma)
+                # post_data[key] = np.concatenate(
+                #     (post_pos, post_rot, post_state[:, None]), axis=1
+                # )
+        pre = Condition(
+            f"{self.cfg.folder}_pre", pre_data, 1, self.cfg.n_con_samples, path
+        )
+        post = Condition(
+            f"{self.cfg.folder}_post", post_data, 1, self.cfg.n_con_samples, path
+        )
+        return [ConditionPair(self.cfg.folder, pre, post)]

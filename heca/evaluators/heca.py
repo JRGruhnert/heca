@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from heca.agents.agent import AgentFeedback
 from heca.evaluators.evaluator import Evaluator
-from heca.misc.td import TDScene, TDWorld
+from heca.misc.td import TDScene
 
 
 class HecaEvaluator(Evaluator):
