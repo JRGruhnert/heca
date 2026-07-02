@@ -79,7 +79,10 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def load_dataset(
-        self, file: h5py.File
+        self,
+        file: h5py.File,
+        selections: list[int] | None = None,
+        only_conditions: bool = False,
     ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 

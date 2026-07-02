@@ -35,63 +35,65 @@ class TapasAgent(ExpertAgent):
     @dataclass(kw_only=True)
     class Config(ExpertAgent.Config):
         label: str = "tapas"
-        policy: GMMPolicyConfig = GMMPolicyConfig(
-            suffix="release",
-            model=AutoTPGMMConfig(
-                tpgmm=TPGMMConfig(
-                    n_components=20,
-                    model_type=ModelType.HMM,
-                    use_riemann=True,
-                    add_time_component=True,
-                    add_action_component=False,
-                    position_only=False,
-                    add_gripper_action=True,
-                    reg_shrink=1e-2,
-                    reg_diag=2e-4,
-                    reg_diag_gripper=2e-2,
-                    reg_em_finish_shrink=1e-2,
-                    reg_em_finish_diag=2e-4,
-                    reg_em_finish_diag_gripper=2e-2,
-                    trans_cov_mask_t_pos_corr=False,
-                    em_steps=50,
-                    fix_first_component=False,  # True maybe
-                    fix_last_component=False,  # True maybe
-                    reg_init_diag=5e-4,  # 5
-                    heal_time_variance=False,
+        policy: GMMPolicyConfig = field(
+            default_factory=lambda: GMMPolicyConfig(
+                suffix="release",
+                model=AutoTPGMMConfig(
+                    tpgmm=TPGMMConfig(
+                        n_components=20,
+                        model_type=ModelType.HMM,
+                        use_riemann=True,
+                        add_time_component=True,
+                        add_action_component=False,
+                        position_only=False,
+                        add_gripper_action=True,
+                        reg_shrink=1e-2,
+                        reg_diag=2e-4,
+                        reg_diag_gripper=2e-2,
+                        reg_em_finish_shrink=1e-2,
+                        reg_em_finish_diag=2e-4,
+                        reg_em_finish_diag_gripper=2e-2,
+                        trans_cov_mask_t_pos_corr=False,
+                        em_steps=50,
+                        fix_first_component=False,  # True maybe
+                        fix_last_component=False,  # True maybe
+                        reg_init_diag=5e-4,  # 5
+                        heal_time_variance=False,
+                    ),
+                    frame_selection=FrameSelectionConfig(
+                        init_strategy=InitStrategy.TIME_BASED,
+                        fitting_actions=(FittingStage.INIT,),
+                        use_bic=False,
+                        drop_redundant_frames=False,
+                        rel_score_threshold=0.0,
+                        gt_frames=None,  # Frames per segment
+                    ),
+                    demos_segmentation=DemoSegmentationConfig(
+                        gripper_based=False,
+                        distance_based=False,
+                        velocity_based=True,
+                        repeat_final_step=0,  # 1
+                        repeat_first_step=0,
+                        components_prop_to_len=True,
+                        velocity_threshold=0.05,
+                    ),
+                    cascade=CascadeConfig(
+                        kl_keep_time_dim=True,
+                        kl_keep_rotation_dim=True,
+                    ),
                 ),
-                frame_selection=FrameSelectionConfig(
-                    init_strategy=InitStrategy.TIME_BASED,
-                    fitting_actions=(FittingStage.INIT,),
-                    use_bic=False,
-                    drop_redundant_frames=False,
-                    rel_score_threshold=0.0,
-                    gt_frames=None,  # Frames per segment
-                ),
-                demos_segmentation=DemoSegmentationConfig(
-                    gripper_based=False,
-                    distance_based=False,
-                    velocity_based=True,
-                    repeat_final_step=0,  # 1
-                    repeat_first_step=0,
-                    components_prop_to_len=True,
-                    velocity_threshold=0.05,
-                ),
-                cascade=CascadeConfig(
-                    kl_keep_time_dim=True,
-                    kl_keep_rotation_dim=True,
-                ),
+                time_based=True,
+                predict_dx_in_xdx_models=False,
+                binary_gripper_action=False,
+                binary_gripper_closed_threshold=0.0,
+                dbg_prediction=False,
+                force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
+                time_scale=1.0,
+                postprocess_prediction=True,  # TODO:  abs quaternions if False else delta quaternions
+                invert_prediction_batch=False,
+                return_full_batch=True,
+                batch_predict_in_t_models=True,
             ),
-            time_based=True,
-            predict_dx_in_xdx_models=False,
-            binary_gripper_action=False,
-            binary_gripper_closed_threshold=0.0,
-            dbg_prediction=False,
-            force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
-            time_scale=1.0,
-            postprocess_prediction=True,  # TODO:  abs quaternions if False else delta quaternions
-            invert_prediction_batch=False,
-            return_full_batch=True,
-            batch_predict_in_t_models=True,
         )
         repeat_actions: int = 0
         n_con_samples: int = 1000
@@ -100,9 +102,10 @@ class TapasAgent(ExpertAgent):
         rel_score_threshold: float = 0.0
 
         def __post_init__(self):
-            fs = self.policy.model.frame_selection
-            fs.gt_frames = self.gt_frames
-            fs.rel_score_threshold = self.rel_score_threshold
+            self.policy.model.frame_selection.gt_frames = self.gt_frames
+            self.policy.model.frame_selection.rel_score_threshold = (
+                self.rel_score_threshold
+            )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -185,6 +188,7 @@ class TapasAgent(ExpertAgent):
         else:
             logger.warning(f"No tapas policy found at given path: {filepath}")
         self.policy = temp.to(device)
+        print(self.policy)
 
     def eval(self):
         self.policy.eval()
@@ -276,28 +280,33 @@ class TapasAgent(ExpertAgent):
         for idx, key in enumerate(tpgmm._demos.idx_key_list):
             if idx in tpgmm._used_frames:
                 pass
-                # Use from h5 file
-                # # precon
-                # pre_pos = tpgmm._demos.start_pos[key].numpy()  # (N,3)
-                # pre_rot = tpgmm._demos.start_rot[key].numpy()  # (N,4)
-                # pre_state = tpgmm._demos.start_state[key].numpy()  # (N,C) or (N,)
-                # if pre_state.ndim == 2:
-                #     pre_state = np.argmax(pre_state, axis=1)
+                path = TapasAgent.resolve(self.cfg)
+                demos_file = h5py.File(path / self.cfg.demo_filename, "r")
+                scene = Scene.get(self.scene.cfg, load=not self.cfg.use_gt)
+                demos_scenes, demos_images = scene.load_dataset(
+                    demos_file, only_conditions=True
+                )
+                # precon
+                pre_pos = tpgmm._demos.start_pos[key].numpy()  # (N,3)
+                pre_rot = tpgmm._demos.start_rot[key].numpy()  # (N,4)
+                pre_state = tpgmm._demos.start_state[key].numpy()  # (N,C) or (N,)
+                if pre_state.ndim == 2:
+                    pre_state = np.argmax(pre_state, axis=1)
 
-                # pre_data[key] = np.concatenate(
-                #     (pre_pos, pre_rot, pre_state[:, None]), axis=1
-                # )
+                pre_data[key] = np.concatenate(
+                    (pre_pos, pre_rot, pre_state[:, None]), axis=1
+                )
 
-                # # postcon
-                # post_pos = tpgmm._demos.end_pos[key].numpy()
-                # post_rot = tpgmm._demos.end_rot[key].numpy()
-                # post_state = tpgmm._demos.end_state[key].numpy()  # (N,C) or (N,)
-                # if post_state.ndim == 2:
-                #     post_state = np.argmax(post_state, axis=1)
+                # postcon
+                post_pos = tpgmm._demos.end_pos[key].numpy()
+                post_rot = tpgmm._demos.end_rot[key].numpy()
+                post_state = tpgmm._demos.end_state[key].numpy()  # (N,C) or (N,)
+                if post_state.ndim == 2:
+                    post_state = np.argmax(post_state, axis=1)
 
-                # post_data[key] = np.concatenate(
-                #     (post_pos, post_rot, post_state[:, None]), axis=1
-                # )
+                post_data[key] = np.concatenate(
+                    (post_pos, post_rot, post_state[:, None]), axis=1
+                )
         pre = Condition(
             f"{self.cfg.folder}_pre", pre_data, 1, self.cfg.n_con_samples, path
         )
@@ -306,27 +315,16 @@ class TapasAgent(ExpertAgent):
         )
         return [ConditionPair(self.cfg.folder, pre, post)]
 
-    def load_demos(
-        self,
-        add_init_ee_pose_as_frame=True,
-        add_world_frame=False,
-        frames_from_keypoints=False,
-        kp_indeces=None,
-        enforce_z_up=False,
-        modulo_object_z_rotation=False,
-        make_quats_continuous=True,
-    ) -> Demos:
+    def load_demos(self, selections: list[int]) -> list[TensorDict]:
         path = TapasAgent.resolve(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
 
         observations: list[SceneObservation] = []  # type: ignore
 
-        if self.cfg.use_gt:
-            load_scene = False
-        else:
-            load_scene = True
-        scene = Scene.get(self.scene.cfg, load=load_scene)
-        demos_scenes, demos_images = scene.load_dataset(demos_file)
+        scene = Scene.get(self.scene.cfg, load=not self.cfg.use_gt)
+        demos_scenes, demos_images = scene.load_dataset(
+            demos_file, selections=selections
+        )
         for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
             if self.cfg.use_gt:
                 obss: list[TensorDict] = []
@@ -336,6 +334,8 @@ class TapasAgent(ExpertAgent):
                     obs = self.tapas_td(td_obs, td_goal)
                     obss.append(obs)
                 stacked_obs = TensorDict.stack(obss, dim=0)
+                print(stacked_obs)
+                assert isinstance(stacked_obs, SceneObservation)
                 observations.append(stacked_obs)
             else:
                 raise NotImplementedError(
@@ -343,13 +343,4 @@ class TapasAgent(ExpertAgent):
                 )
                 # TODO:
 
-        return Demos(
-            observations,
-            add_init_ee_pose_as_frame=add_init_ee_pose_as_frame,
-            add_world_frame=add_world_frame,
-            frames_from_keypoints=frames_from_keypoints,
-            kp_indeces=kp_indeces,
-            enforce_z_up=enforce_z_up,
-            modulo_object_z_rotation=modulo_object_z_rotation,
-            make_quats_continuous=make_quats_continuous,
-        )  # type: ignore
+        return observations

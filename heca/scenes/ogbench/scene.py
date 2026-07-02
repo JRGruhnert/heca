@@ -312,48 +312,62 @@ class OGBenchScene(Scene):
         return obs, reward, terminated, truncated
 
     def load_dataset(
-        self, file: h5py.File
+        self,
+        file: h5py.File,
+        selections: list[int] | None = None,
+        only_conditions: bool = False,
     ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
-        demo_indices: h5py.Dataset = file["demo"][:]  # type: ignore
-        demo_length = len(demo_indices)
-        pp_demos_scene: list[TDScene] = []
-        pp_demos_image: list[TDImage] = []
-        for i in range(demo_length):
-            image = dict(
-                rgb=file["rgb"][i],  # type: ignore
-                depth=file["depth"][i],  # type: ignore
-                mask=file["mask"][i],  # type: ignore
-                extrinsics=file["extrinsics"][i],  # type: ignore
-                intrinsics=file["intrinsics"][i],  # type: ignore
-            )  # type: ignore
-            ob: dict = {
-                key: file[key][i]  # type: ignore
-                for key in file.keys()
-                if key
-                not in [
-                    "rgb",
-                    "depth",
-                    "mask",
-                    "extrinsics",
-                    "intrinsics",
-                    "demo",
-                ]
-            }  # type: ignore
-            obs, _ = self.to_internal(image, ob)
-            td_scene, td_image, _ = self.from_internal(obs)
-            pp_demos_scene.append(td_scene)
-            pp_demos_image.append(td_image)
+        demo_indices: np.ndarray = file["demo"][:]  # type: ignore
 
         change_points = np.where(np.diff(demo_indices) != 0)[0] + 1
-
         starts = np.concatenate([[0], change_points])
         ends = np.concatenate([change_points, [len(demo_indices)]])
 
         segments_scene: list[list[TDScene]] = []
         segments_image: list[list[TDImage]] = []
-        for start, end in zip(starts, ends):
-            segment_scene = pp_demos_scene[start:end]
-            segment_image = pp_demos_image[start:end]
+        if selections is None:
+            selections = list(range(len(starts)))
+
+        for episode_idx in selections:
+            start = starts[episode_idx]
+            end = ends[episode_idx]
+
+            segment_scene: list[TDScene] = []
+            segment_image: list[TDImage] = []
+            if only_conditions:
+                indices = [start, end - 1]
+            else:
+                indices = range(start, end)
+            for i in indices:
+                image = dict(
+                    rgb=file["rgb"][i],  # type: ignore
+                    depth=file["depth"][i],  # type: ignore
+                    mask=file["mask"][i],  # type: ignore
+                    extrinsics=file["extrinsics"][i],  # type: ignore
+                    intrinsics=file["intrinsics"][i],  # type: ignore
+                )
+
+                ob = {
+                    key: file[key][i]  # type: ignore
+                    for key in file.keys()
+                    if key
+                    not in {
+                        "rgb",
+                        "depth",
+                        "mask",
+                        "extrinsics",
+                        "intrinsics",
+                        "demo",
+                    }
+                }
+
+                obs, _ = self.to_internal(image, ob)
+                td_scene, td_image, _ = self.from_internal(obs)
+
+                segment_scene.append(td_scene)
+                segment_image.append(td_image)
+
             segments_scene.append(segment_scene)
             segments_image.append(segment_image)
+
         return segments_scene, segments_image
