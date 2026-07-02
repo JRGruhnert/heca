@@ -52,7 +52,7 @@ configs: list[TapasAgent.Config] = [
     #     use_gt=True,
     # ),
     TapasAgent.Config(
-        folder="move_ee",
+        folder="move_block_drawer",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),

@@ -25,7 +25,6 @@ class TapasDemoSelector(Configurable):
         )
         self.save_path = ExpertAgent.resolve(cfg.agent) / cfg.file_name
         self.train_dataset = h5py.File(self.load_path, "r")
-        self.demos_file = h5py.File(self.save_path, "w")
         self.observations = self.train_dataset["rgb"]  # type: ignore
         self.actions = self.train_dataset["actions"]  # type: ignore
         self.terminals = np.asarray(self.train_dataset["terminals"])  # type: ignore
@@ -35,8 +34,21 @@ class TapasDemoSelector(Configurable):
         self.ep_idx = 0
         self.key_pressed = set()
 
-        self.demo_counter = 0
-        self.out_datasets = {}
+        # Open demos file — append if it already exists, otherwise create fresh
+        if self.save_path.exists():
+            self.demos_file = h5py.File(self.save_path, "a")
+            self.out_datasets = {
+                key: self.demos_file[key] for key in self.demos_file.keys()
+            }
+            # Restore demo counter from the existing "demo" dataset
+            if "demo" in self.out_datasets:
+                self.demo_counter = int(np.max(self.out_datasets["demo"][:])) + 1
+            else:
+                self.demo_counter = 0
+        else:
+            self.demos_file = h5py.File(self.save_path, "w")
+            self.demo_counter = 0
+            self.out_datasets = {}
 
         self.btn_start_text = "Mark Start"
         self.btn_end_text = "Mark End & Add"
@@ -53,6 +65,7 @@ class TapasDemoSelector(Configurable):
         return (slices, demo_lengths, len(slices))
 
     def _build_ui(self):
+        plt.rcParams["keymap.save"] = []
         self.fig = plt.figure(figsize=(14, 8))
         self.fig.canvas.manager.set_window_title(f"Demo Selector: {self.cfg.agent.folder}")  # type: ignore
 
@@ -155,18 +168,18 @@ class TapasDemoSelector(Configurable):
 
         self.key_pressed.add(event.key)
 
-        if event.key == "right":
+        if event.key in ["right", "d"]:
             value = min(int(self.frame_slider.val) + 1, int(self.frame_slider.valmax))
             self.frame_slider.set_val(value)
-        elif event.key == "left":
+        elif event.key in ["left", "a"]:
             value = max(int(self.frame_slider.val) - 1, 0)
             self.frame_slider.set_val(value)
 
-        elif event.key == "up":
+        elif event.key in ["up", "w"]:
             value = min(int(self.ep_slider.val) + 1, int(self.ep_slider.valmax))
             self.ep_slider.set_val(value)
 
-        elif event.key == "down":
+        elif event.key in ["down", "s"]:
             value = max(int(self.ep_slider.val) - 1, 0)
             self.ep_slider.set_val(value)
 

@@ -10,6 +10,13 @@ R = TypeVar("R", bound="Registerable")
 P = TypeVar("P", bound="Persistable")
 
 
+def find_repo_root(start: Path) -> Path:
+    for p in (start, *start.parents):
+        if (p / "pyproject.toml").exists():
+            return p
+    raise RuntimeError("Could not find repository root")
+
+
 class Configurable(abc.ABC):
     _config_registry: ClassVar[dict[type, type]] = {}
 
@@ -63,7 +70,7 @@ class Registerable(Configurable):
 
 
 class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
-    root: ClassVar[Path] = Path("data")
+    root: ClassVar[Path] = find_repo_root(Path(__file__).resolve()) / "data"
     _persisted_instances: ClassVar[dict[tuple[str, str], "Persistable"]] = {}
 
     def __init_subclass__(cls, **kwargs):

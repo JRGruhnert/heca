@@ -1,26 +1,34 @@
 from pathlib import Path
+import h5py
 import torch
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 from tensordict import TensorDict
 from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
-from tapas_gmm_modified.policy.models.tpgmm import AutoTPGMM
 from tapas_gmm_modified.utils.observation import SceneObservation, dict_to_tensordict
 from tapas_gmm_modified.policy.models.tpgmm import (
-    AutoTPGMMConfig,
     ModelType,
+    FittingStage,
+    InitStrategy,
     TPGMMConfig,
+    AutoTPGMMConfig,
+    AutoTPGMM,
+    Demos,
+    FrameSelectionConfig,
+    DemoSegmentationConfig,
+    CascadeConfig,
 )
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
-from heca.misc.entity import Entity, Mobility
-from heca.misc.td import TDEntity, TDImage, TDScene, empty_bs
+from heca.misc.entity import Mobility
+from heca.misc.td import TDImage, TDScene, empty_bs
 from heca.misc import logger
 from heca.misc.hardware import device
+from heca.scenes.scene import Scene
 
 
 class TapasAgent(ExpertAgent):
@@ -45,11 +53,32 @@ class TapasAgent(ExpertAgent):
                     reg_em_finish_diag=2e-4,
                     reg_em_finish_diag_gripper=2e-2,
                     trans_cov_mask_t_pos_corr=False,
-                    em_steps=1,
-                    fix_first_component=True,
-                    fix_last_component=True,
+                    em_steps=50,
+                    fix_first_component=False,  # True maybe
+                    fix_last_component=False,  # True maybe
                     reg_init_diag=5e-4,  # 5
                     heal_time_variance=False,
+                ),
+                frame_selection=FrameSelectionConfig(
+                    init_strategy=InitStrategy.TIME_BASED,
+                    fitting_actions=(FittingStage.INIT,),
+                    use_bic=False,
+                    drop_redundant_frames=False,
+                    rel_score_threshold=0.0,
+                    gt_frames=None,  # Frames per segment
+                ),
+                demos_segmentation=DemoSegmentationConfig(
+                    gripper_based=False,
+                    distance_based=False,
+                    velocity_based=True,
+                    repeat_final_step=0,  # 1
+                    repeat_first_step=0,
+                    components_prop_to_len=True,
+                    velocity_threshold=0.05,
+                ),
+                cascade=CascadeConfig(
+                    kl_keep_time_dim=True,
+                    kl_keep_rotation_dim=True,
                 ),
             ),
             time_based=True,
@@ -66,6 +95,14 @@ class TapasAgent(ExpertAgent):
         )
         repeat_actions: int = 0
         n_con_samples: int = 1000
+        demo_filename: str = "demos_post.h5"
+        gt_frames: list[list[int]] | None = None
+        rel_score_threshold: float = 0.0
+
+        def __post_init__(self):
+            fs = self.policy.model.frame_selection
+            fs.gt_frames = self.gt_frames
+            fs.rel_score_threshold = self.rel_score_threshold
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -140,27 +177,32 @@ class TapasAgent(ExpertAgent):
         else:
             file_name = "policy_img.pt"
         filepath = path / file_name
-        logger.info(f"Loading tapas policy from: {filepath}")
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
-        temp.from_disk(str(filepath))
-        temp.eval()
+        if filepath.exists():
+            temp.from_disk(str(filepath))
+            logger.info(f"Loading tapas policy from: {filepath}")
+        else:
+            logger.warning(f"No tapas policy found at given path: {filepath}")
         self.policy = temp.to(device)
 
+    def eval(self):
+        self.policy.eval()
+
     def _save(self, path: Path):
-        raise NotImplementedError("Saving not implemented for TapasAgent yet.")
+        if self.cfg.use_gt:
+            file_name = "policy_gt.pt"
+        else:
+            file_name = "policy_img.pt"
+        filepath = path / file_name
+        logger.info(f"Saving tapas policy to: {filepath}")
+        self.model.to_disk(str(filepath))
 
     @cached_property
     def model(self) -> AutoTPGMM:
         temp = self.policy.model
         assert isinstance(temp, AutoTPGMM), "Model must be an AutoTPGMM."
         return temp
-
-    def gen_pre(self) -> list[tuple[Entity, TDEntity]]:
-        raise NotImplementedError()
-
-    def gen_post(self) -> list[tuple[Entity, TDEntity]]:
-        raise NotImplementedError()
 
     def tapas_td(self, td_obs: TDScene, td_goal: TDScene) -> TensorDict:
         action = td_obs.extras["action"]
@@ -233,6 +275,7 @@ class TapasAgent(ExpertAgent):
         post_data: dict[str, np.ndarray] = {}
         for idx, key in enumerate(tpgmm._demos.idx_key_list):
             if idx in tpgmm._used_frames:
+                pass
                 # Use from h5 file
                 # # precon
                 # pre_pos = tpgmm._demos.start_pos[key].numpy()  # (N,3)
@@ -262,3 +305,51 @@ class TapasAgent(ExpertAgent):
             f"{self.cfg.folder}_post", post_data, 1, self.cfg.n_con_samples, path
         )
         return [ConditionPair(self.cfg.folder, pre, post)]
+
+    def load_demos(
+        self,
+        add_init_ee_pose_as_frame=True,
+        add_world_frame=False,
+        frames_from_keypoints=False,
+        kp_indeces=None,
+        enforce_z_up=False,
+        modulo_object_z_rotation=False,
+        make_quats_continuous=True,
+    ) -> Demos:
+        path = TapasAgent.resolve(self.cfg)
+        demos_file = h5py.File(path / self.cfg.demo_filename, "r")
+
+        observations: list[SceneObservation] = []  # type: ignore
+
+        if self.cfg.use_gt:
+            load_scene = False
+        else:
+            load_scene = True
+        scene = Scene.get(self.scene.cfg, load=load_scene)
+        demos_scenes, demos_images = scene.load_dataset(demos_file)
+        for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
+            if self.cfg.use_gt:
+                obss: list[TensorDict] = []
+                for td_scene in demo_scenes:
+                    td_obs = td_scene
+                    td_goal = demo_scenes[-1]
+                    obs = self.tapas_td(td_obs, td_goal)
+                    obss.append(obs)
+                stacked_obs = TensorDict.stack(obss, dim=0)
+                observations.append(stacked_obs)
+            else:
+                raise NotImplementedError(
+                    "TODO: implement tapas_td and convert demos to tapas format"
+                )
+                # TODO:
+
+        return Demos(
+            observations,
+            add_init_ee_pose_as_frame=add_init_ee_pose_as_frame,
+            add_world_frame=add_world_frame,
+            frames_from_keypoints=frames_from_keypoints,
+            kp_indeces=kp_indeces,
+            enforce_z_up=enforce_z_up,
+            modulo_object_z_rotation=modulo_object_z_rotation,
+            make_quats_continuous=make_quats_continuous,
+        )  # type: ignore
