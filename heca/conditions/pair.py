@@ -31,13 +31,12 @@ class ConditionPair:
         a: "ConditionPair",
         b: "ConditionPair",
         n_samples: int,
-        plot_path: Path | None = None,
     ) -> "ConditionPair":
         pre_max, post_max = cls.make_max_components(a, b)
         pre_data = cls._merge_data(a.pre.data_raw, b.pre.data_raw)
         post_data = cls._merge_data(a.post.data_raw, b.post.data_raw)
-        pre = Condition(f"{label}_pre", pre_data, pre_max, n_samples, plot_path)
-        post = Condition(f"{label}_post", post_data, post_max, n_samples, plot_path)
+        pre = Condition(f"{label}_pre", pre_data, pre_max, n_samples)
+        post = Condition(f"{label}_post", post_data, post_max, n_samples)
         return cls(label, pre, post)
 
     @classmethod
@@ -58,3 +57,7 @@ class ConditionPair:
         for k, v in d2.items():
             result[k] = np.concatenate((result[k], v), axis=0) if k in result else v
         return result
+
+    def plot(self, path: Path):
+        self.pre.plot(path / "plots")
+        self.post.plot(path / "plots")

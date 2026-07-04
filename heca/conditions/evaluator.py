@@ -1,12 +1,13 @@
 from dataclasses import dataclass
 from heca.agents.agent import AgentFeedback
-from heca.evaluators.evaluator import Evaluator
+from heca.conditions.pair import ConditionPair
+from heca.misc.base import Configurable
 from heca.misc.td import TDScene
 
 
-class HecaEvaluator(Evaluator):
+class Evaluator(Configurable):
     @dataclass(kw_only=True)
-    class Config(Evaluator.Config):
+    class Config(Configurable.Config):
         success_reward: float = 25.0
         max_steps: int = 10
         max_progress_reward: float = 1.0
@@ -22,17 +23,13 @@ class HecaEvaluator(Evaluator):
         self.progress: float = 0.0
         self.current_step: int = 0
 
-    def reset(self, x: TDScene, y: TDScene):
+    def reset(self, y: TDScene):
         self.y = y
         self.highscore = 0.0
         self.progress = 0.0
         self.current_step = 0
 
-    def is_sample(self, x: TDWorld, y: TDWorld) -> bool:
-        self.reset(x, y)
-        return not MetaEntity.evaluate(x, y, e)
-
-    def step(self, x: TDWorld) -> AgentFeedback:
+    def step(self, x: TDScene) -> AgentFeedback:
         reward = 0.0 + self.cfg.step_penalty
         alltime = self.highscore
         last = self.progress
@@ -55,3 +52,6 @@ class HecaEvaluator(Evaluator):
 
         self.current_step += 1
         return AgentFeedback(reward=reward, done=done, terminal=False)
+
+    def setup(self, conditions: list[ConditionPair]) -> "Evaluator":
+        return self

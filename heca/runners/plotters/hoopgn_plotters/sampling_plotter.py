@@ -10,7 +10,7 @@ from heca.misc.entity import Entity
 from heca.scenes.calvin import CalvinEnvironmentConfig
 from heca.evaluators import select_evaluator
 from heca.evaluators.dense import Dense3EvaluatorConfig
-from heca.evaluators.evaluator import EvaluatorConfig
+from heca.conditions.evaluator import EvaluatorConfig
 from heca.evaluators.set_evaluator import SetEvaluatorConfig
 from heca.experiments.noise_experiment import NoiseExperimentConfig
 from heca.hoops.v1 import MPGNNConfig

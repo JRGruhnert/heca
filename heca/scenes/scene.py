@@ -86,11 +86,11 @@ class Scene(Persistable):
     ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 
-    def _load(self, path: Path):
+    def _load(self, path: Path, tag: str):
         dc_pattern = re.compile(rf"xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png")
         sample_postfix = r"_sample(\d+)\.png"
         for entity in self.entities:
-            edir = path / entity.cfg.label
+            edir = path / tag / entity.cfg.label
             self.state_references[entity.cfg.label] = {}
             for state in entity.cfg.states:
                 self.state_references[entity.cfg.label][state] = []
@@ -114,9 +114,9 @@ class Scene(Persistable):
                     int(match.group(4)),
                 )
 
-    def _save(self, path: Path):
+    def _save(self, path: Path, tag: str):
         for entity in self.entities:
-            entity_dir = path / entity.cfg.label
+            entity_dir = path / tag / entity.cfg.label
             entity_dir.mkdir(parents=True, exist_ok=True)
             for state, samples in self.state_references[entity.cfg.label].items():
                 for idx, img in enumerate(samples):

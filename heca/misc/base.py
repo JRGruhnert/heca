@@ -18,11 +18,12 @@ def find_repo_root(start: Path) -> Path:
 
 
 class Configurable(abc.ABC):
+    root: ClassVar[Path] = find_repo_root(Path(__file__).resolve()) / "data"
     _config_registry: ClassVar[dict[type, type]] = {}
 
     @dataclass(kw_only=True)
     class Config:
-        pass
+        folder: str
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -32,7 +33,7 @@ class Configurable(abc.ABC):
         # so A.get(B.Config(...)) resolves B even when called on A.
         own_config = cls.__dict__.get("Config")
         if own_config is None:
-            # raise TypeError(f"{cls.__name__} must define a nested Config dataclass.")
+            raise TypeError(f"{cls.__name__} must define a nested Config dataclass.")
             return
 
         for base in cls.__mro__[1:]:
@@ -47,6 +48,12 @@ class Configurable(abc.ABC):
         target_cls = cls._config_registry.get(type(cfg), cls)
         return target_cls(cfg)
 
+    @classmethod
+    def class_dir(cls, cfg: "Configurable.Config") -> Path:
+        path = cls.root / cfg.folder
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
 
 class Registerable(Configurable):
     _instances: ClassVar[dict[tuple[type, str], "Registerable"]] = {}
@@ -57,21 +64,31 @@ class Registerable(Configurable):
 
     def __init__(self, cfg: "Registerable.Config"):
         super().__init__(cfg)
+        self.cfg = cfg
+
+    @classmethod
+    def _key(cls: Type[R], cfg: "Registerable.Config") -> tuple[Type, str]:
+        return (type(cfg), cfg.label)
 
     @classmethod
     def get(cls: Type[R], cfg: "Registerable.Config") -> R:
         # Resolve the concrete subclass from the config type; fall back to cls
         # itself if this is already a concrete class being called directly.
         target_cls = cls._config_registry.get(type(cfg), cls)
-        key = (type(cfg), cfg.label)
+        key = cls._key(cfg)
         if key not in cls._instances:
             cls._instances[key] = target_cls(cfg)
         return cast(R, cls._instances[key])
 
+    @classmethod
+    def instance_dir(cls, cfg: "Registerable.Config") -> Path:
+        path = cls.class_dir(cfg) / cfg.label
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
-class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
-    root: ClassVar[Path] = find_repo_root(Path(__file__).resolve()) / "data"
-    _persisted_instances: ClassVar[dict[tuple[str, str], "Persistable"]] = {}
+
+class Persistable(Registerable, abc.ABC):
+    _persisted_instances: ClassVar[dict[tuple[type, str], "Persistable"]] = {}
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -79,54 +96,41 @@ class Persistable(Registerable, abc.ABC):  # (ABC, metaclass=ConfigurableMeta):
 
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
-        subroot: str
-        folder: str
+        tag: str
 
     def __init__(self, cfg: "Persistable.Config"):
         super().__init__(cfg)
+        self.cfg = cfg
 
     @classmethod
-    def get(cls: Type[P], cfg: "Persistable.Config", load: bool = True) -> P:
+    def _key(cls: Type[R], cfg: "Persistable.Config") -> tuple[Type, str]:
+        return (type(cfg), cfg.label + cfg.tag)
+
+    @classmethod
+    def get(cls: Type[P], cfg: "Persistable.Config", auto_load: bool = True) -> P:
         target_cls = cls._config_registry.get(type(cfg), cls)
-        key = (cfg.folder, cfg.label)
+        key = cls._key(cfg)
         if key not in cls._persisted_instances:
-            instance = target_cls(cfg)
-            assert isinstance(instance, Persistable)
-            path = cls.resolve(cfg)
-            if load:
-                logger.info(f"Loading {type(instance)} {cfg.label} data from {path}")
-                instance._load(path)
+            instance = cast(P, target_cls(cfg))
+            if auto_load:
+                instance.load()
             cls._persisted_instances[key] = instance
         return cast(P, cls._persisted_instances[key])
 
-    @classmethod
-    def save(cls: Type[P], cfg: "Persistable.Config"):
-        key = (cfg.folder, cfg.label)
-        if key not in cls._persisted_instances:
-            raise KeyError(
-                f"No instance found for folder={cfg.folder!r}, label={cfg.label!r}"
-            )
-        persistable = cast(P, cls._persisted_instances[key])
-        path = cls.resolve(cfg)
-        logger.info(f"Saving {type(persistable)} {cfg.label} data to {path}")
-        persistable._save(path)
+    def save(self):
+        path = self.instance_dir(self.cfg)
+        logger.info(f"Saving {Type(self)} with tag {self.cfg.tag} to {path}")
+        self._save(path, self.cfg.tag)
 
-    @classmethod
-    def resolve_base(cls, cfg: "Persistable.Config") -> Path:
-        path = cls.root / cfg.subroot / cfg.label
-        path.mkdir(parents=True, exist_ok=True)
-        return path
-
-    @classmethod
-    def resolve(cls, cfg: "Persistable.Config") -> Path:
-        path = cls.resolve_base(cfg) / cfg.folder
-        path.mkdir(parents=True, exist_ok=True)
-        return path
+    def load(self):
+        path = self.instance_dir(self.cfg)
+        logger.info(f"Loading {Type(self)} with tag {self.cfg.tag} from {path}")
+        self._load(path, self.cfg.tag)
 
     @abc.abstractmethod
-    def _load(self, path: Path):
+    def _save(self, path: Path, tag: str) -> bool:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def _save(self, path: Path) -> bool:
+    def _load(self, path: Path, tag: str) -> bool:
         raise NotImplementedError()

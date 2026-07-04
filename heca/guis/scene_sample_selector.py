@@ -25,7 +25,7 @@ class SceneSampleSelector(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.get(self.cfg.scene, load=False)
+        self.scene = Scene.get(self.cfg.scene, auto_load=False)
         self.scale = min(
             self.cfg.vis_size[0] / self.scene.cfg.width,
             self.cfg.vis_size[1] / self.scene.cfg.height,

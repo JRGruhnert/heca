@@ -19,7 +19,7 @@ class AgentTester(Configurable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = Scene.get(self.cfg.scene, load=False)
+        self.scene = Scene.get(self.cfg.scene, auto_load=False)
         self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
         assert all(
             agent.cfg.scene == self.cfg.scene for agent in self.agents

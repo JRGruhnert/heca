@@ -15,7 +15,6 @@ class Condition:
         data: dict[str, np.ndarray],
         max_components: int,
         n_samples: int,
-        plot_path: Path | None = None,
     ):
         self._data_raw = data
         self._max_components = max_components
@@ -33,10 +32,6 @@ class Condition:
         }
 
         self._model, self._samples, self._bics = self._fit_model()
-
-        if plot_path:
-            self._plot_bic(plot_path)
-            self._plot_mix(plot_path)
 
     @property
     def model_states(self) -> dict[str, set[int]]:
@@ -106,6 +101,10 @@ class Condition:
             bics[key] = bic_values
 
         return models, samples, bics
+
+    def plot(self, path: Path):
+        self._plot_bic(path)
+        self._plot_mix(path)
 
     def _plot_bic(self, path: Path):
         ks = range(1, self._max_components + 1)

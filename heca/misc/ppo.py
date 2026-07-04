@@ -1,10 +1,12 @@
 from dataclasses import dataclass
+from pathlib import Path
 import torch
 import copy
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.misc.base import Registerable
-from heca.heca_gnn.network import HecaNetwork
+from heca.agents.agent import AgentFeedback
+from heca.misc.base import Persistable, Registerable
+from heca.heca_gnn.network import Network
 from heca.misc.hardware import device
 from heca.misc import logger
 from thop import profile
@@ -19,9 +21,12 @@ class AnnealingConfig:
     max_epochs: int = 1000
 
 
-class PPO(Registerable):
+class PPO(Persistable):
     @dataclass(kw_only=True)
-    class Config(Registerable.Config):
+    class Config(Persistable.Config):
+        folder: str = "training"
+        label: str = "ppo"
+        tag: str = "default"
         batch_size: int = 2048
         mini_batch_size: int = 64
         learning_epochs: int = 5
@@ -39,8 +44,6 @@ class PPO(Registerable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.mse_loss = nn.MSELoss()
-        self.network: HecaNetwork | None = None
-        self.optim: torch.optim.Optimizer | None = None
 
         # Rollout storage
         self.data: list[HeteroData] = []
@@ -54,13 +57,14 @@ class PPO(Registerable):
         # Statistics
         self.highscore = float("-inf")
 
-    def load_network(self, config: HecaNetwork.Config):
-        self.network = HecaNetwork.get(config)
+    def setup(self, config: Network.Config) -> "PPO":
+        self.network = Network.get(config)
         self.optim = torch.optim.AdamW(self.network.parameters(), lr=self.cfg.lr)
+        return self
 
     def learn(self, progress: float) -> tuple[dict, bool]:
-        assert self.network is not None
-        assert self.optim is not None
+        # assert self.network is not None
+        # assert self.optim is not None
         # Main PPO update loop
         self._mini_batch_loop()
 
@@ -257,7 +261,7 @@ class PPO(Registerable):
             return True
         return False
 
-    def to_disk(self, tag: str):
+    def _save(self, path: Path, tag: str):
         assert self.optim is not None, "Optimizer must be set before saving"
         logger.info(f"Saving {tag} buffer")
         torch.save(
@@ -270,8 +274,7 @@ class PPO(Registerable):
                 "terminals": torch.tensor(self.terminals),
                 "optimizer_state": self.optim.state_dict(),
             },
-            # TODO: storage path
-            "data/" + tag + f"/epoch_data_{0}.pt",
+            path / tag / f"epoch_data_{0}.pt",
         )
 
     def pre_action(
@@ -286,17 +289,12 @@ class PPO(Registerable):
         self.logprobs.append(logprob)
         self.values.append(value)
 
-    def post_action(
-        self,
-        reward: float,
-        success: bool,
-        terminal: bool,
-    ) -> bool:
-        self.rewards.append(reward)
-        self.success.append(success)
-        self.terminals.append(terminal)
+    def post_action(self, fb: AgentFeedback) -> bool:
+        self.rewards.append(fb.reward)
+        self.success.append(fb.done)
+        self.terminals.append(fb.terminal)
         return len(self.data) >= self.cfg.batch_size
 
-    def collector(self) -> "HecaNetwork":
+    def copy_network(self) -> "Network":
         assert self.network is not None, "Network must be set before collecting"
         return copy.deepcopy(self.network)

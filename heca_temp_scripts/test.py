@@ -2,7 +2,7 @@ from heca.agents.agent import Agent
 from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
-from heca.agents.heca_base import HecaBase
+from heca.agents.heca import Heca
 from heca.scenes.ogbench.scene import OGBenchScene
 
 agents = [
@@ -59,7 +59,7 @@ agents = [
 ]
 
 
-heca_cfg = HecaBase.Config(
+heca_cfg = Heca.Config(
     subroot="heca_test",
     folder="test",
     agents=agents,

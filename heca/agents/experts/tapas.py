@@ -96,7 +96,7 @@ class TapasAgent(ExpertAgent):
             ),
         )
         repeat_actions: int = 0
-        n_con_samples: int = 1000
+        n_samples: int = 1000
         demo_filename: str = "demos_post.h5"
         gt_frames: list[list[int]] | None = None
         rel_score_threshold: float = 0.0
@@ -274,73 +274,74 @@ class TapasAgent(ExpertAgent):
         # https://distancia.readthedocs.io/en/latest/ChamferDistance.html
         tpgmm: AutoTPGMM = self.policy.model  # type: ignore
         assert tpgmm._demos is not None
-        path = ExpertAgent.resolve(self.cfg)
+        path = TapasAgent.instance_dir(self.cfg)
+        demos_file = h5py.File(path / self.cfg.demo_filename, "r")
+        scene = Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
+        elabels = [e.cfg.label for e in scene.entities]
+        demos_scenes, demos_images = scene.load_dataset(
+            demos_file, only_conditions=True
+        )
+
         pre_data: dict[str, np.ndarray] = {}
         post_data: dict[str, np.ndarray] = {}
+        if self.cfg.use_gt:
+            start_scenes = [demo[0] for demo in demos_scenes]
+            end_scenes = [demo[-1] for demo in demos_scenes]
+        else:
+            start_scenes = [self.from_image(demo[0]) for demo in demos_images]
+            end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
+
         for idx, key in enumerate(tpgmm._demos.idx_key_list):
-            if idx in tpgmm._used_frames:
-                pass
-                path = TapasAgent.resolve(self.cfg)
-                demos_file = h5py.File(path / self.cfg.demo_filename, "r")
-                scene = Scene.get(self.scene.cfg, load=not self.cfg.use_gt)
-                demos_scenes, demos_images = scene.load_dataset(
-                    demos_file, only_conditions=True
-                )
-                # precon
-                pre_pos = tpgmm._demos.start_pos[key].numpy()  # (N,3)
-                pre_rot = tpgmm._demos.start_rot[key].numpy()  # (N,4)
-                pre_state = tpgmm._demos.start_state[key].numpy()  # (N,C) or (N,)
-                if pre_state.ndim == 2:
-                    pre_state = np.argmax(pre_state, axis=1)
+            if idx not in tpgmm._used_frames or key not in elabels:
+                continue
+            pre_data[key] = self.collect_entity_data(start_scenes, key)
+            post_data[key] = self.collect_entity_data(end_scenes, key)
 
-                pre_data[key] = np.concatenate(
-                    (pre_pos, pre_rot, pre_state[:, None]), axis=1
-                )
-
-                # postcon
-                post_pos = tpgmm._demos.end_pos[key].numpy()
-                post_rot = tpgmm._demos.end_rot[key].numpy()
-                post_state = tpgmm._demos.end_state[key].numpy()  # (N,C) or (N,)
-                if post_state.ndim == 2:
-                    post_state = np.argmax(post_state, axis=1)
-
-                post_data[key] = np.concatenate(
-                    (post_pos, post_rot, post_state[:, None]), axis=1
-                )
-        pre = Condition(
-            f"{self.cfg.folder}_pre", pre_data, 1, self.cfg.n_con_samples, path
-        )
-        post = Condition(
-            f"{self.cfg.folder}_post", post_data, 1, self.cfg.n_con_samples, path
-        )
-        return [ConditionPair(self.cfg.folder, pre, post)]
+        pre = Condition("pre", pre_data, 1, self.cfg.n_samples)
+        post = Condition("post", post_data, 1, self.cfg.n_samples)
+        pair = ConditionPair(f"cond_pair_0", pre, post)
+        pair.plot(path)
+        return [pair]
 
     def load_demos(self, selections: list[int]) -> list[TensorDict]:
-        path = TapasAgent.resolve(self.cfg)
+        path = TapasAgent.instance_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
 
         observations: list[SceneObservation] = []  # type: ignore
 
-        scene = Scene.get(self.scene.cfg, load=not self.cfg.use_gt)
+        scene = Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
         demos_scenes, demos_images = scene.load_dataset(
             demos_file, selections=selections
         )
         for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
             if self.cfg.use_gt:
-                obss: list[TensorDict] = []
-                for td_scene in demo_scenes:
-                    td_obs = td_scene
-                    td_goal = demo_scenes[-1]
-                    obs = self.tapas_td(td_obs, td_goal)
-                    obss.append(obs)
-                stacked_obs = TensorDict.stack(obss, dim=0)
-                print(stacked_obs)
-                assert isinstance(stacked_obs, SceneObservation)
-                observations.append(stacked_obs)
+                stacked = self.tdscenes_to_tdtapas(demo_scenes)
             else:
-                raise NotImplementedError(
-                    "TODO: implement tapas_td and convert demos to tapas format"
-                )
-                # TODO:
-
+                demo_extracted: list[TDScene] = []
+                for td_img in demo_images:
+                    extracted = self.from_image(td_img)
+                    demo_extracted.append(extracted)
+                stacked = self.tdscenes_to_tdtapas(demo_extracted)
+            observations.append(stacked)
         return observations
+
+    def tdscenes_to_tdtapas(self, scenes: list[TDScene]) -> list[TensorDict]:
+        obs: list[TensorDict] = []
+        td_goal = scenes[-1]
+        for td_scene in scenes:
+            td_obs = td_scene
+            td = self.tapas_td(td_obs, td_goal)
+            obs.append(td)
+        stacked_obs = TensorDict.stack(obs, dim=0)
+        assert isinstance(stacked_obs, SceneObservation)
+        return obs
+
+    def collect_entity_data(self, scenes: list[TDScene], key: str) -> np.ndarray:
+        pos = torch.stack([s[key].position for s in scenes]).numpy()
+        rot = torch.stack([s[key].rotation for s in scenes]).numpy()
+        state = torch.stack([s[key].state for s in scenes]).numpy()
+
+        if state.ndim == 2:
+            state = np.argmax(state, axis=1)
+
+        return np.concatenate((pos, rot, state[:, None]), axis=1)
