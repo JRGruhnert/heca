@@ -274,7 +274,7 @@ class TapasAgent(ExpertAgent):
         # https://distancia.readthedocs.io/en/latest/ChamferDistance.html
         tpgmm: AutoTPGMM = self.policy.model  # type: ignore
         assert tpgmm._demos is not None
-        path = TapasAgent.instance_dir(self.cfg)
+        path = TapasAgent.load_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
         scene = Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
         elabels = [e.cfg.label for e in scene.entities]
@@ -304,7 +304,7 @@ class TapasAgent(ExpertAgent):
         return [pair]
 
     def load_demos(self, selections: list[int]) -> list[TensorDict]:
-        path = TapasAgent.instance_dir(self.cfg)
+        path = TapasAgent.load_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
 
         observations: list[SceneObservation] = []  # type: ignore

@@ -22,7 +22,7 @@ class OGBenchScene(Scene):
     @dataclass(kw_only=True)
     class Config(Scene.Config):
         label: str = "ogbench"
-        folder: str = "samples"
+        tag: str = "samples"
         id: str = "visual-scene-play-v0"
         mode: str = "task"
         ob_type: str = "pixels"  # states, pixels

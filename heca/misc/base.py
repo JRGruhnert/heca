@@ -23,7 +23,7 @@ class Configurable(abc.ABC):
 
     @dataclass(kw_only=True)
     class Config:
-        folder: str
+        pass
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -49,8 +49,8 @@ class Configurable(abc.ABC):
         return target_cls(cfg)
 
     @classmethod
-    def class_dir(cls, cfg: "Configurable.Config") -> Path:
-        path = cls.root / cfg.folder
+    def base_dir(cls, cfg: "Configurable.Config", folder: str) -> Path:
+        path = cls.root / folder
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -81,8 +81,8 @@ class Registerable(Configurable):
         return cast(R, cls._instances[key])
 
     @classmethod
-    def instance_dir(cls, cfg: "Registerable.Config") -> Path:
-        path = cls.class_dir(cfg) / cfg.label
+    def instance_dir(cls, cfg: "Registerable.Config", folder: str) -> Path:
+        path = cls.base_dir(cfg, folder) / cfg.label
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -96,7 +96,9 @@ class Persistable(Registerable, abc.ABC):
 
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
+        load_tag: str | None = None
         tag: str
+        folder: str
 
     def __init__(self, cfg: "Persistable.Config"):
         super().__init__(cfg)
@@ -117,20 +119,37 @@ class Persistable(Registerable, abc.ABC):
             cls._persisted_instances[key] = instance
         return cast(P, cls._persisted_instances[key])
 
+    @classmethod
+    def load_dir(cls, cfg: "Persistable.Config") -> Path:
+        tag = cfg.load_tag or cfg.tag
+        path = cls.instance_dir(cfg, cfg.folder) / tag
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @classmethod
+    def save_dir(cls, cfg: "Persistable.Config") -> Path:
+        path = cls.instance_dir(cfg, cfg.folder) / cfg.tag
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     def save(self):
-        path = self.instance_dir(self.cfg)
-        logger.info(f"Saving {Type(self)} with tag {self.cfg.tag} to {path}")
-        self._save(path, self.cfg.tag)
+        path = self.save_dir(self.cfg)
+        logger.info(f"Saving {Type(self)} to {path}")
+        self._save(path)
 
     def load(self):
-        path = self.instance_dir(self.cfg)
-        logger.info(f"Loading {Type(self)} with tag {self.cfg.tag} from {path}")
-        self._load(path, self.cfg.tag)
+        path = self.save_dir(self.cfg)
+        logger.info(f"Loading {Type(self)} from {path}")
+        self._load(path)
 
     @abc.abstractmethod
-    def _save(self, path: Path, tag: str) -> bool:
+    def _save(self, path: Path) -> bool:
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def _load(self, path: Path, tag: str) -> bool:
+    def _load(self, path: Path) -> bool:
         raise NotImplementedError()
+
+
+# root / folder / label / tag
+# data / agents / tapas /

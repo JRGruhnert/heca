@@ -4,7 +4,7 @@ from enum import Enum
 from functools import cached_property
 from heca.conditions.pair import ConditionPair
 from heca.misc.td import TDScene
-from heca.misc.base import Registerable
+from heca.misc.base import Persistable
 
 
 class EESate(Enum):
@@ -20,10 +20,11 @@ class AgentFeedback:
     terminal: bool
 
 
-class Agent(Registerable, abc.ABC):
+class Agent(Persistable, abc.ABC):
     @dataclass(kw_only=True)
-    class Config(Registerable.Config):
+    class Config(Persistable.Config):
         n_samples: int = 1000
+        folder: str = "agents"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

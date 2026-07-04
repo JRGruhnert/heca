@@ -17,9 +17,7 @@ from heca.misc.base import Persistable
 class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        label: str
-        subroot: str = "scenes"
-        folder: str = "samples"
+        folder: str = "scenes"
         width: int = 256
         height: int = 256
 

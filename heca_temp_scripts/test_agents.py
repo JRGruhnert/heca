@@ -1,61 +1,56 @@
 from heca.agents.experts.tapas import TapasAgent
 from heca.scenes.ogbench.scene import OGBenchScene
 from heca.guis.tapas_agent_tester import AgentTester
-import numpy as np
 
-np.set_printoptions(
-    linewidth=200,
-    suppress=True,
-)
 cfg = AgentTester.Config(
     agents=[
         TapasAgent.Config(
-            folder="open_drawer",
+            tag="open_drawer",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="close_drawer",
+            tag="close_drawer",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="open_window",
+            tag="open_window",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="close_window",
+            tag="close_window",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="lock_left_button",
+            tag="lock_left_button",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="lock_right_button",
+            tag="lock_right_button",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="unlock_left_button",
+            tag="unlock_left_button",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="unlock_right_button",
+            tag="unlock_right_button",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="move_block",
+            tag="move_block",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
         TapasAgent.Config(
-            folder="move_ee",
+            tag="move_ee",
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),

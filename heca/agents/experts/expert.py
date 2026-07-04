@@ -18,7 +18,6 @@ from heca.misc.td import (
 class ExpertAgent(Agent, abc.ABC):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        subroot: str = "experts"
         scene: Scene.Config
         kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
         state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
