@@ -3,14 +3,14 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from heca.misc.base import Persistable
+from heca.misc.base import Configurable
 from heca.heca_gnn.actor import ActorReadoutNetwork
 from heca.heca_gnn.critic import CriticReadoutNetwork
 
 
-class Network(Persistable, nn.Module):
+class Network(Configurable, nn.Module):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
+    class Config(Configurable.Config):
         feature_dim: int = 32
 
     def __init__(self, cfg: Config):

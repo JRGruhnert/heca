@@ -1,4 +1,5 @@
-from typing import cast
+from typing import Iterator, Tuple, cast
+
 
 from tensordict import TensorDict
 import torch
@@ -48,6 +49,11 @@ class TDScene(TensorDict):
     @property
     def extras(self) -> dict[str, torch.Tensor]:
         return self.get("extras", {})
+
+    def entities(self) -> Iterator[Tuple[str, TDEntity]]:
+        for key, value in self.items():
+            if key != "extras":
+                yield key, cast(TDEntity, value)
 
 
 class TDAgentCon(TensorDict):

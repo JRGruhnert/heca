@@ -3,56 +3,57 @@ from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
+from heca.conditions.evaluator import Evaluator
 from heca.scenes.ogbench.scene import OGBenchScene
 
 agents = [
     TapasAgent.Config(
-        folder="open_drawer",
+        tag="open_drawer",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="close_drawer",
+        tag="close_drawer",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="open_window",
+        tag="open_window",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="close_window",
+        tag="close_window",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="lock_left_button",
+        tag="lock_left_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="lock_right_button",
+        tag="lock_right_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="unlock_left_button",
+        tag="unlock_left_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="unlock_right_button",
+        tag="unlock_right_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
-        folder="move_block",
+        tag="move_block",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
     # TapasAgent.Config(
-    #    folder="move_ee",
+    #    tag="move_ee",
     #    scene=OGBenchScene.Config(),
     #    use_gt=True,
     # ),
@@ -60,10 +61,22 @@ agents = [
 
 
 heca_cfg = Heca.Config(
-    subroot="heca_test",
-    folder="test",
+    tag="test",
     agents=agents,
 )
 
-heca = Agent.get(heca_cfg, load=False)
-heca.conditions
+# heca = Agent.get(heca_cfg, auto_load=False)
+# heca.conditions
+
+agent = Agent.get(
+    TapasAgent.Config(
+        tag="unlock_right_button",
+        scene=OGBenchScene.Config(),
+        use_gt=True,
+    ),
+)
+
+print(agent.conditions[0].elabels)
+parameters = agent.conditions[0].pre.model["button_1"].get_parameters()
+print(parameters)
+print(parameters["measurement"])

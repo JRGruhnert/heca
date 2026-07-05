@@ -4,30 +4,38 @@ import matplotlib.pyplot as plt
 
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
+from stepmix import StepMix
 
 
 class ConditionAnalyzer:
+    def __init__(
+        self,
+        merge_threshold: float,
+        subgoal_threshold: float,
+    ):
+        self.merge_ths = merge_threshold
+        self.subgoal_ths = subgoal_threshold
 
-    def check(self, mat: np.ndarray, ths: float):
-        return np.all(mat >= ths)
+    def mcheck(self, mat: np.ndarray):
+        return np.all(mat >= self.merge_ths)
 
-    def evaluate_merge(self, sim_rating: dict[str, np.ndarray], ths: float) -> bool:
+    def evaluate_merge(self, sim_rating: dict[str, np.ndarray]) -> bool:
         mat = np.stack(list(sim_rating.values()), axis=0)
         mat = np.nan_to_num(mat, nan=1.0)  # nan values should be ignored
 
-        if self.check(mat[:, 0, 0, 1], ths) and self.check(mat[:, 1, 1, 0], ths):
+        if self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 1, 0]):
             return True  # pre0 = post1
-        elif self.check(mat[:, 1, 0, 1], ths) and self.check(mat[:, 0, 1, 0], ths):
+        elif self.mcheck(mat[:, 1, 0, 1]) and self.mcheck(mat[:, 0, 1, 0]):
             return True  # pre1 = post0
-        elif self.check(mat[:, 0, 0, 1], ths) and self.check(mat[:, 1, 0, 1], ths):
+        elif self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 0, 1]):
             return True  # pre0 <= post1 and pre1 <= post0
-        elif self.check(mat[:, 0, 0, 0], ths) and self.check(mat[:, 0, 1, 1], ths):
+        elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 1, 1]):
             return True  # pre0 <= pre1 and post0 <= post1
-        elif self.check(mat[:, 1, 0, 0], ths) and self.check(mat[:, 1, 1, 1], ths):
+        elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 1, 1]):
             return True  # pre1 <= pre0 and post1 <= post0
-        elif self.check(mat[:, 0, 0, 0], ths) and self.check(mat[:, 0, 0, 1], ths):
+        elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 0, 1]):
             return True  # pre0 <= pre1 and pre0 <= post1
-        elif self.check(mat[:, 1, 0, 0], ths) and self.check(mat[:, 1, 0, 1], ths):
+        elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 0, 1]):
             return True  # pre1 <= pre0 and pre1 <= post0
         return False
 
@@ -35,15 +43,19 @@ class ConditionAnalyzer:
         raise NotImplementedError
 
     def calculate_subgoal(
-        self, post: Condition, pre: Condition, keys: list[str]
-    ) -> dict[str, str]:
+        self,
+        post: Condition,
+        pre: Condition,
+        keys: set[str],
+    ) -> dict[str, tuple[float, np.ndarray]]:
         values = {}
         for key in keys:
             inpost = key in post.elabels
             inpre = key in pre.elabels
             if not inpost:
-                continue
+                score = 0.0
             elif not inpre:
+                score = 0.0
                 pass
                 # not in pre -> either set as goal if goal in post distibution or current or sample own
                 # 1. goal
@@ -52,9 +64,96 @@ class ConditionAnalyzer:
             else:
                 # 1. Pre sample
                 # 2. Post sample
-                post_score = self.calculate_score(post, pre, key)
-                pre_score = self.calculate_score(pre, post, key)
+                score = self.calculate_score(post, pre, key)
+                value = self.best_sample(post, pre, key)
         return values
+
+    def best_sample(self, post: Condition, pre: Condition, key: str):
+
+        m1 = post.model[key]
+        m2 = pre.model[key]
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        weights1 = p1["weights"]
+        weights2 = p2["weights"]
+
+        means1 = p1["measurement"]["pose"]["means"]
+        means2 = p2["measurement"]["pose"]["means"]
+
+        vars1 = p1["measurement"]["pose"]["covariances"]
+        vars2 = p2["measurement"]["pose"]["covariances"]
+
+        state1 = p1["measurement"]["state"]["pis"]
+        state2 = p2["measurement"]["state"]["pis"]
+
+        K1, S1 = state1.shape
+        K2, S2 = state2.shape
+
+        S = max(S1, S2)  # union of state space size
+
+        results = []
+
+        for i in range(K1):
+            for j in range(K2):
+
+                # Gaussian diag part
+                precision = 1.0 / vars1[i] + 1.0 / vars2[j]
+                var = 1.0 / precision
+
+                mean = var * (means1[i] / vars1[i] + means2[j] / vars2[j])
+
+                diff = means1[i] - means2[j]
+
+                log_norm = -0.5 * (
+                    np.sum(np.log(2 * np.pi * (vars1[i] + vars2[j])))
+                    + np.sum(diff**2 / (vars1[i] + vars2[j]))
+                )
+
+                # Categorical part
+                p_state1 = state1[i]
+                p_state2 = state2[j]
+
+                log_cat = -np.inf
+                best_state = None
+
+                for s in range(S):
+
+                    p1_s = p_state1[s] if s < S1 else 0.0
+                    p2_s = p_state2[s] if s < S2 else 0.0
+
+                    score_s = p1_s * p2_s
+
+                    if score_s > 0:
+                        log_score = np.log(score_s)
+
+                        if log_score > log_cat:
+                            log_cat = log_score
+                            best_state = s
+
+                # if absolutely no overlap in states
+                if best_state is None:
+                    log_cat = -1e9
+                    best_state = 0  # arbitrary fallback
+
+                score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat
+
+                results.append(
+                    {
+                        "score": score,
+                        "pose": mean,
+                        "state": best_state,
+                        "component1": i,
+                        "component2": j,
+                    }
+                )
+
+        results.sort(key=lambda r: r["score"], reverse=True)
+
+        pose = results[0]["pose"]
+        state = results[0]["pose"]
+        assert isinstance(pose, np.ndarray)
+        return np.concatenate([pose, [state]])
 
     def calculate_sim_matrix(
         self, cp1: ConditionPair, cp2: ConditionPair, key: str

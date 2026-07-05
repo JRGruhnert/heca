@@ -59,5 +59,7 @@ class ConditionPair:
         return result
 
     def plot(self, path: Path):
-        self.pre.plot(path / "plots")
-        self.post.plot(path / "plots")
+        plot_path = path / "plots"
+        plot_path.mkdir(parents=True, exist_ok=True)
+        self.pre.plot(plot_path)
+        self.post.plot(plot_path)

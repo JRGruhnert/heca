@@ -33,7 +33,7 @@ class Configurable(abc.ABC):
         # so A.get(B.Config(...)) resolves B even when called on A.
         own_config = cls.__dict__.get("Config")
         if own_config is None:
-            raise TypeError(f"{cls.__name__} must define a nested Config dataclass.")
+            # raise TypeError(f"{cls.__name__} must define a nested Config dataclass.")
             return
 
         for base in cls.__mro__[1:]:
@@ -134,12 +134,12 @@ class Persistable(Registerable, abc.ABC):
 
     def save(self):
         path = self.save_dir(self.cfg)
-        logger.info(f"Saving {Type(self)} to {path}")
+        logger.info(f"Saving {type(self)} to {path}")
         self._save(path)
 
     def load(self):
         path = self.save_dir(self.cfg)
-        logger.info(f"Loading {Type(self)} from {path}")
+        logger.info(f"Loading {type(self)} from {path}")
         self._load(path)
 
     @abc.abstractmethod

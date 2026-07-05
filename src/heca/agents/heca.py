@@ -1,18 +1,17 @@
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from itertools import permutations
+from itertools import product
 from typing import Sequence
 import torch
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
-from torch_geometric.data import HeteroData, Batch
 
 from heca.conditions.analyzer import ConditionAnalyzer
-from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
+from heca.graphs.graph import GraphBlueprint
 from heca.heca_gnn.network import Network
 from heca.misc.ppo import PPO
 from heca.misc.td import TDScene
@@ -27,15 +26,16 @@ class HecaMode(Enum):
 class Heca(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        evaluator: Evaluator.Config
-        network: Network.Config
+        evaluator: Evaluator.Config = Evaluator.Config()
+        network: Network.Config = Network.Config()
         agents: Sequence[Agent.Config]
-        mode: HecaMode
-        ppo: PPO.Config
+        mode: HecaMode = HecaMode.TRAIN
+        ppo: PPO.Config = PPO.Config()
         label: str = "heca"
-        n_samples: int = 1000
         visualize: bool = True
+        n_samples: int = 1000
         merge_threshold: float = 0.75
+        subgoal_threshold: float = 0.5
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -60,13 +60,15 @@ class Heca(Agent):
             )
 
         self.evaluator = Evaluator.get(cfg.evaluator).setup(self.conditions)
-        self.analyzer = ConditionAnalyzer()
+        self.analyzer = ConditionAnalyzer(
+            merge_threshold=cfg.merge_threshold,
+            subgoal_threshold=cfg.subgoal_threshold,
+        )
+        self.blueprint = self.generate_blueprint()
 
-    def predict(
-        self,
-        data: HeteroData,
-        options: list[tuple[Agent.Config, TDScene, TDScene]],
-    ) -> tuple[Agent.Config, TDScene, TDScene]:
+    def predict(self) -> tuple[Agent.Config, TDScene, TDScene]:
+        data = self.blueprint.graph()
+        options = self.blueprint.options()
         with torch.inference_mode():
             logits = self.network.actor(data)
 
@@ -83,8 +85,8 @@ class Heca(Agent):
         return options[action]
 
     def step(self, x: TDScene) -> tuple[TDScene, AgentFeedback]:
-        data, options = self.generate_graph(x)
-        sa, sx, sy = self.predict(data, options)
+        self.blueprint.set_entity(x, tag="start")
+        sa, sx, sy = self.predict()
         z = Agent.get(sa).act(sx, sy)
         fb = self.evaluator.step(z)
         if self.cfg.mode == HecaMode.TRAIN:
@@ -94,44 +96,86 @@ class Heca(Agent):
 
     def act(self, x: TDScene, y: TDScene) -> TDScene:
         self.evaluator.reset(y)
-        self.condition_graph(y)
+        self.blueprint.set_entity(x, tag="goal")
         z, fb = self.step(x)
         while not fb.terminal:
             z, fb = self.step(z)
         return z
 
-    def generate_graph(self, x: TDScene) -> tuple[
-        HeteroData,
-        list[tuple[Agent.Config, TDScene, TDScene]],
-    ]:
-        raise NotImplementedError()
+    def generate_blueprint(self) -> GraphBlueprint:
+        gbp = GraphBlueprint.empty()
+        agents = [Agent.get(cfg) for cfg in agent_cfgs]
+        current: list[str] = list(self.elabels)
+        goal: list[str] = list(self.elabels)
+        precons: list[tuple[str, str]] = [
+            (label, condition.label)
+            for agent in agents
+            for condition in agent.conditions
+            for label in condition.elabels
+        ]
 
-    def condition_graph(self, y: TDScene):
-        raise NotImplementedError()
+        postcons: list[tuple[str, str]] = [
+            (label, condition.label)
+            for agent in agents
+            for condition in agent.conditions
+            for label in condition.elabels
+        ]
+        options: list[tuple[str, Agent.Config]] = [
+            (condition.label, agent.cfg)
+            for agent in agents
+            for condition in agent.conditions
+        ]
 
-    def precompute_graph(self, agents: list[Agent.Config]):
-        cons: dict[Agent.Config, list[tuple[Condition, Condition]]] = {}
-        for a, b in permutations(agents, 2):
-            tuples = [(cfg, con) for con in Agent.get(cfg).conditions]
-            cons.extend(tuples)
-        sets = [{i} for i in range(len(cons))]
-        while True:
-            merged = False
-            for i in range(len(cons)):
-                for j in range(i + 1, len(cons)):
-                    a = cons[i]
-                    b = cons[j]
-                    sim_rating = self.analyzer.compute_sim(a, b)
+        for a, b in product(agents, repeat=2):
+            for ac in a.conditions:
+                for bc in b.conditions:
 
-    def to_batch(self, data: list[HeteroData]) -> Batch:
-        return cast(Batch, Batch.from_data_list(data))  # type: ignore
+                    values = self.analyzer.calculate_subgoal(
+                        ac.post, bc.pre, self.elabels
+                    )
+        # for a in agents:
+        #     tuples = [(cfg, con) for con in Agent.get(cfg).conditions]
+        #     cons.extend(tuples)
+
+        agents = [Agent.get(cfg) for cfg in agent_cfgs]
+        current = [EntityNode(label) for label in self.elabels]
+
+        goal = [GoalNode(label) for label in self.elabels]
+
+        precons = [
+            PreConditionNode(label, condition.label)
+            for agent in agents
+            for condition in agent.conditions
+            for label in condition.elabels
+        ]
+
+        postcons = [
+            PostConditionNode(label, condition.label)
+            for agent in agents
+            for condition in agent.conditions
+            for label in condition.elabels
+        ]
+
+        options = [
+            OptionNode(condition.label, agent.cfg)
+            for agent in agents
+            for condition in agent.conditions
+        ]
 
     def sample(self) -> tuple[TDScene, TDScene]:
         raise NotImplementedError
 
     @cached_property
+    def elabels(self) -> set[str]:
+        labels = set()
+        for cfg in self.cfg.agents:
+            for con in Agent.get(cfg).conditions:
+                labels.union(con.elabels)
+        return labels
+
+    @cached_property
     def conditions(self) -> list[ConditionPair]:
-        path = Agent.instance_dir(self.cfg)
+        path = Agent.load_dir(self.cfg)
         cons = []
         for cfg in self.cfg.agents:
             cons.extend(Agent.get(cfg).conditions)
@@ -145,9 +189,7 @@ class Heca(Agent):
                     b = cons[j]
                     sim_rating = self.analyzer.compute_sim(a, b)
                     self.analyzer.plot_similarity(sim_rating, a, b, path)
-                    if self.analyzer.evaluate_merge(
-                        sim_rating, self.cfg.merge_threshold
-                    ):
+                    if self.analyzer.evaluate_merge(sim_rating):
                         a_set = sets[i]
                         b_set = sets[j]
                         new_set = a_set | b_set

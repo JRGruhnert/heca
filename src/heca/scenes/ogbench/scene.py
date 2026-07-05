@@ -159,7 +159,7 @@ class OGBenchScene(Scene):
                 "button_0",
                 "button_1",
             ]:  # hack cause _pos already used
-                e_pos = obs[f"privileged_{entity.cfg.label}_pos_full"]
+                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]  # _full"]
             else:
                 e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]

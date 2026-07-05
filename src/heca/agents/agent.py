@@ -31,12 +31,16 @@ class Agent(Persistable, abc.ABC):
 
     @abc.abstractmethod
     def act(self, x: TDScene, y: TDScene) -> TDScene:
-        raise NotImplementedError()
+        raise NotImplementedError
+
+    @cached_property
+    def elabels(self) -> set[str]:
+        raise NotImplementedError
 
     @cached_property
     def conditions(self) -> list[ConditionPair]:
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @abc.abstractmethod
     def eval(self):
-        raise NotImplementedError()
+        raise NotImplementedError

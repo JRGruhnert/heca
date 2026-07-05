@@ -4,14 +4,14 @@ from pathlib import Path
 from torch import nn
 import torch
 
-from heca.misc.base import Persistable
+from heca.misc.base import Configurable
 from heca.heca_gnn.mlp import StandardMLP
 from heca.misc import hardware
 
 
-class PropertyEncoder(Persistable, nn.Module):
+class PropertyEncoder(Configurable, nn.Module):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
+    class Config(Configurable.Config):
         subroot: str = "heca"
         label: str = "encoder"
         in_dim: int = 16
@@ -25,12 +25,3 @@ class PropertyEncoder(Persistable, nn.Module):
 
     def forward(self, x):
         return self.fc(x)
-
-    def _load(self, path: Path):
-        self.load_state_dict(
-            torch.load(path / "model.pt", map_location=hardware.device)
-        )
-
-    def _save(self, path: Path) -> bool:
-        torch.save(self.state_dict(), path / "model.pt")
-        return True

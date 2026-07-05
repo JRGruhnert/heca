@@ -205,7 +205,13 @@ class TapasAgent(ExpertAgent):
     @cached_property
     def model(self) -> AutoTPGMM:
         temp = self.policy.model
-        assert isinstance(temp, AutoTPGMM), "Model must be an AutoTPGMM."
+        assert isinstance(temp, AutoTPGMM)
+        return temp
+
+    @cached_property
+    def demos(self) -> Demos:
+        temp = self.model._demos
+        assert isinstance(temp, Demos)
         return temp
 
     def tapas_td(self, td_obs: TDScene, td_goal: TDScene) -> TensorDict:
@@ -269,17 +275,26 @@ class TapasAgent(ExpertAgent):
             batch_size=empty_bs,
         )
 
+    @property
+    def scene(self) -> Scene:
+        return Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
+
+    @cached_property
+    def elabels(self) -> set[str]:
+        labels = set()
+        elabels = [e.cfg.label for e in self.scene.entities]
+        for idx, key in enumerate(self.demos.idx_key_list):
+            if idx in self.model._used_frames and key in elabels:
+                labels.add(key)
+        return labels
+
     @cached_property
     def conditions(self) -> list[ConditionPair]:
-        # https://distancia.readthedocs.io/en/latest/ChamferDistance.html
-        tpgmm: AutoTPGMM = self.policy.model  # type: ignore
-        assert tpgmm._demos is not None
         path = TapasAgent.load_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
-        scene = Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
-        elabels = [e.cfg.label for e in scene.entities]
-        demos_scenes, demos_images = scene.load_dataset(
-            demos_file, only_conditions=True
+        demos_scenes, demos_images = self.scene.load_dataset(
+            demos_file,
+            only_conditions=True,
         )
 
         pre_data: dict[str, np.ndarray] = {}
@@ -291,9 +306,7 @@ class TapasAgent(ExpertAgent):
             start_scenes = [self.from_image(demo[0]) for demo in demos_images]
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
-        for idx, key in enumerate(tpgmm._demos.idx_key_list):
-            if idx not in tpgmm._used_frames or key not in elabels:
-                continue
+        for key in self.elabels:
             pre_data[key] = self.collect_entity_data(start_scenes, key)
             post_data[key] = self.collect_entity_data(end_scenes, key)
 
@@ -309,8 +322,7 @@ class TapasAgent(ExpertAgent):
 
         observations: list[SceneObservation] = []  # type: ignore
 
-        scene = Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
-        demos_scenes, demos_images = scene.load_dataset(
+        demos_scenes, demos_images = self.scene.load_dataset(
             demos_file, selections=selections
         )
         for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
