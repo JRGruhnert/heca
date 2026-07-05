@@ -12,6 +12,9 @@ build/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+#extras
+.pytest_cache
+.vscode
 
 # mkdocs documentation
 /site
