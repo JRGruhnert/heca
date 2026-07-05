@@ -4,7 +4,7 @@ from heca.guis.tapas_demo_selector import TapasDemoSelector
 
 cfg = TapasDemoSelector.Config(
     agent=TapasAgent.Config(
-        folder="close_drawer",
+        tag="close_drawer",
         scene=OGBenchScene.Config(),
     ),
 )

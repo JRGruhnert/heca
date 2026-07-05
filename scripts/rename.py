@@ -52,7 +52,7 @@ configs: list[TapasAgent.Config] = [
     #     use_gt=True,
     # ),
     TapasAgent.Config(
-        folder="move_block_drawer",
+        tag="move_block_drawer",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
@@ -60,8 +60,8 @@ configs: list[TapasAgent.Config] = [
 
 for cfg in configs:
     for name in ["demos", "demos_post"]:
-        load_path = ExpertAgent.resolve(cfg) / f"{name}.h5"
-        save_path = ExpertAgent.resolve(cfg) / f"{name}_new.h5"
+        load_path = ExpertAgent.load_dir(cfg) / f"{name}.h5"
+        save_path = ExpertAgent.load_dir(cfg) / f"{name}_new.h5"
 
         with h5py.File(load_path, "r") as f:
             data = {k: np.asarray(f[k]) for k in f.keys()}
