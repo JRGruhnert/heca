@@ -73,13 +73,13 @@ class HecaConditionPlotter(HecaPlotter):
                 break
         if not skip:
             return TDEntity(
-                position=conditions[f"{label}_position"].value,
-                rotation=conditions[f"{label}_rotation"].value,
-                state=conditions[f"{label}_scalar"].value,
+                pos=conditions[f"{label}_position"].value,
+                rot=conditions[f"{label}_rotation"].value,
+                ste=conditions[f"{label}_scalar"].value,
             )
         else:
             return TDEntity(
-                position=torch.zeros(3),
-                rotation=torch.tensor([0.0, 0.0, 0.0, 1.0]),
-                state=torch.zeros(1),
+                pos=torch.zeros(3),
+                rot=torch.tensor([0.0, 0.0, 0.0, 1.0]),
+                ste=torch.zeros(1),
             )

@@ -28,7 +28,7 @@ class GraphNode(ABC):
 
 @dataclass(frozen=True)
 class PosCompNode(GraphNode):
-    comp: str
+    tag: str
     x: torch.Tensor
 
     @property
@@ -46,7 +46,7 @@ class PosCompNode(GraphNode):
 
 @dataclass(frozen=True)
 class RotCompNode(GraphNode):
-    comp: str
+    tag: str
     x: torch.Tensor
 
     @property
@@ -63,8 +63,8 @@ class RotCompNode(GraphNode):
 
 
 @dataclass(frozen=True)
-class StateCompNode(GraphNode):
-    comp: str
+class SteCompNode(GraphNode):
+    tag: str
     x: torch.Tensor
 
     @property
@@ -82,7 +82,7 @@ class StateCompNode(GraphNode):
 
 @dataclass(frozen=True)
 class CompNode(GraphNode):
-    comp: str
+    tag: str
     entity: str
     x: Optional[torch.Tensor] = None
 
@@ -101,8 +101,7 @@ class CompNode(GraphNode):
 
 @dataclass(frozen=True)
 class StepMixNode(GraphNode):
-    entity: str
-    condition: str
+    tag: str
     x: Optional[torch.Tensor] = None
 
     @property
@@ -155,7 +154,7 @@ class RotNode(GraphNode):
 
 
 @dataclass(frozen=True)
-class StateNode(GraphNode):
+class SteNode(GraphNode):
     entity: str
     x: torch.Tensor
 

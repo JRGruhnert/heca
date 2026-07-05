@@ -70,8 +70,8 @@ class ConditionAnalyzer:
 
     def best_sample(self, post: Condition, pre: Condition, key: str):
 
-        m1 = post.model[key]
-        m2 = pre.model[key]
+        m1 = post.models[key]
+        m2 = pre.models[key]
         p1 = m1.get_parameters()
         p2 = m2.get_parameters()
 
@@ -170,7 +170,7 @@ class ConditionAnalyzer:
         return mat
 
     def calculate_score(self, a: Condition, b: Condition, key: str) -> float:
-        raw = a.model[key].score(b.samples[key])
+        raw = a.models[key].score(b.samples[key])
         delta = raw - a.sample_self_scores[key]
         clipped = np.minimum(delta, 0)  # we just care for negative deltas
         return np.exp(clipped)  # make a score

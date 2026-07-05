@@ -7,6 +7,7 @@ from torch_geometric.data import HeteroData
 from heca.agents.agent import Agent
 from heca.graphs.nodes import (
     CompNode,
+    ConditionNode,
     EntityNode,
     StepMixNode,
     GraphNode,
@@ -14,11 +15,12 @@ from heca.graphs.nodes import (
     PosNode,
     RotCompNode,
     RotNode,
-    StateCompNode,
-    StateNode,
+    SteCompNode,
+    SteNode,
 )
 from heca.graphs.sets import EdgeSet, NodeSet
 from heca.misc.td import TDScene
+from heca.conditions.condition import Condition
 
 T = TypeVar("T", bound=GraphNode)
 
@@ -68,23 +70,52 @@ class GraphBlueprint:
         self.nodes[label].set(node)
 
     def set_entity(self, tdscene: TDScene, tag: str):
-        for entity_name, tde in tdscene.entities():
-            self.set_node(PosNode(entity=entity_name, x=tde.position), label="pose")
-            self.set_node(RotNode(entity=entity_name, x=tde.rotation), label="rot")
-            self.set_node(StateNode(entity=entity_name, x=tde.state), label="state")
-            self.set_node(EntityNode(entity=entity_name, tag=tag), label="entity")
+        for entity, tde in tdscene.entities():
+            self.set_node(PosNode(entity=entity, x=tde.pos), label="pos")
+            self.set_node(RotNode(entity=entity, x=tde.rot), label="rot")
+            self.set_node(SteNode(entity=entity, x=tde.ste), label="ste")
+            self.set_node(EntityNode(entity=entity, tag=tag), label="entity")
+        self.nodes["pos"].build()
+        self.nodes["rot"].build()
+        self.nodes["ste"].build()
+        self.nodes["entity"].build()
+
+    def set_condition(self, con: Condition, tag: str):
+        contag = con.label
+        for entity, components in con.model_parameters.items():
+            etag = contag + entity
+            for idx, ct in enumerate(components):
+                ctag = f"{etag}_{idx}"
+                self.set_node(
+                    PosCompNode(tag=ctag, x=torch.Tensor(ct[0])),
+                    label="posc",
+                )
+                self.set_node(
+                    RotCompNode(tag=ctag, x=torch.Tensor(ct[1])),
+                    label="rotc",
+                )
+                self.set_node(
+                    SteCompNode(tag=ctag, x=torch.Tensor(ct[2])),
+                    label="stec",
+                )
+                self.set_node(
+                    CompNode(tag=ctag, entity=entity),
+                    label="comp",
+                )
+            self.set_node(StepMixNode(tag=ctag), label="stepmix")
+        self.set_node(ConditionNode(condition=tag), label=tag)
         self.nodes["pos"].build()
         self.nodes["rot"].build()
         self.nodes["state"].build()
         self.nodes["entity"].build()
 
-    def set_gmm(self, tdscene: TDScene, tag: str):
+    def set_option(self, tdscene: TDScene, tag: str):
         for entity_name, tde in tdscene.entities():
-            self.set_node(PosCompNode(entity=entity_name, x=tde.position), label="pose")
-            self.set_node(RotCompNode(entity=entity_name, x=tde.rotation), label="rot")
-            self.set_node(StateCompNode(entity=entity_name, x=tde.state), label="state")
+            self.set_node(PosCompNode(entity=entity_name, x=tde.pos), label="pose")
+            self.set_node(RotCompNode(entity=entity_name, x=tde.rot), label="rot")
+            self.set_node(SteCompNode(entity=entity_name, x=tde.ste), label="state")
             self.set_node(CompNode(entity=entity_name, tag=tag), label="entity")
-            self.set_node(StepMixNode(entity=entity_name, tag=tag), label="entity")
+            self.set_node(StepMixNode(tag=entity_name, tag=tag), label="entity")
         self.nodes["pos"].build()
         self.nodes["rot"].build()
         self.nodes["state"].build()

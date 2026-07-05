@@ -175,9 +175,9 @@ class OGBenchScene(Scene):
             td_entities[entity.cfg.label] = td_abs
             td_entities[f"{entity.cfg.label}_rel"] = td_rel
         td_entities["ee"] = TDEntity(
-            position=pos,
-            rotation=rot,
-            state=state,
+            pos=pos,
+            rot=rot,
+            ste=state,
         )
         extras = self.get_extras(obs)
         return TDScene(td_entities, extras=extras)

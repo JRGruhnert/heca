@@ -5,6 +5,8 @@ import numpy as np
 
 from stepmix import StepMix
 
+from heca.misc.quaternion import Quaternion
+
 # Condition saves raw datapoints per entity
 
 
@@ -34,6 +36,64 @@ class Condition:
         self._model, self._samples, self._bics = self._fit_model()
 
     @property
+    def model_parameters(
+        self,
+    ) -> dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]]:
+        """
+        Extracts node features for the StepMix tree-graph.
+
+        Returns:
+            dict: Keys are model names. Values are lists of tuples, one per component.
+                Each tuple contains:
+                - pos_feature (np.ndarray): [μ_x, μ_y, μ_z, σ_x, σ_y, σ_z] (shape: 6)
+                - rot_feature (np.ndarray): [6D_rot_mean, σ_w, σ_x, σ_y, σ_z] (shape: 10)
+                - state_feature (np.ndarray): Probabilities for each category (shape: total_outcomes)
+        """
+        result: dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {}
+
+        for model_name, mix in self.models.items():
+            # 1. Extract raw parameters from the fitted StepMix model
+            params = mix.get_parameters()
+            weights = params["weights"]  # shape: (K,)
+            means = params["measurement"]["pose"]["means"]  # shape: (K, 7)
+            covariances = params["measurement"]["pose"][
+                "covariances"
+            ]  # shape: (K, 7) - assumes diagonal!
+            pis = params["measurement"]["state"]["pis"]  # shape: (K, total_outcomes)
+
+            n_components = weights.shape[0]  # type: ignore
+            components_list = []
+
+            for i in range(n_components):
+                # --- A. Position Feature (First 3 continuous variables) ---
+                pos_mean = means[i, :3]
+                pos_std = np.sqrt(covariances[i, :3])  # Standard deviation
+                pos_feature = np.concatenate([pos_mean, pos_std])  # Shape: (6,)
+
+                # --- B. Rotation Feature (Last 4 continuous variables: w, x, y, z) ---
+                quat_mean = means[i, 3:7]  # [w, x, y, z]
+                quat_std = np.sqrt(covariances[i, 3:7])  # Standard deviations
+
+                # Convert the mean quaternion to 6D continuous representation
+                rot_6d = Quaternion.quat_to_6d(
+                    quat_mean[0], quat_mean[1], quat_mean[2], quat_mean[3]
+                )  # Shape: (6,)
+
+                # Concatenate the 6D mean with the 4 standard deviations
+                rot_feature = np.concatenate([rot_6d, quat_std])  # Shape: (10,)
+
+                # --- C. State Feature (Categorical probabilities) ---
+                # Pis for this specific component. Shape: (total_outcomes,)
+                state_feature = pis[i, :]
+
+                # Store the tuple for this component
+                components_list.append((pos_feature, rot_feature, state_feature))
+
+            result[model_name] = components_list
+
+        return result
+
+    @property
     def model_states(self) -> dict[str, set[int]]:
         states: dict[str, set[int]] = {}
 
@@ -52,14 +112,14 @@ class Condition:
 
     @property
     def sample_self_scores(self) -> dict[str, float]:
-        return {k: float(self.model[k].score(v)) for k, v in self.samples.items()}
+        return {k: float(self.models[k].score(v)) for k, v in self.samples.items()}
 
     @property
     def raw_self_scores(self) -> dict[str, float]:
-        return {k: float(self.model[k].score(v)) for k, v in self.data_raw.items()}
+        return {k: float(self.models[k].score(v)) for k, v in self.data_raw.items()}
 
     @property
-    def model(self) -> dict[str, StepMix]:
+    def models(self) -> dict[str, StepMix]:
         return self._model
 
     @property

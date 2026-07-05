@@ -219,8 +219,8 @@ class TapasAgent(ExpertAgent):
         reward = td_obs.extras["reward"]
         joint_pos = td_obs.extras["joint_pos"]
         joint_vel = td_obs.extras["joint_vel"]
-        ee_state = td_obs["ee"].state
-        ee_pose = torch.cat((td_obs["ee"].position, td_obs["ee"].rotation), dim=-1)
+        ee_state = td_obs["ee"].ste
+        ee_pose = torch.cat((td_obs["ee"].pos, td_obs["ee"].rot), dim=-1)
 
         # camera_obs = self.image_tensors(obs)
         # multicam_obs = dict_to_tensordict(
@@ -229,8 +229,8 @@ class TapasAgent(ExpertAgent):
         poses = {
             entity.cfg.label: torch.cat(
                 [
-                    td_obs[entity.cfg.label].position,
-                    td_obs[entity.cfg.label].rotation,
+                    td_obs[entity.cfg.label].pos,
+                    td_obs[entity.cfg.label].rot,
                 ],
                 dim=-1,
             )
@@ -238,7 +238,7 @@ class TapasAgent(ExpertAgent):
         }
 
         states = {
-            entity.cfg.label: td_obs[entity.cfg.label].state
+            entity.cfg.label: td_obs[entity.cfg.label].ste
             for entity in self.scene.entities
         }
 
@@ -246,15 +246,15 @@ class TapasAgent(ExpertAgent):
             # This adds target frames for mobile entities.
             # Later can be used to set target for the tapas model
             if entity.cfg.mobility == Mobility.FREE:
-                pos = td_goal[entity.cfg.label].position
-                rot = td_goal[entity.cfg.label].rotation
-                state = td_goal[entity.cfg.label].state
+                pos = td_goal[entity.cfg.label].pos
+                rot = td_goal[entity.cfg.label].rot
+                state = td_goal[entity.cfg.label].ste
                 pose = torch.cat((pos, rot), dim=-1)
                 poses[f"{entity.cfg.label}_target"] = pose
                 states[f"{entity.cfg.label}_target"] = state
 
-        gee_state = td_goal["ee"].state
-        gee_pose = torch.cat((td_goal["ee"].position, td_goal["ee"].rotation), dim=-1)
+        gee_state = td_goal["ee"].ste
+        gee_pose = torch.cat((td_goal["ee"].pos, td_goal["ee"].rot), dim=-1)
 
         poses[f"ee_target"] = gee_pose
         states[f"ee_target"] = gee_state
@@ -349,9 +349,9 @@ class TapasAgent(ExpertAgent):
         return obs
 
     def collect_entity_data(self, scenes: list[TDScene], key: str) -> np.ndarray:
-        pos = torch.stack([s[key].position for s in scenes]).numpy()
-        rot = torch.stack([s[key].rotation for s in scenes]).numpy()
-        state = torch.stack([s[key].state for s in scenes]).numpy()
+        pos = torch.stack([s[key].pos for s in scenes]).numpy()
+        rot = torch.stack([s[key].rot for s in scenes]).numpy()
+        state = torch.stack([s[key].ste for s in scenes]).numpy()
 
         if state.ndim == 2:
             state = np.argmax(state, axis=1)

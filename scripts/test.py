@@ -77,6 +77,6 @@ agent = Agent.get(
 )
 
 print(agent.conditions[0].elabels)
-parameters = agent.conditions[0].pre.model["button_1"].get_parameters()
+parameters = agent.conditions[0].pre.models["button_1"].get_parameters()
 print(parameters)
 print(parameters["measurement"])

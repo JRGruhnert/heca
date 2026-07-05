@@ -70,7 +70,7 @@ class ExpertAgent(Agent, abc.ABC):
             )
             td_entities[entity.cfg.label] = td_abs
             td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["ee"] = TDEntity(position=c_pos, rotation=c_rot, state=c_state)
+        td_entities["ee"] = TDEntity(pos=c_pos, rot=c_rot, ste=c_state)
         return TDScene(td_entities)
 
     def get_entity_pose_and_state(

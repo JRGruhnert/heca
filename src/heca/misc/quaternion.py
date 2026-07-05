@@ -1,4 +1,5 @@
 import math
+import numpy as np
 import torch
 
 
@@ -39,3 +40,29 @@ class Quaternion:
         dot_product = torch.clamp(dot_product, -1.0, 1.0)
         angle = 2 * torch.acos(dot_product) / math.pi
         return angle.item()
+
+    @staticmethod
+    def quat_to_6d(w: float, x: float, y: float, z: float) -> np.ndarray:
+        """
+        Converts a quaternion (w, x, y, z) to the 6D continuous rotation
+        representation (first two columns of the rotation matrix).
+        This avoids the q/-q ambiguity and provides a smoother gradient landscape.
+        """
+        # Rotation matrix from quaternion (w, x, y, z)
+        # R00 = 1 - 2*y^2 - 2*z^2
+        # R10 = 2*x*y + 2*z*w
+        # R20 = 2*x*z - 2*y*w
+        # R01 = 2*x*y - 2*z*w
+        # R11 = 1 - 2*x^2 - 2*z^2
+        # R21 = 2*y*z + 2*x*w
+
+        r00 = 1.0 - 2.0 * y * y - 2.0 * z * z
+        r10 = 2.0 * x * y + 2.0 * z * w
+        r20 = 2.0 * x * z - 2.0 * y * w
+
+        r01 = 2.0 * x * y - 2.0 * z * w
+        r11 = 1.0 - 2.0 * x * x - 2.0 * z * z
+        r21 = 2.0 * y * z + 2.0 * x * w
+
+        # Flatten the first two columns: [col0, col1] -> 6 values
+        return np.array([r00, r10, r20, r01, r11, r21])

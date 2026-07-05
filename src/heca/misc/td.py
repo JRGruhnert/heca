@@ -11,28 +11,28 @@ class TDEntity(TensorDict):
 
     def __init__(
         self,
-        position: torch.Tensor,
-        rotation: torch.Tensor,
-        state: torch.Tensor,
+        pos: torch.Tensor,
+        rot: torch.Tensor,
+        ste: torch.Tensor,
     ):
         data = {
-            "position": position,
-            "rotation": rotation,
-            "state": state,
+            "pos": pos,
+            "rot": rot,
+            "ste": ste,
         }
         super().__init__(data, batch_size=empty_bs)
 
     @property
-    def position(self) -> torch.Tensor:
-        return self["position"]
+    def pos(self) -> torch.Tensor:
+        return self["pos"]
 
     @property
-    def rotation(self) -> torch.Tensor:
-        return self["rotation"]
+    def rot(self) -> torch.Tensor:
+        return self["rot"]
 
     @property
-    def state(self) -> torch.Tensor:
-        return self["state"]
+    def ste(self) -> torch.Tensor:
+        return self["ste"]
 
 
 class TDScene(TensorDict):
@@ -379,13 +379,13 @@ def make_abs_and_rel_td_entity(
     ee_rot: torch.Tensor,
 ) -> tuple[TDEntity, TDEntity]:
     td_rel = TDEntity(
-        position=position - ee_pos,
-        rotation=relative_quaternion(rotation, ee_rot),
-        state=state,
+        pos=position - ee_pos,
+        rot=relative_quaternion(rotation, ee_rot),
+        ste=state,
     )
     td_abs = TDEntity(
-        position=position,
-        rotation=rotation,
-        state=state,
+        pos=position,
+        rot=rotation,
+        ste=state,
     )
     return td_abs, td_rel
