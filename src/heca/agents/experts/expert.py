@@ -1,18 +1,15 @@
 import abc
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from heca.agents.agent import Agent, EESate
+from heca.misc.dc import DCScene, DCEntity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.image_encoders.molmo_encoder import MolmoEncoder
-from heca.misc.td import (
-    TDEntity,
-    TDImage,
-    TDScene,
-    make_abs_and_rel_td_entity,
-)
+from heca.misc.td import TDImage
 
 
 class ExpertAgent(Agent, abc.ABC):
@@ -39,39 +36,32 @@ class ExpertAgent(Agent, abc.ABC):
     def required_scenes(self) -> list[Scene.Config]:
         return [self.cfg.scene]
 
-    def from_image(self, image: TDImage) -> TDScene:
+    def from_image(self, image: TDImage) -> DCScene:
         kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
         states, state_scores = self.state_extractor.extract_states(image, kps2d)
 
         # Sanity check on dimensions
         assert kps3d.shape[1] == len(self.scene.entities) + 1  # ee at index 0
 
-        td_entities: dict[str, TDEntity] = {}
-        c_pos, c_rot, c_state = self.get_entity_pose_and_state(
-            kps3d[:, 0],
-            kp_scores[:, 0],
-            states[:, 0],
-            state_scores[:, 0],
-        )
+        dc_entities: dict[str, DCEntity] = {}
         for idx, entity in enumerate(self.scene.entities):
-            pos, rot, state = self.get_entity_pose_and_state(
+            pos, rot, ste = self.get_entity_pose_and_state(
                 kps3d[:, idx + 1],
                 kp_scores[:, idx + 1],
                 states[:, idx + 1],
                 state_scores[:, idx + 1],
             )
-
-            td_abs, td_rel = make_abs_and_rel_td_entity(
-                position=pos,
-                rotation=rot,
-                state=state,
-                ee_pos=c_pos,
-                ee_rot=c_rot,
-            )
-            td_entities[entity.cfg.label] = td_abs
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["ee"] = TDEntity(pos=c_pos, rot=c_rot, ste=c_state)
-        return TDScene(td_entities)
+            soh = entity.state.one_hot_from_idx_dc(ste.item())
+            dc_entities[entity.cfg.label] = DCEntity(pos, rot, ste, soh)
+        c_pos, c_rot, c_ste = self.get_entity_pose_and_state(
+            kps3d[:, 0],
+            kp_scores[:, 0],
+            states[:, 0],
+            state_scores[:, 0],
+        )
+        c_soh = entity.state.one_hot_from_idx_dc(c_ste.item())
+        ee = DCEntity(c_pos, c_rot, c_ste, c_soh)
+        return DCScene(ee, dc_entities)
 
     def get_entity_pose_and_state(
         self,
@@ -79,7 +69,7 @@ class ExpertAgent(Agent, abc.ABC):
         poses_scores: torch.Tensor,
         states: torch.Tensor,
         state_scores: torch.Tensor,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         present = poses_scores > self.cfg.score_threshold
         if present.sum() == 0:
             # Not present
@@ -90,7 +80,7 @@ class ExpertAgent(Agent, abc.ABC):
             idxx = present.nonzero(as_tuple=True)[0][0]
             pose = poses[idxx]
             state = states[idxx]
-        return pose[:3], pose[3:7], state
+        return pose[:3].numpy(), pose[3:7].numpy(), state.numpy()
 
     # def from_images(self, td_image: TDImage) -> TDScene:
     #     td_images = TDSceneImages({"front": td_image})

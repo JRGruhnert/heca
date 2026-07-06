@@ -12,8 +12,8 @@ from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import GraphBlueprint
 from heca.heca_gnn.network import Network
+from heca.misc.dc import DCScene
 from heca.misc.ppo import PPO
-from heca.misc.td import TDScene
 
 
 class HecaMode(Enum):
@@ -61,7 +61,7 @@ class Heca(Agent):
         self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
         self.blueprint = GraphBlueprint(cfg.threshold).generate(self.cfg.agents)
 
-    def predict(self) -> tuple[Agent.Config, TDScene, TDScene]:
+    def predict(self) -> tuple[Agent.Config, DCScene]:
         data = self.blueprint.graph()
         options = self.blueprint.options()
         with torch.inference_mode():
@@ -79,17 +79,17 @@ class Heca(Agent):
 
         return options[action]
 
-    def step(self, x: TDScene) -> tuple[TDScene, AgentFeedback]:
+    def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.blueprint.set_start(x)
-        sa, sx, sy = self.predict()
-        z = Agent.get(sa).act(sx, sy)
+        a, y = self.predict()
+        z = Agent.get(a).act(x, y)
         fb = self.evaluator.step(z)
         if self.cfg.mode == HecaMode.TRAIN:
             if self.ppo.post_action(fb):  # true if batch full
                 raise NotImplementedError()
         return z, fb
 
-    def act(self, x: TDScene, y: TDScene) -> TDScene:
+    def act(self, x: DCScene, y: DCScene) -> DCScene:
         self.blueprint.set_goal(y)
         self.evaluator.reset(y)
         z, fb = self.step(x)
@@ -97,16 +97,16 @@ class Heca(Agent):
             z, fb = self.step(z)
         return z
 
-    def sample(self) -> tuple[TDScene, TDScene]:
+    def sample(self) -> tuple[DCScene, DCScene]:
         raise NotImplementedError
 
-    # @cached_property
-    # def elabels(self) -> set[str]:
-    #     labels = set()
-    #     for cfg in self.cfg.agents:
-    #         for con in Agent.get(cfg).conditions:
-    #             labels.union(con.elabels)
-    #     return labels
+    @cached_property
+    def elabels(self) -> set[str]:
+        labels = set()
+        for cfg in self.cfg.agents:
+            for con in Agent.get(cfg).conditions:
+                labels.union(con.elabels)
+        return labels
 
     @cached_property
     def conditions(self) -> list[ConditionPair]:

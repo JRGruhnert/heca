@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from heca.agents.agent import AgentFeedback
 from heca.conditions.pair import ConditionPair
 from heca.misc.base import Configurable
-from heca.misc.td import TDScene
+from heca.misc.dc import DCScene
 
 
 class Evaluator(Configurable):
@@ -24,13 +24,13 @@ class Evaluator(Configurable):
         self.current_step: int = 0
         self.conditions: list[ConditionPair] = []
 
-    def reset(self, y: TDScene):
+    def reset(self, y: DCScene):
         self.y = y
         self.highscore = 0.0
         self.progress = 0.0
         self.current_step = 0
 
-    def step(self, x: TDScene) -> AgentFeedback:
+    def step(self, x: DCScene) -> AgentFeedback:
         reward = 0.0 + self.cfg.step_penalty
         alltime = self.highscore
         last = self.progress
@@ -58,13 +58,13 @@ class Evaluator(Configurable):
         self.conditions = conditions
         return self
 
-    def distance(self, x: TDScene, y: TDScene) -> float:
+    def distance(self, x: DCScene, y: DCScene) -> float:
         return 0.0
 
-    def evaluate(self, x: TDScene, y: TDScene) -> bool:
+    def evaluate(self, x: DCScene, y: DCScene) -> bool:
         return False
 
-    def task_score(self, x: TDScene, y: TDScene) -> float:
+    def task_score(self, x: DCScene, y: DCScene) -> float:
         # filter out ones that are already solved
         #
         return 0.0

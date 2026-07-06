@@ -9,6 +9,7 @@ from typing import Any
 from PIL import Image
 
 
+from heca.misc.dc import DCScene
 from heca.misc.entity import Entity
 from heca.misc.td import TDImage, TDScene
 from heca.misc.base import Persistable
@@ -27,18 +28,18 @@ class Scene(Persistable):
         self.kp_references: dict[str, tuple[Image.Image, int, int, int, int]] = {}
         self.state_references: dict[str, dict[str, list[Image.Image]]] = {}
 
-    def from_internal(self, data) -> tuple[TDScene, TDImage, np.ndarray]:
-        tdscene = self.to_td_scene(data)
+    def from_internal(self, data) -> tuple[DCScene, TDImage, np.ndarray]:
+        tdscene = self.to_dc_scene(data)
         tdimage = self.to_td_image(data)
         npimage = self.to_np_image(data)
         return tdscene, tdimage, npimage
 
-    def step(self, action: np.ndarray) -> tuple[TDScene, TDImage, float, bool, bool]:
+    def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, float, bool, bool]:
         obs, reward, done, truncated = self._step(action)
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, reward, done, truncated
 
-    def step_vis(self, action: np.ndarray) -> tuple[TDScene, TDImage, np.ndarray]:
+    def step_vis(self, action: np.ndarray) -> tuple[DCScene, TDImage, np.ndarray]:
         obs, _, _, _ = self._step(action)
         return self.from_internal(obs)
 
@@ -64,6 +65,10 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     @abc.abstractmethod
+    def to_dc_scene(self, obs) -> DCScene:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
     def to_td_scene(self, obs) -> TDScene:
         raise NotImplementedError()
 
@@ -81,7 +86,7 @@ class Scene(Persistable):
         file: h5py.File,
         selections: list[int] | None = None,
         only_conditions: bool = False,
-    ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
+    ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 
     def _load(self, path: Path, tag: str):

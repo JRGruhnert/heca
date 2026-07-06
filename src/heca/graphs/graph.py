@@ -1,11 +1,8 @@
-from dataclasses import dataclass, field
+from dataclasses import field
 from enum import Enum
 from typing import Sequence, TypeVar
-import uuid
 from heca.conditions.analyzer import ConditionAnalyzer
 from heca.conditions.condition import Condition
-from heca.conditions.pair import ConditionPair
-from heca.misc.td import TDEntity
 from itertools import permutations
 import torch
 from torch_geometric.data import HeteroData
@@ -13,7 +10,7 @@ from torch_geometric.data import HeteroData
 from heca.agents.agent import Agent
 from heca.graphs.nodes import *
 from heca.graphs.sets import EdgeSet, NodeSet
-from heca.misc.td import TDScene
+from heca.misc.dc import DCEntity, DCScene
 from heca.conditions.condition import Condition
 
 T = TypeVar("T", bound=GraphNode)
@@ -32,8 +29,8 @@ class GraphBlueprint:
         self._edges: dict[tuple[str, str, str], EdgeSet] = field(default_factory=dict)
         self._node_staged: set[str] = set()
         self._edge_staged: set[str] = set()
-        self._start: TDScene = TDScene({})
-        self._goal: TDScene = TDScene({})
+        self._start: DCScene = DCScene.empty()
+        self._goal: DCScene = DCScene.empty()
 
     def flush(self) -> "GraphBlueprint":
         self._nodes = {}
@@ -79,9 +76,83 @@ class GraphBlueprint:
             self._edge_staged.add(node.node)
         return node.key
 
+    def set_start(self, x: DCScene):
+        self.set_entities(x, "start")
+
+    def set_goal(self, x: DCScene):
+        self.set_entities(x, "goal")
+
+    def set_entities(self, x: DCScene, tag: str):
+        for etag, tde in x.entities():
+            ekey = self.nset(EntityNode(dst=etag, src="", tag=tag))
+            self.nset(PosNode(dst=ekey, src="", x=tde.tpos))
+            self.nset(RotNode(dst=ekey, src="", x=tde.trot))
+            self.nset(SteNode(dst=ekey, src="", x=tde.tste))
+
+    def set_precondition(self, con: Condition, ptag: str):
+        for etag, components in con.model_parameters.items():
+            self.set_premix(components, etag, ptag)
+
+    def set_premix(self, components: list[tuple], etag: str, ptag: str):
+        mkey = self.nset(PreMixNode(dst=ptag, src="", etag=etag))
+        for idx, ct in enumerate(components):
+            ckey = self.nset(CompNode(dst=mkey, src="", idx=idx))
+            self.nset(PosCompNode(dst=ckey, src="", x=torch.Tensor(ct[0])))
+            self.nset(RotCompNode(dst=ckey, src="", x=torch.Tensor(ct[1])))
+            self.nset(SteCompNode(dst=ckey, src="", x=torch.Tensor(ct[2])))
+
+    def set_postmix(self, components: list[tuple], etag: str, ptag: str):
+        mkey = self.nset(PostMixNode(dst=ptag, src=""))
+        for idx, ct in enumerate(components):
+            ckey = self.nset(CompNode(dst=mkey, src="", idx=idx))
+            self.nset(PosCompNode(dst=ckey, src="", x=torch.Tensor(ct[0])))
+            self.nset(RotCompNode(dst=ckey, src="", x=torch.Tensor(ct[1])))
+            self.nset(SteCompNode(dst=ckey, src="", x=torch.Tensor(ct[2])))
+
+    def set_option(
+        self,
+        post: Condition,
+        pre: Condition,
+        agent: Agent.Config,
+        ptag: str,
+    ):
+        values, remaining = self._analyzer.calculate_subgoal(post, pre)
+        if self._analyzer.is_subgoal(values):
+
+            for etag, components in post.model_parameters.items():
+                self.set_postmix(components, etag, ptag)
+
+    def options(self) -> list[tuple[Agent.Config, DCScene]]:
+        values: list[tuple[Agent.Config, DCScene]] = []
+        for option in self._nodes[OptionNode.node].nodes:
+            assert isinstance(option, OptionNode)
+            subgoal = self.assemble_subgoal(option)
+            values.append((option.agent, subgoal))
+        return values
+
+    def assemble_subgoal(self, option: OptionNode) -> DCScene:
+        raise NotImplementedError
+
+    def generate(self, cfgs: Sequence[Agent.Config]) -> "GraphBlueprint":
+        self.flush()
+        agents = [Agent.get(cfg) for cfg in cfgs]
+        for a in agents:
+            for pair in a.conditions:
+                self.set_precondition(pair.pre, pair.label)
+                self.set_option(pair.post, pair.post, a.cfg, pair.label)
+
+        for a, b in permutations(agents, 2):
+            for ac in a.conditions:
+                for bc in b.conditions:
+                    self.set_option(ac.post, bc.pre, a.cfg, ac.label)
+
+        return self
+
     def update_edges(self):
         # 1. Score against goal
         for option in self._nodes[OptionNode.node].nodes:
+            assert isinstance(option, OptionNode)
+            option.
             goal_score = self._compute_score(goal_cond, tdentity, etag)
             if goal_score >= threshold:
                 chosen_dtag = (
@@ -102,90 +173,10 @@ class GraphBlueprint:
             self.nset(SteNode(dtag=chosen_dtag, etag=etag, x=tdentity.ste))
             self.nset(EntityNode(dtag=chosen_dtag, etag=etag))
 
-    def _compute_score(self, cond: Condition, tdentity: TDEntity, etag: str) -> float:
+    def _compute_score(self, cond: Condition, dcentity: DCEntity, etag: str) -> float:
         """Use the condition's score method; assume it returns a dict[etag -> float]."""
-        scores = cond.score(tdentity)  # you'll need to adapt this to a single entity
+        scores = cond.score(dcentity.stacked)
         return scores.get(etag, 0.0)
-
-    def _create_sampled_nodes(self, cond: Condition, etag: str) -> str:
-        """Sample a new latent representation from cond, create nodes, return new tag."""
-        unique_tag = f"sample_{uuid.uuid4().hex[:8]}"
-        # Sample: use cond.models[etag].sample(1) or something similar
-        sample_data = cond.models[etag].sample(1)[0]  # adjust to your shape
-        # Extract pose, rot, state features from sample_data
-        # (You may need to adapt your existing Component creation logic)
-        # Create the component nodes for this new tag
-        # ... (similar to what you do in set_condition)
-        self.nset(PreMixNode(atag=..., etag=etag, dtag=unique_tag))
-        # Also create PosCompNode, RotCompNode, SteCompNode for each component?
-        return unique_tag
-
-    def set_start(self, x: TDScene):
-        self.set_entities(x, "start")
-
-    def set_goal(self, x: TDScene):
-        self.set_entities(x, "goal")
-
-    def set_entities(self, x: TDScene, tag: str):
-        for etag, tde in x.entities():
-            ekey = self.nset(EntityNode(dst=etag, tag=tag))
-            self.nset(PosNode(dst=ekey, x=tde.pos))
-            self.nset(RotNode(dst=ekey, x=tde.rot))
-            self.nset(SteNode(dst=ekey, x=tde.ste))
-
-    def set_precondition(self, con: Condition, ptag: str):
-        for etag, components in con.model_parameters.items():
-            self.set_premix(components, etag, ptag)
-
-    def set_premix(self, components: list[tuple], etag: str, ptag: str):
-        mkey = self.nset(PreMixNode(dst=ptag, etag=etag))
-        for idx, ct in enumerate(components):
-            ckey = self.nset(CompNode(dst=mkey, idx=idx))
-            self.nset(PosCompNode(dst=ckey, x=torch.Tensor(ct[0])))
-            self.nset(RotCompNode(dst=ckey, x=torch.Tensor(ct[1])))
-            self.nset(SteCompNode(dst=ckey, x=torch.Tensor(ct[2])))
-
-    def set_postmix(self, components: list[tuple], etag: str, ptag: str):
-        mkey = self.nset(PostMixNode(dst=ptag, etag=etag))
-        for idx, ct in enumerate(components):
-            ckey = self.nset(CompNode(dst=mkey, idx=idx))
-            self.nset(PosCompNode(dst=ckey, x=torch.Tensor(ct[0])))
-            self.nset(RotCompNode(dst=ckey, x=torch.Tensor(ct[1])))
-            self.nset(SteCompNode(dst=ckey, x=torch.Tensor(ct[2])))
-
-    def set_option(
-        self,
-        post: Condition,
-        pre: Condition,
-        agent: Agent.Config,
-        ptag: str,
-    ):
-        values, remaining = self._analyzer.calculate_subgoal(post, pre)
-        if self._analyzer.is_subgoal(values):
-
-            for etag, components in post.model_parameters.items():
-                self.set_postmix(components, etag, ptag)
-
-    def options(self) -> list[tuple[Agent.Config, TDScene, TDScene]]:
-        raise NotImplementedError
-
-    def assemble_subgoal(self) -> TDScene:
-        raise NotImplementedError
-
-    def generate(self, cfgs: Sequence[Agent.Config]) -> "GraphBlueprint":
-        self.flush()
-        agents = [Agent.get(cfg) for cfg in cfgs]
-        for a in agents:
-            for pair in a.conditions:
-                self.set_precondition(pair.pre, pair.label)
-                self.set_option(pair.post, pair.post, a.cfg, pair.label)
-
-        for a, b in permutations(agents, 2):
-            for ac in a.conditions:
-                for bc in b.conditions:
-                    self.set_option(ac.post, bc.pre, a.cfg, ac.label)
-
-        return self
 
 
 # Entity Nodes need to be updated

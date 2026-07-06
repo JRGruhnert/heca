@@ -24,8 +24,9 @@ from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
+from heca.misc.dc import DCScene
 from heca.misc.entity import Mobility
-from heca.misc.td import TDImage, TDScene, empty_bs
+from heca.misc.td import TDImage
 from heca.misc import logger
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene
@@ -111,7 +112,7 @@ class TapasAgent(ExpertAgent):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def act(self, x: TDScene, y: TDScene) -> tuple[TDScene, AgentFeedback]:
+    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.policy.reset_episode()
         xt = self.tapas_td(x, y)
         if self.cfg.policy.return_full_batch:
@@ -147,7 +148,7 @@ class TapasAgent(ExpertAgent):
             terminal=truncated,
         )
 
-    def make_scene(self, scene: TDScene, image: TDImage):
+    def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
         if self.cfg.use_gt:
             return scene
         else:
@@ -214,13 +215,13 @@ class TapasAgent(ExpertAgent):
         assert isinstance(temp, Demos)
         return temp
 
-    def tapas_td(self, td_obs: TDScene, td_goal: TDScene) -> TensorDict:
-        action = td_obs.extras["action"]
-        reward = td_obs.extras["reward"]
-        joint_pos = td_obs.extras["joint_pos"]
-        joint_vel = td_obs.extras["joint_vel"]
-        ee_state = td_obs["ee"].ste
-        ee_pose = torch.cat((td_obs["ee"].pos, td_obs["ee"].rot), dim=-1)
+    def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
+        action = dc_obs.extras["action"]
+        reward = dc_obs.extras["reward"]
+        joint_pos = dc_obs.extras["joint_pos"]
+        joint_vel = dc_obs.extras["joint_vel"]
+        ee_state = dc_obs.ee.tste
+        ee_pose = torch.cat((dc_obs.ee.tpos, dc_obs.ee.trot), dim=-1)
 
         # camera_obs = self.image_tensors(obs)
         # multicam_obs = dict_to_tensordict(
@@ -229,8 +230,8 @@ class TapasAgent(ExpertAgent):
         poses = {
             entity.cfg.label: torch.cat(
                 [
-                    td_obs[entity.cfg.label].pos,
-                    td_obs[entity.cfg.label].rot,
+                    dc_obs[entity.cfg.label].tpos,
+                    dc_obs[entity.cfg.label].trot,
                 ],
                 dim=-1,
             )
@@ -238,7 +239,7 @@ class TapasAgent(ExpertAgent):
         }
 
         states = {
-            entity.cfg.label: td_obs[entity.cfg.label].ste
+            entity.cfg.label: dc_obs[entity.cfg.label].tste
             for entity in self.scene.entities
         }
 
@@ -246,15 +247,15 @@ class TapasAgent(ExpertAgent):
             # This adds target frames for mobile entities.
             # Later can be used to set target for the tapas model
             if entity.cfg.mobility == Mobility.FREE:
-                pos = td_goal[entity.cfg.label].pos
-                rot = td_goal[entity.cfg.label].rot
-                state = td_goal[entity.cfg.label].ste
+                pos = dc_goal[entity.cfg.label].tpos
+                rot = dc_goal[entity.cfg.label].trot
+                state = dc_goal[entity.cfg.label].tste
                 pose = torch.cat((pos, rot), dim=-1)
                 poses[f"{entity.cfg.label}_target"] = pose
                 states[f"{entity.cfg.label}_target"] = state
 
-        gee_state = td_goal["ee"].ste
-        gee_pose = torch.cat((td_goal["ee"].pos, td_goal["ee"].rot), dim=-1)
+        gee_state = dc_goal.ee.tste
+        gee_pose = torch.cat((dc_goal.ee.tpos, dc_goal.ee.trot), dim=-1)
 
         poses[f"ee_target"] = gee_pose
         states[f"ee_target"] = gee_state
@@ -272,7 +273,7 @@ class TapasAgent(ExpertAgent):
             object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
-            batch_size=empty_bs,
+            batch_size=torch.Size([]),
         )
 
     @property
@@ -327,17 +328,17 @@ class TapasAgent(ExpertAgent):
         )
         for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
             if self.cfg.use_gt:
-                stacked = self.tdscenes_to_tdtapas(demo_scenes)
+                stacked = self.dcscenes_to_tdtapas(demo_scenes)
             else:
-                demo_extracted: list[TDScene] = []
+                demo_extracted: list[DCScene] = []
                 for td_img in demo_images:
                     extracted = self.from_image(td_img)
                     demo_extracted.append(extracted)
-                stacked = self.tdscenes_to_tdtapas(demo_extracted)
+                stacked = self.dcscenes_to_tdtapas(demo_extracted)
             observations.append(stacked)
         return observations
 
-    def tdscenes_to_tdtapas(self, scenes: list[TDScene]) -> list[TensorDict]:
+    def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> list[TensorDict]:
         obs: list[TensorDict] = []
         td_goal = scenes[-1]
         for td_scene in scenes:
@@ -348,12 +349,9 @@ class TapasAgent(ExpertAgent):
         assert isinstance(stacked_obs, SceneObservation)
         return obs
 
-    def collect_entity_data(self, scenes: list[TDScene], key: str) -> np.ndarray:
-        pos = torch.stack([s[key].pos for s in scenes]).numpy()
-        rot = torch.stack([s[key].rot for s in scenes]).numpy()
-        state = torch.stack([s[key].ste for s in scenes]).numpy()
-
-        if state.ndim == 2:
-            state = np.argmax(state, axis=1)
+    def collect_entity_data(self, scenes: list[DCScene], key: str) -> np.ndarray:
+        pos = np.stack([s[key].pos for s in scenes])
+        rot = np.stack([s[key].rot for s in scenes])
+        state = np.stack([s[key].ste for s in scenes])
 
         return np.concatenate((pos, rot, state[:, None]), axis=1)

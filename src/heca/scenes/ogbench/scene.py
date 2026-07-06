@@ -8,6 +8,7 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
+from heca.misc.dc import DCEntity, DCScene
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
 from heca.misc.td import (
@@ -152,8 +153,7 @@ class OGBenchScene(Scene):
         return Entity.get(config)
 
     def to_dc_scene(self, obs: dict) -> DCScene:
-        pos, rot, state = self.get_ee(obs)
-        td_entities: dict[str, TDEntity] = {}
+        dc_entities: dict[str, DCEntity] = {}
         for entity in self.entities:
             if entity.cfg.label in [
                 "button_0",
@@ -164,23 +164,14 @@ class OGBenchScene(Scene):
                 e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
-            e_state = obs[f"privileged_{entity.cfg.label}_state"]
-            td_abs, td_rel = make_abs_and_rel_td_entity(
-                position=torch.tensor(e_pos, dtype=torch.float32),
-                rotation=torch.tensor(e_rot, dtype=torch.float32),
-                state=entity.state.one_hot_from_idx(e_state),
-                ee_pos=pos,
-                ee_rot=rot,
-            )
-            td_entities[entity.cfg.label] = td_abs
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["ee"] = TDEntity(
-            pos=pos,
-            rot=rot,
-            ste=state,
-        )
+            e_ste = obs[f"privileged_{entity.cfg.label}_state"]
+            e_soh = entity.state.one_hot_from_idx_dc(e_ste)
+
+            dc_entities[entity.cfg.label] = DCEntity(e_pos, e_rot, e_ste, e_soh)
+        pos, rot, ste, soh = self.get_ee_dc(obs)
+        ee = DCEntity(pos, rot, ste, soh)
         extras = self.get_extras(obs)
-        return TDScene(td_entities, extras=extras)
+        return DCScene(ee, dc_entities, extras=extras)
 
     def to_td_scene(self, obs: dict) -> TDScene:
         pos, rot, state = self.get_ee(obs)
@@ -275,8 +266,8 @@ class OGBenchScene(Scene):
     def sample_task(
         self,
     ) -> tuple[
-        tuple[TDScene, TDImage],
-        tuple[TDScene, TDImage],
+        tuple[DCScene, TDImage],
+        tuple[DCScene, TDImage],
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
@@ -288,8 +279,8 @@ class OGBenchScene(Scene):
         return (s_scene, s_image), (g_scene, g_image)
 
     def sample_task_vis(self) -> tuple[
-        tuple[TDScene, TDImage, np.ndarray],
-        tuple[TDScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
     ]:
         ob, info = self.env.reset(options=self.reset_options)
         obs, goal = self.to_internal(ob, info)
@@ -310,6 +301,19 @@ class OGBenchScene(Scene):
         #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
         # )
         return pos, rot, state
+
+    def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        pos = obs["proprio_effector_pos"]
+        # wxyz = obs["proprio/effector_quat"]
+        yaw = obs["proprio_effector_yaw"].item()
+        rot = self.yaw_to_quat(yaw)
+        # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
+        ste_idx = obs["proprio_gripper_state"]
+        ste_oh = self.ee.state.one_hot_from_idx_dc(ste_idx)
+        # print(
+        #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
+        # )
+        return pos, rot, ste_idx, ste_oh
 
     def yaw_to_quat(self, yaw: float) -> np.ndarray:
         half_yaw = yaw / 2
@@ -347,14 +351,14 @@ class OGBenchScene(Scene):
         file: h5py.File,
         selections: list[int] | None = None,
         only_conditions: bool = False,
-    ) -> tuple[list[list[TDScene]], list[list[TDImage]]]:
+    ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         demo_indices: np.ndarray = file["demo"][:]  # type: ignore
 
         change_points = np.where(np.diff(demo_indices) != 0)[0] + 1
         starts = np.concatenate([[0], change_points])
         ends = np.concatenate([change_points, [len(demo_indices)]])
 
-        segments_scene: list[list[TDScene]] = []
+        segments_scene: list[list[DCScene]] = []
         segments_image: list[list[TDImage]] = []
         if selections is None:
             selections = list(range(len(starts)))
@@ -363,7 +367,7 @@ class OGBenchScene(Scene):
             start = starts[episode_idx]
             end = ends[episode_idx]
 
-            segment_scene: list[TDScene] = []
+            segment_scene: list[DCScene] = []
             segment_image: list[TDImage] = []
             if only_conditions:
                 indices = [start, end - 1]
@@ -393,9 +397,9 @@ class OGBenchScene(Scene):
                 }
 
                 obs, _ = self.to_internal(image, ob)
-                td_scene, td_image, _ = self.from_internal(obs)
+                dc_scene, td_image, _ = self.from_internal(obs)
 
-                segment_scene.append(td_scene)
+                segment_scene.append(dc_scene)
                 segment_image.append(td_image)
 
             segments_scene.append(segment_scene)

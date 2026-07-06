@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
 from heca.conditions.pair import ConditionPair
-from heca.misc.td import TDScene
+from heca.misc.dc import DCScene
 from heca.misc.base import Persistable
 
 
@@ -30,7 +30,7 @@ class Agent(Persistable, abc.ABC):
         self.cfg = cfg
 
     @abc.abstractmethod
-    def act(self, x: TDScene, y: TDScene) -> TDScene:
+    def act(self, x: DCScene, y: DCScene) -> DCScene:
         raise NotImplementedError
 
     @cached_property

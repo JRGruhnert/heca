@@ -6,7 +6,6 @@ import numpy as np
 from stepmix import StepMix
 
 from heca.misc.quaternion import Quaternion
-from heca.misc.td import TDEntity, TDScene
 
 # Condition saves raw datapoints per entity
 

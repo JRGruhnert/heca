@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
+from heca.misc.dc import DCEntity
 from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.misc import logger
 from heca.misc.td import TDEntity
@@ -43,8 +44,8 @@ class HecaConditionPlotter(HecaPlotter):
             label = entity.cfg.label
             self.entity3d.set_entity(
                 entity=entity,
-                current=self.make_td_entity(label, agent.precons),
-                goal=self.make_td_entity(label, agent.postcons),
+                current=self.make_dc_entity(label, agent.precons),
+                goal=self.make_dc_entity(label, agent.postcons),
                 different=True,  # Makes no sense otherwise
                 solved=False,  # We dont support that currently
             )
@@ -52,9 +53,9 @@ class HecaConditionPlotter(HecaPlotter):
         self.entity3d.show_areas(self.cfg.area)
         self.entity3d.finish()
 
-    def make_td_entity(
+    def make_dc_entity(
         self, label: str, conditions: dict[str, PropertyCondition]
-    ) -> TDEntity:
+    ) -> DCEntity:
 
         if label in ["red", "blue", "pink"]:
             label = f"block_{label}"
@@ -72,14 +73,10 @@ class HecaConditionPlotter(HecaPlotter):
                 )
                 break
         if not skip:
-            return TDEntity(
+            return DCEntity(
                 pos=conditions[f"{label}_position"].value,
                 rot=conditions[f"{label}_rotation"].value,
                 ste=conditions[f"{label}_scalar"].value,
             )
         else:
-            return TDEntity(
-                pos=torch.zeros(3),
-                rot=torch.tensor([0.0, 0.0, 0.0, 1.0]),
-                ste=torch.zeros(1),
-            )
+            return DCEntity.empty()
