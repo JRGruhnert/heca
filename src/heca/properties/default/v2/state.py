@@ -44,6 +44,11 @@ class StateProperty(Property):
         one_hot[index] = 1.0
         return one_hot
 
+    def make_idx(self, label: str) -> int:
+        assert label is not None, "Label cannot be None."
+        assert label in self.cfg.values, "Label must be in state values."
+        return list(self.cfg.values).index(label)
+
     def one_hot_from_idx(self, idx: int) -> torch.Tensor:
         assert 0 <= idx < len(self.cfg.values), "Index out of bounds."
         one_hot = self.make_zeros()

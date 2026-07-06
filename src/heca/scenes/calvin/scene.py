@@ -3,16 +3,12 @@ from functools import cached_property
 import torch
 import numpy as np
 from dataclasses import dataclass, field
+from heca.misc.dc import DCEntity, DCScene
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
 from heca.misc.state import State
 from heca.misc.area import Area
-from heca.misc.td import (
-    TDEntity,
-    TDImage,
-    TDScene,
-    make_abs_and_rel_td_entity,
-)
+from heca.misc.td import TDEntity, TDImage, TDScene, make_abs_and_rel_td_entity
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -83,7 +79,7 @@ class CalvinScene(Scene):
     def close(self):
         self.env.close()
 
-    def reset(self) -> tuple[TDScene, TDImage, np.ndarray]:
+    def reset(self) -> tuple[DCScene, TDImage, np.ndarray]:
         obs = self.env.reset()[0]
         return self.from_internal(obs)
 
@@ -93,8 +89,8 @@ class CalvinScene(Scene):
     def sample_task(
         self,
     ) -> tuple[
-        tuple[TDScene, TDImage],
-        tuple[TDScene, TDImage],
+        tuple[DCScene, TDImage],
+        tuple[DCScene, TDImage],
     ]:
         s_scene, s_images, _ = self.reset()
         g_scene, g_images, _ = self.reset()
@@ -103,8 +99,8 @@ class CalvinScene(Scene):
     def sample_task_vis(
         self,
     ) -> tuple[
-        tuple[TDScene, TDImage, np.ndarray],
-        tuple[TDScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
     ]:
         return self.reset(), self.reset()
 
@@ -113,6 +109,7 @@ class CalvinScene(Scene):
         ents = [
             Entity.Config(
                 label="drawer",
+                scene="calvin",
                 question="Is the wooden, brown drawer under the wooden, brown table:",
                 answers={"open", "closed"},
                 states={"open", "closed"},
@@ -120,6 +117,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="slider",
+                scene="calvin",
                 question="Is the horizontal sliding door, with a grey handle, in the back of the table:",
                 answers={"moved to the left", "moved to the right"},
                 states={"left", "right"},
@@ -127,6 +125,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="button",
+                scene="calvin",
                 question="Is the black button:",
                 answers={"pressed", "not pressed"},
                 states={"pressed", "not pressed"},
@@ -134,6 +133,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="switch",
+                scene="calvin",
                 question="Is the vertical switch:",
                 answers={"up", "down"},
                 states={"on", "off"},
@@ -141,6 +141,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="light",
+                scene="calvin",
                 question="Is the rectangular shaped light on the top left:",
                 answers={"green ", "white"},
                 states={"on", "off"},
@@ -148,6 +149,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="red_block",
+                scene="calvin",
                 question="Is the red block:",
                 answers={
                     "visible and in the brown, wooden drawer",
@@ -158,8 +160,9 @@ class CalvinScene(Scene):
                 mobility=Mobility.FREE,
             ),
             Entity.Config(
-                label="Is the pink block:",
-                question="",
+                label="pink_block:",
+                scene="calvin",
+                question="Is the pink block:",
                 answers={
                     "visible and in the brown, wooden drawer",
                     "visible and on the brown, wooden table",
@@ -170,6 +173,7 @@ class CalvinScene(Scene):
             ),
             Entity.Config(
                 label="blue_block",
+                scene="calvin",
                 question="Is the blue block:",
                 answers={
                     "visible and in the brown, wooden drawer",
@@ -186,6 +190,7 @@ class CalvinScene(Scene):
     def ee(self) -> Entity:
         config = Entity.Config(
             label="ee",
+            scene="calvin",
             question="Is the robot arms gripper:",
             answers={"open", "closed"},
             states={"open", "closed"},
@@ -200,6 +205,12 @@ class CalvinScene(Scene):
         rot = torch.tensor(obs.ee_pose[-4:], dtype=torch.float32)
         state = torch.tensor([obs.ee_state], dtype=torch.float32)
         return pos, rot, state
+
+    def get_dc_ee_values(
+        self, obs: CalvinEnvObservation
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        soh = self.ee.state.one_hot_from_idx_dc(obs.ee_state.item())
+        return obs.ee_pose[:3], obs.ee_pose[-4:], obs.ee_state, soh
 
     def is_tresholded(
         self, value: np.ndarray, target: float, threshold: float = 0.05
@@ -241,6 +252,41 @@ class CalvinScene(Scene):
         else:
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
 
+    def dc_state(self, entity: Entity, state: np.ndarray) -> int:
+        # Custom mehthod to parse states since calvin doesnt provide them as we need them.
+        if entity.cfg.label == "drawer":
+            if self.is_tresholded(state, 0.0):
+                return entity.state.make_idx("closed")  # closed
+            elif self.is_tresholded(state, 0.22):
+                return entity.state.make_idx("open")  # open
+            else:
+                raise NotImplementedError
+        elif entity.cfg.label == "slider":
+            if self.is_tresholded(state, 0.0):
+                return entity.state.make_idx("left")  # left
+            elif self.is_tresholded(state, 0.28):
+                return entity.state.make_idx("right")  # right
+            else:
+                raise NotImplementedError
+        elif entity.cfg.label == "button":
+            if self.is_tresholded(state, 0.0):
+                return entity.state.make_idx("released")  # released
+            elif self.is_tresholded(state, 1.0):
+                return entity.state.make_idx("pressed")  # pressed
+            else:
+                raise NotImplementedError
+        elif entity.cfg.label == "light":
+            if self.is_tresholded(state, 0.0):
+                return entity.state.make_idx("off")  # off
+            elif self.is_tresholded(state, 1.0):
+                return entity.state.make_idx("on")  # on
+            else:
+                raise NotImplementedError
+        elif entity.cfg.label in {"red_block", "blue_block", "pink_block"}:
+            raise NotImplementedError
+        else:
+            raise ValueError(f"Unknown entity label: {entity.cfg.label}")
+
     def to_td_scene(self, obs: CalvinEnvObservation) -> TDScene:
         pos, rot, state = self.get_ee(obs)
         td_entities: dict[str, TDEntity] = {}
@@ -266,6 +312,24 @@ class CalvinScene(Scene):
             ste=state,
         )
         return TDScene(td_entities)
+
+    def to_dc_scene(self, obs: CalvinEnvObservation) -> DCScene:
+        pos, rot, ste, soh = self.get_dc_ee_values(obs)
+        td_entities: dict[str, DCEntity] = {}
+        for entity in self.entities:
+            e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
+            e_ste = obs.object_states.get(f"base__{entity.cfg.label}", None)
+            assert e_pose is not None, f"Missing pose for entity {entity.cfg.label}"
+            assert e_ste is not None, f"Missing state for entity {entity.cfg.label}"
+            e_pos = e_pose[:3]
+            e_rot = e_pose[-4]
+            e_ste = self.dc_state(entity, e_ste)
+            e_soh = entity.state.one_hot_from_idx_dc(e_ste)
+            td_entities[entity.cfg.label] = DCEntity(
+                e_pos, e_rot, np.ndarray(e_ste), e_soh
+            )
+        ee = DCEntity(pos=pos, rot=rot, ste=ste, soh=soh)
+        return DCScene(ee, td_entities)
 
     def to_np_image(self, obs: CalvinEnvObservation) -> np.ndarray:
         return obs.rgb["front"]

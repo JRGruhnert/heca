@@ -12,6 +12,7 @@ from heca.graphs.nodes import *
 from heca.graphs.sets import EdgeSet, NodeSet
 from heca.misc.dc import DCEntity, DCScene
 from heca.conditions.condition import Condition
+from heca.misc.entity import Entity
 
 T = TypeVar("T", bound=GraphNode)
 
@@ -31,6 +32,7 @@ class GraphBlueprint:
         self._edge_staged: set[str] = set()
         self._start: DCScene = DCScene.empty()
         self._goal: DCScene = DCScene.empty()
+        self._entities: set[Entity] = set()
 
     def flush(self) -> "GraphBlueprint":
         self._nodes = {}
@@ -67,6 +69,22 @@ class GraphBlueprint:
                 data[(src, rel, dst)].edge_attr = es.edge_attr
         return data
 
+    def generate(self, cfgs: Sequence[Agent.Config], entities: set[Entity]) -> "GraphBlueprint":
+        self.flush()
+        self._entities = entities
+        agents = [Agent.get(cfg) for cfg in cfgs]
+        for a in agents:
+            for ac in a.conditions:
+                self.set_precondition(ac.pre, ac.label)
+                self.set_option(ac.label, a.cfg, ac.post)
+
+        for a, b in permutations(agents, 2):
+            for ac in a.conditions:
+                for bc in b.conditions:
+                    self.set_option(ac.label, a.cfg, ac.post, bc.pre)
+
+        return self
+
     def nset(self, node: GraphNode) -> str:
         if node.node not in self._nodes:
             self._nodes[node.node] = NodeSet(nodes=[])
@@ -93,16 +111,16 @@ class GraphBlueprint:
         for etag, components in con.model_parameters.items():
             self.set_premix(components, etag, ptag)
 
-    def set_premix(self, components: list[tuple], etag: str, ptag: str):
-        mkey = self.nset(PreMixNode(dst=ptag, src="", etag=etag))
+    def set_premix(self, components: list[tuple], etag: str, otag: str):
+        mkey = self.nset(PreMixNode(dst=otag, src="", etag=etag))
         for idx, ct in enumerate(components):
             ckey = self.nset(CompNode(dst=mkey, src="", idx=idx))
             self.nset(PosCompNode(dst=ckey, src="", x=torch.Tensor(ct[0])))
             self.nset(RotCompNode(dst=ckey, src="", x=torch.Tensor(ct[1])))
             self.nset(SteCompNode(dst=ckey, src="", x=torch.Tensor(ct[2])))
 
-    def set_postmix(self, components: list[tuple], etag: str, ptag: str):
-        mkey = self.nset(PostMixNode(dst=ptag, src=""))
+    def set_postmix(self, components: list[tuple], etag: str, otag: str):
+        mkey = self.nset(PostMixNode(dst=otag, src="", etag=etag))
         for idx, ct in enumerate(components):
             ckey = self.nset(CompNode(dst=mkey, src="", idx=idx))
             self.nset(PosCompNode(dst=ckey, src="", x=torch.Tensor(ct[0])))
@@ -111,16 +129,17 @@ class GraphBlueprint:
 
     def set_option(
         self,
-        post: Condition,
-        pre: Condition,
+        otag: str,
         agent: Agent.Config,
-        ptag: str,
+        post: Condition,
+        pre: Condition | None = None,
     ):
-        values, remaining = self._analyzer.calculate_subgoal(post, pre)
-        if self._analyzer.is_subgoal(values):
+        if pre is not None:
+            values, remaining = self._analyzer.calculate_subgoal(post, pre)
+            if self._analyzer.is_subgoal(values):
 
-            for etag, components in post.model_parameters.items():
-                self.set_postmix(components, etag, ptag)
+                for etag, components in post.model_parameters.items():
+                    self.set_postmix(components, etag, otag)
 
     def options(self) -> list[tuple[Agent.Config, DCScene]]:
         values: list[tuple[Agent.Config, DCScene]] = []
@@ -132,21 +151,6 @@ class GraphBlueprint:
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
         raise NotImplementedError
-
-    def generate(self, cfgs: Sequence[Agent.Config]) -> "GraphBlueprint":
-        self.flush()
-        agents = [Agent.get(cfg) for cfg in cfgs]
-        for a in agents:
-            for pair in a.conditions:
-                self.set_precondition(pair.pre, pair.label)
-                self.set_option(pair.post, pair.post, a.cfg, pair.label)
-
-        for a, b in permutations(agents, 2):
-            for ac in a.conditions:
-                for bc in b.conditions:
-                    self.set_option(ac.post, bc.pre, a.cfg, ac.label)
-
-        return self
 
     def update_edges(self):
         # 1. Score against goal

@@ -5,6 +5,7 @@ from functools import cached_property
 from heca.conditions.pair import ConditionPair
 from heca.misc.dc import DCScene
 from heca.misc.base import Persistable
+from heca.misc.entity import Entity
 
 
 class EESate(Enum):
@@ -34,7 +35,7 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError
 
     @cached_property
-    def elabels(self) -> set[str]:
+    def entities(self) -> set[Entity]:
         raise NotImplementedError
 
     @cached_property

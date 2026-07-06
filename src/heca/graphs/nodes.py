@@ -118,6 +118,7 @@ class PreMixNode(GraphNode):
 
 @dataclass(frozen=True)
 class PostMixNode(GraphNode):
+    etag: str
     x: Optional[torch.Tensor] = None
     node: str = "postmix"
 

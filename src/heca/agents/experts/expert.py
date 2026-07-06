@@ -1,10 +1,12 @@
 import abc
 from dataclasses import dataclass
+from functools import cached_property
 
 import numpy as np
 import torch
 from heca.agents.agent import Agent, EESate
 from heca.misc.dc import DCScene, DCEntity
+from heca.misc.entity import Entity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
@@ -35,6 +37,10 @@ class ExpertAgent(Agent, abc.ABC):
 
     def required_scenes(self) -> list[Scene.Config]:
         return [self.cfg.scene]
+
+    @cached_property
+    def entities(self) -> list[Entity]:
+        return self.scene.entities
 
     def from_image(self, image: TDImage) -> DCScene:
         kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)

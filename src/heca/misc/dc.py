@@ -31,13 +31,6 @@ class DCEntity:
     def tsoh(self) -> torch.Tensor:
         return torch.Tensor(self.tsoh)
 
-    @property
-    def stacked(self) -> np.ndarray:
-        return np.concatenate(
-            (self.pos, self.rot, self.ste[:, None]),
-            axis=1,
-        )
-
     @classmethod
     def empty(cls) -> "DCEntity":
         return cls(
@@ -61,7 +54,7 @@ class DCScene:
         self._entities = entities
         self._extras = extras if extras is not None else {}
 
-    def __getitem__(self, key: str) -> DCEntity:
+    def get(self, key: str) -> DCEntity:
         if key not in self._entities:
             raise KeyError(f"Entity {key} not found in TDScene")
         return self._entities[key]

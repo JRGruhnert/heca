@@ -90,10 +90,11 @@ class OGBenchScene(Scene):
         """)
 
     @property
-    def entities(self) -> list[Entity]:
+    def entities(self) -> set[Entity]:
         ents = [
             Entity.Config(
                 label="drawer_handle",
+                scene="ogbench",
                 question="What describes the drawer the best?",
                 answers={"It is open", "It is closed"},
                 states={"open", "closed"},  # 0, 1
@@ -101,6 +102,7 @@ class OGBenchScene(Scene):
             ),
             Entity.Config(
                 label="window_handle",
+                scene="ogbench",
                 question="What describes the sliding window the best?",
                 answers={
                     "it is open and therefore moved to the front",
@@ -111,6 +113,7 @@ class OGBenchScene(Scene):
             ),
             Entity.Config(
                 label="button_0",
+                scene="ogbench",
                 question="What is the color of the left button?",
                 answers={"white", "red"},
                 states={"free", "locked"},  # 0, 1
@@ -118,6 +121,7 @@ class OGBenchScene(Scene):
             ),
             Entity.Config(
                 label="button_1",
+                scene="ogbench",
                 question="What is the color of the right button?",
                 answers={"white", "red"},
                 states={"free", "locked"},  # 0, 1
@@ -125,6 +129,7 @@ class OGBenchScene(Scene):
             ),
             Entity.Config(
                 label="block_0",
+                scene="ogbench",
                 question="Where is the red cube in the scene?",
                 answers={
                     "inside the drawer",
@@ -135,12 +140,13 @@ class OGBenchScene(Scene):
                 mobility=Mobility.FREE,
             ),
         ]
-        return [Entity.get(e) for e in ents]
+        return set([Entity.get(e) for e in ents])
 
     @property
     def ee(self) -> Entity:
         config = Entity.Config(
             label="ee",
+            scene="ogbench",
             question="Where is the red cube in the scene?",
             answers={
                 "on the floor",

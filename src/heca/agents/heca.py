@@ -13,6 +13,7 @@ from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import GraphBlueprint
 from heca.heca_gnn.network import Network
 from heca.misc.dc import DCScene
+from heca.misc.entity import Entity
 from heca.misc.ppo import PPO
 
 
@@ -57,9 +58,13 @@ class Heca(Agent):
                 ),
             )
 
-        self.evaluator = Evaluator.get(cfg.evaluator).setup(self.conditions)
+        self.evaluator = Evaluator.get(cfg.evaluator).setup(
+            self.conditions, self.entities
+        )
         self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
-        self.blueprint = GraphBlueprint(cfg.threshold).generate(self.cfg.agents)
+        self.blueprint = GraphBlueprint(cfg.threshold).generate(
+            self.cfg.agents, self.entities
+        )
 
     def predict(self) -> tuple[Agent.Config, DCScene]:
         data = self.blueprint.graph()
@@ -102,11 +107,18 @@ class Heca(Agent):
 
     @cached_property
     def elabels(self) -> set[str]:
-        labels = set()
+        values = set()
         for cfg in self.cfg.agents:
             for con in Agent.get(cfg).conditions:
-                labels.union(con.elabels)
-        return labels
+                values.union(con.elabels)
+        return values
+
+    @cached_property
+    def entities(self) -> set[Entity]:
+        values = set()
+        for cfg in self.cfg.agents:
+            values.union(Agent.get(cfg).entities)
+        return values
 
     @cached_property
     def conditions(self) -> list[ConditionPair]:

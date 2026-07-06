@@ -3,6 +3,7 @@ from heca.agents.agent import AgentFeedback
 from heca.conditions.pair import ConditionPair
 from heca.misc.base import Configurable
 from heca.misc.dc import DCScene
+from heca.misc.entity import Entity
 
 
 class Evaluator(Configurable):
@@ -23,6 +24,7 @@ class Evaluator(Configurable):
         self.progress: float = 0.0
         self.current_step: int = 0
         self.conditions: list[ConditionPair] = []
+        self.entities: set[Entity] = set()
 
     def reset(self, y: DCScene):
         self.y = y
@@ -54,15 +56,26 @@ class Evaluator(Configurable):
         self.current_step += 1
         return AgentFeedback(reward=reward, done=done, terminal=False)
 
-    def setup(self, conditions: list[ConditionPair]) -> "Evaluator":
+    def setup(
+        self,
+        conditions: list[ConditionPair],
+        entities: set[Entity],
+    ) -> "Evaluator":
         self.conditions = conditions
+        self.entities = entities
         return self
 
     def distance(self, x: DCScene, y: DCScene) -> float:
-        return 0.0
+        sum: float = 0.0
+        for e in self.entities:
+            sum += e.distance(x.get(e.cfg.label), y.get(e.cfg.label))
+        return sum
 
     def evaluate(self, x: DCScene, y: DCScene) -> bool:
-        return False
+        for e in self.entities:
+            if not e.evaluate(x.get(e.cfg.label), y.get(e.cfg.label)):
+                return False
+        return True
 
     def task_score(self, x: DCScene, y: DCScene) -> float:
         # filter out ones that are already solved
