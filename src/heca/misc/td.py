@@ -56,16 +56,6 @@ class TDScene(TensorDict):
                 yield key, cast(TDEntity, value)
 
 
-class TDAgentCon(TensorDict):
-    def __init__(self, entities: dict[str, TDEntity]):
-        super().__init__(entities, batch_size=empty_bs)
-
-    def __getitem__(self, key: str) -> TDEntity:
-        if key not in self.keys():
-            raise KeyError(f"Entity {key} not found in TDAgentCon")
-        return cast(TDEntity, super().__getitem__(key))
-
-
 class TDImage(TensorDict):
     def __init__(
         self,

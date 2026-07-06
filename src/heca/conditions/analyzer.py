@@ -4,20 +4,14 @@ import matplotlib.pyplot as plt
 
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
-from stepmix import StepMix
 
 
 class ConditionAnalyzer:
-    def __init__(
-        self,
-        merge_threshold: float,
-        subgoal_threshold: float,
-    ):
-        self.merge_ths = merge_threshold
-        self.subgoal_ths = subgoal_threshold
+    def __init__(self, threshold: float):
+        self.threshold = threshold
 
     def mcheck(self, mat: np.ndarray):
-        return np.all(mat >= self.merge_ths)
+        return np.all(mat >= self.threshold)
 
     def evaluate_merge(self, sim_rating: dict[str, np.ndarray]) -> bool:
         mat = np.stack(list(sim_rating.values()), axis=0)
@@ -39,34 +33,24 @@ class ConditionAnalyzer:
             return True  # pre1 <= pre0 and pre1 <= post0
         return False
 
-    def evaluate_subgoal(self, sim_rating: dict[str, np.ndarray]) -> np.ndarray:
-        raise NotImplementedError
+    def is_subgoal(self, values: dict[str, tuple[float, np.ndarray]]) -> bool:
+        if len(values) == 0:
+            return False  # No matching keys so no option at all
+        for score, _ in values.values():
+            if score < self.threshold:
+                return False
+        return True
 
     def calculate_subgoal(
-        self,
-        post: Condition,
-        pre: Condition,
-        keys: set[str],
-    ) -> dict[str, tuple[float, np.ndarray]]:
+        self, post: Condition, pre: Condition
+    ) -> tuple[dict[str, tuple[float, np.ndarray]], set[str]]:
         values = {}
-        for key in keys:
-            inpost = key in post.elabels
-            inpre = key in pre.elabels
-            if not inpost:
-                score = 0.0
-            elif not inpre:
-                score = 0.0
-                pass
-                # not in pre -> either set as goal if goal in post distibution or current or sample own
-                # 1. goal
-                # 2. current
-                # 3. sample from pre
-            else:
-                # 1. Pre sample
-                # 2. Post sample
-                score = self.calculate_score(post, pre, key)
-                value = self.best_sample(post, pre, key)
-        return values
+        leftover = post.elabels.difference(pre.elabels)
+        for key in post.elabels.intersection(pre.elabels):
+            score = self.calculate_score(post, pre, key)
+            value = self.best_sample(post, pre, key)
+            values[key] = (score, value)
+        return values, leftover
 
     def best_sample(self, post: Condition, pre: Condition, key: str):
 

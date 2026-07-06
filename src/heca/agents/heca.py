@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from itertools import product
 from typing import Sequence
 import torch
 from torch.distributions import Categorical
@@ -34,8 +33,7 @@ class Heca(Agent):
         label: str = "heca"
         visualize: bool = True
         n_samples: int = 1000
-        merge_threshold: float = 0.75
-        subgoal_threshold: float = 0.5
+        threshold: float = 0.75
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -60,11 +58,8 @@ class Heca(Agent):
             )
 
         self.evaluator = Evaluator.get(cfg.evaluator).setup(self.conditions)
-        self.analyzer = ConditionAnalyzer(
-            merge_threshold=cfg.merge_threshold,
-            subgoal_threshold=cfg.subgoal_threshold,
-        )
-        self.blueprint = self.generate_blueprint()
+        self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
+        self.blueprint = GraphBlueprint(cfg.threshold).generate(self.cfg.agents)
 
     def predict(self) -> tuple[Agent.Config, TDScene, TDScene]:
         data = self.blueprint.graph()
@@ -85,7 +80,7 @@ class Heca(Agent):
         return options[action]
 
     def step(self, x: TDScene) -> tuple[TDScene, AgentFeedback]:
-        self.blueprint.set_entity(x, tag="start")
+        self.blueprint.set_start(x)
         sa, sx, sy = self.predict()
         z = Agent.get(sa).act(sx, sy)
         fb = self.evaluator.step(z)
@@ -95,83 +90,23 @@ class Heca(Agent):
         return z, fb
 
     def act(self, x: TDScene, y: TDScene) -> TDScene:
+        self.blueprint.set_goal(y)
         self.evaluator.reset(y)
-        self.blueprint.set_entity(x, tag="goal")
         z, fb = self.step(x)
         while not fb.terminal:
             z, fb = self.step(z)
         return z
 
-    def generate_blueprint(self) -> GraphBlueprint:
-        gbp = GraphBlueprint.empty()
-        agents = [Agent.get(cfg) for cfg in agent_cfgs]
-        current: list[str] = list(self.elabels)
-        goal: list[str] = list(self.elabels)
-        precons: list[tuple[str, str]] = [
-            (label, condition.label)
-            for agent in agents
-            for condition in agent.conditions
-            for label in condition.elabels
-        ]
-
-        postcons: list[tuple[str, str]] = [
-            (label, condition.label)
-            for agent in agents
-            for condition in agent.conditions
-            for label in condition.elabels
-        ]
-        options: list[tuple[str, Agent.Config]] = [
-            (condition.label, agent.cfg)
-            for agent in agents
-            for condition in agent.conditions
-        ]
-
-        for a, b in product(agents, repeat=2):
-            for ac in a.conditions:
-                for bc in b.conditions:
-
-                    values = self.analyzer.calculate_subgoal(
-                        ac.post, bc.pre, self.elabels
-                    )
-        # for a in agents:
-        #     tuples = [(cfg, con) for con in Agent.get(cfg).conditions]
-        #     cons.extend(tuples)
-
-        agents = [Agent.get(cfg) for cfg in agent_cfgs]
-        current = [EntityNode(label) for label in self.elabels]
-
-        goal = [GoalNode(label) for label in self.elabels]
-
-        precons = [
-            PreConditionNode(label, condition.label)
-            for agent in agents
-            for condition in agent.conditions
-            for label in condition.elabels
-        ]
-
-        postcons = [
-            PostConditionNode(label, condition.label)
-            for agent in agents
-            for condition in agent.conditions
-            for label in condition.elabels
-        ]
-
-        options = [
-            OptionNode(condition.label, agent.cfg)
-            for agent in agents
-            for condition in agent.conditions
-        ]
-
     def sample(self) -> tuple[TDScene, TDScene]:
         raise NotImplementedError
 
-    @cached_property
-    def elabels(self) -> set[str]:
-        labels = set()
-        for cfg in self.cfg.agents:
-            for con in Agent.get(cfg).conditions:
-                labels.union(con.elabels)
-        return labels
+    # @cached_property
+    # def elabels(self) -> set[str]:
+    #     labels = set()
+    #     for cfg in self.cfg.agents:
+    #         for con in Agent.get(cfg).conditions:
+    #             labels.union(con.elabels)
+    #     return labels
 
     @cached_property
     def conditions(self) -> list[ConditionPair]:
@@ -194,9 +129,12 @@ class Heca(Agent):
                         b_set = sets[j]
                         new_set = a_set | b_set
                         ids = map(str, sorted(new_set))
-                        label = f"cond_pair_{''.join(ids)}"
+                        label = f"{self.cfg.tag}_{''.join(ids)}"
                         new_pair = ConditionPair.merge(
-                            label=label, a=a, b=b, n_samples=self.cfg.n_samples
+                            label=label,
+                            a=a,
+                            b=b,
+                            n_samples=self.cfg.n_samples,
                         )
                         new_pair.plot(path)
                         cons.pop(j)

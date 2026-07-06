@@ -151,6 +151,37 @@ class OGBenchScene(Scene):
         )
         return Entity.get(config)
 
+    def to_dc_scene(self, obs: dict) -> DCScene:
+        pos, rot, state = self.get_ee(obs)
+        td_entities: dict[str, TDEntity] = {}
+        for entity in self.entities:
+            if entity.cfg.label in [
+                "button_0",
+                "button_1",
+            ]:  # hack cause _pos already used
+                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]  # _full"]
+            else:
+                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
+            wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
+            e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
+            e_state = obs[f"privileged_{entity.cfg.label}_state"]
+            td_abs, td_rel = make_abs_and_rel_td_entity(
+                position=torch.tensor(e_pos, dtype=torch.float32),
+                rotation=torch.tensor(e_rot, dtype=torch.float32),
+                state=entity.state.one_hot_from_idx(e_state),
+                ee_pos=pos,
+                ee_rot=rot,
+            )
+            td_entities[entity.cfg.label] = td_abs
+            td_entities[f"{entity.cfg.label}_rel"] = td_rel
+        td_entities["ee"] = TDEntity(
+            pos=pos,
+            rot=rot,
+            ste=state,
+        )
+        extras = self.get_extras(obs)
+        return TDScene(td_entities, extras=extras)
+
     def to_td_scene(self, obs: dict) -> TDScene:
         pos, rot, state = self.get_ee(obs)
         td_entities: dict[str, TDEntity] = {}

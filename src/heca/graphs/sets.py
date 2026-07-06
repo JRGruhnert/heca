@@ -28,7 +28,7 @@ class NodeSet(Generic[T]):
                 feats.append(torch.zeros(dim))
         self.static_x = torch.stack(feats)
 
-    def set(self, node: T):
+    def set(self, node: T) -> bool:
         # Runtime type check: if we already have nodes, the new one must match
         if self.nodes and not isinstance(node, type(self.nodes[0])):
             raise TypeError(
@@ -39,8 +39,9 @@ class NodeSet(Generic[T]):
         for i, existing in enumerate(self.nodes):
             if existing.key == node.key:
                 self.nodes[i] = node
-                return
+                return False
         self.nodes.append(node)
+        return True
 
     def size(self) -> int:
         return len(self.nodes)

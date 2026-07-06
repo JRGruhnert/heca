@@ -26,17 +26,13 @@ class ConditionPair:
 
     @classmethod
     def merge(
-        cls,
-        label: str,
-        a: "ConditionPair",
-        b: "ConditionPair",
-        n_samples: int,
+        cls, label: str, a: "ConditionPair", b: "ConditionPair", n_samples: int
     ) -> "ConditionPair":
         pre_max, post_max = cls.make_max_components(a, b)
         pre_data = cls._merge_data(a.pre.data_raw, b.pre.data_raw)
         post_data = cls._merge_data(a.post.data_raw, b.post.data_raw)
-        pre = Condition(f"{label}_pre", pre_data, pre_max, n_samples)
-        post = Condition(f"{label}_post", post_data, post_max, n_samples)
+        pre = Condition("pre", pre_data, pre_max, n_samples)
+        post = Condition("post", post_data, post_max, n_samples)
         return cls(label, pre, post)
 
     @classmethod

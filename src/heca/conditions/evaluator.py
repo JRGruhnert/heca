@@ -22,6 +22,7 @@ class Evaluator(Configurable):
         self.highscore: float = 0.0
         self.progress: float = 0.0
         self.current_step: int = 0
+        self.conditions: list[ConditionPair] = []
 
     def reset(self, y: TDScene):
         self.y = y
@@ -33,9 +34,9 @@ class Evaluator(Configurable):
         reward = 0.0 + self.cfg.step_penalty
         alltime = self.highscore
         last = self.progress
-        self.progress = MetaEntity.distance(x, self.y, self.e)
+        self.progress = self.distance(x, self.y)
         self.highscore = max(self.highscore, self.progress)
-        done = MetaEntity.evaluate(x, self.y, self.e)
+        done = self.evaluate(x, self.y)
 
         if done:
             reward += self.cfg.success_reward
@@ -54,4 +55,16 @@ class Evaluator(Configurable):
         return AgentFeedback(reward=reward, done=done, terminal=False)
 
     def setup(self, conditions: list[ConditionPair]) -> "Evaluator":
+        self.conditions = conditions
         return self
+
+    def distance(self, x: TDScene, y: TDScene) -> float:
+        return 0.0
+
+    def evaluate(self, x: TDScene, y: TDScene) -> bool:
+        return False
+
+    def task_score(self, x: TDScene, y: TDScene) -> float:
+        # filter out ones that are already solved
+        #
+        return 0.0

@@ -6,6 +6,7 @@ import numpy as np
 from stepmix import StepMix
 
 from heca.misc.quaternion import Quaternion
+from heca.misc.td import TDEntity, TDScene
 
 # Condition saves raw datapoints per entity
 
@@ -161,6 +162,15 @@ class Condition:
             bics[key] = bic_values
 
         return models, samples, bics
+
+    def score(self, x: dict[str, np.ndarray]) -> dict[str, float]:
+        scores: dict[str, float] = {}
+        for key, model in self.models.items():
+            raw = model.score(x)
+            delta = raw - self.sample_self_scores[key]
+            clipped = np.minimum(delta, 0)  # we just care for negative deltas
+            scores[key] = np.exp(clipped)
+        return scores
 
     def plot(self, path: Path):
         self._plot_bic(path)
