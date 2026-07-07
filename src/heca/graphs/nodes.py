@@ -7,12 +7,11 @@ import torch
 from heca.agents.agent import Agent
 
 
-@dataclass(frozen=True)
 class GraphNode(ABC):
-    node: str
     x: torch.Tensor
     src: str
     dst: str
+    node: str
 
     @property
     @abstractmethod
@@ -20,7 +19,6 @@ class GraphNode(ABC):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class PosNode(GraphNode):
     x: torch.Tensor
     node: str = "pos"
@@ -30,7 +28,6 @@ class PosNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class RotNode(GraphNode):
     x: torch.Tensor
     node: str = "rot"
@@ -40,7 +37,6 @@ class RotNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class SteNode(GraphNode):
     x: torch.Tensor
     node: str = "ste"
@@ -50,7 +46,6 @@ class SteNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class EntityNode(GraphNode):
     tag: str
     x: Optional[torch.Tensor] = None
@@ -65,7 +60,6 @@ class EntityNode(GraphNode):
         return etag + tag
 
 
-@dataclass(frozen=True)
 class PosCompNode(GraphNode):
     node: str = "posc"
 
@@ -74,7 +68,6 @@ class PosCompNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class RotCompNode(GraphNode):
     x: torch.Tensor
     node: str = "rotc"
@@ -84,7 +77,6 @@ class RotCompNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class SteCompNode(GraphNode):
     x: torch.Tensor
     node: str = "stec"
@@ -94,7 +86,6 @@ class SteCompNode(GraphNode):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
 class CompNode(GraphNode):
     idx: int
     x: Optional[torch.Tensor] = None
@@ -105,7 +96,6 @@ class CompNode(GraphNode):
         return self.dst + f"{self.idx}"
 
 
-@dataclass(frozen=True)
 class PreMixNode(GraphNode):
     etag: str
     x: Optional[torch.Tensor] = None
@@ -116,7 +106,6 @@ class PreMixNode(GraphNode):
         return self.dst + self.etag + self.node
 
 
-@dataclass(frozen=True)
 class PostMixNode(GraphNode):
     etag: str
     x: Optional[torch.Tensor] = None
@@ -127,7 +116,6 @@ class PostMixNode(GraphNode):
         return self.dst + self.node
 
 
-@dataclass(frozen=True)
 class OptionNode(GraphNode):
     agent: Agent.Config
     x: Optional[torch.Tensor] = None

@@ -69,7 +69,9 @@ class GraphBlueprint:
                 data[(src, rel, dst)].edge_attr = es.edge_attr
         return data
 
-    def generate(self, cfgs: Sequence[Agent.Config], entities: set[Entity]) -> "GraphBlueprint":
+    def generate(
+        self, cfgs: Sequence[Agent.Config], entities: set[Entity]
+    ) -> "GraphBlueprint":
         self.flush()
         self._entities = entities
         agents = [Agent.get(cfg) for cfg in cfgs]
@@ -152,35 +154,35 @@ class GraphBlueprint:
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
         raise NotImplementedError
 
-    def update_edges(self):
-        # 1. Score against goal
-        for option in self._nodes[OptionNode.node].nodes:
-            assert isinstance(option, OptionNode)
-            option.
-            goal_score = self._compute_score(goal_cond, tdentity, etag)
-            if goal_score >= threshold:
-                chosen_dtag = (
-                    f"{dtag}_goal"  # or whatever tag you assigned to goal's StepMixNode
-                )
-            else:
-                # 2. Score against start
-                start_score = self._compute_score(start_cond, tdentity, etag)
-                if start_score >= threshold:
-                    chosen_dtag = f"{dtag}_start"
-                else:
-                    # 3. Sample a new component from the goal model
-                    chosen_dtag = self._create_sampled_nodes(goal_cond, etag)
+    # def update_edges(self):
+    #     # 1. Score against goal
+    #     for option in self._nodes[OptionNode.node].nodes:
+    #         assert isinstance(option, OptionNode)
+    #         #option.
+    #         goal_score = self._compute_score(goal_cond, tdentity, etag)
+    #         if goal_score >= threshold:
+    #             chosen_dtag = (
+    #                 f"{dtag}_goal"  # or whatever tag you assigned to goal's StepMixNode
+    #             )
+    #         else:
+    #             # 2. Score against start
+    #             start_score = self._compute_score(start_cond, tdentity, etag)
+    #             if start_score >= threshold:
+    #                 chosen_dtag = f"{dtag}_start"
+    #             else:
+    #                 # 3. Sample a new component from the goal model
+    #                 chosen_dtag = self._create_sampled_nodes(goal_cond, etag)
 
-            # Now add entity nodes with the chosen target
-            self.nset(PosNode(dtag=chosen_dtag, etag=etag, x=tdentity.pos))
-            self.nset(RotNode(dtag=chosen_dtag, etag=etag, x=tdentity.rot))
-            self.nset(SteNode(dtag=chosen_dtag, etag=etag, x=tdentity.ste))
-            self.nset(EntityNode(dtag=chosen_dtag, etag=etag))
+    #         # Now add entity nodes with the chosen target
+    #         self.nset(PosNode(dtag=chosen_dtag, etag=etag, x=tdentity.pos))
+    #         self.nset(RotNode(dtag=chosen_dtag, etag=etag, x=tdentity.rot))
+    #         self.nset(SteNode(dtag=chosen_dtag, etag=etag, x=tdentity.ste))
+    #         self.nset(EntityNode(dtag=chosen_dtag, etag=etag))
 
-    def _compute_score(self, cond: Condition, dcentity: DCEntity, etag: str) -> float:
-        """Use the condition's score method; assume it returns a dict[etag -> float]."""
-        scores = cond.score(dcentity.stacked)
-        return scores.get(etag, 0.0)
+    # def _compute_score(self, cond: Condition, dcentity: DCEntity, etag: str) -> float:
+    #     """Use the condition's score method; assume it returns a dict[etag -> float]."""
+    #     scores = cond.score(dcentity.stacked)
+    #     return scores.get(etag, 0.0)
 
 
 # Entity Nodes need to be updated

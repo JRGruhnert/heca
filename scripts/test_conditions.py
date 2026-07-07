@@ -8,16 +8,16 @@ from heca.conditions.pair import ConditionPair
 from heca.scenes.ogbench.scene import OGBenchScene
 
 agents = [
-    TapasAgent.Config(
-        tag="open_drawer",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
-    ),
-    TapasAgent.Config(
-        tag="close_drawer",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
-    ),
+    # TapasAgent.Config(
+    #     tag="open_drawer",
+    #     scene=OGBenchScene.Config(),
+    #     use_gt=True,
+    # ),
+    # TapasAgent.Config(
+    #     tag="close_drawer",
+    #     scene=OGBenchScene.Config(),
+    #     use_gt=True,
+    # ),
     TapasAgent.Config(
         tag="open_window",
         scene=OGBenchScene.Config(),
@@ -28,31 +28,31 @@ agents = [
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
-    TapasAgent.Config(
-        tag="lock_left_button",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
-    ),
+    # TapasAgent.Config(
+    #     tag="lock_left_button",
+    #     scene=OGBenchScene.Config(),
+    #     use_gt=True,
+    # ),
     TapasAgent.Config(
         tag="lock_right_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
-    TapasAgent.Config(
-        tag="unlock_left_button",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
-    ),
+    # TapasAgent.Config(
+    #     tag="unlock_left_button",
+    #     scene=OGBenchScene.Config(),
+    #     use_gt=True,
+    # ),
     TapasAgent.Config(
         tag="unlock_right_button",
         scene=OGBenchScene.Config(),
         use_gt=True,
     ),
-    TapasAgent.Config(
-        tag="move_block",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
-    ),
+    # TapasAgent.Config(
+    #     tag="move_block",
+    #     scene=OGBenchScene.Config(),
+    #     use_gt=True,
+    # ),
     # TapasAgent.Config(
     #    tag="move_ee",
     #    scene=OGBenchScene.Config(),
@@ -67,7 +67,7 @@ heca_cfg = Heca.Config(
 )
 analyzer = ConditionAnalyzer(threshold=0.75)
 path = Agent.load_dir(heca_cfg)
-cons = []
+cons: list[ConditionPair] = []
 for cfg in heca_cfg.agents:
     cons.extend(Agent.get(cfg).conditions)
 
@@ -81,6 +81,7 @@ while True:
             sim_rating = analyzer.compute_sim(a, b)
             analyzer.plot_similarity(sim_rating, a, b, path)
             if analyzer.evaluate_merge(sim_rating):
+                print(f"{a.label} and {b.label} merge")
                 a_set = sets[i]
                 b_set = sets[j]
                 new_set = a_set | b_set
@@ -106,3 +107,5 @@ while True:
             break
     if not merged:
         break
+
+print(len(sets))

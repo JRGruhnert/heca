@@ -165,13 +165,13 @@ class OGBenchScene(Scene):
                 "button_0",
                 "button_1",
             ]:  # hack cause _pos already used
-                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]  # _full"]
+                e_pos = obs[f"privileged_{entity.cfg.label}_pos_full"]
             else:
                 e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_ste = obs[f"privileged_{entity.cfg.label}_state"]
-            e_soh = entity.state.one_hot_from_idx_dc(e_ste)
+            e_soh = entity.state.one_hot_from_idx_dc(e_ste.item())
 
             dc_entities[entity.cfg.label] = DCEntity(e_pos, e_rot, e_ste, e_soh)
         pos, rot, ste, soh = self.get_ee_dc(obs)
@@ -187,16 +187,17 @@ class OGBenchScene(Scene):
                 "button_0",
                 "button_1",
             ]:  # hack cause _pos already used
-                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]  # _full"]
+                e_pos = obs[f"privileged_{entity.cfg.label}_pos_full"]
             else:
                 e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_state = obs[f"privileged_{entity.cfg.label}_state"]
+            # print(e_state)
             td_abs, td_rel = make_abs_and_rel_td_entity(
                 position=torch.tensor(e_pos, dtype=torch.float32),
                 rotation=torch.tensor(e_rot, dtype=torch.float32),
-                state=entity.state.one_hot_from_idx(e_state),
+                state=entity.state.one_hot_from_idx(e_state.item()),
                 ee_pos=pos,
                 ee_rot=rot,
             )

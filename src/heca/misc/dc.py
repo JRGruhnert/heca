@@ -54,6 +54,9 @@ class DCScene:
         self._entities = entities
         self._extras = extras if extras is not None else {}
 
+    def __getitem__(self, key: str) -> DCEntity:
+        return self._entities[key]
+
     def get(self, key: str) -> DCEntity:
         if key not in self._entities:
             raise KeyError(f"Entity {key} not found in TDScene")

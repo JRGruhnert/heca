@@ -50,12 +50,14 @@ class StateProperty(Property):
         return list(self.cfg.values).index(label)
 
     def one_hot_from_idx(self, idx: int) -> torch.Tensor:
+        idx = int(idx)
         assert 0 <= idx < len(self.cfg.values), "Index out of bounds."
         one_hot = self.make_zeros()
         one_hot[idx] = 1.0
         return one_hot
 
     def one_hot_from_idx_dc(self, idx: int) -> np.ndarray:
+        idx = int(idx)
         assert 0 <= idx < len(self.cfg.values), "Index out of bounds."
         one_hot = self.make_zeros_dc()
         one_hot[idx] = 1.0

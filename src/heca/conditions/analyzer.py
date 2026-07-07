@@ -165,7 +165,9 @@ class ConditionAnalyzer:
         cp2: "ConditionPair",
     ) -> dict[str, np.ndarray]:
         sim_rating = {}
-        for el in cp1.elabels | cp2.elabels:
+        print(cp1.elabels)
+        print(cp2.elabels)
+        for el in cp1.elabels.intersection(cp2.elabels):
             forward = self.calculate_sim_matrix(cp1, cp2, el)
             backward = self.calculate_sim_matrix(cp2, cp1, el)
             sim_rating[el] = np.stack((forward, backward), axis=0)
@@ -217,7 +219,7 @@ class ConditionAnalyzer:
 
                 if c == 0:
                     ax.set_ylabel(cp1.label if r == 0 else cp2.label)
-                    ax.set_xlabel(cp2.label if r == 1 else cp1.label)
+                    ax.set_xlabel(cp2.label if r == 0 else cp1.label)
 
                 # annotate values
                 for i in range(2):

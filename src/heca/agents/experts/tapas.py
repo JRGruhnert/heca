@@ -216,10 +216,10 @@ class TapasAgent(ExpertAgent):
         return temp
 
     def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
-        action = dc_obs.extras["action"]
-        reward = dc_obs.extras["reward"]
-        joint_pos = dc_obs.extras["joint_pos"]
-        joint_vel = dc_obs.extras["joint_vel"]
+        action = torch.Tensor(dc_obs.extras["action"])
+        reward = torch.Tensor(dc_obs.extras["reward"])
+        joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
+        joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
         ee_state = dc_obs.ee.tste
         ee_pose = torch.cat((dc_obs.ee.tpos, dc_obs.ee.trot), dim=-1)
 
@@ -235,15 +235,15 @@ class TapasAgent(ExpertAgent):
                 ],
                 dim=-1,
             )
-            for entity in self.scene.entities
+            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
         }
 
         states = {
             entity.cfg.label: dc_obs[entity.cfg.label].tste
-            for entity in self.scene.entities
+            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
         }
 
-        for entity in self.scene.entities:
+        for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label):
             # This adds target frames for mobile entities.
             # Later can be used to set target for the tapas model
             if entity.cfg.mobility == Mobility.FREE:
@@ -275,10 +275,6 @@ class TapasAgent(ExpertAgent):
             joint_vel=joint_vel,
             batch_size=torch.Size([]),
         )
-
-    @property
-    def scene(self) -> Scene:
-        return Scene.get(self.scene.cfg, auto_load=not self.cfg.use_gt)
 
     @cached_property
     def elabels(self) -> set[str]:
@@ -313,7 +309,7 @@ class TapasAgent(ExpertAgent):
 
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples)
         post = Condition("post", post_data, 1, self.cfg.n_samples)
-        pair = ConditionPair(f"cond_pair_0", pre, post)
+        pair = ConditionPair(f"{self.cfg.tag}_0", pre, post)
         pair.plot(path)
         return [pair]
 
@@ -338,7 +334,7 @@ class TapasAgent(ExpertAgent):
             observations.append(stacked)
         return observations
 
-    def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> list[TensorDict]:
+    def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> TensorDict:
         obs: list[TensorDict] = []
         td_goal = scenes[-1]
         for td_scene in scenes:
@@ -347,11 +343,10 @@ class TapasAgent(ExpertAgent):
             obs.append(td)
         stacked_obs = TensorDict.stack(obs, dim=0)
         assert isinstance(stacked_obs, SceneObservation)
-        return obs
+        return stacked_obs  # type: ignore
 
     def collect_entity_data(self, scenes: list[DCScene], key: str) -> np.ndarray:
         pos = np.stack([s[key].pos for s in scenes])
         rot = np.stack([s[key].rot for s in scenes])
-        state = np.stack([s[key].ste for s in scenes])
-
-        return np.concatenate((pos, rot, state[:, None]), axis=1)
+        ste = np.stack([s[key].ste for s in scenes])
+        return np.concatenate((pos, rot, ste), axis=1)
