@@ -5,9 +5,6 @@ from stepmix import StepMix
 
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
-import matplotlib
-
-matplotlib.use("Agg")  # non-interactive backend, won't block
 
 
 class ConditionAnalyzer:
