@@ -145,10 +145,10 @@ class ConditionAnalyzer:
         mat = np.zeros((2, 2))
         for i, cp1con in enumerate([cp1.pre, cp1.post]):
             for j, cp2con in enumerate([cp2.pre, cp2.post]):
-                if not cp1con.model_states[key].issubset(cp2con.model_states[key]):
-                    continue
                 if key not in cp1con.model_states or key not in cp2con.model_states:
                     mat[i, j] = np.nan
+                elif not cp1con.model_states[key].issubset(cp2con.model_states[key]):
+                    continue
                 else:
                     mat[i, j] = self.calculate_score(cp2con, cp1con, key)
         return mat
