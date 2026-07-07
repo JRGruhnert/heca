@@ -29,7 +29,6 @@ from heca.misc.entity import Mobility
 from heca.misc.td import TDImage
 from heca.misc import logger
 from heca.misc.hardware import device
-from heca.scenes.scene import Scene
 
 
 class TapasAgent(ExpertAgent):
@@ -101,6 +100,7 @@ class TapasAgent(ExpertAgent):
         demo_filename: str = "demos_post.h5"
         gt_frames: list[list[int]] | None = None
         rel_score_threshold: float = 0.0
+        demo_selections: list[int] | None = None
 
         def __post_init__(self):
             self.policy.model.frame_selection.gt_frames = self.gt_frames
@@ -291,6 +291,7 @@ class TapasAgent(ExpertAgent):
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
         demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
+            self.cfg.demo_selections,
             only_conditions=True,
         )
 

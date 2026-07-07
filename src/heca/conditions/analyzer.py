@@ -161,7 +161,6 @@ class ConditionAnalyzer:
 
     def calculate_score(self, a: Condition, b: Condition, key: str) -> float:
         raw = a.models[key].score(b.samples[key])
-        a.models[key].report
         delta = raw - a.sample_self_scores[key]
         clipped = np.minimum(delta, 0)  # we just care for negative deltas
         return np.exp(clipped)  # make a score
@@ -177,8 +176,12 @@ class ConditionAnalyzer:
             var1 = p1["measurement"]["pose"]["covariances"][i]
             cat1 = p1["measurement"]["state"]["pis"][i]  # ← shape (S,)
 
-            best_kl = np.inf
+            # --- CHANGE STARTS HERE ---
+            # Instead of tracking best_kl, we now accumulate the weighted sum
+            weighted_pairwise_kl = 0.0
+
             for j in range(len(p2["weights"])):
+                vj = p2["weights"][j]  # weight of component j in m2
                 mu2 = p2["measurement"]["pose"]["means"][j]
                 var2 = p2["measurement"]["pose"]["covariances"][j]
                 cat2 = p2["measurement"]["state"]["pis"][j]  # ← shape (S,)
@@ -192,14 +195,17 @@ class ConditionAnalyzer:
                     - 1
                 )
 
-                # Categorical part — NEW, closed form
+                # Categorical part (same as before)
                 cat1_safe = np.clip(cat1, 1e-12, 1)
                 cat2_safe = np.clip(cat2, 1e-12, 1)
                 kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
 
-                best_kl = min(best_kl, kl_gauss + kl_cat)
+                # Weight this pairwise KL by the weight of component j in m2
+                weighted_pairwise_kl += vj * (kl_gauss + kl_cat)
 
-            kl += w1 * best_kl
+            # Now weight the entire sum by the weight of component i in m1
+            kl += w1 * weighted_pairwise_kl
+
         return np.exp(-kl)
 
     def compute_sim(
