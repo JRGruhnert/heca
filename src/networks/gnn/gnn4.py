@@ -128,6 +128,7 @@ class Gnn(GnnBase):
             ppo_type=PPOType.CRITIC,
         )
 
+        # node_mask_type: object for per node importance, "attributes" for per feature importance
         self.actor_explainer = Explainer(
             _ExplainerWrapper(self.actor),
             algorithm=CaptumExplainer("IntegratedGradients"),
@@ -162,8 +163,8 @@ class Gnn(GnnBase):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
-        Explanation | HeteroExplanation,
-        Explanation | HeteroExplanation,
+        HeteroExplanation,
+        HeteroExplanation,
     ]:
         # Resolve the action first (same logic as act())
         action, logprob, value = self.act(obs, goal)

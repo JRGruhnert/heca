@@ -13,17 +13,17 @@ retrain = False
 eval = True
 
 source_tag = "red"
-target_tag = "red"
+target_tag = "blue"
 
 network = "gnn"
-checkpoint_tag = f"t_{target_tag}_{target_tag}_pe0.0_pr0.0"
+checkpoint_tag = f"t_{source_tag}_{source_tag}_pe0.0_pr0.0"
 
 
-prefix = "re"
+prefix = "exp"
 tag = f"{prefix}_{source_tag}_{target_tag}"
 wandb_tag = f"{network}_{tag}"
 
-t_train_config = TrainConfig(
+br_config = TrainConfig(
     agent=GNNAgentConfig(
         eval=eval,
         max_batches=1,
@@ -38,9 +38,9 @@ t_train_config = TrainConfig(
         wandb_tag=wandb_tag,
     ),
     storage=StorageConfig(
-        used_skills=source_tag,
-        used_states=source_tag,
-        eval_states=source_tag,
+        used_skills=target_tag,
+        used_states=target_tag,
+        eval_states=target_tag,
         tag=tag,
         network=network,
         checkpoint_path=f"results/{network}/{checkpoint_tag}/model_cp_best.pth",

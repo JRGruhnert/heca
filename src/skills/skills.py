@@ -8,6 +8,7 @@ from src.variables import (
     SET_SRP,
     SET_SRPB,
     SET_SRPB,
+    TEST,
 )
 
 predict_as_batch = True
@@ -240,12 +241,20 @@ SKILLS_BY_TAG = {
     #    _S["GrabPinkDrawer"],
     #    _S["PlacePinkDrawer"],
     # ],
-    # "Blue": [
-    #    _S["GrabBlueTable"],
-    #    _S["PlaceBlueTable"],
-    #    _S["GrabBlueDrawer"],
-    #    _S["PlaceBlueDrawer"],
-    # ],
+    TEST: [
+        _S["GrabBlueTable"],
+        _S["PlaceBlueTable"],
+        _S["GrabBlueDrawer"],
+        _S["PlaceBlueDrawer"],
+        _S["GrabRedTable"],
+        _S["PlaceRedTable"],
+        _S["GrabRedDrawer"],
+        _S["PlaceRedDrawer"],
+        _S["GrabPinkTable"],
+        _S["PlacePinkTable"],
+        _S["GrabPinkDrawer"],
+        _S["PlacePinkDrawer"],
+    ],
     SET_SLIDE: [
         _S["CloseDrawer"],
         _S["CloseDrawerBack"],

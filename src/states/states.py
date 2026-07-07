@@ -15,8 +15,8 @@ from src.variables import (
     SET_SRP,
     SET_SRPB,
     SET_SRPB,
+    TEST,
 )
-
 
 _S = {
     "ee_position": PreciseEulerState(
@@ -121,27 +121,17 @@ _S = {
 }
 
 STATES_BY_TAG = {
-    "Debug": [
+    TEST: [
         _S["ee_position"],
-        _S["base__slide_position"],
-        _S["base__drawer_position"],
-        _S["base__button_position"],
-        _S["led_position"],
         _S["block_red_position"],
         _S["block_blue_position"],
         _S["block_pink_position"],
         _S["ee_rotation"],
-        _S["base__slide_rotation"],
-        _S["base__drawer_rotation"],
-        _S["base__button_rotation"],
         _S["led_rotation"],
         _S["block_red_rotation"],
         _S["block_blue_rotation"],
         _S["block_pink_rotation"],
         _S["ee_scalar"],
-        _S["base__slide_scalar"],
-        _S["base__drawer_scalar"],
-        _S["base__button_scalar"],
         _S["block_red_scalar"],
         _S["block_blue_scalar"],
         _S["block_pink_scalar"],

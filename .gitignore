@@ -125,4 +125,8 @@ results_old/
 results.zip
 /plots/
 
-/dependencies/
+/dependencies/*.zip
+
+data.zip
+calvin.zip
+mp.zip

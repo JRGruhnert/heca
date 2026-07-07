@@ -1,4 +1,5 @@
 import pathlib
+from matplotlib import pyplot as plt
 import numpy as np
 import torch
 import re
@@ -26,6 +27,10 @@ from tapas_gmm.utils.observation import (
     dict_to_tensordict,
     empty_batchsize,
 )
+import matplotlib
+
+matplotlib.use("Agg")  # non-interactive backend, won't block
+import matplotlib.pyplot as plt
 
 
 class TapasSkill(Skill):
@@ -133,27 +138,78 @@ class TapasSkill(Skill):
                 pos_str, rot_str = tpgmm.frame_mapping[frame_idx]
                 tapas_tp.add(pos_str)
                 tapas_tp.add(rot_str)
-        # TODO: Currently assumes tapas tps are euler and quaternion
-        # My whole code does not generalize to other Task Parameterized models and state types
+            # TODO: Currently assumes tapas tps are euler and quaternion
+            # My whole code does not generalize to other Task Parameterized models and state types
+        print(f"{self.name}")
         for state in states:
             pre_value = state.run_addon(
                 "tapas",
                 tpgmm.start_values[state.name],
                 tpgmm.end_values[state.name],
                 self.reversed,
-                True if state.name in tapas_tp else False,
+                state.name in tapas_tp,
             )
             post_value = state.run_addon(
                 "tapas",
                 tpgmm.start_values[state.name],
                 tpgmm.end_values[state.name],
                 not self.reversed,
-                True if state.name in tapas_tp else False,
+                state.name in tapas_tp,
             )
             if pre_value is not None:
                 self.precons[state.name] = pre_value
             if post_value is not None:
                 self.postcons[state.name] = post_value
+
+            if state.name in tapas_tp:
+                logger.info(f"Plotting pre/post conditions for {state.name}")
+                start = tpgmm.start_values[state.name]  # (N, dim)
+                end = tpgmm.end_values[state.name]  # (N, dim)
+
+                pre_mean = start.mean(dim=0).cpu().numpy()
+                pre_std = start.std(dim=0).cpu().numpy()
+                post_mean = end.mean(dim=0).cpu().numpy()
+                post_std = end.std(dim=0).cpu().numpy()
+
+                dims = np.arange(len(pre_mean))
+                width = 0.35
+
+                fig, ax = plt.subplots(figsize=(8, 5))
+                ax.bar(
+                    dims - width / 2,
+                    pre_mean,
+                    width,
+                    yerr=pre_std,
+                    label="Pre",
+                    capsize=3,
+                    color="#4a6fa5",
+                )
+                ax.bar(
+                    dims + width / 2,
+                    post_mean,
+                    width,
+                    yerr=post_std,
+                    label="Post",
+                    capsize=3,
+                    color="#d95f02",
+                )
+
+                ax.set_xticks(dims)
+                ax.set_xticklabels([f"dim_{i}" for i in dims])
+                ax.set_title(f"{self.name} – {state.name}")
+                ax.set_ylabel("Value")
+                ax.legend()
+                ax.grid(axis="y", alpha=0.3)
+                fig.tight_layout()
+
+                plot_dir = pathlib.Path("plots") / "tapas_conditions"
+                plot_dir.mkdir(parents=True, exist_ok=True)
+                fig.savefig(
+                    plot_dir / f"{self.name}_{state.name}.png",
+                    dpi=200,
+                    bbox_inches="tight",
+                )
+                plt.close(fig)
 
     def initialize_overrides(self, states: list[State]):
         """

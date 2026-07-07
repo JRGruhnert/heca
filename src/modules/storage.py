@@ -52,6 +52,7 @@ class Storage:
             if isinstance(skill, TapasSkill):
                 skill.initialize_conditions(self.states)
                 skill.initialize_overrides(self.states)
+                skill.policy
 
     def create_directory(self, path: str):
         if not os.path.exists(path):

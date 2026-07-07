@@ -17,81 +17,113 @@ from src.factory import (
 
 @dataclass
 class ExplainConfig:
-    source: TrainConfig
-    target: TrainConfig
+    bb: TrainConfig
+    bp: TrainConfig
+    br: TrainConfig
 
 
 def run_explain(config: ExplainConfig):
-    s_storage = Storage(config.source.storage)
-    s_buffer = Buffer(config.source.buffer)
+    bb_storage = Storage(config.bb.storage)
+    bb_buffer = Buffer(config.bb.buffer)
+    bb_evaluator = select_evaluator(config.bb.evaluator, bb_storage)
+    bb_env = select_environment(config.bb.environment, bb_evaluator, bb_storage)
+    bb_experiment = select_experiment(config.bb.experiment, bb_env, bb_storage)
+    bb_agent = select_agent(config.bb.agent, bb_storage, bb_buffer)
 
-    s_evaluator = select_evaluator(config.source.evaluator, s_storage)
-    s_env = select_environment(config.source.environment, s_evaluator, s_storage)
-    s_experiment = select_experiment(config.source.experiment, s_env, s_storage)
-    s_agent = select_agent(config.source.agent, s_storage, s_buffer)
+    assert isinstance(bb_agent, GNNAgent), "Agent must be GNNAgent for explanation"
 
-    t_storage = Storage(config.target.storage)
-    t_buffer = Buffer(config.target.buffer)
-    t_evaluator = select_evaluator(config.target.evaluator, t_storage)
-    t_env = select_environment(config.target.environment, t_evaluator, t_storage)
-    t_experiment = select_experiment(config.target.experiment, t_env, t_storage)
-    t_agent = select_agent(config.target.agent, t_storage, t_buffer)
-    assert isinstance(s_agent, GNNAgent) and isinstance(
-        t_agent, GNNAgent
-    ), "Agents must be GNNAgent for explanation"
+    obs, goal = bb_experiment.sample_task()
+    state_diff = bb_evaluator.is_equal_dict(obs, goal)
+    while state_diff["block_blue_position"]:
+        obs, goal = bb_experiment.sample_task()
+        state_diff = bb_evaluator.is_equal_dict(obs, goal)
+    ref_obs = obs
+    ref_goal = goal
 
-    s_obs, s_goal = s_experiment.sample_task()
-    t_obs, t_goal = t_experiment.sample_task()
-    while not s_evaluator.is_equal(s_obs, s_goal) or not t_evaluator.is_equal(
-        t_obs, t_goal
+    print(state_diff)
+    step = 0
+    skills_list = []
+    done = False
+    episode_ended = False
+    while not episode_ended:
+        skill = bb_agent.explain(obs, goal, step)
+        # print(f"[step {step}] skill = {skill.name}")
+        skills_list.append(skill.name)
+        obs, reward, done, episode_ended = bb_experiment.step(skill)
+        bb_agent.feedback(reward, done, episode_ended)
+        step += 1
+    bb_experiment.close()
+
+    print(f"Executed skills: {skills_list}")
+    print(f"Done: {done}, episode_ended: {episode_ended}")
+
+    bp_storage = Storage(config.bp.storage)
+    bp_buffer = Buffer(config.bp.buffer)
+    bp_evaluator = select_evaluator(config.bp.evaluator, bp_storage)
+    bp_env = select_environment(config.bp.environment, bp_evaluator, bp_storage)
+    bp_experiment = select_experiment(config.bp.experiment, bp_env, bp_storage)
+    bp_agent = select_agent(config.bp.agent, bp_storage, bp_buffer)
+    assert isinstance(bp_agent, GNNAgent), "Agent must be GNNAgent for explanation"
+
+    bp_obs, bp_goal = bp_experiment.sample_task()
+    while (
+        not bp_evaluator.is_equal(ref_obs, bp_obs)
+        or not bp_evaluator.is_equal(ref_goal, bp_goal)
+        or not bp_evaluator.is_equal_dict(bp_obs, bp_goal) == state_diff
     ):
-        s_obs, s_goal = s_experiment.sample_task()
-        t_obs, t_goal = t_experiment.sample_task()
+        bp_obs, bp_goal = bp_experiment.sample_task()
 
-    s_state_diff = s_evaluator.is_equal_dict(s_obs, s_goal)
-    t_state_diff = t_evaluator.is_equal_dict(t_obs, t_goal)
-    assert (
-        s_state_diff == t_state_diff
-    ), "State differences must be the same for explanation"
-    print(f"State differences: {s_state_diff}")
+    step = 0
+    skills_list = []
+    done = False
+    episode_ended = False
+    while not episode_ended:
+        skill = bp_agent.explain(bp_obs, bp_goal, step)
+        # print(f"[step {step}] skill = {skill.name}")
+        skills_list.append(skill.name)
+        bp_obs, reward, done, episode_ended = bp_experiment.step(skill)
+        bp_agent.feedback(reward, done, episode_ended)
+        step += 1
+    bp_experiment.close()
 
-    s_step = 0
-    s_skills_list = []
-    s_done = False
-    s_episode_ended = False
-    while not s_episode_ended:
-        skill = s_agent.explain(s_obs, s_goal, s_step)
-        # print(f"[step {s_step}] skill = {skill.name}")
-        s_skills_list.append(skill.name)
-        s_obs, reward, s_done, s_episode_ended = s_experiment.step(skill)
-        s_agent.feedback(reward, s_done, s_episode_ended)
-        s_step += 1
-    s_experiment.close()
+    print(f"Executed skills: {skills_list}")
+    print(f"Done: {done}, episode_ended: {episode_ended}")
 
-    t_step = 0
-    t_skills_list = []
-    t_done = False
-    t_episode_ended = False
-    while not t_episode_ended:
-        skill = t_agent.explain(t_obs, t_goal, t_step)
-        # print(f"[step {t_step}] skill = {skill.name}")
-        t_skills_list.append(skill.name)
-        t_obs, reward, t_done, t_episode_ended = t_experiment.step(skill)
-        t_agent.feedback(reward, t_done, t_episode_ended)
-        t_step += 1
+    br_storage = Storage(config.br.storage)
+    br_buffer = Buffer(config.br.buffer)
+    br_evaluator = select_evaluator(config.br.evaluator, br_storage)
+    br_env = select_environment(config.br.environment, br_evaluator, br_storage)
+    br_experiment = select_experiment(config.br.experiment, br_env, br_storage)
+    br_agent = select_agent(config.br.agent, br_storage, br_buffer)
+    assert isinstance(br_agent, GNNAgent), "Agent must be GNNAgent for explanation"
 
-    t_experiment.close()
-    print(f"Executed skills: {s_skills_list}")
-    print(f"Done: {s_done}, episode_ended: {s_episode_ended}")
+    br_obs, br_goal = br_experiment.sample_task()
+    while (
+        not br_evaluator.is_equal(ref_obs, br_obs)
+        or not br_evaluator.is_equal(ref_goal, br_goal)
+        or not br_evaluator.is_equal_dict(br_obs, br_goal) == state_diff
+    ):
+        br_obs, br_goal = br_experiment.sample_task()
+
+    step = 0
+    skills_list = []
+    done = False
+    episode_ended = False
+    while not episode_ended:
+        skill = br_agent.explain(br_obs, br_goal, step)
+        # print(f"[step {step}] skill = {skill.name}")
+        skills_list.append(skill.name)
+        br_obs, reward, done, episode_ended = br_experiment.step(skill)
+        br_agent.feedback(reward, done, episode_ended)
+        step += 1
+    br_experiment.close()
+
+    print(f"Executed skills: {skills_list}")
+    print(f"Done: {done}, episode_ended: {episode_ended}")
 
 
 def entry_point():
     _, dict_config = parse_and_build_config(data_load=False, need_task=False)
-
-    dict_config["storage"]["tag"] = (
-        dict_config["storage"]["tag"]
-        + f"_pe{dict_config['experiment']['p_empty']}_pr{dict_config['experiment']['p_rand']}"
-    )
 
     config = OmegaConf.to_container(
         dict_config, resolve=True, structured_config_mode=SCMode.INSTANTIATE

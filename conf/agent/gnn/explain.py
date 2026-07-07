@@ -1,8 +1,10 @@
 from scripts.explain import ExplainConfig
-from conf.agent.gnn.t_train import t_train_config
-from conf.agent.gnn.s_train import s_train_config
+from conf.agent.gnn.bp_train import bp_config
+from conf.agent.gnn.bb_train import bb_config
+from conf.agent.gnn.br_train import br_config
 
 config = ExplainConfig(
-    source=s_train_config,
-    target=t_train_config,
+    bb=bb_config,
+    bp=bp_config,
+    br=br_config,
 )
