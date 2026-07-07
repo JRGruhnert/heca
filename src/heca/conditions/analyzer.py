@@ -1,9 +1,13 @@
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+from stepmix import StepMix
 
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConditionPair
+import matplotlib
+
+matplotlib.use("Agg")  # non-interactive backend, won't block
 
 
 class ConditionAnalyzer:
@@ -150,19 +154,56 @@ class ConditionAnalyzer:
                 elif not cp1con.model_states[key].issubset(cp2con.model_states[key]):
                     continue
                 else:
-                    mat[i, j] = self.calculate_score(cp2con, cp1con, key)
+                    mat[i, j] = self.kl_variational_stepmix(
+                        cp2con.models[key], cp1con.models[key]
+                    )
         return mat
 
     def calculate_score(self, a: Condition, b: Condition, key: str) -> float:
         raw = a.models[key].score(b.samples[key])
+        a.models[key].report
         delta = raw - a.sample_self_scores[key]
         clipped = np.minimum(delta, 0)  # we just care for negative deltas
         return np.exp(clipped)  # make a score
 
+    def kl_variational_stepmix(self, m1: StepMix, m2: StepMix):
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        kl = 0.0
+        for i in range(len(p1["weights"])):
+            w1 = p1["weights"][i]
+            mu1 = p1["measurement"]["pose"]["means"][i]
+            var1 = p1["measurement"]["pose"]["covariances"][i]
+            cat1 = p1["measurement"]["state"]["pis"][i]  # ← shape (S,)
+
+            best_kl = np.inf
+            for j in range(len(p2["weights"])):
+                mu2 = p2["measurement"]["pose"]["means"][j]
+                var2 = p2["measurement"]["pose"]["covariances"][j]
+                cat2 = p2["measurement"]["state"]["pis"][j]  # ← shape (S,)
+
+                # Gaussian part (same as before)
+                kl_gauss = 0.5 * np.sum(
+                    np.log(var2)
+                    - np.log(var1)
+                    + var1 / var2
+                    + (mu1 - mu2) ** 2 / var2
+                    - 1
+                )
+
+                # Categorical part — NEW, closed form
+                cat1_safe = np.clip(cat1, 1e-12, 1)
+                cat2_safe = np.clip(cat2, 1e-12, 1)
+                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
+
+                best_kl = min(best_kl, kl_gauss + kl_cat)
+
+            kl += w1 * best_kl
+        return np.exp(-kl)
+
     def compute_sim(
-        self,
-        cp1: "ConditionPair",
-        cp2: "ConditionPair",
+        self, cp1: "ConditionPair", cp2: "ConditionPair"
     ) -> dict[str, np.ndarray]:
         sim_rating = {}
         print(cp1.elabels)
@@ -184,13 +225,7 @@ class ConditionAnalyzer:
         entities = list(sim_rating.keys())
         n = len(entities)
 
-        fig, axes = plt.subplots(
-            2,
-            n,
-            figsize=(3.5 * n, 7),
-            squeeze=False,
-            constrained_layout=True,
-        )
+        fig, axes = plt.subplots(2, n, figsize=(3.5 * n, 7), squeeze=False)
 
         xticklabels = ["pre", "post"]
         yticklabels = ["pre", "post"]
@@ -238,6 +273,5 @@ class ConditionAnalyzer:
 
         fig.colorbar(im, ax=axes, label="Similarity", shrink=0.8)
         fig.suptitle(f"{cp2.label} ↔ {cp1.label} similarity", fontsize=16)
-
         plt.savefig(path / "plots" / f"sim_{cp2.label}_{cp1.label}.png", dpi=300)
         plt.close(fig)
