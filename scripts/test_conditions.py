@@ -3,8 +3,8 @@ from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
-from heca.conditions.analyzer import ConditionAnalyzer
-from heca.conditions.pair import ConditionPair
+from heca.conditions.analyzer import Analyzer
+from heca.conditions.pair import ConPair
 from heca.scenes.ogbench.scene import OGBenchScene
 
 agents = [
@@ -65,9 +65,9 @@ heca_cfg = Heca.Config(
     tag="test",
     agents=agents,
 )
-analyzer = ConditionAnalyzer(threshold=0.75)
+analyzer = Analyzer(threshold=0.75)
 path = Agent.load_dir(heca_cfg)
-cons: list[ConditionPair] = []
+cons: list[ConPair] = []
 for cfg in heca_cfg.agents:
     cons.extend(Agent.get(cfg).conditions)
 
@@ -87,7 +87,7 @@ while True:
                 new_set = a_set | b_set
                 ids = map(str, sorted(new_set))
                 label = f"{heca_cfg.tag}_{''.join(ids)}"
-                new_pair = ConditionPair.merge(
+                new_pair = ConPair.merge(
                     label=label,
                     a=a,
                     b=b,

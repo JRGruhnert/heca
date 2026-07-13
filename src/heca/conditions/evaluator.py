@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from heca.agents.agent import AgentFeedback
-from heca.conditions.pair import ConditionPair
+from heca.conditions.pair import ConPair
 from heca.misc.base import Configurable
-from heca.misc.dc import DCScene
+from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 
 
@@ -23,7 +23,7 @@ class Evaluator(Configurable):
         self.highscore: float = 0.0
         self.progress: float = 0.0
         self.current_step: int = 0
-        self.conditions: list[ConditionPair] = []
+        self.conditions: list[ConPair] = []
         self.entities: set[Entity] = set()
 
     def reset(self, y: DCScene):
@@ -58,7 +58,7 @@ class Evaluator(Configurable):
 
     def setup(
         self,
-        conditions: list[ConditionPair],
+        conditions: list[ConPair],
         entities: set[Entity],
     ) -> "Evaluator":
         self.conditions = conditions

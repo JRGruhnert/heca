@@ -35,12 +35,35 @@ class Network(Configurable, nn.Module):
         self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
         self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
 
-    def forward(
-        self, x: torch.Tensor, x_dict: dict, edge_index_dict: dict
-    ) -> torch.Tensor:
-        return self.actor(
-            HeteroData(x=x, x_dict=x_dict, edge_index_dict=edge_index_dict)
+    def forwarddd(self, raw_observations):
+        # raw_observations: [N, 7] (pos+rot) + state as int separately
+        # StepMix expects: [pos, rot, state_onehot] or [pos, rot, state_int]
+
+        # 1. Get probabilities
+        probs = self.stepmix.predict_proba(raw_observations)  # [N, n_comp]
+
+        # 2. Get log-likelihood
+        log_liks = self.stepmix.score_samples(raw_observations)  # [N]
+
+        # 3. Get hard assignments (for one-hot)
+        assignments = self.stepmix.predict(raw_observations)  # [N]
+        assignment_onehot = F.one_hot(assignments, num_classes=n_comp)  # [N, n_comp]
+
+        # 4. Concatenate everything
+        features = torch.cat(
+            [
+                raw_observations[:, :7],  # pos + rot (keep raw!)
+                probs,  # soft memberships
+                log_liks.unsqueeze(-1),  # confidence
+                assignment_onehot,  # hard assignment
+            ],
+            dim=-1,
         )
+
+        return features  # [N, 7 + 3*n_comp + 1]
+
+    def forward(self, data: HeteroData) -> torch.Tensor:
+        return self.actor(data)
 
     def actor(self, data: HeteroData) -> torch.Tensor:
         return self.actor_net(data)

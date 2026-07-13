@@ -4,14 +4,13 @@ from functools import cached_property
 
 import numpy as np
 import torch
-from heca.agents.agent import Agent, EESate
-from heca.misc.dc import DCScene, DCEntity
+from heca.agents.agent import Agent, EEState
+from heca.misc.data import DCScene, DCEntity, TDImage
 from heca.misc.entity import Entity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.image_encoders.molmo_encoder import MolmoEncoder
-from heca.misc.td import TDImage
 
 
 class ExpertAgent(Agent, abc.ABC):
@@ -25,7 +24,7 @@ class ExpertAgent(Agent, abc.ABC):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.state = EESate.IDLE
+        self.state = EEState.IDLE
 
         self.scene = Scene.get(self.cfg.scene, auto_load=not cfg.use_gt)
 

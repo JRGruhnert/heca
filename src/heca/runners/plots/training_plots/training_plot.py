@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from glob import glob
 import re
 
-from heca.misc.data import TrainingRunData
+from heca.misc.run_data import TrainingRunData
 from heca.runners.plotters.hecas.heca import (
     HecaPlotter,
     HecaPlotterConfig,

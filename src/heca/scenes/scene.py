@@ -9,9 +9,8 @@ from typing import Any
 from PIL import Image
 
 
-from heca.misc.dc import DCScene
+from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Entity
-from heca.misc.td import TDImage, TDScene
 from heca.misc.base import Persistable
 
 
@@ -49,14 +48,14 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def sample_task(self) -> tuple[
-        tuple[TDScene, TDImage],
-        tuple[TDScene, TDImage],
+        tuple[DCScene, TDImage],
+        tuple[DCScene, TDImage],
     ]:
         raise NotImplementedError()
 
     def sample_task_vis(self) -> tuple[
-        tuple[TDScene, TDImage, np.ndarray],
-        tuple[TDScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
+        tuple[DCScene, TDImage, np.ndarray],
     ]:
         raise NotImplementedError()
 
@@ -66,10 +65,6 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def to_dc_scene(self, obs) -> DCScene:
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def to_td_scene(self, obs) -> TDScene:
         raise NotImplementedError()
 
     @abc.abstractmethod

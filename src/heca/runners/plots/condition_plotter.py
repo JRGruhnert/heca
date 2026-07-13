@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.misc.dc import DCEntity
+from heca.misc.run_data import DCEntity
 from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.misc import logger
 from heca.misc.td import TDEntity

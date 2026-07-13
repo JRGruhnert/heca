@@ -36,20 +36,20 @@ class Condition:
         self._model, self._samples, self._bics = self._fit_model()
 
     @property
-    def model_parameters(
+    def parameters(
         self,
-    ) -> dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]]:
+    ) -> dict[str, list[np.ndarray]]:
         """
         Extracts node features for the StepMix tree-graph.
 
         Returns:
             dict: Keys are model names. Values are lists of tuples, one per component.
                 Each tuple contains:
-                - pos_feature (np.ndarray): [μ_x, μ_y, μ_z, σ_x, σ_y, σ_z] (shape: 6)
-                - rot_feature (np.ndarray): [6D_rot_mean, σ_w, σ_x, σ_y, σ_z] (shape: 10)
+                - feature (np.ndarray): [μ_x, μ_y, μ_z, log(σ_x), log(σ_y), log(σ_z), μ_rx, μ_ry, μ_rz, μ_rw, log(σ_x), log(σ_y), log(σ_z)] (shape: 7)
                 - state_feature (np.ndarray): Probabilities for each category (shape: total_outcomes)
         """
-        result: dict[str, list[tuple[np.ndarray, np.ndarray, np.ndarray]]] = {}
+
+        result: dict[str, list[np.ndarray]] = {}
 
         for model_name, mix in self.models.items():
             # 1. Extract raw parameters from the fitted StepMix model

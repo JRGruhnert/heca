@@ -6,13 +6,13 @@ import torch
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
 
-from heca.conditions.analyzer import ConditionAnalyzer
-from heca.conditions.pair import ConditionPair
+from heca.conditions.analyzer import Analyzer
+from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import GraphBlueprint
 from heca.heca_gnn.network import Network
-from heca.misc.dc import DCScene
+from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.misc.ppo import PPO
 
@@ -61,9 +61,9 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions, self.entities
         )
-        self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
+        self.analyzer = Analyzer(threshold=cfg.threshold)
         self.blueprint = GraphBlueprint(cfg.threshold).generate(
-            self.cfg.agents, self.entities
+            list(self.cfg.agents), self.entities
         )
 
     def predict(self) -> tuple[Agent.Config, DCScene]:
@@ -121,7 +121,7 @@ class Heca(Agent):
         return values
 
     @cached_property
-    def conditions(self) -> list[ConditionPair]:
+    def conditions(self) -> list[ConPair]:
         path = Agent.load_dir(self.cfg)
         cons = []
         for cfg in self.cfg.agents:
@@ -142,7 +142,7 @@ class Heca(Agent):
                         new_set = a_set | b_set
                         ids = map(str, sorted(new_set))
                         label = f"{self.cfg.tag}_{''.join(ids)}"
-                        new_pair = ConditionPair.merge(
+                        new_pair = ConPair.merge(
                             label=label,
                             a=a,
                             b=b,

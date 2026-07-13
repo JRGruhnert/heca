@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import torch
 
@@ -34,35 +33,51 @@ class Quaternion:
         return Quaternion.normalize_quat(mean_quat_xyzw)
 
     @staticmethod
-    def _quaternion_distance(q1: torch.Tensor, q2: torch.Tensor) -> float:
-        """Calculate the angular distance between two quaternions."""
-        dot_product = torch.abs(torch.dot(q1, q2))
-        dot_product = torch.clamp(dot_product, -1.0, 1.0)
-        angle = 2 * torch.acos(dot_product) / math.pi
-        return angle.item()
+    def inv(q):
+        """q: [..., 4] unit quaternion. Returns inverse."""
+        # For unit quaternion, inverse is just conjugate
+        return np.concatenate([q[..., 0:1], -q[..., 1:]], axis=-1)
 
     @staticmethod
-    def quat_to_6d(w: float, x: float, y: float, z: float) -> np.ndarray:
+    def mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+        """Hamiltonian product. q1, q2: [..., 4]."""
+        w1, x1, y1, z1 = q1[..., 0], q1[..., 1], q1[..., 2], q1[..., 3]
+        w2, x2, y2, z2 = q2[..., 0], q2[..., 1], q2[..., 2], q2[..., 3]
+
+        w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
+        x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
+        y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
+        z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
+
+        return np.stack([w, x, y, z], axis=-1)
+
+    @staticmethod
+    def log_map(q: np.ndarray) -> np.ndarray:
+        """q: [..., 4] unit quaternion. Returns axis-angle vector [..., 3]."""
+        w = np.clip(q[..., 0], -1.0, 1.0)  # Clamp for numerical stability
+        xyz = q[..., 1:]
+        norm = np.linalg.norm(xyz, axis=-1, keepdims=True)
+
+        # Avoid division by zero
+        safe_norm = np.where(norm < 1e-12, 1.0, norm)
+        angle = 2 * np.arctan2(safe_norm.squeeze(-1), w)
+        axis = xyz / safe_norm
+
+        return angle[..., np.newaxis] * axis  # [..., 3]
+
+    @staticmethod
+    def exp(delta_rot: np.ndarray) -> np.ndarray:
         """
-        Converts a quaternion (w, x, y, z) to the 6D continuous rotation
-        representation (first two columns of the rotation matrix).
-        This avoids the q/-q ambiguity and provides a smoother gradient landscape.
+        Exponential map from axis-angle (3D) to unit quaternion.
+        delta_rot: [..., 3] axis-angle vector.
+        Returns: [..., 4] unit quaternion.
         """
-        # Rotation matrix from quaternion (w, x, y, z)
-        # R00 = 1 - 2*y^2 - 2*z^2
-        # R10 = 2*x*y + 2*z*w
-        # R20 = 2*x*z - 2*y*w
-        # R01 = 2*x*y - 2*z*w
-        # R11 = 1 - 2*x^2 - 2*z^2
-        # R21 = 2*y*z + 2*x*w
+        angle = np.linalg.norm(delta_rot, axis=-1, keepdims=True)  # [..., 1]
+        # Avoid division by zero
+        safe_angle = np.where(angle < 1e-12, 1.0, angle)
+        axis = delta_rot / safe_angle
 
-        r00 = 1.0 - 2.0 * y * y - 2.0 * z * z
-        r10 = 2.0 * x * y + 2.0 * z * w
-        r20 = 2.0 * x * z - 2.0 * y * w
-
-        r01 = 2.0 * x * y - 2.0 * z * w
-        r11 = 1.0 - 2.0 * x * x - 2.0 * z * z
-        r21 = 2.0 * y * z + 2.0 * x * w
-
-        # Flatten the first two columns: [col0, col1] -> 6 values
-        return np.array([r00, r10, r20, r01, r11, r21])
+        half_angle = angle / 2.0
+        w = np.cos(half_angle).squeeze(-1)  # [..., ]
+        xyz = np.sin(half_angle) * axis  # [..., 3]
+        return np.concatenate([w[..., np.newaxis], xyz], axis=-1)  # [..., 4]

@@ -1,10 +1,10 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from heca.misc.data import TrainingRunData
+from heca.misc.run_data import TrainingRunData
 from heca.plots.helper.helper import *
 from dataclasses import dataclass
 
-from heca.misc.data import TrainingRunData
+from heca.misc.run_data import TrainingRunData
 from heca.runners.plotters.hecas.heca import (
     HecaPlotter,
     HecaPlotterConfig,

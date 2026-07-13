@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from stepmix import StepMix
 
 from heca.conditions.condition import Condition
-from heca.conditions.pair import ConditionPair
+from heca.conditions.pair import ConPair
+from scipy.optimize import minimize
 
 
 class ConditionAnalyzer:
@@ -42,16 +43,15 @@ class ConditionAnalyzer:
                 return False
         return True
 
-    def calculate_subgoal(
+    def make_subgoal(
         self, post: Condition, pre: Condition
-    ) -> tuple[dict[str, tuple[float, np.ndarray]], set[str]]:
+    ) -> dict[str, tuple[float, np.ndarray]]:
         values = {}
-        leftover = post.elabels.difference(pre.elabels)
         for key in post.elabels.intersection(pre.elabels):
             score = self.calculate_score(post, pre, key)
             value = self.best_sample(post, pre, key)
             values[key] = (score, value)
-        return values, leftover
+        return values
 
     def best_sample(self, post: Condition, pre: Condition, key: str):
 
@@ -136,13 +136,21 @@ class ConditionAnalyzer:
         results.sort(key=lambda r: r["score"], reverse=True)
 
         pose = results[0]["pose"]
-        state = results[0]["pose"]
+        state = results[0]["state"]
         assert isinstance(pose, np.ndarray)
         return np.concatenate([pose, [state]])
 
-    def calculate_sim_matrix(
-        self, cp1: ConditionPair, cp2: ConditionPair, key: str
-    ) -> np.ndarray:
+    def refine_pose(self, initial_pose, m1: StepMix, m2: StepMix):
+
+        def neg_log_product(x):
+            # Minimize the negative sum of log-densities
+            return -(m1.log_prob(x) + m2.log_prob(x))
+
+        # Gradient is automatically computed via finite differences or autograd
+        result = minimize(neg_log_product, initial_pose, method="L-BFGS-B")
+        return result.x
+
+    def calculate_sim_matrix(self, cp1: ConPair, cp2: ConPair, key: str) -> np.ndarray:
         mat = np.zeros((2, 2))
         for i, cp1con in enumerate([cp1.pre, cp1.post]):
             for j, cp2con in enumerate([cp2.pre, cp2.post]):
@@ -205,9 +213,7 @@ class ConditionAnalyzer:
 
         return np.exp(-kl)
 
-    def compute_sim(
-        self, cp1: "ConditionPair", cp2: "ConditionPair"
-    ) -> dict[str, np.ndarray]:
+    def compute_sim(self, cp1: "ConPair", cp2: "ConPair") -> dict[str, np.ndarray]:
         sim_rating = {}
         print(cp1.elabels)
         print(cp2.elabels)
@@ -221,8 +227,8 @@ class ConditionAnalyzer:
     def plot_similarity(
         self,
         sim_rating: dict[str, np.ndarray],
-        cp1: "ConditionPair",
-        cp2: "ConditionPair",
+        cp1: "ConPair",
+        cp2: "ConPair",
         path: Path,
     ):
         entities = list(sim_rating.keys())

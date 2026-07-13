@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import heca.plots.helper.helper as helper
-from heca.misc.data import TrainingRunData, RunDataCollection
+from heca.misc.run_data import TrainingRunData, RunDataCollection
 
 
 def plot(collection: RunDataCollection):

@@ -2,13 +2,13 @@ import abc
 from dataclasses import dataclass
 from enum import Enum
 from functools import cached_property
-from heca.conditions.pair import ConditionPair
-from heca.misc.dc import DCScene
+from heca.conditions.pair import ConPair
+from heca.misc.data import DCScene
 from heca.misc.base import Persistable
 from heca.misc.entity import Entity
 
 
-class EESate(Enum):
+class EEState(Enum):
     IDLE = 1
     ERROR = 2
     ACTIVE = 3
@@ -39,7 +39,7 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError
 
     @cached_property
-    def conditions(self) -> list[ConditionPair]:
+    def conditions(self) -> list[ConPair]:
         raise NotImplementedError
 
     @abc.abstractmethod

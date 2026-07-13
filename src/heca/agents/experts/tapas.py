@@ -23,10 +23,9 @@ from tapas_gmm_modified.policy.models.tpgmm import (
 from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
-from heca.conditions.pair import ConditionPair
-from heca.misc.dc import DCScene
+from heca.conditions.pair import ConPair
+from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Mobility
-from heca.misc.td import TDImage
 from heca.misc import logger
 from heca.misc.hardware import device
 
@@ -286,7 +285,7 @@ class TapasAgent(ExpertAgent):
         return labels
 
     @cached_property
-    def conditions(self) -> list[ConditionPair]:
+    def conditions(self) -> list[ConPair]:
         path = TapasAgent.load_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
         demos_scenes, demos_images = self.scene.load_dataset(
@@ -310,7 +309,7 @@ class TapasAgent(ExpertAgent):
 
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples)
         post = Condition("post", post_data, 1, self.cfg.n_samples)
-        pair = ConditionPair(f"{self.cfg.tag}_0", pre, post)
+        pair = ConPair(f"{self.cfg.tag}_0", pre, post)
         pair.plot(path)
         return [pair]
 

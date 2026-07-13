@@ -3,12 +3,11 @@ from functools import cached_property
 import torch
 import numpy as np
 from dataclasses import dataclass, field
-from heca.misc.dc import DCEntity, DCScene
+from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
 from heca.misc.state import State
 from heca.misc.area import Area
-from heca.misc.td import TDEntity, TDImage, TDScene, make_abs_and_rel_td_entity
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -286,32 +285,6 @@ class CalvinScene(Scene):
             raise NotImplementedError
         else:
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
-
-    def to_td_scene(self, obs: CalvinEnvObservation) -> TDScene:
-        pos, rot, state = self.get_ee(obs)
-        td_entities: dict[str, TDEntity] = {}
-        for entity in self.entities:
-            e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
-            e_state = obs.object_states.get(f"base__{entity.cfg.label}", None)
-            assert e_pose is not None, f"Missing pose for entity {entity.cfg.label}"
-            assert e_state is not None, f"Missing state for entity {entity.cfg.label}"
-            final_kps = torch.tensor(e_pose, dtype=torch.float32)
-            final_state = self.gt_state(entity, e_state)
-            td_abs, td_rel = make_abs_and_rel_td_entity(
-                position=final_kps[:3],
-                rotation=final_kps[-4:],
-                state=final_state,
-                ee_pos=pos,
-                ee_rot=rot,
-            )
-            td_entities[entity.cfg.label] = td_abs
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["ee"] = TDEntity(
-            pos=pos,
-            rot=rot,
-            ste=state,
-        )
-        return TDScene(td_entities)
 
     def to_dc_scene(self, obs: CalvinEnvObservation) -> DCScene:
         pos, rot, ste, soh = self.get_dc_ee_values(obs)

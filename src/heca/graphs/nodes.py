@@ -1,122 +1,31 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
-from typing import Optional
 
-import torch
+import numpy as np
 
 from heca.agents.agent import Agent
 
 
+@dataclass
 class GraphNode(ABC):
-    x: torch.Tensor
-    src: str
-    dst: str
-    node: str
-
-    @property
-    @abstractmethod
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class PosNode(GraphNode):
-    x: torch.Tensor
-    node: str = "pos"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class RotNode(GraphNode):
-    x: torch.Tensor
-    node: str = "rot"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class SteNode(GraphNode):
-    x: torch.Tensor
-    node: str = "ste"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class EntityNode(GraphNode):
     tag: str
-    x: Optional[torch.Tensor] = None
-    node: str = "entity"
-
-    @property
-    def key(self) -> str:
-        return self.dst + self.tag
-
-    @classmethod
-    def make_key(cls, etag: str, tag: str) -> str:
-        return etag + tag
+    changed: bool
+    data: np.ndarray
+    sources: set[tuple[str, str]]
 
 
-class PosCompNode(GraphNode):
-    node: str = "posc"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class RotCompNode(GraphNode):
-    x: torch.Tensor
-    node: str = "rotc"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
+@dataclass
+class EntityNode(GraphNode):
+    entity: str
+    data: np.ndarray = np.zeros(0)
+    changed: bool = True
+    static: bool = False
+    weight: float = 1.0
 
 
-class SteCompNode(GraphNode):
-    x: torch.Tensor
-    node: str = "stec"
-
-    @property
-    def key(self) -> str:
-        raise NotImplementedError
-
-
-class CompNode(GraphNode):
-    idx: int
-    x: Optional[torch.Tensor] = None
-    node: str = "comp"
-
-    @property
-    def key(self) -> str:
-        return self.dst + f"{self.idx}"
-
-
-class PreMixNode(GraphNode):
-    etag: str
-    x: Optional[torch.Tensor] = None
-    node: str = "premix"
-
-    @property
-    def key(self) -> str:
-        return self.dst + self.etag + self.node
-
-
-class PostMixNode(GraphNode):
-    etag: str
-    x: Optional[torch.Tensor] = None
-    node: str = "postmix"
-
-    @property
-    def key(self) -> str:
-        return self.dst + self.node
-
-
+@dataclass
 class OptionNode(GraphNode):
+    tag: str
     agent: Agent.Config
-    x: Optional[torch.Tensor] = None
-    node: str = "option"
+    changed: bool = False
+    data: np.ndarray = np.zeros(0)

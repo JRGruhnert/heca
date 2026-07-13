@@ -7,7 +7,7 @@ from heca.conditions.condition import Condition
 # Condition saves raw datapoints per entity
 
 
-class ConditionPair:
+class ConPair:
     def __init__(
         self,
         label: str,
@@ -25,9 +25,7 @@ class ConditionPair:
         return self.pre.elabels
 
     @classmethod
-    def merge(
-        cls, label: str, a: "ConditionPair", b: "ConditionPair", n_samples: int
-    ) -> "ConditionPair":
+    def merge(cls, label: str, a: "ConPair", b: "ConPair", n_samples: int) -> "ConPair":
         pre_max, post_max = cls.make_max_components(a, b)
         pre_data = cls._merge_data(a.pre.data_raw, b.pre.data_raw)
         post_data = cls._merge_data(a.post.data_raw, b.post.data_raw)
@@ -36,9 +34,7 @@ class ConditionPair:
         return cls(label, pre, post)
 
     @classmethod
-    def make_max_components(
-        cls, a: "ConditionPair", b: "ConditionPair"
-    ) -> tuple[int, int]:
+    def make_max_components(cls, a: "ConPair", b: "ConPair") -> tuple[int, int]:
         pre_max = a.pre._max_components + b.pre._max_components
         post_max = a.post._max_components + b.post._max_components
         return pre_max, post_max

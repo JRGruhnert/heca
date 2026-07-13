@@ -8,15 +8,9 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
-from heca.misc.dc import DCEntity, DCScene
+from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
-from heca.misc.td import (
-    TDEntity,
-    TDImage,
-    TDScene,
-    make_abs_and_rel_td_entity,
-)
 
 
 class OGBenchScene(Scene):
@@ -178,38 +172,6 @@ class OGBenchScene(Scene):
         ee = DCEntity(pos, rot, ste, soh)
         extras = self.get_extras(obs)
         return DCScene(ee, dc_entities, extras=extras)
-
-    def to_td_scene(self, obs: dict) -> TDScene:
-        pos, rot, state = self.get_ee(obs)
-        td_entities: dict[str, TDEntity] = {}
-        for entity in self.entities:
-            if entity.cfg.label in [
-                "button_0",
-                "button_1",
-            ]:  # hack cause _pos already used
-                e_pos = obs[f"privileged_{entity.cfg.label}_pos_full"]
-            else:
-                e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
-            wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
-            e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
-            e_state = obs[f"privileged_{entity.cfg.label}_state"]
-            # print(e_state)
-            td_abs, td_rel = make_abs_and_rel_td_entity(
-                position=torch.tensor(e_pos, dtype=torch.float32),
-                rotation=torch.tensor(e_rot, dtype=torch.float32),
-                state=entity.state.one_hot_from_idx(e_state.item()),
-                ee_pos=pos,
-                ee_rot=rot,
-            )
-            td_entities[entity.cfg.label] = td_abs
-            td_entities[f"{entity.cfg.label}_rel"] = td_rel
-        td_entities["ee"] = TDEntity(
-            pos=pos,
-            rot=rot,
-            ste=state,
-        )
-        extras = self.get_extras(obs)
-        return TDScene(td_entities, extras=extras)
 
     def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
