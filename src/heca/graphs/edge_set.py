@@ -29,7 +29,8 @@ class EdgeSet:
         for i, edge in enumerate(self.edges):
             src = snset.idx_get(edge[0])
             dst = dnset.idx_get(edge[1])
-            self.update_attr(src, dst, i)
+            if src.changed or dst.changed:
+                self.update_attr(src, dst, i)
         self.edge_attr = torch.from_numpy(self.attrs).float()
 
     def update_attr(self, src: GraphNode, dst: GraphNode, index: int):
@@ -41,9 +42,6 @@ class EdgeSet:
             pass
         else:
             raise NotImplementedError
-        if src.changed or dst.changed:
-            attr = np.zeros(1)
-            self.attrs[index] = attr
 
     def compute_edge_feats(self, x_src: np.ndarray, x_dst: np.ndarray):
         """

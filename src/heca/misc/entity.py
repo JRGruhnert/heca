@@ -1,3 +1,5 @@
+from typing import Callable
+
 import numpy as np
 
 from dataclasses import dataclass
@@ -7,7 +9,6 @@ from functools import total_ordering
 from heca.misc.base import Configurable
 from heca.misc.data import DCEntity
 from heca.misc.quaternion import Quaternion
-from heca.properties.default.v2.position import PositionProperty
 from heca.properties.default.v2.state import StateProperty
 
 
@@ -27,13 +28,10 @@ class Entity(Configurable):
         question: str
         answers: set[str]
         mobility: Mobility
-        position: PositionProperty.Config = PositionProperty.Config()
-        rotation: PositionProperty.Config = PositionProperty.Config()
+        eval_func: Callable[[DCEntity, DCEntity], bool] = lambda a, b: False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.position = PositionProperty.get(cfg.position)
-        self.rotation = PositionProperty.get(cfg.rotation)
         self.state = StateProperty.get(
             StateProperty.Config(
                 values=cfg.states,
@@ -51,10 +49,7 @@ class Entity(Configurable):
         )
 
     def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
-        raise NotImplementedError
-
-    def distance(self, a: DCEntity, b: DCEntity) -> float:
-        raise NotImplementedError
+        return self.cfg.eval_func(a, b)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Entity):

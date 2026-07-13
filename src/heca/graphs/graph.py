@@ -30,28 +30,24 @@ class GraphBlueprint:
         self.goal: DCScene = DCScene.empty()
         self.entities: dict[str, Entity] = {}
 
-        self.stempix_edge: tuple[str, str, str] = ("entity", "stepmix", "entity")
-        self.summary_edge: tuple[str, str, str] = ("entity", "summary", "option")
-        self.tapas_edge: tuple[str, str, str] = ("entity", "tapas", "entity")
-
     def graph(self) -> HeteroData:
         data = HeteroData()
-        data["entity"].x = self.ns_entity.x
-        data["option"].x = self.ns_option.x
-        data[self.stempix_edge].edge_attr = self.es_stepmix.edge_attr
-        data[self.summary_edge].edge_attr = self.es_summary.edge_attr
-        data[self.stempix_edge].edge_index = self.es_stepmix.edge_index
-        data[self.summary_edge].edge_index = self.es_summary.edge_index
-        data[self.tapas_edge].edge_index = self.es_tapas.edge_index
+        data[self.ns_entity.type].x = self.ns_entity.x
+        data[self.ns_option.type].x = self.ns_option.x
+        data[self.es_stepmix.type].edge_attr = self.es_stepmix.edge_attr
+        data[self.es_summary.type].edge_attr = self.es_summary.edge_attr
+        data[self.es_stepmix.type].edge_index = self.es_stepmix.edge_index
+        data[self.es_summary.type].edge_index = self.es_summary.edge_index
+        data[self.es_tapas.type].edge_index = self.es_tapas.edge_index
         return data.to(device=hardware.device.type)
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
         raise NotImplementedError
 
-    def pre_tag(self, entity: str):
+    def start_tag(self, entity: str):
         return f"{entity}-pre"
 
-    def post_tag(self, entity: str):
+    def goal_tag(self, entity: str):
         return f"{entity}-post"
 
     def preprocess_entity(self, x: DCEntity) -> np.ndarray:
@@ -62,7 +58,7 @@ class GraphBlueprint:
         self.start = start
         for label, entity in start.entities():
             x = self.preprocess_entity(entity)
-            self.ns_entity.update(tag=self.pre_tag(label), x=x)
+            self.ns_entity.update(tag=self.start_tag(label), x=x)
 
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
@@ -72,7 +68,7 @@ class GraphBlueprint:
         self.goal = goal
         for label, entity in goal.entities():
             x = self.preprocess_entity(entity)
-            self.ns_entity.update(tag=self.post_tag(label), x=x)
+            self.ns_entity.update(tag=self.goal_tag(label), x=x)
 
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
@@ -87,7 +83,7 @@ class GraphBlueprint:
         for entity, comps in con.parameters.items():
             for idx, data in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
-                keys[entity].add((self.stempix_edge[1], key))
+                keys[entity].add((self.es_stepmix.type[1], key))
                 self.ns_entity.add(
                     key,
                     EntityNode(
@@ -105,12 +101,12 @@ class GraphBlueprint:
         pre_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in comp_sources.items():
             key = "pre" + entity + label
-            pre_sources[entity] = (self.tapas_edge[1], key)
+            pre_sources[entity] = (self.es_tapas.type[1], key)
             self.ns_entity.add(
                 key=key,
                 value=EntityNode(
                     entity=entity,
-                    tag=self.pre_tag(entity),
+                    tag=self.start_tag(entity),
                     sources=sources,
                 ),
             )
@@ -131,11 +127,11 @@ class GraphBlueprint:
                 key,
                 EntityNode(
                     entity=entity,
-                    tag=self.post_tag(entity),
+                    tag=self.goal_tag(entity),
                     sources=sources,
                 ),
             )
-            post_sources[entity] = (self.summary_edge[1], key)
+            post_sources[entity] = (self.es_summary.type[1], key)
         return post_sources
 
     def set_subgoal(
@@ -161,7 +157,7 @@ class GraphBlueprint:
                     sources=sources,
                 ),
             )
-            temp_sources[entity] = (self.summary_edge[1], key)
+            temp_sources[entity] = (self.es_summary.type[1], key)
         return {src for src in temp_sources.values()}
 
     def generate(

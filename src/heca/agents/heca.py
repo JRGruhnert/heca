@@ -6,7 +6,7 @@ import torch
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
 
-from heca.conditions.analyzer import Analyzer
+from heca.conditions.analyzer import ConditionAnalyzer
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
@@ -61,7 +61,7 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions, self.entities
         )
-        self.analyzer = Analyzer(threshold=cfg.threshold)
+        self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
         self.blueprint = GraphBlueprint(cfg.threshold).generate(
             list(self.cfg.agents), self.entities
         )

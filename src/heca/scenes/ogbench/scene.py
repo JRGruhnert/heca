@@ -10,6 +10,7 @@ from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
 from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
+from heca.scenes.ogbench.utils import eval_pos, eval_state
 from heca.scenes.scene import Scene
 
 
@@ -93,6 +94,7 @@ class OGBenchScene(Scene):
                 answers={"It is open", "It is closed"},
                 states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
+                eval_func=eval_pos,
             ),
             Entity.Config(
                 label="window_handle",
@@ -104,6 +106,7 @@ class OGBenchScene(Scene):
                 },
                 states={"open", "closed"},  # 0, 1
                 mobility=Mobility.ARTICULATED,
+                eval_func=eval_pos,
             ),
             Entity.Config(
                 label="button_0",
@@ -112,6 +115,7 @@ class OGBenchScene(Scene):
                 answers={"white", "red"},
                 states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
+                eval_func=eval_state,
             ),
             Entity.Config(
                 label="button_1",
@@ -120,6 +124,7 @@ class OGBenchScene(Scene):
                 answers={"white", "red"},
                 states={"free", "locked"},  # 0, 1
                 mobility=Mobility.STATIC,
+                eval_func=eval_state,
             ),
             Entity.Config(
                 label="block_0",
@@ -132,6 +137,7 @@ class OGBenchScene(Scene):
                 },
                 states={"drawer", "floor", "unknown"},  # 0, 1
                 mobility=Mobility.FREE,
+                eval_func=eval_pos,
             ),
         ]
         return set([Entity.get(e) for e in ents])
