@@ -159,7 +159,7 @@ class ConditionAnalyzer:
                 elif not cp1con.model_states[key].issubset(cp2con.model_states[key]):
                     continue
                 else:
-                    mat[i, j] = self.kl_variational_stepmix(
+                    mat[i, j] = self.kl_variational_paper(
                         cp2con.models[key], cp1con.models[key]
                     )
         return mat
@@ -213,7 +213,113 @@ class ConditionAnalyzer:
 
         return np.exp(-kl)
 
-    def compute_sim(self, cp1: "ConPair", cp2: "ConPair") -> dict[str, np.ndarray]:
+    def kl_variational_stepmix_min(self, m1: StepMix, m2: StepMix):
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        kl = 0.0
+        for i in range(len(p1["weights"])):
+            w1 = p1["weights"][i]
+            mu1 = p1["measurement"]["pose"]["means"][i]
+            var1 = p1["measurement"]["pose"]["covariances"][i]
+            cat1 = p1["measurement"]["state"]["pis"][i]  # ← shape (S,)
+
+            best_kl = np.inf
+            for j in range(len(p2["weights"])):
+                mu2 = p2["measurement"]["pose"]["means"][j]
+                var2 = p2["measurement"]["pose"]["covariances"][j]
+                cat2 = p2["measurement"]["state"]["pis"][j]  # ← shape (S,)
+
+                # Gaussian part (same as before)
+                kl_gauss = 0.5 * np.sum(
+                    np.log(var2)
+                    - np.log(var1)
+                    + var1 / var2
+                    + (mu1 - mu2) ** 2 / var2
+                    - 1
+                )
+
+                # Categorical part — NEW, closed form
+                cat1_safe = np.clip(cat1, 1e-12, 1)
+                cat2_safe = np.clip(cat2, 1e-12, 1)
+                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
+
+                best_kl = min(best_kl, kl_gauss + kl_cat)
+
+            kl += w1 * best_kl
+        return np.exp(-kl)
+
+    def kl_variational_paper(self, m1: StepMix, m2: StepMix):
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        kl = 0.0
+        for i in range(len(p1["weights"])):
+            w1 = p1["weights"][i]
+            mu1 = p1["measurement"]["pose"]["means"][i]
+            var1 = p1["measurement"]["pose"]["covariances"][i]
+            cat1 = p1["measurement"]["state"]["pis"][i]
+
+            log_sum_m1 = 0.0
+            log_sum_m2 = 0.0
+            for j in range(len(p2["weights"])):
+                w2 = p2["weights"][j]
+                mu2 = p2["measurement"]["pose"]["means"][j]
+                var2 = p2["measurement"]["pose"]["covariances"][j]
+                cat2 = p2["measurement"]["state"]["pis"][j]
+
+                kl_gauss = 0.5 * np.sum(
+                    np.log(var2)
+                    - np.log(var1)
+                    + var1 / var2
+                    + (mu1 - mu2) ** 2 / var2
+                    - 1
+                )
+                cat1_safe = np.clip(cat1, 1e-12, 1)
+                cat2_safe = np.clip(cat2, 1e-12, 1)
+                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
+                total_kl = kl_gauss + kl_cat
+
+                log_sum_m1 += w1 * np.exp(-total_kl)  # numerator: w_i * exp(-KL)
+                log_sum_m2 += w2 * np.exp(-total_kl)  # denominator: v_j * exp(-KL)
+
+            kl += w1 * np.log(log_sum_m1 / log_sum_m2)
+
+        return np.exp(-kl)
+
+    def score_single_sample(
+        self, m: StepMix, sample_pose: np.ndarray, sample_state: int
+    ) -> float:
+        """Score a single sample under a StepMix model. Returns [0,1]. No Monte Carlo."""
+        params = m.get_parameters()
+
+        best_log_prob = -np.inf
+        for k in range(len(params["weights"])):
+            mu = params["measurement"]["pose"]["means"][k]
+            var = params["measurement"]["pose"]["covariances"][k]
+            pis = params["measurement"]["state"]["pis"][k]
+
+            # Gaussian part — closed form
+            log_gauss = -0.5 * np.sum(
+                np.log(2 * np.pi * var) + (sample_pose - mu) ** 2 / var
+            )
+
+            # Categorical part — closed form (just look up the state)
+            log_cat = np.log(np.clip(pis[sample_state], 1e-12, 1))
+
+            total = log_gauss + log_cat
+
+            # Weight-corrected (same as your Olsen version)
+            score = np.log(params["weights"][k]) + total
+
+            if score > best_log_prob:
+                best_log_prob = score
+
+        return np.exp(best_log_prob)  # [0, 1], 1 = perfect fit
+
+    def compute_sim(
+        self, cp1: "ConditionPair", cp2: "ConditionPair"
+    ) -> dict[str, np.ndarray]:
         sim_rating = {}
         print(cp1.elabels)
         print(cp2.elabels)
