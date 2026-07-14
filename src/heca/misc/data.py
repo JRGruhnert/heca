@@ -4,75 +4,43 @@ from typing import Iterator, cast
 from tensordict import TensorDict
 
 
-class DCEntity:
-    def __init__(
-        self, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray, soh: np.ndarray
-    ):
-        self.pos = pos
-        self.rot = rot
-        self.ste = ste
-        self.soh = soh
-
-    @property
-    def tpos(self) -> torch.Tensor:
-        return torch.Tensor(self.pos)
-
-    @property
-    def trot(self) -> torch.Tensor:
-        return torch.Tensor(self.rot)
-
-    @property
-    def tste(self) -> torch.Tensor:
-        return torch.Tensor(self.ste)
-
-    @property
-    def tsoh(self) -> torch.Tensor:
-        return torch.Tensor(self.tsoh)
-
-    @classmethod
-    def empty(cls) -> "DCEntity":
-        return cls(
-            np.zeros(3),
-            np.array([0.0, 0.0, 0.0, 1.0]),
-            np.zeros(1),
-            np.zeros(1),
-        )
-
-
 class DCScene:
     def __init__(
         self,
-        ee: DCEntity,
-        entities: dict[str, DCEntity],
+        ee: np.ndarray,
+        entities: dict[str, np.ndarray],
         extras: dict[str, np.ndarray] = {},
     ):
         self._ee = ee
         self._entities = entities
         self._extras = extras if extras is not None else {}
 
-    def __getitem__(self, key: str) -> DCEntity:
+    def __getitem__(self, key: str) -> np.ndarray:
         return self._entities[key]
 
-    def get(self, key: str) -> DCEntity:
+    def get(self, key: str) -> np.ndarray:
         if key not in self._entities:
             raise KeyError(f"Entity {key} not found in TDScene")
         return self._entities[key]
+
+    def set(self, key: str, value: np.ndarray):
+        self._entities[key] = value
 
     @property
     def extras(self) -> dict[str, np.ndarray]:
         return self._extras
 
     @property
-    def ee(self) -> DCEntity:
+    def ee(self) -> np.ndarray:
         return self._ee
 
-    def entities(self) -> Iterator[tuple[str, DCEntity]]:
+    def entities(self) -> Iterator[tuple[str, np.ndarray]]:
         for key, value in self._entities.items():
             yield key, value
 
     @classmethod
     def empty(cls) -> "DCScene":
-        return cls(DCEntity.empty(), {})
+        return cls(np.empty(8), {})
 
 
 class TDImage(TensorDict):

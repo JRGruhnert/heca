@@ -3,11 +3,11 @@ from functools import cached_property
 import torch
 import numpy as np
 from dataclasses import dataclass, field
-from heca.misc.data import DCEntity, DCScene, TDImage
+from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
-from heca.misc.state import State
-from heca.misc.area import Area
+from heca.utils.state import State
+from heca.utils.area import Area
 
 from calvin_env_modified.envs.observation import CalvinEnvObservation
 from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
@@ -288,7 +288,7 @@ class CalvinScene(Scene):
 
     def to_dc_scene(self, obs: CalvinEnvObservation) -> DCScene:
         pos, rot, ste, soh = self.get_dc_ee_values(obs)
-        td_entities: dict[str, DCEntity] = {}
+        td_entities: dict[str, np.ndarray] = {}
         for entity in self.entities:
             e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
             e_ste = obs.object_states.get(f"base__{entity.cfg.label}", None)
@@ -298,10 +298,10 @@ class CalvinScene(Scene):
             e_rot = e_pose[-4]
             e_ste = self.dc_state(entity, e_ste)
             e_soh = entity.state.one_hot_from_idx_dc(e_ste)
-            td_entities[entity.cfg.label] = DCEntity(
-                e_pos, e_rot, np.ndarray(e_ste), e_soh
+            td_entities[entity.cfg.label] = Entity.to_value(
+                e_pos, e_rot, np.ndarray(e_ste)
             )
-        ee = DCEntity(pos=pos, rot=rot, ste=ste, soh=soh)
+        ee = Entity.to_value(pos=pos, rot=rot, ste=ste)
         return DCScene(ee, td_entities)
 
     def to_np_image(self, obs: CalvinEnvObservation) -> np.ndarray:

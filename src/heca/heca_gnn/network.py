@@ -2,74 +2,162 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch_geometric.data import HeteroData
+from torch_geometric.nn import GINEConv, GINConv
 
 from heca.misc.base import Configurable
-from heca.heca_gnn.actor import ActorReadoutNetwork
-from heca.heca_gnn.critic import CriticReadoutNetwork
+
+
+class StepMixBlock(nn.Module):
+    """GIN layer for entity→stepmix→entity edges (8-dim edge features)."""
+
+    def __init__(self, dim: int):
+        super().__init__()
+        self.nn = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.LayerNorm(dim),
+            nn.ReLU(),
+            nn.Linear(dim, dim),
+        )
+        self.conv = GINEConv(nn=self.nn, edge_dim=8)
+
+    def forward(
+        self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor
+    ) -> torch.Tensor:
+        return self.conv(x, edge_index, edge_attr) + x
+
+
+class TapasBlock(nn.Module):
+    """GIN layer for entity→tapas→entity edges (no edge features)."""
+
+    def __init__(self, dim: int):
+        super().__init__()
+        self.nn = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.LayerNorm(dim),
+            nn.ReLU(),
+            nn.Linear(dim, dim),
+        )
+        self.conv = GINConv(nn=self.nn)
+
+    def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
+        return self.conv(x, edge_index) + x
+
+
+class SummaryBlock(nn.Module):
+    """GINE layer for entity→summary→option edges (7-dim edge features)."""
+
+    def __init__(self, dim: int):
+        super().__init__()
+        self.nn = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.ReLU(),
+            nn.Linear(dim, dim),
+        )
+        self.conv = GINEConv(nn=self.nn, edge_dim=7)
+
+    def forward(
+        self,
+        x_entity: torch.Tensor,
+        x_option: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_attr: torch.Tensor,
+    ) -> torch.Tensor:
+        return self.conv((x_entity, x_option), edge_index, edge_attr)
+
+
+class OptionReadout(nn.Module):
+    """MLP readout from option node features to actor logits and critic value."""
+
+    def __init__(self, dim: int):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, dim),
+            nn.ReLU(),
+        )
+        self.actor_head = nn.Linear(dim, 1)
+        self.critic_head = nn.Linear(dim, 1)
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        x = self.net(x)
+        logits = self.actor_head(x).view(1, -1)  # [1, num_options]
+        value = self.critic_head(x).squeeze(-1)  # [num_options]
+        return logits, value
 
 
 class Network(Configurable, nn.Module):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        feature_dim: int = 32
+        input_dim: int = 64  # 13 + max_state_count
+        feature_dim: int = 128
+        type_embed_dim: int = 8
+        max_entity_types: int = 32  # safe upper bound
+        num_stepmix_layers: int = 2
+        num_tapas_layers: int = 2
 
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)
         self.cfg = cfg
-        self.linear = nn.ModuleDict(
-            {
-                "position": nn.Linear(
-                    in_features=3,
-                    out_features=self.cfg.feature_dim,
-                ),
-                "rotation": nn.Linear(
-                    in_features=3,
-                    out_features=self.cfg.feature_dim,
-                ),
-                "state": nn.Linear(
-                    in_features=self.cfg.feature_dim,
-                    out_features=self.cfg.feature_dim,
-                ),
-            }
-        )
-        self.actor_net = ActorReadoutNetwork(feature_dim=self.cfg.feature_dim)
-        self.critic_net = CriticReadoutNetwork(feature_dim=self.cfg.feature_dim)
 
-    def forwarddd(self, raw_observations):
-        # raw_observations: [N, 7] (pos+rot) + state as int separately
-        # StepMix expects: [pos, rot, state_onehot] or [pos, rot, state_int]
+        self.type_embedding = nn.Embedding(cfg.max_entity_types, cfg.type_embed_dim)
 
-        # 1. Get probabilities
-        probs = self.stepmix.predict_proba(raw_observations)  # [N, n_comp]
+        total_input_dim = cfg.input_dim + cfg.type_embed_dim
 
-        # 2. Get log-likelihood
-        log_liks = self.stepmix.score_samples(raw_observations)  # [N]
-
-        # 3. Get hard assignments (for one-hot)
-        assignments = self.stepmix.predict(raw_observations)  # [N]
-        assignment_onehot = F.one_hot(assignments, num_classes=n_comp)  # [N, n_comp]
-
-        # 4. Concatenate everything
-        features = torch.cat(
-            [
-                raw_observations[:, :7],  # pos + rot (keep raw!)
-                probs,  # soft memberships
-                log_liks.unsqueeze(-1),  # confidence
-                assignment_onehot,  # hard assignment
-            ],
-            dim=-1,
+        self.entity_encoder = nn.Sequential(
+            nn.Linear(total_input_dim, cfg.feature_dim),
+            nn.LayerNorm(cfg.feature_dim),
+            nn.ReLU(),
         )
 
-        return features  # [N, 7 + 3*n_comp + 1]
+        self.stepmix_layers = nn.ModuleList(
+            [StepMixBlock(cfg.feature_dim) for _ in range(cfg.num_stepmix_layers)]
+        )
 
-    def forward(self, data: HeteroData) -> torch.Tensor:
-        return self.actor(data)
+        self.tapas_layers = nn.ModuleList(
+            [TapasBlock(cfg.feature_dim) for _ in range(cfg.num_tapas_layers)]
+        )
+
+        self.summary_layer = SummaryBlock(cfg.feature_dim)
+        self.option_readout = OptionReadout(cfg.feature_dim)
+
+    def forward(self, data: HeteroData) -> tuple[torch.Tensor, torch.Tensor]:
+        # --- 0. Concatenate type embeddings with entity features ---
+        type_embeds = self.type_embedding(
+            data["entity"].type_ids
+        )  # [N, type_embed_dim]
+        entity_x = torch.cat([data["entity"].x, type_embeds], dim=-1)
+
+        # --- 1. Encode entity features ---
+        entity_x = self.entity_encoder(entity_x)
+
+        # --- 2. StepMix message passing (entity → entity) ---
+        stepmix_idx = data[("entity", "stepmix", "entity")].edge_index
+        stepmix_attr = data[("entity", "stepmix", "entity")].edge_attr
+        for layer in self.stepmix_layers:
+            entity_x = layer(entity_x, stepmix_idx, stepmix_attr)
+
+        # --- 3. Tapas message passing (entity → entity) ---
+        tapas_idx = data[("entity", "tapas", "entity")].edge_index
+        for layer in self.tapas_layers:
+            entity_x = layer(entity_x, tapas_idx)
+
+        # --- 4. Summary message passing (entity → option) ---
+        summary_idx = data[("entity", "summary", "option")].edge_index
+        summary_attr = data[("entity", "summary", "option")].edge_attr
+        option_x = self.summary_layer(
+            entity_x, data["option"].x, summary_idx, summary_attr
+        )
+
+        # --- 5. Option readout ---
+        logits, value = self.option_readout(option_x)
+        return logits, value
 
     def actor(self, data: HeteroData) -> torch.Tensor:
-        return self.actor_net(data)
+        logits, _ = self.forward(data)
+        return logits
 
     def critic(self, data: HeteroData) -> torch.Tensor:
-        return self.critic_net(data)
+        _, value = self.forward(data)
+        return value
 
     def upgrade(self, checkpoint):
         self.load_state_dict(checkpoint, strict=False)

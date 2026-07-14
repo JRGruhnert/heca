@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.misc.area import Area
+from heca.utils.area import Area
 from heca.properties.evaluators.evaluator import PropertyEvaluator
 
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from heca.misc.base import Registerable
 from heca.misc.entity import Entity
 from heca.scenes.scene import Scene
-from heca.misc.td import TDImage
+from heca.misc.data import TDImage
 
 
 class ImageEncoder(Registerable):

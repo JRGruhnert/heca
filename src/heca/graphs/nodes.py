@@ -4,28 +4,34 @@ from dataclasses import dataclass
 import numpy as np
 
 from heca.agents.agent import Agent
+from heca.conditions.condition import Condition
+
+
+@dataclass
+class NodeData:
+    gnn: np.ndarray = np.zeros(0)
+    env: np.ndarray = np.zeros(0)
 
 
 @dataclass
 class GraphNode(ABC):
-    tag: str
     changed: bool
-    data: np.ndarray
+    data: NodeData
     sources: set[tuple[str, str]]
 
 
 @dataclass
 class EntityNode(GraphNode):
     entity: str
-    data: np.ndarray = np.zeros(0)
+    data: NodeData  # = GoalEntry()
     changed: bool = True
     static: bool = False
     weight: float = 1.0
+    con: Condition | None = None
 
 
 @dataclass
 class OptionNode(GraphNode):
-    tag: str
     agent: Agent.Config
     changed: bool = False
-    data: np.ndarray = np.zeros(0)
+    data: NodeData = NodeData()

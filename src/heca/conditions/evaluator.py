@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from heca.agents.agent import AgentFeedback
-from heca.conditions.analyzer import ConditionAnalyzer
 from heca.conditions.pair import ConPair
 from heca.misc.base import Configurable
 from heca.misc.data import DCScene
@@ -22,7 +21,6 @@ class Evaluator(Configurable):
         self.current_step: int = 0
         self.conditions: list[ConPair] = []
         self.entities: set[Entity] = set()
-        self.analyzer = ConditionAnalyzer(cfg.sample_threshold)
 
     def reset(self, y: DCScene):
         self.y = y
@@ -61,19 +59,13 @@ class Evaluator(Configurable):
         for pair in self.conditions:
             pair_match = True
             for label in pair.pre.elabels:
-                score = self.analyzer.score_single(
-                    pair.pre.models[label],
-                    Entity.stepmix_fmt(x.get(label)),
-                )
-                if score < self.analyzer.threshold:
-                    pair_match = False
+                _, valid = pair.pre.score_single(x.get(label), label)
+                if not valid:
+                    pair_match = valid
             for label in pair.post.elabels:
-                score = self.analyzer.score_single(
-                    pair.post.models[label],
-                    Entity.stepmix_fmt(x.get(label)),
-                )
-                if score < self.analyzer.threshold:
-                    pair_match = False
+                _, valid = pair.pre.score_single(x.get(label), label)
+                if not valid:
+                    pair_match = valid
             if pair_match:
                 return True
         return False

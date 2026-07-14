@@ -14,7 +14,7 @@ from PIL import Image
 from heca.scenes.scene import Scene
 from heca.misc import logger
 from heca.misc.base import Configurable
-from heca.misc.td import TDImage, TDSceneReferences
+from heca.misc.data import TDImage, TDSceneReferences
 from heca.misc.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 

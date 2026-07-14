@@ -5,8 +5,8 @@ import torch
 from heca.misc.base import Configurable
 from heca.environment.scenes.calvin.area import CalvinAreaConfig
 from heca.properties.normalizers.boundary import BoundaryNormalizer
-from heca.misc.area import Area
-from heca.misc.state import State
+from heca.utils.area import Area
+from heca.utils.state import State
 
 
 class AreaGTModifier(Configurable):

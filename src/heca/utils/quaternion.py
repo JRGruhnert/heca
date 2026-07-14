@@ -1,36 +1,14 @@
 import numpy as np
-import torch
 
 
 class Quaternion:
 
     @staticmethod
-    def normalize_quat(x: torch.Tensor) -> torch.Tensor:
-        """Normalize quaternion and ensure positive w component."""
-        nx = x / torch.linalg.norm(x)
+    def normalize(q: np.ndarray) -> np.ndarray:
+        nx = q / np.linalg.norm(q)
         if nx[3] < 0:
             return -nx
         return nx
-
-    @staticmethod
-    def mean(quaternions: torch.Tensor) -> torch.Tensor:
-        """
-        Computes the mean quaternion using the eigenvector method.
-        quaternions: tensor of shape [N, 4] (x, y, z, w)
-        Returns: mean quaternion [4] in (x, y, z, w) format
-        """
-        # Swap to (w, x, y, z) for computation
-        quats = quaternions[:, [3, 0, 1, 2]]
-        quats = quats / quats.norm(dim=1, keepdim=True)
-        A = quats.t() @ quats
-        _, eigenvectors = torch.linalg.eigh(A)
-        mean_quat = eigenvectors[:, -1]
-        # Ensure positive scalar part
-        if mean_quat[0] < 0:
-            mean_quat = -mean_quat
-        # Swap back to (x, y, z, w)
-        mean_quat_xyzw = mean_quat[[1, 2, 3, 0]]
-        return Quaternion.normalize_quat(mean_quat_xyzw)
 
     @staticmethod
     def inv(q):
@@ -66,16 +44,16 @@ class Quaternion:
         return angle[..., np.newaxis] * axis  # [..., 3]
 
     @staticmethod
-    def exp(delta_rot: np.ndarray) -> np.ndarray:
+    def exp(q: np.ndarray) -> np.ndarray:
         """
         Exponential map from axis-angle (3D) to unit quaternion.
         delta_rot: [..., 3] axis-angle vector.
         Returns: [..., 4] unit quaternion.
         """
-        angle = np.linalg.norm(delta_rot, axis=-1, keepdims=True)  # [..., 1]
+        angle = np.linalg.norm(q, axis=-1, keepdims=True)  # [..., 1]
         # Avoid division by zero
         safe_angle = np.where(angle < 1e-12, 1.0, angle)
-        axis = delta_rot / safe_angle
+        axis = q / safe_angle
 
         half_angle = angle / 2.0
         w = np.cos(half_angle).squeeze(-1)  # [..., ]

@@ -5,12 +5,10 @@ from typing import Sequence
 import torch
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
-
-from heca.conditions.analyzer import ConditionAnalyzer
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
-from heca.graphs.graph import GraphBlueprint
+from heca.graphs.graph import Graph
 from heca.heca_gnn.network import Network
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
@@ -62,14 +60,10 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions, self.entities
         )
-        self.analyzer = ConditionAnalyzer(threshold=cfg.threshold)
-        self.blueprint = GraphBlueprint(cfg.threshold).generate(
-            list(self.cfg.agents), self.entities
-        )
+        self.graph = Graph().generate(list(self.cfg.agents), self.entities)
 
     def predict(self) -> tuple[Agent.Config, DCScene]:
-        data = self.blueprint.graph()
-        options = self.blueprint.options()
+        data = self.graph.export()
         with torch.inference_mode():
             logits = self.network.actor(data)
 
@@ -83,10 +77,10 @@ class Heca(Agent):
         else:
             action = logits.argmax(dim=-1)
 
-        return options[action]
+        return self.graph.select(int(action))
 
     def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
-        self.blueprint.set_start(x)
+        self.graph.set_start(x)
         a, y = self.predict()
         z = Agent.get(a).act(x, y)
         fb = self.evaluator.step(z)
@@ -96,7 +90,7 @@ class Heca(Agent):
         return z, fb
 
     def act(self, x: DCScene, y: DCScene) -> DCScene:
-        self.blueprint.set_goal(y)
+        self.graph.set_goal(y)
         self.evaluator.reset(y)
         z, fb = self.step(x)
         while not fb.terminal:
@@ -128,7 +122,7 @@ class Heca(Agent):
     @cached_property
     def conditions(self) -> list[ConPair]:
         path = Agent.load_dir(self.cfg)
-        cons = []
+        cons: list[ConPair] = []
         for cfg in self.cfg.agents:
             cons.extend(Agent.get(cfg).conditions)
 
@@ -139,9 +133,7 @@ class Heca(Agent):
                 for j in range(i + 1, len(cons)):
                     a = cons[i]
                     b = cons[j]
-                    sim_rating = self.analyzer.compute_sim(a, b)
-                    self.analyzer.plot_similarity(sim_rating, a, b, path)
-                    if self.analyzer.evaluate_merge(sim_rating):
+                    if a.can_merge(b, path):
                         a_set = sets[i]
                         b_set = sets[j]
                         new_set = a_set | b_set
@@ -152,6 +144,7 @@ class Heca(Agent):
                             a=a,
                             b=b,
                             n_samples=self.cfg.n_samples,
+                            threshold=self.cfg.threshold,
                         )
                         new_pair.plot(path)
                         cons.pop(j)

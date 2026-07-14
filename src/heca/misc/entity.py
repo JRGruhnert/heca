@@ -7,9 +7,10 @@ from enum import Enum
 from functools import total_ordering
 
 from heca.misc.base import Configurable
-from heca.misc.data import DCEntity
-from heca.misc.quaternion import Quaternion
+from heca.utils.quaternion import Quaternion
 from heca.properties.default.v2.state import StateProperty
+
+STATE_LOGIT_BASELINE = -10.0
 
 
 class Mobility(Enum):
@@ -28,7 +29,7 @@ class Entity(Configurable):
         question: str
         answers: set[str]
         mobility: Mobility
-        eval_func: Callable[[DCEntity, DCEntity], bool] = lambda a, b: False
+        eval_func: Callable[[np.ndarray, np.ndarray], bool] = lambda a, b: False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -41,17 +42,7 @@ class Entity(Configurable):
     def state_count(self) -> int:
         return len(self.cfg.states)
 
-    def dc_format(self, value: np.ndarray) -> DCEntity:
-        return DCEntity(
-            value[:3],
-            value[3:7],
-            value[-1],
-            self.state.one_hot_from_idx_dc(
-                value[-1],
-            ),
-        )
-
-    def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
+    def evaluate(self, a: np.ndarray, b: np.ndarray) -> bool:
         return self.cfg.eval_func(a, b)
 
     def __eq__(self, other: object) -> bool:
@@ -67,17 +58,7 @@ class Entity(Configurable):
             return NotImplemented
         return self.cfg.label < other.cfg.label
 
-    @classmethod
-    def stepmix_fmt(cls, dce: DCEntity) -> np.ndarray:
-        return np.concatenate(
-            (dce.pos, dce.rot, dce.ste[:, None]),
-            axis=1,
-        )
-
-    @classmethod
-    def gnn_format(
-        cls, raw: np.ndarray, K: int, logit_confidence=10.0, base_logstd=-10.0
-    ):
+    def gnn_format(self, raw: np.ndarray, logit_confidence=10.0, base_logstd=-10.0):
         """
         Convert raw stepmix format to GNN node format.
 
@@ -93,6 +74,7 @@ class Entity(Configurable):
                     [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
         """
         # Initialize with zeros
+        K = self.state_count()
         node = np.zeros((13 + K), dtype=np.float32)
 
         # 1. Position mean (raw pos)
@@ -198,3 +180,7 @@ class Entity(Configurable):
         noisy[:, 13:] = noisy_logits
 
         return noisy
+
+    @classmethod
+    def to_value(cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray) -> np.ndarray:
+        return np.concatenate((pos, rot, ste[:, None]), axis=1)

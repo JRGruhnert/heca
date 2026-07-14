@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 
-from heca.misc.run_data import DCEntity
-from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.misc import logger
-from heca.misc.td import TDEntity
+from heca.misc.entity import Entity
 from heca.runners.plotter import HecaPlotter
 from heca.runners.plots.entity_3d import (
     Entity3DHelper,
@@ -55,7 +54,7 @@ class HecaConditionPlotter(HecaPlotter):
 
     def make_dc_entity(
         self, label: str, conditions: dict[str, PropertyCondition]
-    ) -> DCEntity:
+    ) -> np.ndarray:
 
         if label in ["red", "blue", "pink"]:
             label = f"block_{label}"
@@ -73,10 +72,10 @@ class HecaConditionPlotter(HecaPlotter):
                 )
                 break
         if not skip:
-            return DCEntity(
+            return Entity.to_value(
                 pos=conditions[f"{label}_position"].value,
                 rot=conditions[f"{label}_rotation"].value,
                 ste=conditions[f"{label}_scalar"].value,
             )
         else:
-            return DCEntity.empty()
+            return np.empty(8)

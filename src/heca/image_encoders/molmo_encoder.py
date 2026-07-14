@@ -14,7 +14,7 @@ from transformers import AutoProcessor, AutoModelForImageTextToText
 from heca.scenes.scene import Scene
 from heca.helper import molmo
 from heca.image_encoders.image_encoder import ImageEncoder
-from heca.misc.td import TDImage
+from heca.misc.data import TDImage
 
 
 class MolmoEncoder(ImageEncoder):

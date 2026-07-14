@@ -4,7 +4,6 @@ from typing import Callable
 import torch
 
 from heca.misc.base import Configurable
-from heca.misc.area import Area
 
 
 class State(Configurable):

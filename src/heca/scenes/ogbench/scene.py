@@ -8,7 +8,7 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
-from heca.misc.data import DCEntity, DCScene, TDImage
+from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.ogbench.utils import eval_pos, eval_state
 from heca.scenes.scene import Scene
@@ -159,7 +159,7 @@ class OGBenchScene(Scene):
         return Entity.get(config)
 
     def to_dc_scene(self, obs: dict) -> DCScene:
-        dc_entities: dict[str, DCEntity] = {}
+        dc_entities: dict[str, np.ndarray] = {}
         for entity in self.entities:
             if entity.cfg.label in [
                 "button_0",
@@ -173,9 +173,9 @@ class OGBenchScene(Scene):
             e_ste = obs[f"privileged_{entity.cfg.label}_state"]
             e_soh = entity.state.one_hot_from_idx_dc(e_ste.item())
 
-            dc_entities[entity.cfg.label] = DCEntity(e_pos, e_rot, e_ste, e_soh)
+            dc_entities[entity.cfg.label] = Entity.to_value(e_pos, e_rot, e_ste)
         pos, rot, ste, soh = self.get_ee_dc(obs)
-        ee = DCEntity(pos, rot, ste, soh)
+        ee = Entity.to_value(pos, rot, ste)
         extras = self.get_extras(obs)
         return DCScene(ee, dc_entities, extras=extras)
 

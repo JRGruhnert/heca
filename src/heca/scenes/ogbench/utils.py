@@ -1,18 +1,16 @@
 import numpy as np
 
-from heca.misc.data import DCEntity
-
 
 def load_demos():
     pass
 
 
-def eval_state(a: DCEntity, b: DCEntity) -> bool:
-    return a.ste == b.ste
+def eval_state(a: np.ndarray, b: np.ndarray) -> bool:
+    return a[-1] == b[-1]
 
 
-def eval_pos(a: DCEntity, b: DCEntity) -> bool:
-    return bool(np.linalg.norm(a.pos - b.pos) <= 0.04)
+def eval_pos(a: np.ndarray, b: np.ndarray) -> bool:
+    return bool(np.linalg.norm(a[:3] - b[:3]) <= 0.04)
 
 
 # NOTE: Reference OGBench success

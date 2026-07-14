@@ -1,13 +1,17 @@
+from typing import Generic, TypeVar
+
 import numpy as np
 import torch
 
 from heca.graphs.node_set import NodeSet
-from heca.graphs.nodes import GraphNode
-from heca.misc.data import DCScene
-from heca.misc.quaternion import Quaternion
+from heca.graphs.nodes import EntityNode, GraphNode
+from heca.utils.quaternion import Quaternion
+
+S = TypeVar("S", bound=GraphNode)
+D = TypeVar("D", bound=GraphNode)
 
 
-class EdgeSet:
+class EdgeSet(Generic[S, D]):
     def __init__(self, type: tuple[str, str, str]):
         self.edge_index: torch.Tensor = torch.empty((2, 0), dtype=torch.long)
         self.edge_attr: torch.Tensor = torch.empty((2, 0), dtype=torch.long)
@@ -15,6 +19,7 @@ class EdgeSet:
         self.attrs: list[np.ndarray] = []
         self.rebuild: bool = True
         self.type = type
+        self.goal_ref: dict[str, np.ndarray] = {}
 
     def add(self, src_idx: int, dst_idx: int):
         self.edges.append((src_idx, dst_idx))
@@ -24,65 +29,70 @@ class EdgeSet:
     def size(self) -> int:
         return len(self.edges)
 
-    def build(self, snset: NodeSet, dnset: NodeSet):
+    def build(
+        self, snset: NodeSet[S], dnset: NodeSet[D], goal_ref: dict[str, np.ndarray]
+    ):
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
         for i, edge in enumerate(self.edges):
             src = snset.idx_get(edge[0])
             dst = dnset.idx_get(edge[1])
             if src.changed or dst.changed:
-                self.update_attr(src, dst, i, goal)
+                self.update_attr(src, dst, i)
         self.edge_attr = torch.from_numpy(self.attrs).float()
 
-    # One after another (you got this. its just a master thesis. you wont fail)
-    # TODO: implement update attr
-    # implement subgoal option get
-    # implement network
-    # cleanup comp con parameter
-    # cleanup tapas model state check
-    # clean up recorded data
-    # record tapas model
-    # debug
-    # fix ppo databuffer
-    # think about what tests to perform
-    # fix image encoder (uncertainty)
-    # record image samples
-    # recordtapas from image encoder
-
-    def update_attr(self, src: GraphNode, dst: GraphNode, index: int, goal: DCScene):
+    def update_attr(self, src: S, dst: D, index: int):
         if self.type == ("entity", "stepmix", "entity"):
-            self.attrs[index] = self.compute_edge_feats(src.data, dst.data)
+            assert isinstance(src, EntityNode)
+            self.attrs[index] = self.stepmix_feat(
+                src.data.gnn, dst.data.gnn, src.weight
+            )
         elif self.type == ("entity", "summary", "option"):
-            pass
+            assert isinstance(src, EntityNode)
+            self.attrs[index] = self.summary_feat(
+                src.data.gnn, self.goal_ref[src.entity]
+            )
         elif self.type == ("entity", "tapas", "entity"):
             self.attrs[index] = np.empty(1)
         else:
             raise NotImplementedError
 
-    def compute_edge_feats(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
+    def stepmix_feat(
+        self, x_src: np.ndarray, x_dst: np.ndarray, w_src: float
+    ) -> np.ndarray:
+        feat = self.residual(x_src, x_dst)
+        return np.concatenate([feat, w_src])
+
+    def summary_feat(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
+        return self.residual(x_src, x_dst)
+
+    def tapas_feat(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
+        return np.empty(1)
+
+    def residual(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
         """
         Compute directed edge features from source nodes to destination nodes.
 
         Args:
-            x_src: [E, 13+K] features for source nodes (e.g., Components)
-            x_dst: [E, 13+K] features for destination nodes (e.g., Entities)
+            x_src: [13+K] features for src nodes
+            x_dst: [13+K] features for dst nodes
 
         Returns:
-            edge_feat: [E, 7] normalized residuals (z_pos + z_rot + z_state)
+            edge_feat: [8] normalized residuals (z_pos + z_rot + z_state + w_src)
         """
         # Unpack source (A)
-        mu_pos_a = x_src[:, 0:3]
-        lstd_pos_a = x_src[:, 3:6]
-        q_a = x_src[:, 6:10]
-        lstd_rot_a = x_src[:, 10:13]
-        logits_a = x_src[:, 13:]
+        mu_pos_a = x_src[0:3]
+        lstd_pos_a = x_src[3:6]
+        q_a = x_src[6:10]
+        lstd_rot_a = x_src[10:13]
+        logits_a = x_src[13:]
 
         # Unpack destination (B)
-        mu_pos_b = x_dst[:, 0:3]
-        lstd_pos_b = x_dst[:, 3:6]
-        q_b = x_dst[:, 6:10]
-        lstd_rot_b = x_dst[:, 10:13]
-        logits_b = x_dst[:, 13:]
+        mu_pos_b = x_dst[0:3]
+        lstd_pos_b = x_dst[3:6]
+        q_b = x_dst[6:10]
+        lstd_rot_b = x_dst[10:13]
+        logits_b = x_dst[13:]
 
         # --- 1. Position Residual ---
         var_pos_a = np.exp(2 * lstd_pos_a)
@@ -101,66 +111,35 @@ class EdgeSet:
         var_comb_rot = var_rot_a + var_rot_b
         z_rot = r_vec / np.sqrt(var_comb_rot + 1e-8)
 
-        # --- 3. State Residual (Negative Log-Likelihood) ---
-        # Get destination's true class index (argmax of its logits)
-        c_b = np.argmax(logits_b, axis=-1)  # [E]
+        # --- 3. State Residual (Cross-Entropy) ---
+        # Softmax of both distributions
+        logits_a_max = np.max(logits_a, axis=-1, keepdims=True)
+        logits_b_max = np.max(logits_b, axis=-1, keepdims=True)
+        softmax_a = np.exp(logits_a - logits_a_max) / np.sum(
+            np.exp(logits_a - logits_a_max), axis=-1, keepdims=True
+        )
+        softmax_b = np.exp(logits_b - logits_b_max) / np.sum(
+            np.exp(logits_b - logits_b_max), axis=-1, keepdims=True
+        )
 
-        # Compute softmax of source logits
-        logits_exp = np.exp(logits_a - np.max(logits_a, axis=-1, keepdims=True))
-        softmax_a = logits_exp / np.sum(logits_exp, axis=-1, keepdims=True)
-
-        # Get probability of destination's class under source distribution
-        prob = softmax_a[np.arange(len(c_b)), c_b]  # [E]
-        z_state = -np.log(prob + 1e-8)  # [E]
+        # Cross-entropy H(B, A) = -Σ P_B(c) * log P_A(c)
+        # This is the expected surprise of B's full distribution under A's belief.
+        z_state = -np.sum(softmax_b * np.log(softmax_a + 1e-8), axis=-1)
+        # Clip to prevent extreme outliers from dominating the edge feature
+        z_state = np.clip(z_state, 0.0, 10.0)
 
         # Stack
         edge_feat = np.concatenate(
-            [z_pos, z_rot, z_state[:, np.newaxis]],
-            axis=-1,  # [E, 3]  # [E, 3]  # [E, 1]
-        )  # [E, 7]
+            [z_pos, z_rot, z_state[:, np.newaxis]], axis=-1
+        )  # [8]
 
         return edge_feat
 
-    def build_edges(
-        self,
-        comp_feats: np.ndarray,
-        entity_feats: np.ndarray,
-        edge_index: np.ndarray,
-    ):
-        """
-        Build edge features for all edges in a single shot.
-
-        Args:
-            comp_features: [num_components, 13+K] node features for components
-            entity_features: [num_entities, 13+K] node features for entities
-            edge_index: [2, E] where edge_index[0] = src indices, edge_index[1] = dst indices
-                        Indices refer to the combined node array [comp_features; entity_features]
-
-        Returns:
-            edge_attr: [E, 7] computed edge features
-            edge_type: [E] integer types (0 = comp->entity, 1 = entity->comp, etc.)
-        """
-        # Combine all nodes
-        all_nodes = np.concatenate([comp_feats, entity_feats], axis=0)
-        num_comps = comp_feats.shape[0]
-
-        src_idx = edge_index[0]
-        dst_idx = edge_index[1]
-
-        # Determine edge types based on src/dst ranges
-        is_comp_to_entity = (src_idx < num_comps) & (dst_idx >= num_comps)
-        is_entity_to_comp = (src_idx >= num_comps) & (dst_idx < num_comps)
-        # You can also have comp->comp or entity->entity if needed
-
-        # Pull source and destination features
-        x_src = all_nodes[src_idx]  # [E, 13+K]
-        x_dst = all_nodes[dst_idx]  # [E, 13+K]
-
-        # Compute features
-        edge_attr = self.compute_edge_feats(x_src, x_dst)
-
-        # Assign edge types (0 = comp->entity, 1 = entity->comp)
-        edge_type = np.zeros(len(src_idx), dtype=np.int64)
-        edge_type[is_entity_to_comp] = 1
-
-        return edge_attr, edge_type
+    def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
+        """Create edges by matching node source entries to this edge type."""
+        for i, node in enumerate(tnset.items):
+            for e, key in node.sources:
+                if e == self.type[1]:  # matches e.g. "stepmix", "summar y", "tapas"
+                    if snset.has_key(key):
+                        j = snset.get_index(key)
+                        self.add(j, i)

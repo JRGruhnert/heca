@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from heca.misc.quaternion import Quaternion
+from heca.utils.quaternion import Quaternion
 from heca.properties.normalizers.normalizer import PropertyNormalizer
 
 
@@ -18,4 +18,4 @@ class QuaternionNormalizer(PropertyNormalizer):
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize the quaternion."""
-        return self.rotation.normalize_quat(x)
+        return self.rotation.normalize(x)

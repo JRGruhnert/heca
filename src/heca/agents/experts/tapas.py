@@ -219,8 +219,11 @@ class TapasAgent(ExpertAgent):
         reward = torch.Tensor(dc_obs.extras["reward"])
         joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
         joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
-        ee_state = dc_obs.ee.tste
-        ee_pose = torch.cat((dc_obs.ee.tpos, dc_obs.ee.trot), dim=-1)
+        ee_state = torch.Tensor(dc_obs.ee[-1])
+        ee_pose = torch.cat(
+            (torch.Tensor(dc_obs.ee[:3]), torch.Tensor(dc_obs.ee[3:7])),
+            dim=-1,
+        )
 
         # camera_obs = self.image_tensors(obs)
         # multicam_obs = dict_to_tensordict(
@@ -229,8 +232,8 @@ class TapasAgent(ExpertAgent):
         poses = {
             entity.cfg.label: torch.cat(
                 [
-                    dc_obs[entity.cfg.label].tpos,
-                    dc_obs[entity.cfg.label].trot,
+                    torch.Tensor(dc_obs[entity.cfg.label][:3]),
+                    torch.Tensor(dc_obs[entity.cfg.label][3:7]),
                 ],
                 dim=-1,
             )
@@ -238,7 +241,7 @@ class TapasAgent(ExpertAgent):
         }
 
         states = {
-            entity.cfg.label: dc_obs[entity.cfg.label].tste
+            entity.cfg.label: torch.Tensor(dc_obs[entity.cfg.label][-1])
             for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
         }
 
@@ -246,15 +249,17 @@ class TapasAgent(ExpertAgent):
             # This adds target frames for mobile entities.
             # Later can be used to set target for the tapas model
             if entity.cfg.mobility == Mobility.FREE:
-                pos = dc_goal[entity.cfg.label].tpos
-                rot = dc_goal[entity.cfg.label].trot
-                state = dc_goal[entity.cfg.label].tste
+                pos = torch.Tensor(dc_goal[entity.cfg.label][:3])
+                rot = torch.Tensor(dc_goal[entity.cfg.label][3:7])
+                state = torch.Tensor(dc_goal[entity.cfg.label][-1])
                 pose = torch.cat((pos, rot), dim=-1)
                 poses[f"{entity.cfg.label}_target"] = pose
                 states[f"{entity.cfg.label}_target"] = state
 
-        gee_state = dc_goal.ee.tste
-        gee_pose = torch.cat((dc_goal.ee.tpos, dc_goal.ee.trot), dim=-1)
+        gee_state = torch.Tensor(dc_goal.ee[-1])
+        gee_pose = torch.cat(
+            (torch.Tensor(dc_goal.ee[:3]), torch.Tensor(dc_goal.ee[3:7])), dim=-1
+        )
 
         poses[f"ee_target"] = gee_pose
         states[f"ee_target"] = gee_state
@@ -304,12 +309,12 @@ class TapasAgent(ExpertAgent):
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
         for key in self.elabels:
-            pre_data[key] = self.collect_entity_data(start_scenes, key)
-            post_data[key] = self.collect_entity_data(end_scenes, key)
+            pre_data[key] = np.stack([s[key] for s in start_scenes])
+            post_data[key] = np.stack([s[key] for s in end_scenes])
 
-        pre = Condition("pre", pre_data, 1, self.cfg.n_samples)
-        post = Condition("post", post_data, 1, self.cfg.n_samples)
-        pair = ConPair(f"{self.cfg.tag}_0", pre, post)
+        pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
+        post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
+        pair = ConPair(f"{self.cfg.tag}_0", pre, post, self.cfg.threshold)
         pair.plot(path)
         return [pair]
 
@@ -344,9 +349,3 @@ class TapasAgent(ExpertAgent):
         stacked_obs = TensorDict.stack(obs, dim=0)
         assert isinstance(stacked_obs, SceneObservation)
         return stacked_obs  # type: ignore
-
-    def collect_entity_data(self, scenes: list[DCScene], key: str) -> np.ndarray:
-        pos = np.stack([s[key].pos for s in scenes])
-        rot = np.stack([s[key].rot for s in scenes])
-        ste = np.stack([s[key].ste for s in scenes])
-        return np.concatenate((pos, rot, ste), axis=1)

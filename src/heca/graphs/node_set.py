@@ -1,33 +1,33 @@
-from collections import defaultdict
+from typing import Generic, TypeVar
 
 import numpy as np
 import torch
 
-from heca.graphs.nodes import GraphNode
+from heca.graphs.nodes import EntityNode, NodeData, GraphNode
+
+T = TypeVar("T", bound=GraphNode)
 
 
-class NodeSet:
+class NodeSet(Generic[T]):
     def __init__(self, type: str):
-        self.items: list[GraphNode] = []
+        self.items: list[T] = []
         self.index: dict[str, int] = {}
-        self.tags: dict[str, set[int]] = defaultdict(set[int])
         self.x: torch.Tensor = torch.empty()
         self.type = type
 
-    def add(self, key: str, value: GraphNode):
+    def add(self, key: str, value: T):
         self.index[key] = len(self.items)
         self.items.append(value)
-        self.tags[value.tag].add(len(self.items))
 
-    def update(self, tag: str, x: np.ndarray):
-        for idx in self.tags[tag]:
-            self.items[idx].data = x
-            self.items[idx].changed = True
+    def key_update(self, key: str, data: NodeData):
+        idx = self.index[key]
+        self.items[idx].data = data
+        self.items[idx].changed = True
 
-    def get_by_key(self, key: str) -> GraphNode:
+    def get_by_key(self, key: str) -> T:
         return self.items[self.index[key]]
 
-    def idx_get(self, idx: int) -> GraphNode:
+    def idx_get(self, idx: int) -> T:
         return self.items[idx]
 
     def get_index(self, key: str) -> int:
@@ -43,5 +43,5 @@ class NodeSet:
         return key in self.index
 
     def build(self):
-        x_np = np.stack([node.data for node in self.items], axis=0)
+        x_np = np.stack([node.data.gnn for node in self.items], axis=0)
         self.x = torch.from_numpy(x_np).float()

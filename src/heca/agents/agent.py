@@ -26,6 +26,7 @@ class Agent(Persistable, abc.ABC):
     class Config(Persistable.Config):
         n_samples: int = 1000
         folder: str = "agents"
+        threshold: float = 0.75
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

@@ -1,6 +1,8 @@
 from collections import defaultdict
+from enum import Enum
 
 import numpy as np
+import torch
 from torch_geometric.data import HeteroData
 
 from heca.agents.agent import Agent
@@ -8,32 +10,44 @@ from heca.graphs.nodes import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
 from heca.misc import hardware
-from heca.misc.data import DCEntity, DCScene
+from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.conditions.condition import Condition
-from heca.conditions.analyzer import ConditionAnalyzer
 
 
-class GraphBlueprint:
-    def __init__(self, threshold: float):
-        self.analyzer = ConditionAnalyzer(threshold)
+@dataclass
+class Graph:
+    ns_entity: NodeSet[EntityNode] = NodeSet[EntityNode]("entity")
+    ns_option: NodeSet[OptionNode] = NodeSet[OptionNode]("option")
+    es_summary: EdgeSet[EntityNode, OptionNode] = EdgeSet[EntityNode, OptionNode](
+        ("entity", "summary", "option")
+    )
+    es_stepmix: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
+        ("entity", "stepmix", "entity")
+    )
+    es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
+        ("entity", "tapas", "entity")
+    )
+    packages: dict[str, tuple[Agent.Config, DCScene, DCScene]] = {}
+    start_keys: dict[str, str] = {}
+    goal_keys: dict[str, str] = {}
+    start: DCScene = DCScene.empty()
+    goal: DCScene = DCScene.empty()
+    entities: dict[str, Entity] = {}
+    goal_ref: dict[str, np.ndarray] = {}
 
-        self.ns_entity: NodeSet = NodeSet("entity")
-        self.ns_option: NodeSet = NodeSet("option")
-        self.es_summary: EdgeSet = EdgeSet(("entity", "summary", "option"))
-        self.es_stepmix: EdgeSet = EdgeSet(("entity", "stepmix", "entity"))
-        self.es_tapas: EdgeSet = EdgeSet(("entity", "tapas", "entity"))
-
-        self.packages: dict[str, tuple[Agent.Config, DCScene, DCScene]]
-
-        self.start: DCScene = DCScene.empty()
-        self.goal: DCScene = DCScene.empty()
-        self.entities: dict[str, Entity] = {}
-
-    def graph(self) -> HeteroData:
+    def export(self) -> HeteroData:
         data = HeteroData()
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_option.type].x = self.ns_option.x
+
+        # Entity type IDs for learned type embeddings
+        entity_types = [node.entity for node in self.ns_entity.items]
+        unique_types = sorted(set(entity_types))
+        type_to_id = {t: i for i, t in enumerate(unique_types)}
+        data[self.ns_entity.type].type_ids = torch.tensor(
+            [type_to_id[t] for t in entity_types], dtype=torch.long
+        )
         data[self.es_stepmix.type].edge_attr = self.es_stepmix.edge_attr
         data[self.es_summary.type].edge_attr = self.es_summary.edge_attr
         data[self.es_stepmix.type].edge_index = self.es_stepmix.edge_index
@@ -42,37 +56,62 @@ class GraphBlueprint:
         return data.to(device=hardware.device.type)
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
-        raise NotImplementedError
-
-    def start_tag(self, entity: str):
-        return f"{entity}-pre"
-
-    def goal_tag(self, entity: str):
-        return f"{entity}-post"
-
-    def preprocess_entity(self, label: str, x: DCEntity) -> np.ndarray:
-        sx = Entity.stepmix_fmt(x)
-        return Entity.gnn_format(sx, self.entities[label].state_count())
+        subgoal = self.start
+        for src in option.sources:
+            node = self.ns_entity.get_by_key(src[1])
+            assert isinstance(node, EntityNode)
+            subgoal.set(node.entity, node.data.env)
+        return subgoal
 
     def set_start(self, start: DCScene):
         self.start = start
-        for label, entity in start.entities():
-            x = self.preprocess_entity(label, entity)
-            self.ns_entity.update(tag=self.start_tag(label), x=x)
+        for key in self.start_keys.keys():
+            node = self.ns_entity.get_by_key(key)
+            assert isinstance(node, EntityNode)
+            x = start[node.entity]
+            gx = self.entities[node.entity].gnn_format(x)
+            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
 
-        self.es_stepmix.build(self.ns_entity, self.ns_entity)
-        self.es_summary.build(self.ns_entity, self.ns_option)
-        self.es_tapas.build(self.ns_entity, self.ns_entity)
+        self.update_subgoals()
+        self.rebuild()
 
     def set_goal(self, goal: DCScene):
         self.goal = goal
-        for label, entity in goal.entities():
-            x = self.preprocess_entity(label, entity)
-            self.ns_entity.update(tag=self.goal_tag(label), x=x)
+        self.update_subgoals()
+        for k, v in self.goal.entities():
+            self.goal_ref[k] = self.entities[k].gnn_format(v)
+        self.rebuild()
 
-        self.es_stepmix.build(self.ns_entity, self.ns_entity)
-        self.es_summary.build(self.ns_entity, self.ns_option)
-        self.es_tapas.build(self.ns_entity, self.ns_entity)
+    def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
+        assert node.con is not None
+        return node.con.score_single(x[node.entity], node.entity)[1]
+
+    def create_subgoal(
+        self, node: EntityNode, x: DCScene | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        assert node.con is not None
+        if x is not None:
+            v = x[node.entity]
+        else:
+            v = node.con.models[node.entity].sample(1)[0]
+        return (self.entities[node.entity].gnn_format(v), v)
+
+    def update_subgoals(self):
+        for key in self.goal_keys.keys():
+            node = self.ns_entity.get_by_key(key)
+            assert isinstance(node, EntityNode)
+            if self.test_subgoal(node, self.goal):
+                gx, x = self.create_subgoal(node, self.goal)
+            elif self.test_subgoal(node, self.start):
+                gx, x = self.create_subgoal(node, self.start)
+            else:
+                gx, x = self.create_subgoal(node)
+            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
+
+    def rebuild(self):
+        self.es_stepmix.build(self.ns_entity, self.ns_entity, {})
+        self.es_summary.build(self.ns_entity, self.ns_option, self.goal_ref)
+        self.es_tapas.build(self.ns_entity, self.ns_entity, {})
 
     def set_comps(
         self,
@@ -88,26 +127,28 @@ class GraphBlueprint:
                     key,
                     EntityNode(
                         entity=entity,
-                        tag="",
-                        data=data,
+                        data=NodeData(gnn=data),
+                        static=True,
                         sources=set(),
                     ),
                 )
         return keys
 
     def set_precon(
-        self, label: str, comp_sources: dict[str, set[tuple[str, str]]]
+        self, label: str, con: Condition, comp_sources: dict[str, set[tuple[str, str]]]
     ) -> dict[str, tuple[str, str]]:
         pre_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in comp_sources.items():
             key = "pre" + entity + label
             pre_sources[entity] = (self.es_tapas.type[1], key)
+            self.start_keys[key] = entity
             self.ns_entity.add(
                 key=key,
                 value=EntityNode(
                     entity=entity,
-                    tag=self.start_tag(entity),
+                    data=NodeData(),
                     sources=sources,
+                    con=con,
                 ),
             )
         return pre_sources
@@ -115,6 +156,7 @@ class GraphBlueprint:
     def set_postcon(
         self,
         label: str,
+        con: Condition,
         comp_sources: dict[str, set[tuple[str, str]]],
         pre_sources: dict[str, tuple[str, str]],
     ) -> dict[str, tuple[str, str]]:
@@ -123,12 +165,14 @@ class GraphBlueprint:
             key = "post" + entity + label
             sources = comp_sources[entity]
             sources.add(pre_sources[entity])
+            self.goal_keys[key] = entity
             self.ns_entity.add(
                 key,
                 EntityNode(
                     entity=entity,
-                    tag=self.goal_tag(entity),
+                    data=NodeData(),
                     sources=sources,
+                    con=con,
                 ),
             )
             post_sources[entity] = (self.es_summary.type[1], key)
@@ -147,13 +191,12 @@ class GraphBlueprint:
             key = entity + label
             sources = comp_sources[entity]
             sources.add(pre_sources[entity])
-            data = Entity.gnn_format(value[1], self.entities[entity].state_count())
+            data = self.entities[entity].gnn_format(value[1])
             self.ns_entity.add(
                 key,
                 EntityNode(
                     entity=entity,
-                    tag="",
-                    data=data,
+                    data=NodeData(gnn=data, env=value[1]),
                     static=True,
                     sources=sources,
                 ),
@@ -161,18 +204,17 @@ class GraphBlueprint:
             temp_sources[entity] = (self.es_summary.type[1], key)
         return {src for src in temp_sources.values()}
 
-    def generate(
-        self, cfgs: list[Agent.Config], entities: set[Entity]
-    ) -> "GraphBlueprint":
+    def generate(self, cfgs: list[Agent.Config], entities: set[Entity]) -> "Graph":
         self.entities = {e.cfg.label: e for e in entities}
         agents = [Agent.get(cfg) for cfg in cfgs]
         for a in agents:
             for ac in a.conditions:
                 pre_comp_sources = self.set_comps(ac.label, ac.pre)
                 post_comp_sources = self.set_comps(ac.label, ac.post)
-                pre_sources = self.set_precon(ac.label, pre_comp_sources)
+                pre_sources = self.set_precon(ac.label, ac.pre, pre_comp_sources)
                 post_sources = self.set_postcon(
                     ac.label,
+                    ac.post,
                     post_comp_sources,
                     pre_sources,
                 )
@@ -184,14 +226,13 @@ class GraphBlueprint:
                             self.ns_option.add(
                                 otag,
                                 OptionNode(
-                                    tag=otag,
                                     agent=a.cfg,
                                     sources=sources,
                                 ),
                             )
                         else:  # pre != post
-                            subgoal = self.analyzer.make_subgoal(ac.post, bc.pre)
-                            if self.analyzer.is_subgoal(subgoal):
+                            subgoal = ac.post.make_subgoal(bc.pre)
+                            if subgoal is not None:
                                 sources = self.set_subgoal(
                                     otag,
                                     post_comp_sources,
@@ -202,28 +243,18 @@ class GraphBlueprint:
                                 self.ns_option.add(
                                     otag,
                                     OptionNode(
-                                        tag=otag,
                                         agent=a.cfg,
                                         sources=sources,
                                     ),
                                 )
 
-        nsets = {nset.type: nset for nset in [self.ns_entity, self.ns_option]}
-        for eset in [self.es_stepmix, self.es_summary, self.es_tapas]:
-            etype = eset.type[1]
-            snset = nsets[eset.type[0]]
-            tnset = nsets[eset.type[2]]
-            for i, node in enumerate(snset.items):
-                for e, key in node.sources:
-                    if e == etype:
-                        j = tnset.get_index(key)
-                        eset.add(i, j)
+        self.es_stepmix.edges_from_sets(self.ns_entity, self.ns_entity)
+        self.es_summary.edges_from_sets(self.ns_entity, self.ns_option)
+        self.es_tapas.edges_from_sets(self.ns_entity, self.ns_entity)
         return self
 
-    def options(self) -> list[tuple[Agent.Config, DCScene]]:
-        values: list[tuple[Agent.Config, DCScene]] = []
-        for option in self.ns_option.items:
-            assert isinstance(option, OptionNode)
-            subgoal = self.assemble_subgoal(option)
-            values.append((option.agent, subgoal))
-        return values
+    def select(self, index: int) -> tuple[Agent.Config, DCScene]:
+        node = self.ns_option.idx_get(index)
+        assert isinstance(node, OptionNode)
+        subgoal = self.assemble_subgoal(node)
+        return node.agent, subgoal
