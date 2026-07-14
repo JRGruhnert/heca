@@ -38,6 +38,9 @@ class Entity(Configurable):
             )
         )
 
+    def state_count(self) -> int:
+        return len(self.cfg.states)
+
     def dc_format(self, value: np.ndarray) -> DCEntity:
         return DCEntity(
             value[:3],
@@ -72,7 +75,9 @@ class Entity(Configurable):
         )
 
     @classmethod
-    def gnn_format(cls, raw_entities, K, logit_confidence=10.0, base_logstd=-10.0):
+    def gnn_format(
+        cls, raw: np.ndarray, K: int, logit_confidence=10.0, base_logstd=-10.0
+    ):
         """
         Convert raw stepmix format to GNN node format.
 
@@ -87,37 +92,35 @@ class Entity(Configurable):
             gnn_nodes: [N, 13 + K] with structure:
                     [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
         """
-        N = raw_entities.shape[0]
-
         # Initialize with zeros
-        gnn_nodes = np.zeros((N, 13 + K), dtype=np.float32)
+        node = np.zeros((13 + K), dtype=np.float32)
 
         # 1. Position mean (raw pos)
-        gnn_nodes[:, 0:3] = raw_entities[:, 0:3]
+        node[0:3] = raw[0:3]
 
         # 2. Position log-std (deterministic baseline, very certain)
-        gnn_nodes[:, 3:6] = base_logstd
+        node[3:6] = base_logstd
 
         # 3. Quaternion mean (raw quat)
-        gnn_nodes[:, 6:10] = raw_entities[:, 3:7]
+        node[6:10] = raw[3:7]
         # Ensure unit norm (just in case)
-        norms = np.linalg.norm(gnn_nodes[:, 6:10], axis=-1, keepdims=True)
-        gnn_nodes[:, 6:10] = gnn_nodes[:, 6:10] / norms
+        norms = np.linalg.norm(node[6:10], axis=-1, keepdims=True)
+        node[6:10] = node[6:10] / norms
 
         # 4. Rotation log-std (deterministic baseline)
-        gnn_nodes[:, 10:13] = base_logstd
+        node[10:13] = base_logstd
 
         # 5. State logits (convert scalar to high-confidence logits)
-        state_ids = raw_entities[:, 7].astype(int)  # [N]
+        state_ids = raw[7].astype(int)  # [N]
         # Set all logits to low value
-        gnn_nodes[:, 13:] = -logit_confidence
+        node[13:] = -logit_confidence
         # Set the true class to high value
-        gnn_nodes[np.arange(N), 13 + state_ids] = logit_confidence
+        node[13 + state_ids] = logit_confidence
 
-        return gnn_nodes
+        return node
 
     @classmethod
-    def apply_noise(
+    def apply_uncertainty(
         cls,
         entity_features: np.ndarray,
         pos_noise_std=0.1,

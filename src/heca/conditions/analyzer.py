@@ -170,85 +170,6 @@ class ConditionAnalyzer:
         clipped = np.minimum(delta, 0)  # we just care for negative deltas
         return np.exp(clipped)  # make a score
 
-    def kl_variational_stepmix(self, m1: StepMix, m2: StepMix):
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
-
-        kl = 0.0
-        for i in range(len(p1["weights"])):
-            w1 = p1["weights"][i]
-            mu1 = p1["measurement"]["pose"]["means"][i]
-            var1 = p1["measurement"]["pose"]["covariances"][i]
-            cat1 = p1["measurement"]["state"]["pis"][i]  # ← shape (S,)
-
-            # --- CHANGE STARTS HERE ---
-            # Instead of tracking best_kl, we now accumulate the weighted sum
-            weighted_pairwise_kl = 0.0
-
-            for j in range(len(p2["weights"])):
-                vj = p2["weights"][j]  # weight of component j in m2
-                mu2 = p2["measurement"]["pose"]["means"][j]
-                var2 = p2["measurement"]["pose"]["covariances"][j]
-                cat2 = p2["measurement"]["state"]["pis"][j]  # ← shape (S,)
-
-                # Gaussian part (same as before)
-                kl_gauss = 0.5 * np.sum(
-                    np.log(var2)
-                    - np.log(var1)
-                    + var1 / var2
-                    + (mu1 - mu2) ** 2 / var2
-                    - 1
-                )
-
-                # Categorical part (same as before)
-                cat1_safe = np.clip(cat1, 1e-12, 1)
-                cat2_safe = np.clip(cat2, 1e-12, 1)
-                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
-
-                # Weight this pairwise KL by the weight of component j in m2
-                weighted_pairwise_kl += vj * (kl_gauss + kl_cat)
-
-            # Now weight the entire sum by the weight of component i in m1
-            kl += w1 * weighted_pairwise_kl
-
-        return np.exp(-kl)
-
-    def kl_variational_stepmix_min(self, m1: StepMix, m2: StepMix):
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
-
-        kl = 0.0
-        for i in range(len(p1["weights"])):
-            w1 = p1["weights"][i]
-            mu1 = p1["measurement"]["pose"]["means"][i]
-            var1 = p1["measurement"]["pose"]["covariances"][i]
-            cat1 = p1["measurement"]["state"]["pis"][i]  # ← shape (S,)
-
-            best_kl = np.inf
-            for j in range(len(p2["weights"])):
-                mu2 = p2["measurement"]["pose"]["means"][j]
-                var2 = p2["measurement"]["pose"]["covariances"][j]
-                cat2 = p2["measurement"]["state"]["pis"][j]  # ← shape (S,)
-
-                # Gaussian part (same as before)
-                kl_gauss = 0.5 * np.sum(
-                    np.log(var2)
-                    - np.log(var1)
-                    + var1 / var2
-                    + (mu1 - mu2) ** 2 / var2
-                    - 1
-                )
-
-                # Categorical part — NEW, closed form
-                cat1_safe = np.clip(cat1, 1e-12, 1)
-                cat2_safe = np.clip(cat2, 1e-12, 1)
-                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
-
-                best_kl = min(best_kl, kl_gauss + kl_cat)
-
-            kl += w1 * best_kl
-        return np.exp(-kl)
-
     def kl_variational_paper(self, m1: StepMix, m2: StepMix):
         p1 = m1.get_parameters()
         p2 = m2.get_parameters()
@@ -287,12 +208,11 @@ class ConditionAnalyzer:
 
         return np.exp(-kl)
 
-    def score_single_sample(
-        self, m: StepMix, sample_pose: np.ndarray, sample_state: int
-    ) -> float:
-        """Score a single sample under a StepMix model. Returns [0,1]. No Monte Carlo."""
+    def score_single(self, m: StepMix, sample: np.ndarray) -> float:
+        """Score a single sample under a StepMix model. Returns [0,1]."""
+        sample_pose = sample[:7]
+        sample_state = sample[-1]
         params = m.get_parameters()
-
         best_log_prob = -np.inf
         for k in range(len(params["weights"])):
             mu = params["measurement"]["pose"]["means"][k]
@@ -317,12 +237,10 @@ class ConditionAnalyzer:
 
         return np.exp(best_log_prob)  # [0, 1], 1 = perfect fit
 
-    def compute_sim(
-        self, cp1: "ConditionPair", cp2: "ConditionPair"
-    ) -> dict[str, np.ndarray]:
+    def compute_sim(self, cp1: ConPair, cp2: ConPair) -> dict[str, np.ndarray]:
         sim_rating = {}
-        print(cp1.elabels)
-        print(cp2.elabels)
+        # print(cp1.elabels)
+        # print(cp2.elabels)
         for el in cp1.elabels.intersection(cp2.elabels):
             forward = self.calculate_sim_matrix(cp1, cp2, el)
             backward = self.calculate_sim_matrix(cp2, cp1, el)
@@ -333,8 +251,8 @@ class ConditionAnalyzer:
     def plot_similarity(
         self,
         sim_rating: dict[str, np.ndarray],
-        cp1: "ConPair",
-        cp2: "ConPair",
+        cp1: ConPair,
+        cp2: ConPair,
         path: Path,
     ):
         entities = list(sim_rating.keys())

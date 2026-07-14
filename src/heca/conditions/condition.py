@@ -7,8 +7,6 @@ from stepmix import StepMix
 
 from heca.misc.quaternion import Quaternion
 
-# Condition saves raw datapoints per entity
-
 
 class Condition:
     def __init__(

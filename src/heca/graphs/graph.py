@@ -50,14 +50,14 @@ class GraphBlueprint:
     def goal_tag(self, entity: str):
         return f"{entity}-post"
 
-    def preprocess_entity(self, x: DCEntity) -> np.ndarray:
-        raise NotImplementedError
-        Entity.gnn_format()
+    def preprocess_entity(self, label: str, x: DCEntity) -> np.ndarray:
+        sx = Entity.stepmix_fmt(x)
+        return Entity.gnn_format(sx, self.entities[label].state_count())
 
     def set_start(self, start: DCScene):
         self.start = start
         for label, entity in start.entities():
-            x = self.preprocess_entity(entity)
+            x = self.preprocess_entity(label, entity)
             self.ns_entity.update(tag=self.start_tag(label), x=x)
 
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
@@ -67,7 +67,7 @@ class GraphBlueprint:
     def set_goal(self, goal: DCScene):
         self.goal = goal
         for label, entity in goal.entities():
-            x = self.preprocess_entity(entity)
+            x = self.preprocess_entity(label, entity)
             self.ns_entity.update(tag=self.goal_tag(label), x=x)
 
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
@@ -147,12 +147,13 @@ class GraphBlueprint:
             key = entity + label
             sources = comp_sources[entity]
             sources.add(pre_sources[entity])
+            data = Entity.gnn_format(value[1], self.entities[entity].state_count())
             self.ns_entity.add(
                 key,
                 EntityNode(
                     entity=entity,
                     tag="",
-                    data=value[1],
+                    data=data,
                     static=True,
                     sources=sources,
                 ),

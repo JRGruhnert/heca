@@ -3,6 +3,7 @@ import torch
 
 from heca.graphs.node_set import NodeSet
 from heca.graphs.nodes import GraphNode
+from heca.misc.data import DCScene
 from heca.misc.quaternion import Quaternion
 
 
@@ -30,20 +31,35 @@ class EdgeSet:
             src = snset.idx_get(edge[0])
             dst = dnset.idx_get(edge[1])
             if src.changed or dst.changed:
-                self.update_attr(src, dst, i)
+                self.update_attr(src, dst, i, goal)
         self.edge_attr = torch.from_numpy(self.attrs).float()
 
-    def update_attr(self, src: GraphNode, dst: GraphNode, index: int):
+    # One after another (you got this. its just a master thesis. you wont fail)
+    # TODO: implement update attr
+    # implement subgoal option get
+    # implement network
+    # cleanup comp con parameter
+    # cleanup tapas model state check
+    # clean up recorded data
+    # record tapas model
+    # debug
+    # fix ppo databuffer
+    # think about what tests to perform
+    # fix image encoder (uncertainty)
+    # record image samples
+    # recordtapas from image encoder
+
+    def update_attr(self, src: GraphNode, dst: GraphNode, index: int, goal: DCScene):
         if self.type == ("entity", "stepmix", "entity"):
-            pass
+            self.attrs[index] = self.compute_edge_feats(src.data, dst.data)
         elif self.type == ("entity", "summary", "option"):
             pass
         elif self.type == ("entity", "tapas", "entity"):
-            pass
+            self.attrs[index] = np.empty(1)
         else:
             raise NotImplementedError
 
-    def compute_edge_feats(self, x_src: np.ndarray, x_dst: np.ndarray):
+    def compute_edge_feats(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
         """
         Compute directed edge features from source nodes to destination nodes.
 

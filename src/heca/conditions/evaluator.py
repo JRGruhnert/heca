@@ -59,5 +59,21 @@ class Evaluator(Configurable):
 
     def test_task(self, x: DCScene, y: DCScene) -> bool:
         for pair in self.conditions:
-            if pair.pre.score
-                self.analyzer.calculate_score
+            pair_match = True
+            for label in pair.pre.elabels:
+                score = self.analyzer.score_single(
+                    pair.pre.models[label],
+                    Entity.stepmix_fmt(x.get(label)),
+                )
+                if score < self.analyzer.threshold:
+                    pair_match = False
+            for label in pair.post.elabels:
+                score = self.analyzer.score_single(
+                    pair.post.models[label],
+                    Entity.stepmix_fmt(x.get(label)),
+                )
+                if score < self.analyzer.threshold:
+                    pair_match = False
+            if pair_match:
+                return True
+        return False

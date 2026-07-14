@@ -15,6 +15,7 @@ from heca.heca_gnn.network import Network
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.misc.ppo import PPO
+from heca.scenes.scene import Scene
 
 
 class HecaMode(Enum):
@@ -102,8 +103,12 @@ class Heca(Agent):
             z, fb = self.step(z)
         return z
 
-    def sample(self) -> tuple[DCScene, DCScene]:
-        raise NotImplementedError
+    def sample(self, cfg: Scene.Config) -> tuple[DCScene, DCScene]:
+        scene = Scene.get(cfg)
+        (x, ix), (y, iy) = scene.sample_task()
+        while not self.evaluator.test_task(x, y):
+            (x, ix), (y, iy) = scene.sample_task()
+        return x, y
 
     @cached_property
     def elabels(self) -> set[str]:
