@@ -1,6 +1,8 @@
 from dataclasses import dataclass
+from typing import Sequence
 import torch
 from torch import nn
+from torch.distributions import Categorical
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import GINEConv, GINConv
 
@@ -161,3 +163,46 @@ class Network(Configurable, nn.Module):
 
     def upgrade(self, checkpoint):
         self.load_state_dict(checkpoint, strict=False)
+
+    def evaluate(
+        self, data_list: Sequence[HeteroData], actions: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, Categorical]:
+        """Evaluate a batch of graph data for PPO training.
+
+        For each sample in the batch, runs the forward pass to obtain per-option
+        logits and values, then indexes into the values with the chosen action to
+        produce a scalar state-value V(s). Returns log-probabilities, state
+        values, and the *last* Categorical distribution (for entropy computation,
+        since all samples share the same option structure).
+
+        Args:
+            data_list: Sequence of HeteroData graphs (one per rollout step).
+            actions: Tensor of shape [batch_size] with chosen action indices.
+
+        Returns:
+            logprobs:  Tensor of shape [batch_size] — log pi(a|s) per sample.
+            values:    Tensor of shape [batch_size] — V(s) indexed by chosen action.
+            dist:      Categorical distribution from the last sample (for entropy).
+        """
+        logprobs: list[torch.Tensor] = []
+        state_values: list[torch.Tensor] = []
+        last_dist: Categorical | None = None
+
+        for i, data in enumerate(data_list):
+            logits, all_values = self.forward(data)  # [1, num_opt], [num_opt]
+            dist = Categorical(logits=logits)
+            last_dist = dist
+
+            action = actions[i : i + 1]  # keep dim for log_prob
+            logprob = dist.log_prob(action)  # [1]
+            value = all_values[actions[i]].unsqueeze(0)  # scalar -> [1]
+
+            logprobs.append(logprob)
+            state_values.append(value)
+
+        assert last_dist is not None, "data_list must not be empty"
+        return (
+            torch.cat(logprobs).to(device),
+            torch.cat(state_values).to(device),
+            last_dist,
+        )

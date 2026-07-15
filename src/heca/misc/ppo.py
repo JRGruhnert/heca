@@ -1,33 +1,24 @@
+# heca/misc/ppo.py (rewritten)
 from dataclasses import dataclass
-from pathlib import Path
+from functools import cached_property
 import torch
 import copy
 from torch import nn
 from torch.nn.utils.clip_grad import clip_grad_norm_
-from heca.agents.agent import AgentFeedback
-from heca.misc.base import Persistable, Registerable
+from heca.misc.base import Configurable
 from heca.heca_gnn.network import Network
+from heca.misc.buffer import RolloutBuffer
 from heca.misc.hardware import device
-from heca.misc import logger
 from thop import profile
 from torch_geometric.data import HeteroData
-from heca.misc.td import TDScene
 
 
-@dataclass(kw_only=True)
-class AnnealingConfig:
-    lr_annealing: bool = False
-    learning_rate: float = 0.0003
-    max_epochs: int = 1000
-
-
-class PPO(Persistable):
+class PPO(Configurable):
     @dataclass(kw_only=True)
-    class Config(Persistable.Config):
-        folder: str = "training"
+    class Config(Configurable.Config):
         label: str = "ppo"
         tag: str = "default"
-        batch_size: int = 2048
+        # Hyperparameters only — no buffer or network config here
         mini_batch_size: int = 64
         learning_epochs: int = 5
         lr: float = 0.0003
@@ -44,106 +35,108 @@ class PPO(Persistable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.mse_loss = nn.MSELoss()
-
-        # Rollout storage
-        self.data: list[HeteroData] = []
-        self.actions: list[torch.Tensor] = []
-        self.logprobs: list[torch.Tensor] = []
-        self.values: list[torch.Tensor] = []
-        self.rewards: list[float] = []
-        self.success: list[bool] = []
-        self.terminals: list[bool] = []
-
-        # Statistics
-        self.highscore = float("-inf")
+        self.network: Network | None = None
+        self.optim: torch.optim.Optimizer | None = None
 
     def setup(self, config: Network.Config) -> "PPO":
+        """Create network and optimizer. Idempotent — safe to call multiple times."""
+        if self.network is not None:
+            return self
         self.network = Network.get(config)
         self.optim = torch.optim.AdamW(self.network.parameters(), lr=self.cfg.lr)
         return self
 
-    def learn(self, progress: float) -> tuple[dict, bool]:
-        # assert self.network is not None
-        # assert self.optim is not None
-        # Main PPO update loop
-        self._mini_batch_loop()
+    @cached_property
+    def inference_network(self) -> Network:
+        """All agents attached to this PPO share this frozen copy."""
+        assert self.network is not None
+        return copy.deepcopy(self.network)
 
-        # Update learning rate with linear annealing
-        if self.cfg.lr_annealing:
-            assert progress is not None
-            lr = self.cfg.lr * (1.0 - progress)
-            for param_group in self.optim.param_groups:
-                param_group["lr"] = lr
+    def sync_inference(self):
+        """Push training weights into the shared inference copy."""
+        assert self.network is not None
+        self.inference_network.load_state_dict(self.network.state_dict())
 
-        return self.network.state_dict(), self.flush_and_rate()
+    def copy_network(self) -> Network:
+        assert self.network is not None
+        return copy.deepcopy(self.network)
 
-    def _mini_batch_loop(self):
+    def learn(self, buffer: RolloutBuffer, progress: float) -> tuple[dict, bool]:
+        """Run PPO update on the provided buffer.
+
+        Args:
+            buffer: Filled RolloutBuffer.
+            progress: Training progress 0..1 for LR annealing.
+        Returns:
+            (state_dict, is_best) — training network state and whether
+            the success rate is a new high score.
+        """
         assert self.network is not None
         assert self.optim is not None
-        adv, rtn = self._compute_gae(
-            self.rewards,
-            self.values,
-            self.terminals,
-        )
+        assert buffer.full, "Buffer must be full before learning"
 
-        old_data = self.data
-        old_actions = torch.stack(self.actions, dim=0).detach().to(device).squeeze(-1)
-        old_logprobs = torch.stack(self.logprobs, dim=0).detach().to(device).squeeze(-1)
-        ### Training loop for network
-        kl_divergence_stop = False
+        self._mini_batch_loop(buffer)
+
+        # LR annealing
+        if self.cfg.lr_annealing:
+            lr = self.cfg.lr * (1.0 - progress)
+            for pg in self.optim.param_groups:
+                pg["lr"] = lr
+
+        return self.network.state_dict(), buffer.flush_and_rate()
+
+    def _mini_batch_loop(self, buffer: RolloutBuffer):
+        assert self.network is not None
+        assert self.optim is not None
+
+        adv, rtn = buffer.compute_gae()
+        B = len(buffer)
+        old_data = buffer.data
+        old_actions = torch.stack(buffer.actions, dim=0).detach().to(device).squeeze(-1)
+        old_logprobs = (
+            torch.stack(buffer.logprobs, dim=0).detach().to(device).squeeze(-1)
+        )
+        old_values = torch.stack(buffer.values, dim=0).detach().to(device).squeeze(-1)
+
+        kl_stop = False
         for epoch in range(self.cfg.learning_epochs):
-            # Shuffle indices for minibatch
-            indices = torch.randperm(self.cfg.batch_size)
-            for start in range(0, self.cfg.batch_size, self.cfg.mini_batch_size):
+            indices = torch.randperm(B)
+            for start in range(0, B, self.cfg.mini_batch_size):
                 end = start + self.cfg.mini_batch_size
                 mb_idx = indices[start:end]
-                mb_idx_list = mb_idx.tolist()  # turn Tensor → Python list of ints
-                # Decided to save observations as objects instead of tensors
-                # Makes it easier to convert it based on network later on
-                mb_data = [old_data[i] for i in mb_idx_list]
+                mb_ilist = mb_idx.tolist()
+
+                mb_data = [old_data[i] for i in mb_ilist]
                 mb_actions = old_actions[mb_idx]
                 mb_logprobs = old_logprobs[mb_idx]
                 mb_adv = adv[mb_idx]
                 mb_rtn = rtn[mb_idx]
+                mb_old_val = old_values[mb_idx]
 
-                # Normalize advantages per minibatch
+                # Normalize advantages
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
-                # Evaluate policy #TODO: how did evaluate change here
-                logprobs, state_values, dist_new = self.network.evaluate(
+                # Forward pass
+                logprobs, state_values, dist = self.network.evaluate(
                     mb_data, mb_actions
                 )
+                state_values = state_values.squeeze(-1)
 
-                assert logprobs.shape == mb_logprobs.shape, "Logprobs shape mismatch"
-                assert (
-                    state_values.shape == mb_rtn.shape
-                ), "Value prediction shape mismatch"
-
-                state_values = torch.squeeze(state_values)
-
-                # Ratios
+                # PPO ratio
                 ratios = torch.exp(logprobs - mb_logprobs.detach().to(device))
 
-                # Surrogate loss
+                # Policy loss
                 surr1 = ratios * mb_adv
                 surr2 = (
-                    torch.clamp(
-                        ratios,
-                        1 - self.cfg.eps_clip,
-                        1 + self.cfg.eps_clip,
-                    )
+                    torch.clamp(ratios, 1 - self.cfg.eps_clip, 1 + self.cfg.eps_clip)
                     * mb_adv
                 )
+                policy_loss = -torch.min(surr1, surr2).mean()
 
-                # Value loss (with optional clipping)
+                # Value loss
                 if self.cfg.clip_value_loss:
-                    mb_old_values = (
-                        torch.stack([self.values[i] for i in mb_idx_list])
-                        .squeeze()
-                        .to(device)
-                    )
-                    values_pred = mb_old_values + torch.clamp(
-                        state_values - mb_old_values,
+                    values_pred = mb_old_val + torch.clamp(
+                        state_values - mb_old_val,
                         -self.cfg.eps_clip,
                         self.cfg.eps_clip,
                     )
@@ -151,71 +144,32 @@ class PPO(Persistable):
                 else:
                     value_loss = self.mse_loss(state_values, mb_rtn)
 
-                # Calculate loss
-                loss: torch.Tensor = (
-                    -torch.min(surr1, surr2)
+                # Entropy bonus
+                entropy = dist.entropy().mean()
+                loss = (
+                    policy_loss
                     + self.cfg.critic_coef * value_loss
-                    - self.cfg.entropy_coef * dist_new.entropy().mean()
+                    - self.cfg.entropy_coef * entropy
                 )
 
-                ### Update gradients on mini-batch
+                # Gradient step
                 self.optim.zero_grad()
                 loss.mean().backward()
                 clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
                 self.optim.step()
 
-                # Collect metrics (will keep last minibatch values)
+                # KL early stopping
                 with torch.no_grad():
                     log_ratio = logprobs - mb_logprobs
                     approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio)
-                    clip_fraction = (
-                        ((ratios - 1).abs() > self.cfg.eps_clip).float().mean()
-                    )
-                    entropy = dist_new.entropy().mean()
-                    policy_loss = (-torch.min(surr1, surr2)).mean()
-
-                    # self._metrics.update(
-                    #    {
-                    #        "ppo/policy_loss": policy_loss.item(),
-                    #        "ppo/value_loss": value_loss.item(),
-                    #        "ppo/entropy": entropy.item(),
-                    #        "ppo/approx_kl": approx_kl.item(),
-                    #        "ppo/clip_fraction": clip_fraction.item(),
-                    #        "ppo/total_loss": loss.mean().item(),
-                    #    }
-                    # )
-                    # Optional KL early stopping
-                    if self.cfg.target_kl is not None:
-                        if approx_kl > self.cfg.target_kl:
-                            kl_divergence_stop = True
-                            break  # break minibatch loop
-            if kl_divergence_stop:
+                    if (
+                        self.cfg.target_kl is not None
+                        and approx_kl > self.cfg.target_kl
+                    ):
+                        kl_stop = True
+                        break
+            if kl_stop:
                 break
-
-    def _compute_gae(
-        self, rewards: list[float], values: list[torch.Tensor], terminals: list[bool]
-    ):
-        assert self.network is not None, "Policy must be set before learning"
-        assert self.optim is not None, "Optimizer must be set before learning"
-
-        advantages = []
-        gae = 0
-        values = values + [torch.tensor(0.0, device=device)]  # add dummy for V(s_{T+1})
-        # TODO: What is that dummy value for? Should it be 0 or something else? Does it matter? Maybe we can just not add it and handle the edge case in the loop?
-        for step in reversed(range(len(rewards))):
-            terminal = float(terminals[step])
-            delta = (
-                rewards[step]
-                + self.cfg.gamma * values[step + 1] * (1 - terminal)
-                - values[step]
-            )
-            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * (1 - terminal) * gae
-            advantages.insert(0, gae)
-        returns = [adv + val for adv, val in zip(advantages, values[:-1])]
-        adv_tensor = torch.tensor(advantages, dtype=torch.float32)
-        rtn_tensor = torch.tensor(returns, dtype=torch.float32)
-        assert adv_tensor.shape[0] == rtn_tensor.shape[0], "Advantages shape mismatch"
-        return adv_tensor.to(device), rtn_tensor.to(device)
 
     def metadata(self) -> dict:
         return {
@@ -230,71 +184,12 @@ class PPO(Persistable):
             "critic_coef": self.cfg.critic_coef,
             "max_grad_norm": self.cfg.max_grad_norm,
             "clip_value_loss": self.cfg.clip_value_loss,
-            **(
-                {"target_kl": self.cfg.target_kl}
-                if self.cfg.target_kl is not None
-                else {}
-            ),
-        }
-
-    def measure_flops(self, obs: TDScene, goal: TDScene) -> tuple[int, int]:
-        assert self.network is not None, "Hoop must be set before measuring FLOPs"
-        with torch.no_grad():
-            obs_batch = [obs]
-            goal_batch = [goal]
-            result = profile(
-                self.network, inputs=(obs_batch, goal_batch), verbose=False
-            )
-            return int(result[0]), int(result[1])
-
-    def flush_and_rate(self):
-        current = len(self.success) / len(self.terminals)
-        self.data.clear()
-        self.actions.clear()
-        self.logprobs.clear()
-        self.rewards.clear()
-        self.success.clear()
-        self.values.clear()
-        self.terminals.clear()
-        if current > self.highscore:
-            self.highscore = current
-            return True
-        return False
-
-    def _save(self, path: Path, tag: str):
-        assert self.optim is not None, "Optimizer must be set before saving"
-        logger.info(f"Saving {tag} buffer")
-        torch.save(
-            {
-                "actions": torch.stack(self.actions),
-                "logprobs": torch.tensor(self.logprobs),
-                "values": torch.tensor(self.values),
-                "rewards": torch.tensor(self.rewards),
-                "success": torch.tensor(self.success),
-                "terminals": torch.tensor(self.terminals),
-                "optimizer_state": self.optim.state_dict(),
-            },
-            path / tag / f"epoch_data_{0}.pt",
+        } | (
+            {"target_kl": self.cfg.target_kl} if self.cfg.target_kl is not None else {}
         )
 
-    def pre_action(
-        self,
-        data: HeteroData,
-        action: torch.Tensor,
-        logprob: torch.Tensor,
-        value: torch.Tensor,
-    ):
-        self.data.append(data)
-        self.actions.append(action)
-        self.logprobs.append(logprob)
-        self.values.append(value)
-
-    def post_action(self, fb: AgentFeedback) -> bool:
-        self.rewards.append(fb.reward)
-        self.success.append(fb.done)
-        self.terminals.append(fb.terminal)
-        return len(self.data) >= self.cfg.batch_size
-
-    def copy_network(self) -> "Network":
-        assert self.network is not None, "Network must be set before collecting"
-        return copy.deepcopy(self.network)
+    def measure_flops(self, data: HeteroData) -> tuple[int, int]:
+        assert self.network is not None
+        with torch.no_grad():
+            result = profile(self.network, inputs=data, verbose=False)
+            return int(result[0]), int(result[1])

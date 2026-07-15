@@ -10,6 +10,7 @@ from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import Graph
 from heca.heca_gnn.network import Network
+from heca.misc import logger
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.misc.ppo import PPO
@@ -73,7 +74,7 @@ class Heca(Agent):
             logprob: torch.Tensor = dist.log_prob(action)
             with torch.inference_mode():
                 value = self.network.critic(data)
-            self.ppo.pre_action(data, action, logprob, value)
+            self.ppo.store_action(data, action, logprob, value)
         else:
             action = logits.argmax(dim=-1)
 
@@ -85,8 +86,7 @@ class Heca(Agent):
         z = Agent.get(a).act(x, y)
         fb = self.evaluator.step(z)
         if self.cfg.mode == HecaMode.TRAIN:
-            if self.ppo.post_action(fb):  # true if batch full
-                raise NotImplementedError()
+            self.ppo.store_feedback(fb)
         return z, fb
 
     def act(self, x: DCScene, y: DCScene) -> DCScene:
@@ -103,6 +103,44 @@ class Heca(Agent):
         while not self.evaluator.test_task(x, y):
             (x, ix), (y, iy) = scene.sample_task()
         return x, y
+
+    def train(self, max_episodes: int, cfg: Scene.Config):
+        """Train the network with PPO for a given number of episodes."""
+        episodes_in_batch = 0
+
+        for ep in range(max_episodes):
+            x, y = self.sample(cfg)
+            z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
+            episodes_in_batch += 1
+            ep_reward = 0.0
+            ep_len = 0
+            for r, t in zip(reversed(self.ppo.rewards), reversed(self.ppo.terminals)):
+                ep_reward += r
+                ep_len += 1
+                if t:  # reached the terminal step of this episode
+                    break
+
+            logger.info(f"Episode {ep}: len={ep_len}, reward={ep_reward:.4f}")
+
+            # Perform PPO update once the rollout buffer is full (or overfull).
+            if len(self.ppo.data) >= self.ppo.cfg.batch_size:
+                progress = ep / max_episodes
+                state_dict, is_best = self.ppo.learn(progress)
+
+                # Sync the inference network with the learned policy
+                self.network.load_state_dict(state_dict)
+
+                # Log batch-level stats
+                batch_success = sum(
+                    1 for s in self.ppo.success[: self.ppo.cfg.batch_size] if s
+                )
+                success_rate = batch_success / self.ppo.cfg.batch_size
+                logger.info(
+                    f"PPO update: success_rate={success_rate:.2f}, "
+                    f"episodes_in_batch={episodes_in_batch}, "
+                    f"highscore={self.ppo.highscore:.4f}"
+                )
+                episodes_in_batch = 0
 
     @cached_property
     def elabels(self) -> set[str]:
