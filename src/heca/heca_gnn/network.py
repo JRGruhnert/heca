@@ -6,6 +6,7 @@ from torch.distributions import Categorical
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import GINEConv, GINConv
 
+from heca.misc import hardware
 from heca.misc.base import Configurable
 
 
@@ -202,7 +203,7 @@ class Network(Configurable, nn.Module):
 
         assert last_dist is not None, "data_list must not be empty"
         return (
-            torch.cat(logprobs).to(device),
-            torch.cat(state_values).to(device),
+            torch.cat(logprobs).to(hardware.device),
+            torch.cat(state_values).to(hardware.device),
             last_dist,
         )

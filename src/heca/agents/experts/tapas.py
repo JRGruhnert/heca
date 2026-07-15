@@ -119,14 +119,14 @@ class TapasAgent(ExpertAgent):
             if predictions is None:
                 return x, AgentFeedback(
                     reward=0,
-                    done=False,
-                    terminal=True,
+                    terminal=False,
+                    truncated=True,
                 )  # Error
 
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-                tdscene, tdimage, reward, done, truncated = self.scene.step(action)
+                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
             while not (pred := self.make_prediction(xt))[1]:
@@ -134,17 +134,17 @@ class TapasAgent(ExpertAgent):
                 if action is None:
                     return x, AgentFeedback(
                         reward=0,
-                        done=False,
-                        terminal=True,
+                        terminal=False,
+                        truncated=True,
                     )  # Error
-                tdscene, tdimage, reward, done, truncated = self.scene.step(action)
+                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
                 z = self.make_scene(tdscene, tdimage)
                 xt = self.tapas_td(z, y)
 
         return z, AgentFeedback(
             reward=reward,
-            done=done,
-            terminal=truncated,
+            terminal=terminal,
+            truncated=truncated,
         )
 
     def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:

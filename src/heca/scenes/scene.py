@@ -34,9 +34,9 @@ class Scene(Persistable):
         return tdscene, tdimage, npimage
 
     def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, float, bool, bool]:
-        obs, reward, done, truncated = self._step(action)
+        obs, reward, terminal, truncated = self._step(action)
         tdscene, tdimage, _ = self.from_internal(obs)
-        return tdscene, tdimage, reward, done, truncated
+        return tdscene, tdimage, reward, terminal, truncated
 
     def step_vis(self, action: np.ndarray) -> tuple[DCScene, TDImage, np.ndarray]:
         obs, _, _, _ = self._step(action)

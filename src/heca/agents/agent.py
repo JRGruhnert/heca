@@ -16,9 +16,9 @@ class EEState(Enum):
 
 @dataclass(kw_only=True)
 class AgentFeedback:
-    done: bool
-    reward: float
     terminal: bool
+    reward: float
+    truncated: bool
 
 
 class Agent(Persistable, abc.ABC):

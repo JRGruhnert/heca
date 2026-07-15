@@ -3,7 +3,6 @@ from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
-from heca.conditions.analyzer import Analyzer
 from heca.conditions.pair import ConPair
 from heca.scenes.ogbench.scene import OGBenchScene
 
@@ -65,7 +64,6 @@ heca_cfg = Heca.Config(
     tag="test",
     agents=agents,
 )
-analyzer = Analyzer(threshold=0.75)
 path = Agent.load_dir(heca_cfg)
 cons: list[ConPair] = []
 for cfg in heca_cfg.agents:
@@ -78,9 +76,7 @@ while True:
         for j in range(i + 1, len(cons)):
             a = cons[i]
             b = cons[j]
-            sim_rating = analyzer.compute_sim(a, b)
-            analyzer.plot_similarity(sim_rating, a, b, path)
-            if analyzer.evaluate_merge(sim_rating):
+            if a.can_merge(b, path):
                 print(f"{a.label} and {b.label} merge")
                 a_set = sets[i]
                 b_set = sets[j]
@@ -92,6 +88,7 @@ while True:
                     a=a,
                     b=b,
                     n_samples=heca_cfg.n_samples,
+                    threshold=cfg.threshold,
                 )
                 new_pair.plot(path)
                 cons.pop(j)

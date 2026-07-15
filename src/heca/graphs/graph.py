@@ -1,5 +1,4 @@
 from collections import defaultdict
-from enum import Enum
 
 import numpy as np
 import torch
@@ -17,6 +16,7 @@ from heca.conditions.condition import Condition
 
 @dataclass
 class Graph:
+    entities: dict[str, Entity]
     ns_entity: NodeSet[EntityNode] = NodeSet[EntityNode]("entity")
     ns_option: NodeSet[OptionNode] = NodeSet[OptionNode]("option")
     es_summary: EdgeSet[EntityNode, OptionNode] = EdgeSet[EntityNode, OptionNode](
@@ -29,11 +29,10 @@ class Graph:
         ("entity", "tapas", "entity")
     )
     packages: dict[str, tuple[Agent.Config, DCScene, DCScene]] = {}
-    start_keys: dict[str, str] = {}
-    goal_keys: dict[str, str] = {}
+    start_keys: set[str] = set()
+    goal_keys: set[str] = set()
     start: DCScene = DCScene.empty()
     goal: DCScene = DCScene.empty()
-    entities: dict[str, Entity] = {}
     goal_ref: dict[str, np.ndarray] = {}
 
     def export(self) -> HeteroData:
@@ -65,7 +64,7 @@ class Graph:
 
     def set_start(self, start: DCScene):
         self.start = start
-        for key in self.start_keys.keys():
+        for key in self.start_keys:
             node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
             x = start[node.entity]
@@ -97,7 +96,7 @@ class Graph:
         return (self.entities[node.entity].gnn_format(v), v)
 
     def update_subgoals(self):
-        for key in self.goal_keys.keys():
+        for key in self.goal_keys:
             node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
             if self.test_subgoal(node, self.goal):
@@ -141,7 +140,7 @@ class Graph:
         for entity, sources in comp_sources.items():
             key = "pre" + entity + label
             pre_sources[entity] = (self.es_tapas.type[1], key)
-            self.start_keys[key] = entity
+            self.start_keys.add(key)
             self.ns_entity.add(
                 key=key,
                 value=EntityNode(
@@ -165,7 +164,7 @@ class Graph:
             key = "post" + entity + label
             sources = comp_sources[entity]
             sources.add(pre_sources[entity])
-            self.goal_keys[key] = entity
+            self.goal_keys.add(key)
             self.ns_entity.add(
                 key,
                 EntityNode(
@@ -204,15 +203,16 @@ class Graph:
             temp_sources[entity] = (self.es_summary.type[1], key)
         return {src for src in temp_sources.values()}
 
-    def generate(self, cfgs: list[Agent.Config], entities: set[Entity]) -> "Graph":
-        self.entities = {e.cfg.label: e for e in entities}
+    @classmethod
+    def generate(cls, cfgs: list[Agent.Config], entities: set[Entity]) -> "Graph":
+        graph = cls(entities={e.cfg.label: e for e in entities})
         agents = [Agent.get(cfg) for cfg in cfgs]
         for a in agents:
             for ac in a.conditions:
-                pre_comp_sources = self.set_comps(ac.label, ac.pre)
-                post_comp_sources = self.set_comps(ac.label, ac.post)
-                pre_sources = self.set_precon(ac.label, ac.pre, pre_comp_sources)
-                post_sources = self.set_postcon(
+                pre_comp_sources = graph.set_comps(ac.label, ac.pre)
+                post_comp_sources = graph.set_comps(ac.label, ac.post)
+                pre_sources = graph.set_precon(ac.label, ac.pre, pre_comp_sources)
+                post_sources = graph.set_postcon(
                     ac.label,
                     ac.post,
                     post_comp_sources,
@@ -223,7 +223,7 @@ class Graph:
                         otag = ac.label + bc.label
                         if ac.label + bc.label:  # pre == post
                             sources = {src for src in post_sources.values()}
-                            self.ns_option.add(
+                            graph.ns_option.add(
                                 otag,
                                 OptionNode(
                                     agent=a.cfg,
@@ -233,14 +233,14 @@ class Graph:
                         else:  # pre != post
                             subgoal = ac.post.make_subgoal(bc.pre)
                             if subgoal is not None:
-                                sources = self.set_subgoal(
+                                sources = graph.set_subgoal(
                                     otag,
                                     post_comp_sources,
                                     pre_sources,
                                     post_sources,
                                     subgoal,
                                 )
-                                self.ns_option.add(
+                                graph.ns_option.add(
                                     otag,
                                     OptionNode(
                                         agent=a.cfg,
@@ -248,10 +248,10 @@ class Graph:
                                     ),
                                 )
 
-        self.es_stepmix.edges_from_sets(self.ns_entity, self.ns_entity)
-        self.es_summary.edges_from_sets(self.ns_entity, self.ns_option)
-        self.es_tapas.edges_from_sets(self.ns_entity, self.ns_entity)
-        return self
+        graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
+        graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)
+        graph.es_tapas.edges_from_sets(graph.ns_entity, graph.ns_entity)
+        return graph
 
     def select(self, index: int) -> tuple[Agent.Config, DCScene]:
         node = self.ns_option.idx_get(index)

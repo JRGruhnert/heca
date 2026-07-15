@@ -11,7 +11,6 @@ class Evaluator(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         success_reward: float = 25.0
-        max_steps: int = 10
         # Small step penalty to encourage efficiency
         step_penalty: float = -0.002
         sample_threshold: float = 0.75
@@ -19,6 +18,7 @@ class Evaluator(Configurable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.current_step: int = 0
+        self.max_steps: int = 0
         self.conditions: list[ConPair] = []
         self.entities: set[Entity] = set()
 
@@ -32,22 +32,13 @@ class Evaluator(Configurable):
 
         if done:
             reward += self.cfg.success_reward
-            return AgentFeedback(reward=reward, done=done, terminal=True)
+            return AgentFeedback(reward=reward, terminal=done, truncated=True)
 
-        if self.current_step >= self.cfg.max_steps:
-            return AgentFeedback(reward=reward, done=done, terminal=True)
+        if self.current_step >= self.max_steps:
+            return AgentFeedback(reward=reward, terminal=done, truncated=True)
 
         self.current_step += 1
-        return AgentFeedback(reward=reward, done=done, terminal=False)
-
-    def setup(
-        self,
-        conditions: list[ConPair],
-        entities: set[Entity],
-    ) -> "Evaluator":
-        self.conditions = conditions
-        self.entities = entities
-        return self
+        return AgentFeedback(reward=reward, terminal=done, truncated=False)
 
     def evaluate(self, x: DCScene, y: DCScene) -> bool:
         for e in self.entities:
@@ -69,3 +60,11 @@ class Evaluator(Configurable):
             if pair_match:
                 return True
         return False
+
+    def setup(
+        self, conditions: list[ConPair], entities: set[Entity], max_steps: int
+    ) -> "Evaluator":
+        self.conditions = conditions
+        self.entities = entities
+        self.max_steps = max_steps
+        return self
