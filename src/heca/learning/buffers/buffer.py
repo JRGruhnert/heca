@@ -76,7 +76,3 @@ class Buffer(Configurable):
     @abstractmethod
     def compute_advantages(self, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
-
-    @abstractmethod
-    def flush(self):
-        raise NotImplementedError

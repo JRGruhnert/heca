@@ -113,7 +113,7 @@ class DDPPOBuffer(Buffer):
                 # Keep the newest 'target' steps (most recent)
                 self.buckets[tag] = bucket[-target:]
 
-    def compute_gae(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def compute_advantages(self) -> tuple[torch.Tensor, torch.Tensor]:
         self.trim_to_exact_capacity()
         all_adv, all_ret = [], []
         for tag in self.sorted_tags:
@@ -145,24 +145,6 @@ class DDPPOBuffer(Buffer):
         returns = [adv + values[t] for t, adv in enumerate(advantages)]
         return advantages, returns
 
-    def flush_and_rate(self) -> bool:
-        total_terminals = 0
-        total_dones = 0
-        for bucket in self.buckets.values():
-            for d in bucket:
-                if d.truncated:
-                    total_terminals += 1
-                    if d.terminal:
-                        total_dones += 1
-        if total_terminals == 0:
-            return False
-        current = total_dones / total_terminals
-        self.buckets.clear()
-        if current > self.highscore:
-            self.highscore = current
-            return True
-        return False
-
     def save(self, path: Path, label: str):
         logger.info(f"Saving buffer '{label}'")
         serialized = {}
@@ -173,8 +155,8 @@ class DDPPOBuffer(Buffer):
                 "logprobs": torch.stack([d.logprob for d in bucket]),
                 "values": torch.stack([d.value for d in bucket]),
                 "rewards": torch.tensor([d.reward for d in bucket]),
-                "dones": torch.tensor([d.terminal for d in bucket]),
-                "terminals": torch.tensor([d.truncated for d in bucket]),
+                "terminals": torch.tensor([d.terminal for d in bucket]),
+                "truncates": torch.tensor([d.truncated for d in bucket]),
             }
         torch.save(serialized, path / f"buffer_{label}.pt")
 
@@ -188,8 +170,8 @@ class DDPPOBuffer(Buffer):
             logprobs = torch.unbind(data["logprobs"])
             values = torch.unbind(data["values"])
             rewards = data["rewards"].tolist()
-            dones = data["dones"].tolist()
             terminals = data["terminals"].tolist()
+            truncates = data["truncates"].tolist()
             for i in range(len(rewards)):
                 bucket.append(
                     BufferData(
@@ -198,8 +180,8 @@ class DDPPOBuffer(Buffer):
                         logprob=logprobs[i],
                         value=values[i],
                         reward=rewards[i],
-                        terminal=dones[i],
-                        truncated=terminals[i],
+                        terminal=terminals[i],
+                        truncated=truncates[i],
                     )
                 )
             self.buckets[tag] = bucket

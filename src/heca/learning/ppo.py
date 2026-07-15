@@ -3,24 +3,17 @@ from functools import cached_property
 import torch
 import copy
 from thop import profile
-from enum import Enum
 from torch import nn
 from torch.distributions import Categorical
 from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch_geometric.explain import Explainer, CaptumExplainer
+from torch_geometric.data import HeteroData
 
+from heca.learning.buffers.appo_buffer import APPOBuffer
 from heca.misc.hardware import device
 from heca.misc.base import Configurable
 from heca.heca_gnn.network import Network
-from torch_geometric.data import HeteroData
-from torch.distributions import Categorical
 from heca.learning.buffers.buffer import Buffer
-
-
-class HecaMode(Enum):
-    TRAIN = "train"
-    EXPLAIN = "explain"
-    EVAL = "evaluate"
 
 
 class PPO(Configurable):
@@ -31,8 +24,8 @@ class PPO(Configurable):
         buffer: Buffer.Config
         network: Network.Config = Network.Config()
         # Hyperparameters
-        mini_batch_size: int = 64
-        learning_epochs: int = 5
+        batch_size: int = 64
+        n_epoch: int = 5
         lr: float = 0.0003
         lr_annealing: bool = False
         eps_clip: float = 0.2
@@ -69,122 +62,56 @@ class PPO(Configurable):
     @cached_property
     def inference_network(self) -> Network:
         """All agents attached to this PPO share this frozen copy."""
-        assert self.network is not None
         return copy.deepcopy(self.network)
 
     def sync_inference(self):
         """Push training weights into the shared inference copy."""
-        assert self.network is not None
         self.inference_network.load_state_dict(self.network.state_dict())
 
-    def learn2(self, progress: float) -> tuple[dict, bool]:
-        assert self.network is not None
-        assert self.optim is not None
-        assert self.buffer.full, "Buffer must be full before learning"
+    def learn(self, progress: float):
+        assert self.buffer.full
 
-        # --- APPO Mode ---
-        # 1. Get all data from buffer (flattened)
-        all_data = self.buffer.flat_data
-        all_actions = self.buffer.flat_actions.detach().squeeze(-1)
-
-        # 2. Forward pass on the ENTIRE buffer (current policy π)
-        with torch.set_grad_enabled(True):
-            # We need gradients, so no inference_mode
-            current_logprobs, current_values, _ = self.network.evaluate(
+        if isinstance(self.buffer, APPOBuffer):
+            # V-trace needs current policy evaluation first
+            all_data = self.buffer.flat_data
+            all_actions = self.buffer.flat_actions.detach().squeeze(-1)
+            current_logprobs, current_values, dist = self.network.evaluate(
                 all_data, all_actions
             )
             current_logprobs = current_logprobs.squeeze(-1)
             current_values = current_values.squeeze(-1)
+            current_entropy = dist.entropy().mean()
 
-        # 3. Compute V-trace targets (uses current logprobs and values)
-        adv, rtn = self.buffer.compute_vtrace(current_logprobs, current_values)
-
-        # 4. Now run the minibatch loop using these fixed targets
-        B = len(self.buffer)
-        old_logprobs = self.buffer.flat_logprobs.detach().squeeze(-1)
-        old_values = self.buffer.flat_values.detach().squeeze(-1)
-
-        kl_stop = False
-        for epoch in range(self.cfg.learning_epochs):
-            indices = torch.randperm(B)
-            for start in range(0, B, self.cfg.mini_batch_size):
-                mb_idx = indices[start : start + self.cfg.mini_batch_size]
-                mb_ilist = mb_idx.tolist()
-
-                mb_data = [all_data[i] for i in mb_ilist]
-                mb_actions = all_actions[mb_idx]
-                mb_adv = adv[mb_idx]
-                mb_rtn = rtn[mb_idx]
-
-                # Recompute logprobs and values for the minibatch (current policy)
-                # We could use the cached `current_logprobs[mb_idx]` here,
-                # but recomputing is standard and ensures gradients flow.
-                # To save compute, we can detach and use the cached ones.
-                # Let's use the cached ones to save time:
-                mb_logprobs = current_logprobs[mb_idx].detach()  # π
-                mb_old_logprobs = old_logprobs[mb_idx]  # μ
-                mb_values = current_values[mb_idx].detach()
-                mb_old_values = old_values[mb_idx]
-
-                # PPO ratio = π / μ
-                ratios = torch.exp(mb_logprobs - mb_old_logprobs)
-
-                # Normalize advantages
-                mb_adv_norm = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
-
-                # Policy loss (clipped)
-                surr1 = ratios * mb_adv_norm
-                surr2 = (
-                    torch.clamp(ratios, 1 - self.cfg.eps_clip, 1 + self.cfg.eps_clip)
-                    * mb_adv_norm
-                )
-                policy_loss = -torch.min(surr1, surr2).mean()
-
-                # Value loss (clipped)
-                if self.cfg.clip_value_loss:
-                    values_pred = mb_old_values + torch.clamp(
-                        mb_values - mb_old_values,
-                        -self.cfg.eps_clip,
-                        self.cfg.eps_clip,
-                    )
-                    value_loss = self.mse_loss(values_pred, mb_rtn)
-                else:
-                    value_loss = self.mse_loss(mb_values, mb_rtn)
-
-                # Entropy (we need the distribution for entropy)
-                # We didn't store dist in forward pass, let's recompute entropy quickly:
-                # Actually, we can compute entropy from logits, but let's get dist in forward pass.
-                # Let's modify the forward pass to return logits.
-
-                # ... Gradient step ...
-
-        # CRITICAL: DO NOT clear the buffer! FIFO eviction handles memory.
-        return self.network.state_dict(), False  # No highscore clearing in APPO
-
-    def learn(self, progress: float) -> tuple[dict, bool]:
-        assert self.network is not None
-        assert self.optim is not None
-        assert self.buffer.full, "Buffer must be full before learning"
-
-        self._mini_batch_loop()
-
-        # LR annealing
-        if self.cfg.lr_annealing:
-            lr = self.cfg.lr * (1.0 - progress)
-            for pg in self.optim.param_groups:
-                pg["lr"] = lr
-
+            adv, rtn = self.buffer.compute_advantages(
+                current_logprobs=current_logprobs,
+                current_values=current_values,
+            )
+            self._mini_batch_loop(
+                adv,
+                rtn,
+                cached_logprobs=current_logprobs.detach(),
+                cached_values=current_values.detach(),
+                cached_entropy=current_entropy,
+            )
+        else:
+            # GAE for PPO and DDPPO
+            adv, rtn = self.buffer.compute_advantages()
+            self._mini_batch_loop(adv, rtn)
+            if self.cfg.lr_annealing:
+                lr = self.cfg.lr * (1.0 - progress)
+                for pg in self.optim.param_groups:
+                    pg["lr"] = lr
         self.sync_inference()
 
-        return self.network.state_dict(), self.buffer.flush_and_rate()
-
-    def _mini_batch_loop(self):
-        assert self.network is not None
-        assert self.optim is not None
-
-        adv, rtn = self.buffer.compute_gae()
-        B = len(self.buffer)
-        assert B == self.buffer.capacity  # sanity check
+    def _mini_batch_loop(
+        self,
+        adv: torch.Tensor,
+        rtn: torch.Tensor,
+        cached_logprobs=None,
+        cached_values=None,
+        cached_entropy=None,
+    ):
+        B = self.buffer.cfg.capacity
 
         old_data = self.buffer.flat_data
         old_actions = self.buffer.flat_actions.detach().squeeze(-1)
@@ -192,28 +119,41 @@ class PPO(Configurable):
         old_values = self.buffer.flat_values.detach().squeeze(-1)
 
         kl_stop = False
-        for epoch in range(self.cfg.learning_epochs):
+        for _ in range(self.cfg.n_epoch):
             indices = torch.randperm(B)
-            for start in range(0, B, self.cfg.mini_batch_size):
-                end = start + self.cfg.mini_batch_size
+            for start in range(0, B, self.cfg.batch_size):
+                end = start + self.cfg.batch_size
                 mb_idx = indices[start:end]
                 mb_ilist = mb_idx.tolist()
 
-                mb_data = [old_data[i] for i in mb_ilist]
                 mb_actions = old_actions[mb_idx]
                 mb_logprobs = old_logprobs[mb_idx]
                 mb_adv = adv[mb_idx]
                 mb_rtn = rtn[mb_idx]
                 mb_old_val = old_values[mb_idx]
 
+                if (
+                    cached_logprobs is not None
+                    and cached_values is not None
+                    and cached_entropy is not None
+                ):
+                    # ── APPO: use cached forward pass ──
+                    logprobs = cached_logprobs[mb_idx]
+                    state_values = cached_values[mb_idx]
+                    entropy = cached_entropy
+                else:
+                    # ── PPO/DDPPO: fresh forward pass per minibatch ──
+                    mb_data = [old_data[i] for i in mb_ilist]
+                    logprobs, state_values, dist = self.network.evaluate(
+                        mb_data, mb_actions
+                    )
+                    logprobs = logprobs.squeeze(-1)
+                    state_values = state_values.squeeze(-1)
+                    entropy = dist.entropy().mean()
+
+                assert isinstance(entropy, torch.Tensor)
                 # Normalize advantages
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
-
-                # Forward pass
-                logprobs, state_values, dist = self.network.evaluate(
-                    mb_data, mb_actions
-                )
-                state_values = state_values.squeeze(-1)
 
                 # PPO ratio
                 ratios = torch.exp(logprobs - mb_logprobs.detach().to(device))
@@ -238,7 +178,6 @@ class PPO(Configurable):
                     value_loss = self.mse_loss(state_values, mb_rtn)
 
                 # Entropy bonus
-                entropy = dist.entropy().mean()
                 loss = (
                     policy_loss
                     + self.cfg.critic_coef * value_loss
@@ -266,8 +205,8 @@ class PPO(Configurable):
 
     def metadata(self) -> dict:
         return {
-            "mini_batch_size": self.cfg.mini_batch_size,
-            "learning_epochs": self.cfg.learning_epochs,
+            "mini_batch_size": self.cfg.batch_size,
+            "learning_epochs": self.cfg.n_epoch,
             "lr_annealing": self.cfg.lr_annealing,
             "learning_rate": self.cfg.lr,
             "eps_clip": self.cfg.eps_clip,

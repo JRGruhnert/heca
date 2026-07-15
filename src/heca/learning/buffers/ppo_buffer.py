@@ -29,15 +29,15 @@ class PPOBuffer(Buffer):
 
     @property
     def flat_actions(self) -> torch.Tensor:
-        return [d.action for d in self.bucket]
+        return torch.stack([d.action for d in self.bucket])
 
     @property
     def flat_logprobs(self) -> torch.Tensor:
-        return [d.logprobs for d in self.bucket]
+        return torch.stack([d.logprob for d in self.bucket])
 
     @property
     def flat_values(self) -> torch.Tensor:
-        return [d.values for d in self.bucket]
+        return torch.stack([d.value for d in self.bucket])
 
     def store_prediction(self, data, action, logprob, value, tag):
         self.bucket.append(BufferData(data, action, logprob, value))
@@ -50,7 +50,7 @@ class PPOBuffer(Buffer):
     def trim_to_exact_capacity(self):
         self.bucket = self.bucket[-self.cfg.capacity :]
 
-    def compute_gae(self) -> tuple[torch.Tensor, torch.Tensor]:
+    def compute_advantages(self) -> tuple[torch.Tensor, torch.Tensor]:
         self.trim_to_exact_capacity()
         rewards = [d.reward for d in self.bucket]
         terminals = [d.terminal for d in self.bucket]
@@ -76,23 +76,6 @@ class PPOBuffer(Buffer):
             next_value = values[t]
         returns = [adv + values[t] for t, adv in enumerate(advantages)]
         return advantages, returns
-
-    def flush_and_rate(self) -> bool:
-        total_truncates = 0
-        total_terminals = 0
-        for d in self.bucket:
-            if d.truncated:
-                total_truncates += 1
-                if d.terminal:
-                    total_terminals += 1
-        if total_truncates == 0:
-            return False
-        current = total_terminals / total_truncates
-        self.bucket.clear()
-        if current > self.highscore:
-            self.highscore = current
-            return True
-        return False
 
     def save(self, path: Path, label: str):
         logger.info(f"Saving buffer '{label}'")

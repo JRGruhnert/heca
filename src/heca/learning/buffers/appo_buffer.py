@@ -42,11 +42,7 @@ class APPOBuffer(Buffer):
 
     @property
     def full(self) -> bool:
-        if self.mode == BufferMode.PPO:
-            return sum(len(b) for b in self.buckets.values()) >= self.capacity
-        else:  # DISTRIBUTED
-            caps = self.bucket_capacity
-            return all(len(self.buckets[tag]) >= caps[tag] for tag in caps)
+        raise NotImplementedError
 
     def __len__(self) -> int:
         return sum(len(b) for b in self.buckets.values())
@@ -95,8 +91,8 @@ class APPOBuffer(Buffer):
             all_data.extend((tag, d) for d in bucket)
 
         # 2. If we exceed capacity, remove the oldest (front of the list)
-        if len(all_data) > self.capacity:
-            all_data = all_data[-self.capacity :]  # Keep the newest steps
+        if len(all_data) > self.cfg.capacity:
+            all_data = all_data[-self.cfg.capacity :]  # Keep the newest steps
 
         # 3. Rebuild buckets
         self.buckets.clear()
@@ -119,7 +115,7 @@ class APPOBuffer(Buffer):
 
     def trim_if_overflow(self, tag: str):
         bucket = self.buckets.get(tag, [])
-        target = self.bucket_capacity.get(tag, self.capacity)
+        target = self.bucket_capacity.get(tag, self.cfg.capacity)
         while len(bucket) > target:
             end_idx = self._find_first_episode_end(bucket)
             if end_idx == -1:
@@ -134,132 +130,101 @@ class APPOBuffer(Buffer):
 
     def trim_to_exact_capacity(self):
         for tag, bucket in self.buckets.items():
-            target = self.bucket_capacity.get(tag, self.capacity)
+            target = self.bucket_capacity.get(tag, self.cfg.capacity)
             if len(bucket) > target:
                 # Keep the newest 'target' steps (most recent)
                 self.buckets[tag] = bucket[-target:]
 
-    def compute_gae(self) -> tuple[torch.Tensor, torch.Tensor]:
-        self.trim_to_exact_capacity()
+    def compute_advantages(self, current_logprobs, current_values):
+        """V-trace for APPO. Requires current policy outputs."""
+        self.enforce_fifo_capacity()
         all_adv, all_ret = [], []
+        offset = 0
         for tag in self.sorted_tags:
             bucket = self.buckets[tag]
+            T = len(bucket)
+            if T == 0:
+                continue
+            cp = current_logprobs[offset : offset + T]
+            cv = current_values[offset : offset + T]
+            offset += T
             rewards = [d.reward for d in bucket]
-            terminals = [d.terminal for d in bucket]
-            values = [d.value.item() for d in bucket]
-            advs, rets = self._gae_for_bucket(rewards, terminals, values)
-            all_adv.extend(advs)
-            all_ret.extend(rets)
-        return (
-            torch.tensor(all_adv, dtype=torch.float32, device=device),
-            torch.tensor(all_ret, dtype=torch.float32, device=device),
-        )
+            terminals = [d.terminal or d.truncated for d in bucket]
+            behavior_lp = (
+                torch.stack([d.logprob for d in bucket]).squeeze(-1).to(device)
+            )
+            behavior_v = torch.stack([d.value for d in bucket]).squeeze(-1).to(device)
+            advs, rets = self._vtrace(
+                rewards, terminals, behavior_lp, behavior_v, cp, cv
+            )
+            all_adv.append(advs)
+            all_ret.append(rets)
+        return torch.cat(all_adv), torch.cat(all_ret)
 
-    def _gae_for_bucket(self, rewards, terminals, values):
+    def _vtrace(
+        self,
+        rewards,
+        terminals,
+        behavior_logprobs,
+        behavior_values,
+        current_logprobs,
+        current_values,
+    ):
+        """V-trace for one contiguous episode.
+
+        All tensors are shape [T].
+        rewards/terminals are Python lists.
+        """
         T = len(rewards)
-        advantages = [0.0] * T
-        gae = 0.0
-        next_value = 0.0 if terminals[-1] else values[-1]
-        for t in reversed(range(T)):
-            is_terminal = float(terminals[t])
-            delta = rewards[t] + self.gamma * next_value * (1 - is_terminal) - values[t]
-            gae = delta + self.gamma * self.gae_lambda * (1 - is_terminal) * gae
-            advantages[t] = gae
-            next_value = values[t]
-        returns = [adv + values[t] for t, adv in enumerate(advantages)]
-        return advantages, returns
+        device = current_logprobs.device
 
-    def compute_vtrace(
-        self, current_logprobs: torch.Tensor, current_values: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """
-        Compute V-trace targets and advantages for the entire buffer.
-
-        Args:
-            current_logprobs: log π(a|s) for all steps in the buffer (flattened order).
-            current_values: V(s) for all steps in the buffer (flattened order).
-
-        Returns:
-            advantages: (B,)
-            returns: (B,)
-        """
-        self.enforce_fifo_capacity()  # Ensure we are within limits
-
-        # Get flattened behavior logprobs and values
-        behavior_logprobs = self.flat_logprobs.detach()
-        behavior_values = self.flat_values.detach()
-        rewards = torch.tensor(
-            [d.reward for d in self.flat_data], dtype=torch.float32, device=device
-        )
-        terminals = torch.tensor(
-            [d.terminal for d in self.flat_data], dtype=torch.float32, device=device
-        )
-
-        B = len(rewards)
-        advantages = torch.zeros(B, device=device)
-        returns = torch.zeros(B, device=device)
-
-        # V-trace clipping parameters (standard: 1.0)
+        ratios = torch.exp(current_logprobs - behavior_logprobs)  # π / μ
         rho_bar = 1.0
         c_bar = 1.0
 
-        # Bootstrap value for the last step
-        next_value = 0.0 if terminals[-1] else current_values[-1]
-        next_v_trace = current_values[-1]  # v_{t+1} initializer
+        advantages = torch.zeros(T, device=device)
+        returns = torch.zeros(T, device=device)
 
-        # Compute ratios: π / μ
-        ratios = torch.exp(current_logprobs - behavior_logprobs)
+        # ── Bootstrap V(s_T) ──────────────────────────────
+        # V(s_T) = 0 if the last step ended in terminal,
+        #         else bootstrap with V_current(s_{T-1}) (approx)
+        if terminals[-1]:
+            next_val = 0.0
+        else:
+            next_val = current_values[-1].item()
+        v_next = torch.tensor(next_val, device=device)  # v_T
 
-        for t in reversed(range(B)):
-            rho = min(ratios[t].item(), rho_bar)
-            c = min(ratios[t].item(), c_bar)
+        for t in reversed(range(T)):
+            rho = torch.clamp(ratios[t], max=rho_bar)  # ρ_t
+            c = torch.clamp(ratios[t], max=c_bar)  # c_t
+            term = float(terminals[t])  # 1 if s_{t+1} is terminal
 
-            is_terminal = terminals[t]
-
-            # TD error scaled by rho
+            # TD error: δ_t = ρ_t · (r_t + γ·V(s_{t+1}) - V(s_t))
             delta = rho * (
-                rewards[t]
-                + self.gamma * next_value * (1 - is_terminal)
-                - current_values[t]
+                rewards[t] + self.cfg.gamma * next_val * (1 - term) - current_values[t]
             )
 
-            # V-trace target v_t
-            v_t = (
-                current_values[t]
-                + delta
-                + self.gamma
-                * c
-                * (1 - is_terminal)
-                * (next_v_trace - current_values[t + 1] if t + 1 < B else 0)
-            )
+            # V-trace target: v_t = V(s_t) + δ_t + γ·c_t·(1-term)·(v_{t+1} - V(s_{t+1}))
+            if t < T - 1:
+                v_t = (
+                    current_values[t]
+                    + delta
+                    + self.cfg.gamma * c * (1 - term) * (v_next - current_values[t + 1])
+                )
+            else:
+                v_t = current_values[t] + delta  # last step, no correction from future
+
             returns[t] = v_t
-
-            # Advantage = v_t - V(s_t)
             advantages[t] = v_t - current_values[t]
 
-            # Update for next iteration
-            next_value = current_values[t]  # V(s_t) for next TD error
-            next_v_trace = v_t  # v_t for next V-trace accumulation
+            # ── Prepare for next (previous) step ─────────
+            # For step t-1, V(s_t) is the bootstrap value.
+            # s_t is terminal iff terminals[t-1] is True.
+            if t > 0:
+                next_val = 0.0 if terminals[t - 1] else current_values[t].item()
+            v_next = v_t
 
         return advantages, returns
-
-    def flush_and_rate(self) -> bool:
-        total_terminals = 0
-        total_dones = 0
-        for bucket in self.buckets.values():
-            for d in bucket:
-                if d.truncated:
-                    total_terminals += 1
-                    if d.terminal:
-                        total_dones += 1
-        if total_terminals == 0:
-            return False
-        current = total_dones / total_terminals
-        self.buckets.clear()
-        if current > self.highscore:
-            self.highscore = current
-            return True
-        return False
 
     def save(self, path: Path, label: str):
         logger.info(f"Saving buffer '{label}'")
