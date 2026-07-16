@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from enum import Enum
 from functools import total_ordering
 
+import torch
+
 from heca.misc.base import Configurable
+from heca.misc.data import DCEntity
 from heca.utils.quaternion import Quaternion
-from heca.properties.default.v2.state import StateProperty
 
 STATE_LOGIT_BASELINE = -10.0
 
@@ -30,20 +32,16 @@ class Entity(Configurable):
         answers: set[str]
         mobility: Mobility
         eval_func: Callable[[np.ndarray, np.ndarray], bool] = lambda a, b: False
+        max_states: int = 19  # 13 (pos+rot) + 19 = 32 (dim of gnn features)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.state = StateProperty.get(
-            StateProperty.Config(
-                values=cfg.states,
-            )
-        )
 
     def state_count(self) -> int:
         return len(self.cfg.states)
 
-    def evaluate(self, a: np.ndarray, b: np.ndarray) -> bool:
-        return self.cfg.eval_func(a, b)
+    def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
+        return self.cfg.eval_func(a.value, b.value)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Entity):
@@ -58,7 +56,51 @@ class Entity(Configurable):
             return NotImplemented
         return self.cfg.label < other.cfg.label
 
-    def gnn_format(self, raw: np.ndarray, logit_confidence=10.0, base_logstd=-10.0):
+    def make_zeros(self) -> torch.Tensor:
+        return torch.zeros(len(self.cfg.states), dtype=torch.float32)
+
+    def make_zeros_dc(self) -> np.ndarray:
+        return np.zeros(len(self.cfg.states))
+
+    def make_one_hot(self, label: str) -> torch.Tensor:
+        assert label is not None, "Label cannot be None."
+        assert label in self.cfg.states, "Label must be in state values."
+        one_hot = self.make_zeros()
+        index = list(self.cfg.states).index(label)
+        one_hot[index] = 1.0
+        return one_hot
+
+    def make_idx(self, label: str) -> int:
+        assert label is not None, "Label cannot be None."
+        assert label in self.cfg.states, "Label must be in state values."
+        return list(self.cfg.states).index(label)
+
+    def one_hot_from_idx(self, idx: int) -> torch.Tensor:
+        idx = int(idx)
+        assert 0 <= idx < len(self.cfg.states), "Index out of bounds."
+        one_hot = self.make_zeros()
+        one_hot[idx] = 1.0
+        return one_hot
+
+    def one_hot_from_idx_dc(self, idx: int) -> np.ndarray:
+        idx = int(idx)
+        assert 0 <= idx < len(self.cfg.states), "Index out of bounds."
+        one_hot = self.make_zeros_dc()
+        one_hot[idx] = 1.0
+        return one_hot
+
+    @classmethod
+    def to_value(
+        cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray, soh: np.ndarray
+    ) -> DCEntity:
+        value = np.concatenate((pos, rot, ste[:, None]), axis=1)
+        feature = cls.gnn_format(value, len(soh))
+        return DCEntity(value=value, feature=feature)
+
+    @classmethod
+    def gnn_format(
+        cls, raw: np.ndarray, n_states: int, logit_confidence=10.0, base_logstd=-10.0
+    ):
         """
         Convert raw stepmix format to GNN node format.
 
@@ -74,8 +116,7 @@ class Entity(Configurable):
                     [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
         """
         # Initialize with zeros
-        K = self.state_count()
-        node = np.zeros((13 + K), dtype=np.float32)
+        node = np.zeros((32), dtype=np.float32)
         node[0:3] = raw[0:3]
         node[3:6] = base_logstd
         node[6:10] = raw[3:7]
@@ -83,7 +124,7 @@ class Entity(Configurable):
         node[6:10] = node[6:10] / norms
         node[10:13] = base_logstd
         state_ids = raw[7].astype(int)  # [N]
-        node[13:] = -logit_confidence
+        node[13 : 13 + n_states] = -logit_confidence
         node[13 + state_ids] = logit_confidence
 
         return node
@@ -167,89 +208,6 @@ class Entity(Configurable):
         noisy[:, 13:] = noisy_logits
 
         return noisy
-
-    @classmethod
-    def to_value(cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray) -> np.ndarray:
-        return np.concatenate((pos, rot, ste[:, None]), axis=1)
-
-    @staticmethod
-    def uncertainty_from_condition(
-        con: Condition,
-        entity_label: str,
-        n_states: int,
-        sample: np.ndarray | None = None,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Extract per-entity uncertainty from a Condition's StepMix model.
-
-        Uses posterior-weighted averaging across mixture components to compute
-        the expected position std, rotation std, and state logits for a given
-        observation (or the prior-weighted average if no sample provided).
-
-        Returns:
-            pos_logstd: [3] log standard deviations for position
-            rot_logstd: [3] log standard deviations for rotation (tangent space)
-            state_logits: [n_states] full state logits (padded to entity's state space)
-        """
-        from heca.misc.entity import STATE_LOGIT_BASELINE
-
-        model = con.models[entity_label]
-        params = model.get_parameters()
-        K = len(params["weights"])
-
-        # --- Component posterior given sample (or prior) ---
-        if sample is not None and K > 1:
-            log_probs = np.zeros(K)
-            for k in range(K):
-                mu = params["measurement"]["pose"]["means"][k]
-                var = params["measurement"]["pose"]["covariances"][k]
-                diff = sample[:7] - mu
-                log_prob = -0.5 * np.sum(
-                    np.log(2 * np.pi * var) + diff**2 / var, axis=-1
-                )
-                log_probs[k] = log_prob + np.log(params["weights"][k])
-            log_probs -= log_probs.max()  # numerical stability
-            posteriors = np.exp(log_probs)
-            posteriors /= posteriors.sum()
-        else:
-            posteriors = params["weights"].copy()
-            posteriors /= posteriors.sum()
-
-        # --- Position uncertainty (weighted avg of component variances) ---
-        pos_var = np.sum(
-            posteriors[:, None] * params["measurement"]["pose"]["covariances"][:, :3],
-            axis=0,
-        )
-        pos_logstd = 0.5 * np.log(pos_var + 1e-8)
-
-        # --- Rotation uncertainty ---
-        rot_var = np.sum(
-            posteriors[:, None] * params["measurement"]["pose"]["covariances"][:, 3:6],
-            axis=0,
-        )
-        rot_logstd = 0.5 * np.log(rot_var + 1e-8)
-
-        # --- State logits ---
-        # Weighted average of component state probabilities
-        n_observed = params["measurement"]["state"]["pis"].shape[1]
-        state_probs_compact = np.sum(
-            posteriors[:, None] * params["measurement"]["state"]["pis"], axis=0
-        )
-
-        # Check if we need to pad to full state space
-        total_states = con.model_states[entity_label]
-        if len(total_states) > n_observed or n_states > n_observed:
-            observed_states = np.sort(
-                np.unique(con.data_raw[entity_label][:, 7].astype(int))
-            )
-            state_logits = np.full(n_states, STATE_LOGIT_BASELINE, dtype=np.float32)
-            for j, state_idx in enumerate(observed_states):
-                if state_idx < n_states:
-                    state_logits[state_idx] = np.log(state_probs_compact[j] + 1e-8)
-        else:
-            state_logits = np.log(state_probs_compact + 1e-8)
-
-        return pos_logstd, rot_logstd, state_logits
 
     def gnn_format2(
         self,

@@ -1,29 +1,41 @@
+from dataclasses import dataclass
+
 import torch
 import numpy as np
 from typing import Iterator, cast
 from tensordict import TensorDict
 
 
+@dataclass(slots=True)
+class DCEntity:
+    value: np.ndarray
+    feature: np.ndarray
+
+    @classmethod
+    def empty(cls) -> "DCEntity":
+        return cls(np.empty(0), np.empty(0))
+
+
 class DCScene:
     def __init__(
         self,
-        ee: np.ndarray,
-        entities: dict[str, np.ndarray],
+        ee: DCEntity,
+        entities: dict[str, DCEntity],
         extras: dict[str, np.ndarray] = {},
     ):
         self._ee = ee
         self._entities = entities
         self._extras = extras if extras is not None else {}
 
-    def __getitem__(self, key: str) -> np.ndarray:
+    def __getitem__(self, key: str) -> DCEntity:
         return self._entities[key]
 
-    def get(self, key: str) -> np.ndarray:
+    def get(self, key: str) -> DCEntity:
         if key not in self._entities:
             raise KeyError(f"Entity {key} not found in TDScene")
         return self._entities[key]
 
-    def set(self, key: str, value: np.ndarray):
+    def set(self, key: str, value: DCEntity):
         self._entities[key] = value
 
     @property
@@ -31,16 +43,16 @@ class DCScene:
         return self._extras
 
     @property
-    def ee(self) -> np.ndarray:
+    def ee(self) -> DCEntity:
         return self._ee
 
-    def entities(self) -> Iterator[tuple[str, np.ndarray]]:
+    def entities(self) -> Iterator[tuple[str, DCEntity]]:
         for key, value in self._entities.items():
             yield key, value
 
     @classmethod
     def empty(cls) -> "DCScene":
-        return cls(np.empty(8), {})
+        return cls(DCEntity.empty(), {})
 
 
 class TDImage(TensorDict):

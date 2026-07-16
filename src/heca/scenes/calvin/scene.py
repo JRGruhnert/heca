@@ -3,7 +3,7 @@ from functools import cached_property
 import torch
 import numpy as np
 from dataclasses import dataclass, field
-from heca.misc.data import DCScene, TDImage
+from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.scene import Scene
 from heca.utils.state import State
@@ -208,7 +208,7 @@ class CalvinScene(Scene):
     def get_dc_ee_values(
         self, obs: CalvinEnvObservation
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        soh = self.ee.state.one_hot_from_idx_dc(obs.ee_state.item())
+        soh = self.ee.one_hot_from_idx_dc(obs.ee_state.item())
         return obs.ee_pose[:3], obs.ee_pose[-4:], obs.ee_state, soh
 
     def is_tresholded(
@@ -220,32 +220,32 @@ class CalvinScene(Scene):
         # Custom mehthod to parse states since calvin doesnt provide them as we need them.
         if entity.cfg.label == "drawer":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_one_hot("closed")  # closed
+                return entity.make_one_hot("closed")  # closed
             elif self.is_tresholded(state, 0.22):
-                return entity.state.make_one_hot("open")  # open
+                return entity.make_one_hot("open")  # open
             else:
-                return entity.state.make_zeros()  # in between
+                return entity.make_zeros()  # in between
         elif entity.cfg.label == "slider":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_one_hot("left")  # left
+                return entity.make_one_hot("left")  # left
             elif self.is_tresholded(state, 0.28):
-                return entity.state.make_one_hot("right")  # right
+                return entity.make_one_hot("right")  # right
             else:
-                return entity.state.make_zeros()
+                return entity.make_zeros()
         elif entity.cfg.label == "button":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_one_hot("released")  # released
+                return entity.make_one_hot("released")  # released
             elif self.is_tresholded(state, 1.0):
-                return entity.state.make_one_hot("pressed")  # pressed
+                return entity.make_one_hot("pressed")  # pressed
             else:
-                return entity.state.make_zeros()  # in between
+                return entity.make_zeros()  # in between
         elif entity.cfg.label == "light":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_one_hot("off")  # off
+                return entity.make_one_hot("off")  # off
             elif self.is_tresholded(state, 1.0):
-                return entity.state.make_one_hot("on")  # on
+                return entity.make_one_hot("on")  # on
             else:
-                return entity.state.make_zeros()  # in between
+                return entity.make_zeros()  # in between
         elif entity.cfg.label in {"red_block", "blue_block", "pink_block"}:
             return self.area_state(torch.Tensor(state))
         else:
@@ -255,30 +255,30 @@ class CalvinScene(Scene):
         # Custom mehthod to parse states since calvin doesnt provide them as we need them.
         if entity.cfg.label == "drawer":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_idx("closed")  # closed
+                return entity.make_idx("closed")  # closed
             elif self.is_tresholded(state, 0.22):
-                return entity.state.make_idx("open")  # open
+                return entity.make_idx("open")  # open
             else:
                 raise NotImplementedError
         elif entity.cfg.label == "slider":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_idx("left")  # left
+                return entity.make_idx("left")  # left
             elif self.is_tresholded(state, 0.28):
-                return entity.state.make_idx("right")  # right
+                return entity.make_idx("right")  # right
             else:
                 raise NotImplementedError
         elif entity.cfg.label == "button":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_idx("released")  # released
+                return entity.make_idx("released")  # released
             elif self.is_tresholded(state, 1.0):
-                return entity.state.make_idx("pressed")  # pressed
+                return entity.make_idx("pressed")  # pressed
             else:
                 raise NotImplementedError
         elif entity.cfg.label == "light":
             if self.is_tresholded(state, 0.0):
-                return entity.state.make_idx("off")  # off
+                return entity.make_idx("off")  # off
             elif self.is_tresholded(state, 1.0):
-                return entity.state.make_idx("on")  # on
+                return entity.make_idx("on")  # on
             else:
                 raise NotImplementedError
         elif entity.cfg.label in {"red_block", "blue_block", "pink_block"}:
@@ -287,22 +287,20 @@ class CalvinScene(Scene):
             raise ValueError(f"Unknown entity label: {entity.cfg.label}")
 
     def to_dc_scene(self, obs: CalvinEnvObservation) -> DCScene:
-        pos, rot, ste, soh = self.get_dc_ee_values(obs)
-        td_entities: dict[str, np.ndarray] = {}
+        dc_entities: dict[str, DCEntity] = {}
         for entity in self.entities:
-            e_pose = obs.object_poses.get(f"base__{entity.cfg.label}", None)
-            e_ste = obs.object_states.get(f"base__{entity.cfg.label}", None)
-            assert e_pose is not None, f"Missing pose for entity {entity.cfg.label}"
-            assert e_ste is not None, f"Missing state for entity {entity.cfg.label}"
-            e_pos = e_pose[:3]
-            e_rot = e_pose[-4]
-            e_ste = self.dc_state(entity, e_ste)
-            e_soh = entity.state.one_hot_from_idx_dc(e_ste)
-            td_entities[entity.cfg.label] = Entity.to_value(
-                e_pos, e_rot, np.ndarray(e_ste)
+            pose = obs.object_poses[f"base__{entity.cfg.label}"]
+            ste = obs.object_states[f"base__{entity.cfg.label}"]
+            pos = pose[:3]
+            rot = pose[-4]
+            ste = self.dc_state(entity, ste)
+            soh = entity.one_hot_from_idx_dc(ste)
+            dc_entities[entity.cfg.label] = Entity.to_value(
+                pos, rot, np.ndarray(ste), soh
             )
-        ee = Entity.to_value(pos=pos, rot=rot, ste=ste)
-        return DCScene(ee, td_entities)
+        pos, rot, ste, soh = self.get_dc_ee_values(obs)
+        ee = Entity.to_value(pos, rot, ste, soh)
+        return DCScene(ee, dc_entities)
 
     def to_np_image(self, obs: CalvinEnvObservation) -> np.ndarray:
         return obs.rgb["front"]

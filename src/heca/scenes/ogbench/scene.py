@@ -8,7 +8,7 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
-from heca.misc.data import DCScene, TDImage
+from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity, Mobility
 from heca.scenes.ogbench.utils import eval_pos, eval_state
 from heca.scenes.scene import Scene
@@ -159,7 +159,7 @@ class OGBenchScene(Scene):
         return Entity.get(config)
 
     def to_dc_scene(self, obs: dict) -> DCScene:
-        dc_entities: dict[str, np.ndarray] = {}
+        dc_entities: dict[str, DCEntity] = {}
         for entity in self.entities:
             if entity.cfg.label in [
                 "button_0",
@@ -171,11 +171,10 @@ class OGBenchScene(Scene):
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_ste = obs[f"privileged_{entity.cfg.label}_state"]
-            e_soh = entity.state.one_hot_from_idx_dc(e_ste.item())
-
-            dc_entities[entity.cfg.label] = Entity.to_value(e_pos, e_rot, e_ste)
+            e_soh = entity.one_hot_from_idx_dc(e_ste.item())
+            dc_entities[entity.cfg.label] = Entity.to_value(e_pos, e_rot, e_ste, e_soh)
         pos, rot, ste, soh = self.get_ee_dc(obs)
-        ee = Entity.to_value(pos, rot, ste)
+        ee = Entity.to_value(pos, rot, ste, soh)
         extras = self.get_extras(obs)
         return DCScene(ee, dc_entities, extras=extras)
 
@@ -271,7 +270,7 @@ class OGBenchScene(Scene):
         rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         idx = obs["proprio_gripper_state"]
-        state = self.ee.state.one_hot_from_idx(idx)
+        state = self.ee.one_hot_from_idx(idx)
         # print(
         #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
         # )
@@ -284,7 +283,7 @@ class OGBenchScene(Scene):
         rot = self.yaw_to_quat(yaw)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         ste_idx = obs["proprio_gripper_state"]
-        ste_oh = self.ee.state.one_hot_from_idx_dc(ste_idx)
+        ste_oh = self.ee.one_hot_from_idx_dc(ste_idx)
         # print(
         #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
         # )

@@ -4,11 +4,33 @@ import numpy as np
 class Quaternion:
 
     @staticmethod
+    def identity() -> np.ndarray:
+        """Returns the identity quaternion [1, 0, 0, 0], representing zero rotation."""
+        return np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+
+    @staticmethod
+    def xyzw_to_wxyz(q: np.ndarray) -> np.ndarray:
+        """
+        Convert quaternion from [x, y, z, w] order to [w, x, y, z] order.
+        Supports batched inputs of shape [..., 4].
+        """
+        return q[..., [3, 0, 1, 2]]
+
+    @staticmethod
+    def wxyz_to_xyzw(q: np.ndarray) -> np.ndarray:
+        """
+        Convert quaternion from [w, x, y, z] order to [x, y, z, w] order.
+        Supports batched inputs of shape [..., 4].
+        """
+        return q[..., [1, 2, 3, 0]]
+
+    @staticmethod
     def normalize(q: np.ndarray) -> np.ndarray:
-        nx = q / np.linalg.norm(q)
-        if nx[3] < 0:
-            return -nx
-        return nx
+        norm = np.linalg.norm(q, axis=-1, keepdims=True)
+        nx = q / np.where(norm < 1e-12, 1.0, norm)
+        # Ensure w >= 0 by flipping sign of whole quaternion where w < 0
+        flip = nx[..., 0:1] < 0  # (..., 1)
+        return np.where(flip, -nx, nx)
 
     @staticmethod
     def inv(q):
@@ -30,6 +52,10 @@ class Quaternion:
         return np.stack([w, x, y, z], axis=-1)
 
     @staticmethod
+    def _safe_div(x, y, eps=1e-12):
+        return x / np.where(y < eps, 1.0, y)
+
+    @staticmethod
     def log_map(q: np.ndarray) -> np.ndarray:
         """q: [..., 4] unit quaternion. Returns axis-angle vector [..., 3]."""
         w = np.clip(q[..., 0], -1.0, 1.0)  # Clamp for numerical stability
@@ -38,10 +64,9 @@ class Quaternion:
 
         # Avoid division by zero
         safe_norm = np.where(norm < 1e-12, 1.0, norm)
-        angle = 2 * np.arctan2(safe_norm.squeeze(-1), w)
         axis = xyz / safe_norm
-
-        return angle[..., np.newaxis] * axis  # [..., 3]
+        angle = 2 * np.arctan2(safe_norm, w[..., np.newaxis])
+        return angle * axis  # (...,1) * (...,3) -> (...,3)
 
     @staticmethod
     def exp(q: np.ndarray) -> np.ndarray:

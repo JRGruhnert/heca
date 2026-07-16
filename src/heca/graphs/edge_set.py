@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from heca.graphs.node_set import NodeSet
-from heca.graphs.nodes import EntityNode, GraphNode
+from heca.graphs.nodes import EntityNode, GraphNode, OptionNode
 from heca.utils.quaternion import Quaternion
 
 S = TypeVar("S", bound=GraphNode)
@@ -19,7 +19,6 @@ class EdgeSet(Generic[S, D]):
         self.attrs: list[np.ndarray] = []
         self.rebuild: bool = True
         self.type = type
-        self.goal_ref: dict[str, np.ndarray] = {}
 
     def add(self, src_idx: int, dst_idx: int):
         self.edges.append((src_idx, dst_idx))
@@ -29,9 +28,7 @@ class EdgeSet(Generic[S, D]):
     def size(self) -> int:
         return len(self.edges)
 
-    def build(
-        self, snset: NodeSet[S], dnset: NodeSet[D], goal_ref: dict[str, np.ndarray]
-    ):
+    def build(self, snset: NodeSet[S], dnset: NodeSet[D]):
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
         for i, edge in enumerate(self.edges):
@@ -45,12 +42,13 @@ class EdgeSet(Generic[S, D]):
         if self.type == ("entity", "stepmix", "entity"):
             assert isinstance(src, EntityNode)
             self.attrs[index] = self.stepmix_feat(
-                src.data.gnn, dst.data.gnn, src.weight
+                src.data.feature, dst.data.feature, src.weight
             )
         elif self.type == ("entity", "summary", "option"):
             assert isinstance(src, EntityNode)
+            assert isinstance(dst, OptionNode)
             self.attrs[index] = self.summary_feat(
-                src.data.gnn, self.goal_ref[src.entity]
+                src.data.feature, dst.data[src.entity].feature
             )
         elif self.type == ("entity", "tapas", "entity"):
             self.attrs[index] = np.empty(1)

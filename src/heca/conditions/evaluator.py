@@ -50,11 +50,11 @@ class Evaluator(Configurable):
         for pair in self.conditions:
             pair_match = True
             for label in pair.pre.elabels:
-                _, valid = pair.pre.score_single(x.get(label), label)
+                _, valid = pair.pre.score_single(x.get(label).value, label)
                 if not valid:
                     pair_match = valid
             for label in pair.post.elabels:
-                _, valid = pair.pre.score_single(x.get(label), label)
+                _, valid = pair.pre.score_single(y.get(label).value, label)
                 if not valid:
                     pair_match = valid
             if pair_match:

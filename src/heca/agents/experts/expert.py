@@ -4,8 +4,8 @@ from functools import cached_property
 
 import numpy as np
 import torch
-from heca.agents.agent import Agent, EEState
-from heca.misc.data import DCScene, TDImage
+from heca.agents.agent import Agent
+from heca.misc.data import DCEntity, DCScene, TDImage
 from heca.misc.entity import Entity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
@@ -24,7 +24,6 @@ class ExpertAgent(Agent, abc.ABC):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.state = EEState.IDLE
 
         self.scene = Scene.get(self.cfg.scene, auto_load=not cfg.use_gt)
 
@@ -48,7 +47,7 @@ class ExpertAgent(Agent, abc.ABC):
         # Sanity check on dimensions
         assert kps3d.shape[1] == len(self.scene.entities) + 1  # ee at index 0
 
-        dc_entities: dict[str, np.ndarray] = {}
+        dc_entities: dict[str, DCEntity] = {}
         for idx, entity in enumerate(self.scene.entities):
             pos, rot, ste = self.get_entity_pose_and_state(
                 kps3d[:, idx + 1],
@@ -56,16 +55,16 @@ class ExpertAgent(Agent, abc.ABC):
                 states[:, idx + 1],
                 state_scores[:, idx + 1],
             )
-            soh = entity.state.one_hot_from_idx_dc(ste.item())
-            dc_entities[entity.cfg.label] = Entity.to_value(pos, rot, ste)
+            soh = entity.one_hot_from_idx_dc(ste.item())
+            dc_entities[entity.cfg.label] = Entity.to_value(pos, rot, ste, soh)
         c_pos, c_rot, c_ste = self.get_entity_pose_and_state(
             kps3d[:, 0],
             kp_scores[:, 0],
             states[:, 0],
             state_scores[:, 0],
         )
-        c_soh = entity.state.one_hot_from_idx_dc(c_ste.item())
-        ee = Entity.to_value(c_pos, c_rot, c_ste)
+        c_soh = entity.one_hot_from_idx_dc(c_ste.item())
+        ee = Entity.to_value(c_pos, c_rot, c_ste, c_soh)
         return DCScene(ee, dc_entities)
 
     def get_entity_pose_and_state(

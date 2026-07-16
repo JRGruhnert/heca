@@ -292,7 +292,7 @@ class DinoEncoder(ImageEncoder):
                 entity_label=entity.cfg.label,
                 state_desc_kernel=kernels[idx],
             )
-            one_hot_state = entity.state.make_one_hot(prediction)
+            one_hot_state = entity.make_one_hot(prediction)
             one_hots.append(one_hot_state)
             scores.append(score)
         return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)

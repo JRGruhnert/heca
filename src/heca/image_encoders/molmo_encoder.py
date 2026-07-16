@@ -50,7 +50,9 @@ class MolmoEncoder(ImageEncoder):
     def extract_entities(self, image: TDImage) -> torch.Tensor:
         raise NotImplementedError()
 
-    def extract_states(self, image: TDImage, kps_raw_2d: torch.Tensor) -> torch.Tensor:
+    def extract_states(
+        self, image: TDImage, kps_raw_2d: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         images = [image] * len(self.chat_texts)
         inputs = self.processor(
             images=images,
@@ -70,18 +72,20 @@ class MolmoEncoder(ImageEncoder):
         input_lengths = inputs["attention_mask"].sum(dim=1) - 1
 
         states = []
+        scores = []
 
         for i in range(len(self.chat_texts)):
             next_logits = logits[i, input_lengths[i]]
             letters = self.entity_letters[i]
-            scores = torch.tensor(
+            letter_scores = torch.tensor(
                 [next_logits[self.tokens[letter]] for letter in letters]
             )
-            probs = torch.softmax(scores, dim=0)
+            probs = torch.softmax(letter_scores, dim=0)
             state_idx = probs.argmax().item()
             states.append(state_idx)
+            scores.append(letter_scores)
 
-        return torch.tensor(states)
+        return torch.tensor(states), torch.tensor(scores)
 
     def prepare_for_scene(self, cfg: Scene.Config):
 

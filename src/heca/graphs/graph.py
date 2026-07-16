@@ -33,7 +33,6 @@ class Graph:
     goal_keys: set[str] = set()
     start: DCScene = DCScene.empty()
     goal: DCScene = DCScene.empty()
-    goal_ref: dict[str, np.ndarray] = {}
 
     def export(self) -> HeteroData:
         data = HeteroData()
@@ -59,7 +58,7 @@ class Graph:
         for src in option.sources:
             node = self.ns_entity.get_by_key(src[1])
             assert isinstance(node, EntityNode)
-            subgoal.set(node.entity, node.data.env)
+            subgoal.set(node.entity, node.data)
         return subgoal
 
     def set_start(self, start: DCScene):
@@ -67,50 +66,59 @@ class Graph:
         for key in self.start_keys:
             node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
-            x = start[node.entity]
-            gx = self.entities[node.entity].gnn_format(x)
-            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
+            self.ns_entity.key_update(key, start[node.entity])
 
         self.update_subgoals()
         self.rebuild()
 
     def set_goal(self, goal: DCScene):
         self.goal = goal
+        for node in self.ns_option.items:
+            node.data = goal
         self.update_subgoals()
-        for k, v in self.goal.entities():
-            self.goal_ref[k] = self.entities[k].gnn_format(v)
         self.rebuild()
 
     def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
-        return node.con.score_single(x[node.entity], node.entity)[1]
+        return node.con.score_single(x[node.entity].value, node.entity)[1]
 
-    def create_subgoal(
-        self, node: EntityNode, x: DCScene | None = None
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _find_condition_for_entity2(self, entity_label: str) -> Condition | None:
+        for key in self.goal_keys:
+            node = self.ns_entity.get_by_key(key)
+            if (
+                isinstance(node, EntityNode)
+                and node.entity == entity_label
+                and node.con is not None
+            ):
+                return node.con
+        return None
+
+    def create_subgoal(self, node: EntityNode, x: DCScene | None = None) -> DCEntity:
         assert node.con is not None
         if x is not None:
-            v = x[node.entity]
+            dc_entity = x[node.entity]
         else:
-            v = node.con.models[node.entity].sample(1)[0]
-        return (self.entities[node.entity].gnn_format(v), v)
+            value = node.con.models[node.entity].sample(1)[0]
+            feat = value
+            dc_entity = DCEntity(value=value, feature=feat)
+        return dc_entity
 
     def update_subgoals(self):
         for key in self.goal_keys:
             node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
             if self.test_subgoal(node, self.goal):
-                gx, x = self.create_subgoal(node, self.goal)
+                x = self.goal.get(node.entity)
             elif self.test_subgoal(node, self.start):
-                gx, x = self.create_subgoal(node, self.start)
+                x = self.start.get(node.entity)
             else:
-                gx, x = self.create_subgoal(node)
-            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
+                x = self.create_subgoal(node)
+            self.ns_entity.key_update(key, x)
 
     def rebuild(self):
-        self.es_stepmix.build(self.ns_entity, self.ns_entity, {})
-        self.es_summary.build(self.ns_entity, self.ns_option, self.goal_ref)
-        self.es_tapas.build(self.ns_entity, self.ns_entity, {})
+        self.es_stepmix.build(self.ns_entity, self.ns_entity)
+        self.es_summary.build(self.ns_entity, self.ns_option)
+        self.es_tapas.build(self.ns_entity, self.ns_entity)
 
     def set_comps(
         self,
@@ -119,14 +127,14 @@ class Graph:
     ) -> dict[str, set[tuple[str, str]]]:
         keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
         for entity, comps in con.parameters.items():
-            for idx, data in enumerate(comps):
+            for idx, feat in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
                 keys[entity].add((self.es_stepmix.type[1], key))
                 self.ns_entity.add(
                     key,
                     EntityNode(
                         entity=entity,
-                        data=NodeData(gnn=data),
+                        data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
                         sources=set(),
                     ),
@@ -145,7 +153,7 @@ class Graph:
                 key=key,
                 value=EntityNode(
                     entity=entity,
-                    data=NodeData(),
+                    data=DCEntity.empty(),
                     sources=sources,
                     con=con,
                 ),
@@ -169,7 +177,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
-                    data=NodeData(),
+                    data=DCEntity.empty(),
                     sources=sources,
                     con=con,
                 ),
@@ -186,16 +194,16 @@ class Graph:
         subgoal: dict[str, tuple[float, np.ndarray]],
     ) -> set[tuple[str, str]]:
         temp_sources = post_sources
-        for entity, value in subgoal.items():
+        for entity, (_, value) in subgoal.items():
             key = entity + label
             sources = comp_sources[entity]
             sources.add(pre_sources[entity])
-            data = self.entities[entity].gnn_format(value[1])
+            feat = Entity.gnn_format(value, len(self.entities[entity].cfg.states))
             self.ns_entity.add(
                 key,
                 EntityNode(
                     entity=entity,
-                    data=NodeData(gnn=data, env=value[1]),
+                    data=DCEntity(value=value, feature=feat),
                     static=True,
                     sources=sources,
                 ),
@@ -258,67 +266,3 @@ class Graph:
         assert isinstance(node, OptionNode)
         subgoal = self.assemble_subgoal(node)
         return node.agent, subgoal
-
-    def _find_condition_for_entity2(self, entity_label: str) -> Condition | None:
-        for key in self.goal_keys:
-            node = self.ns_entity.get_by_key(key)
-            if (
-                isinstance(node, EntityNode)
-                and node.entity == entity_label
-                and node.con is not None
-            ):
-                return node.con
-        return None
-
-    def create_subgoal2(
-        self, node: EntityNode, x: DCScene | None = None
-    ) -> tuple[np.ndarray, np.ndarray]:
-        assert node.con is not None
-        if x is not None:
-            v = x[node.entity]
-        else:
-            v = node.con.models[node.entity].sample(1)[0]
-
-        pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
-            node.con, node.entity, self.entities[node.entity].state_count(), v
-        )
-        gx = self.entities[node.entity].gnn_format(
-            v, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
-        )
-        return (gx, v)
-
-    def set_goal2(self, goal: DCScene):
-        self.goal = goal
-        self.update_subgoals()
-        for k, v in self.goal.entities():
-            # Look up a postcondition node for this entity to get the Condition
-            con = self._find_condition_for_entity(k)
-            if con is not None:
-                pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
-                    con, k, self.entities[k].state_count(), v
-                )
-            else:
-                pos_lstd = rot_lstd = state_logits = None
-            self.goal_ref[k] = self.entities[k].gnn_format(
-                v, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
-            )
-        self.rebuild()
-
-    def set_start2(self, start: DCScene):
-        self.start = start
-        for key in self.start_keys:
-            node = self.ns_entity.get_by_key(key)
-            assert isinstance(node, EntityNode)
-            x = start[node.entity]
-            if node.con is not None:
-                pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
-                    node.con, node.entity, self.entities[node.entity].state_count(), x
-                )
-            else:
-                pos_lstd = rot_lstd = state_logits = None
-            gx = self.entities[node.entity].gnn_format(
-                x, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
-            )
-            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
-        self.update_subgoals()
-        self.rebuild()

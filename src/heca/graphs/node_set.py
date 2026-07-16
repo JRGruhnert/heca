@@ -3,7 +3,8 @@ from typing import Generic, TypeVar
 import numpy as np
 import torch
 
-from heca.graphs.nodes import EntityNode, NodeData, GraphNode
+from heca.graphs.nodes import GraphNode
+from heca.misc.data import DCEntity
 
 T = TypeVar("T", bound=GraphNode)
 
@@ -19,7 +20,7 @@ class NodeSet(Generic[T]):
         self.index[key] = len(self.items)
         self.items.append(value)
 
-    def key_update(self, key: str, data: NodeData):
+    def key_update(self, key: str, data: DCEntity):
         idx = self.index[key]
         self.items[idx].data = data
         self.items[idx].changed = True
@@ -43,5 +44,5 @@ class NodeSet(Generic[T]):
         return key in self.index
 
     def build(self):
-        x_np = np.stack([node.data.gnn for node in self.items], axis=0)
+        x_np = np.stack([node.data.feature for node in self.items], axis=0)
         self.x = torch.from_numpy(x_np).float()

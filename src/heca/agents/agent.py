@@ -1,20 +1,14 @@
 import abc
 from dataclasses import dataclass
-from enum import Enum
 from functools import cached_property
+
 from heca.conditions.pair import ConPair
-from heca.misc.data import DCScene
 from heca.misc.base import Persistable
+from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 
 
-class EEState(Enum):
-    IDLE = 1
-    ERROR = 2
-    ACTIVE = 3
-
-
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, slots=True)
 class AgentFeedback:
     terminal: bool
     reward: float

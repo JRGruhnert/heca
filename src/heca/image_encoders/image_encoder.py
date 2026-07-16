@@ -4,9 +4,9 @@ import torch
 from dataclasses import dataclass
 
 from heca.misc.base import Registerable
-from heca.misc.entity import Entity
 from heca.scenes.scene import Scene
 from heca.misc.data import TDImage
+from heca.utils.quaternion import Quaternion
 
 
 class ImageEncoder(Registerable):
@@ -26,7 +26,9 @@ class ImageEncoder(Registerable):
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def extract_states(self, image: TDImage, kps: torch.Tensor) -> torch.Tensor:
+    def extract_states(
+        self, image: TDImage, kps: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
     def normalize_coords(
@@ -87,7 +89,15 @@ class ImageEncoder(Registerable):
             y_pixel, x_pixel, z, intr, extr
         )
 
-        return pos.permute(0, 2, 1).reshape((B, -1))
+        quat = torch.tensor(
+            Quaternion.identity(), device=depth.device, dtype=torch.float32
+        )  # (4,)
+        quat = quat.expand(B, -1)  # (B, 4)
+
+        pos_flat = pos.permute(0, 2, 1).reshape(B, -1)  # (B, 3 * N_kp)
+
+        pose = torch.cat([pos_flat, quat], dim=1)  # (B, 3 * N_kp + 4)
+        return pose
 
     def batched_pinhole_projection_image_to_camera_coordinates_orig(self, u, v, z, K):
         uv1 = torch.stack((u, v, torch.ones(u.shape, device=u.device)), dim=-1)
