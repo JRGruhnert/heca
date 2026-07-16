@@ -4,6 +4,9 @@ from heca.agents.experts.tapas import TapasAgent
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
 from heca.conditions.evaluator import Evaluator
+from heca.learning.buffers.appo_buffer import APPOBuffer
+from heca.learning.buffers.ppo_buffer import PPOBuffer
+from heca.learning.ppo import PPO
 from heca.scenes.ogbench.scene import OGBenchScene
 
 agents = [
@@ -63,20 +66,9 @@ agents = [
 heca_cfg = Heca.Config(
     tag="test",
     agents=agents,
-)
-
-# heca = Agent.get(heca_cfg, auto_load=False)
-# heca.conditions
-
-agent = Agent.get(
-    TapasAgent.Config(
-        tag="unlock_right_button",
-        scene=OGBenchScene.Config(),
-        use_gt=True,
+    ppo=PPO.Config(
+        tag="test",
+        # buffer=APPOBuffer.Config(),
+        buffer=PPOBuffer.Config(),
     ),
 )
-
-print(agent.conditions[0].elabels)
-parameters = agent.conditions[0].pre.models["button_1"].get_parameters()
-print(parameters)
-print(parameters["measurement"])
