@@ -25,7 +25,7 @@ class PPO(Configurable):
         network: Network.Config = Network.Config()
         # Hyperparameters
         batch_size: int = 64
-        n_epoch: int = 5
+        n_epoch: int = 10
         lr: float = 0.0003
         lr_annealing: bool = False
         eps_clip: float = 0.2
@@ -34,6 +34,7 @@ class PPO(Configurable):
         max_grad_norm: float = 0.5
         target_kl: float | None = 0.02
         clip_value_loss: bool = True
+        max_update: int = 1000
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -58,6 +59,7 @@ class PPO(Configurable):
                 return_type="probs",
             ),
         )
+        self.current_update = 0
 
     @cached_property
     def inference_network(self) -> Network:
@@ -68,8 +70,7 @@ class PPO(Configurable):
         """Push training weights into the shared inference copy."""
         self.inference_network.load_state_dict(self.network.state_dict())
 
-    def learn(self, progress: float):
-        assert self.buffer.full
+    def learn(self):
 
         if isinstance(self.buffer, APPOBuffer):
             # V-trace needs current policy evaluation first
@@ -98,7 +99,7 @@ class PPO(Configurable):
             adv, rtn = self.buffer.compute_advantages()
             self._mini_batch_loop(adv, rtn)
             if self.cfg.lr_annealing:
-                lr = self.cfg.lr * (1.0 - progress)
+                lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
                 for pg in self.optim.param_groups:
                     pg["lr"] = lr
         self.sync_inference()
@@ -245,6 +246,11 @@ class PPO(Configurable):
             action = logits.argmax(dim=-1)
         return int(action)
 
-    def update(self, reward: float, terminal: bool, truncated: bool, tag: str):
+    def update(self, reward: float, terminal: bool, truncated: bool, tag: str) -> bool:
         if self.train_mode:
-            self.buffer.store_feedback(reward, terminal, truncated, tag)
+            full = self.buffer.store_feedback(reward, terminal, truncated, tag)
+            if full:
+                self.learn()
+                self.current_update = min(self.current_update + 1, self.cfg.max_update)
+
+        return self.current_update >= self.cfg.max_update

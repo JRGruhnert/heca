@@ -45,7 +45,7 @@ class Buffer(Configurable):
         terminal: bool,
         truncated: bool,
         tag: str,
-    ):
+    ) -> bool:
         raise NotImplementedError
 
     @property

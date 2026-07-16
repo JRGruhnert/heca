@@ -2,6 +2,9 @@
 
 ### Short Horizon:
 
+- fix appobuffer (fifo queue and hyperparameter)
+- implement move_ee in heca
+- implement subgoal (noise free)
 - test network
 - debug until its running
 - clean up recorded data

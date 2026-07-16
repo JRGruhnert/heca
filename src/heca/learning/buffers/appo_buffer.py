@@ -11,7 +11,7 @@ from torch_geometric.data import HeteroData
 class APPOBuffer(Buffer):
     @dataclass(kw_only=True)
     class Config(Buffer.Config):
-        capacity: int = 64
+        capacity: int = 2048
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -42,10 +42,7 @@ class APPOBuffer(Buffer):
 
     @property
     def full(self) -> bool:
-        raise NotImplementedError
-
-    def __len__(self) -> int:
-        return sum(len(b) for b in self.buckets.values())
+        return sum(len(b) for b in self.buckets.values()) >= self.cfg.capacity
 
     @property
     def flat_data(self) -> list[HeteroData]:
@@ -79,33 +76,16 @@ class APPOBuffer(Buffer):
         self.buckets[tag].append(BufferData(data, action, logprob, value))
 
     def enforce_fifo_capacity(self):
+        raise NotImplementedError
 
-        # Flatten all buckets into one list (sorted by tag to keep order)
-        # But we need to preserve per-bucket structure.
-        # Simpler: maintain a global list of (tag, index) or just flatten and rebuild.
-        # Let's flatten all data into a single list and rebuild buckets.
-
-        # 1. Flatten all BufferData into one list with their tags
-        all_data = []
-        for tag, bucket in self.buckets.items():
-            all_data.extend((tag, d) for d in bucket)
-
-        # 2. If we exceed capacity, remove the oldest (front of the list)
-        if len(all_data) > self.cfg.capacity:
-            all_data = all_data[-self.cfg.capacity :]  # Keep the newest steps
-
-        # 3. Rebuild buckets
-        self.buckets.clear()
-        for tag, d in all_data:
-            self.buckets[tag].append(d)
-
-    def store_feedback(self, reward, terminal, truncated, tag):
+    def store_feedback(self, reward, terminal, truncated, tag) -> bool:
         self.buckets[tag][-1].reward = reward
         self.buckets[tag][-1].terminal = terminal
         self.buckets[tag][-1].truncated = truncated
 
         # Enforce FIFO capacity
         self.enforce_fifo_capacity()
+        return self.full
 
     def _find_first_episode_end(self, bucket: list[BufferData], start=0) -> int:
         for i in range(start, len(bucket)):

@@ -42,10 +42,11 @@ class PPOBuffer(Buffer):
     def store_prediction(self, data, action, logprob, value, tag):
         self.bucket.append(BufferData(data, action, logprob, value))
 
-    def store_feedback(self, reward, terminal, truncated, tag):
+    def store_feedback(self, reward, terminal, truncated, tag) -> bool:
         self.bucket[-1].reward = reward
         self.bucket[-1].terminal = terminal
         self.bucket[-1].truncated = truncated
+        return self.full
 
     def trim_to_exact_capacity(self):
         self.bucket = self.bucket[-self.cfg.capacity :]

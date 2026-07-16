@@ -8,7 +8,7 @@ from heca.misc import logger
 from torch_geometric.data import HeteroData
 
 
-class DDPPOBuffer(Buffer):
+class FairBuffer(Buffer):
     @dataclass(kw_only=True)
     class Config(Buffer.Config):
         capacity: int = 2048
@@ -79,38 +79,21 @@ class DDPPOBuffer(Buffer):
     def store_prediction(self, data, action, logprob, value, tag):
         self.buckets[tag].append(BufferData(data, action, logprob, value))
 
-    def store_feedback(self, reward, terminal, truncated, tag):
-        self.buckets[tag][-1].reward = reward
-        self.buckets[tag][-1].terminal = terminal
-        self.buckets[tag][-1].truncated = truncated
-        self.trim_if_overflow(tag)
+    def store_feedback(self, reward, terminal, truncated, tag) -> bool:
+        if self.bucket_capacity[tag] >= len(self.buckets[tag]):
+            self.buckets[tag][-1].reward = reward
+            self.buckets[tag][-1].terminal = terminal
+            self.buckets[tag][-1].truncated = truncated
+        else:
+            # the last node is overflow (remove it)
+            self.buckets[tag].pop()
 
-    def _find_first_episode_end(self, bucket: list[BufferData], start=0) -> int:
-        for i in range(start, len(bucket)):
-            if bucket[i].terminal or bucket[i].truncated:
-                return i
-        return -1
-
-    def trim_if_overflow(self, tag: str):
-        bucket = self.buckets.get(tag, [])
-        target = self.bucket_capacity.get(tag, self.cfg.capacity)
-        while len(bucket) > target:
-            end_idx = self._find_first_episode_end(bucket)
-            if end_idx == -1:
-                break
-            ep_len = end_idx + 1
-            overflow = len(bucket) - target
-            if ep_len <= overflow:
-                bucket = bucket[ep_len:]
-                self.buckets[tag] = bucket
-            else:
-                break
+        return self.full
 
     def trim_to_exact_capacity(self):
         for tag, bucket in self.buckets.items():
             target = self.bucket_capacity.get(tag, self.cfg.capacity)
             if len(bucket) > target:
-                # Keep the newest 'target' steps (most recent)
                 self.buckets[tag] = bucket[-target:]
 
     def compute_advantages(self) -> tuple[torch.Tensor, torch.Tensor]:
