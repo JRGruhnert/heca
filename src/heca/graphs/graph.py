@@ -258,3 +258,67 @@ class Graph:
         assert isinstance(node, OptionNode)
         subgoal = self.assemble_subgoal(node)
         return node.agent, subgoal
+
+    def _find_condition_for_entity2(self, entity_label: str) -> Condition | None:
+        for key in self.goal_keys:
+            node = self.ns_entity.get_by_key(key)
+            if (
+                isinstance(node, EntityNode)
+                and node.entity == entity_label
+                and node.con is not None
+            ):
+                return node.con
+        return None
+
+    def create_subgoal2(
+        self, node: EntityNode, x: DCScene | None = None
+    ) -> tuple[np.ndarray, np.ndarray]:
+        assert node.con is not None
+        if x is not None:
+            v = x[node.entity]
+        else:
+            v = node.con.models[node.entity].sample(1)[0]
+
+        pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
+            node.con, node.entity, self.entities[node.entity].state_count(), v
+        )
+        gx = self.entities[node.entity].gnn_format(
+            v, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
+        )
+        return (gx, v)
+
+    def set_goal2(self, goal: DCScene):
+        self.goal = goal
+        self.update_subgoals()
+        for k, v in self.goal.entities():
+            # Look up a postcondition node for this entity to get the Condition
+            con = self._find_condition_for_entity(k)
+            if con is not None:
+                pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
+                    con, k, self.entities[k].state_count(), v
+                )
+            else:
+                pos_lstd = rot_lstd = state_logits = None
+            self.goal_ref[k] = self.entities[k].gnn_format(
+                v, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
+            )
+        self.rebuild()
+
+    def set_start2(self, start: DCScene):
+        self.start = start
+        for key in self.start_keys:
+            node = self.ns_entity.get_by_key(key)
+            assert isinstance(node, EntityNode)
+            x = start[node.entity]
+            if node.con is not None:
+                pos_lstd, rot_lstd, state_logits = Entity.uncertainty_from_condition(
+                    node.con, node.entity, self.entities[node.entity].state_count(), x
+                )
+            else:
+                pos_lstd = rot_lstd = state_logits = None
+            gx = self.entities[node.entity].gnn_format(
+                x, pos_logstd=pos_lstd, rot_logstd=rot_lstd, state_logits=state_logits
+            )
+            self.ns_entity.key_update(key, NodeData(env=x, gnn=gx))
+        self.update_subgoals()
+        self.rebuild()

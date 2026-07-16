@@ -37,14 +37,13 @@ class ConPair:
         threshold: float,
     ) -> "ConPair":
         pre_max, post_max = cls.make_max_components(a, b)
-        pre_data, pre_states = cls._merge_data(a.pre, b.pre)
-        post_data, post_states = cls._merge_data(a.post, b.post)
+        pre_data = cls._merge_data(a.pre, b.pre)
+        post_data = cls._merge_data(a.post, b.post)
         pre = Condition(
             "pre",
             pre_data,
             pre_max,
             n_samples,
-            pre_states,
             threshold,
         )
         post = Condition(
@@ -52,7 +51,6 @@ class ConPair:
             post_data,
             post_max,
             n_samples,
-            post_states,
             threshold,
         )
         return cls(label, pre, post, threshold)
@@ -68,11 +66,11 @@ class ConPair:
         cls,
         c1: Condition,
         c2: Condition,
-    ) -> tuple[dict[str, np.ndarray], dict[str, int]]:
+    ) -> dict[str, np.ndarray]:
         result = c1.data_raw.copy()
         for k, v in c2.data_raw.items():
             result[k] = np.concatenate((result[k], v), axis=0) if k in result else v
-        return result, {**c1._state_counts, **c2._state_counts}
+        return result
 
     def plot(self, path: Path):
         plot_path = path / "plots"

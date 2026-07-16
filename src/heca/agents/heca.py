@@ -23,6 +23,8 @@ class Heca(Agent):
         visualize: bool = True
         n_samples: int = 1000
         threshold: float = 0.75
+        downstream_virtual: bool = False
+        upstream_noise: bool = True
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -41,6 +43,8 @@ class Heca(Agent):
         option = self.ppo.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
         z = Agent.get(a).act(x, y)
+        if self.cfg.downstream_virtual:
+            z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
         self.ppo.update(fb.reward, fb.terminal, fb.truncated, self.cfg.tag)
         return z, fb
@@ -72,14 +76,14 @@ class Heca(Agent):
         values = set()
         for cfg in self.cfg.agents:
             for con in Agent.get(cfg).conditions:
-                values.union(con.elabels)
+                values.update(con.elabels)
         return values
 
     @cached_property
     def entities(self) -> set[Entity]:
         values = set()
         for cfg in self.cfg.agents:
-            values.union(Agent.get(cfg).entities)
+            values.update(Agent.get(cfg).entities)
         return values
 
     @cached_property

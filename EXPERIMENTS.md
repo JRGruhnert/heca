@@ -13,6 +13,7 @@
 - Instead of trying to solve the Task the Agent skips and returns the subgoal as it is.
 - Compare it with normal mode.
 - How much better does the network learn if data is not noisy?
+- With and without uncertainty
 
 ### Tapas unchanged
 

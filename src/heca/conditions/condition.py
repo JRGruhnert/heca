@@ -90,7 +90,7 @@ class Condition:
                 # --- 3. Rotation quaternion mean (4) ---
                 quat = means[i, 3:7]  # [4] - [w, x, y, z]
                 quat /= np.linalg.norm(quat)  # norm
-                Quaternion.normalize
+                # Quaternion.normalize
                 # --- 4. Rotation log-std (3) ---
                 # Rotation uncertainty has 3 DOF in tangent space (axis-angle).
                 # We take the first 3 of the 4 quaternion-component variances.

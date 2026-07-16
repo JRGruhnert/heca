@@ -76,33 +76,20 @@ class Entity(Configurable):
         # Initialize with zeros
         K = self.state_count()
         node = np.zeros((13 + K), dtype=np.float32)
-
-        # 1. Position mean (raw pos)
         node[0:3] = raw[0:3]
-
-        # 2. Position log-std (deterministic baseline, very certain)
         node[3:6] = base_logstd
-
-        # 3. Quaternion mean (raw quat)
         node[6:10] = raw[3:7]
-        # Ensure unit norm (just in case)
         norms = np.linalg.norm(node[6:10], axis=-1, keepdims=True)
         node[6:10] = node[6:10] / norms
-
-        # 4. Rotation log-std (deterministic baseline)
         node[10:13] = base_logstd
-
-        # 5. State logits (convert scalar to high-confidence logits)
         state_ids = raw[7].astype(int)  # [N]
-        # Set all logits to low value
         node[13:] = -logit_confidence
-        # Set the true class to high value
         node[13 + state_ids] = logit_confidence
 
         return node
 
     @classmethod
-    def apply_uncertainty(
+    def apply_artificial_uncertainty(
         cls,
         entity_features: np.ndarray,
         pos_noise_std=0.1,
@@ -184,3 +171,139 @@ class Entity(Configurable):
     @classmethod
     def to_value(cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray) -> np.ndarray:
         return np.concatenate((pos, rot, ste[:, None]), axis=1)
+
+    @staticmethod
+    def uncertainty_from_condition(
+        con: Condition,
+        entity_label: str,
+        n_states: int,
+        sample: np.ndarray | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Extract per-entity uncertainty from a Condition's StepMix model.
+
+        Uses posterior-weighted averaging across mixture components to compute
+        the expected position std, rotation std, and state logits for a given
+        observation (or the prior-weighted average if no sample provided).
+
+        Returns:
+            pos_logstd: [3] log standard deviations for position
+            rot_logstd: [3] log standard deviations for rotation (tangent space)
+            state_logits: [n_states] full state logits (padded to entity's state space)
+        """
+        from heca.misc.entity import STATE_LOGIT_BASELINE
+
+        model = con.models[entity_label]
+        params = model.get_parameters()
+        K = len(params["weights"])
+
+        # --- Component posterior given sample (or prior) ---
+        if sample is not None and K > 1:
+            log_probs = np.zeros(K)
+            for k in range(K):
+                mu = params["measurement"]["pose"]["means"][k]
+                var = params["measurement"]["pose"]["covariances"][k]
+                diff = sample[:7] - mu
+                log_prob = -0.5 * np.sum(
+                    np.log(2 * np.pi * var) + diff**2 / var, axis=-1
+                )
+                log_probs[k] = log_prob + np.log(params["weights"][k])
+            log_probs -= log_probs.max()  # numerical stability
+            posteriors = np.exp(log_probs)
+            posteriors /= posteriors.sum()
+        else:
+            posteriors = params["weights"].copy()
+            posteriors /= posteriors.sum()
+
+        # --- Position uncertainty (weighted avg of component variances) ---
+        pos_var = np.sum(
+            posteriors[:, None] * params["measurement"]["pose"]["covariances"][:, :3],
+            axis=0,
+        )
+        pos_logstd = 0.5 * np.log(pos_var + 1e-8)
+
+        # --- Rotation uncertainty ---
+        rot_var = np.sum(
+            posteriors[:, None] * params["measurement"]["pose"]["covariances"][:, 3:6],
+            axis=0,
+        )
+        rot_logstd = 0.5 * np.log(rot_var + 1e-8)
+
+        # --- State logits ---
+        # Weighted average of component state probabilities
+        n_observed = params["measurement"]["state"]["pis"].shape[1]
+        state_probs_compact = np.sum(
+            posteriors[:, None] * params["measurement"]["state"]["pis"], axis=0
+        )
+
+        # Check if we need to pad to full state space
+        total_states = con.model_states[entity_label]
+        if len(total_states) > n_observed or n_states > n_observed:
+            observed_states = np.sort(
+                np.unique(con.data_raw[entity_label][:, 7].astype(int))
+            )
+            state_logits = np.full(n_states, STATE_LOGIT_BASELINE, dtype=np.float32)
+            for j, state_idx in enumerate(observed_states):
+                if state_idx < n_states:
+                    state_logits[state_idx] = np.log(state_probs_compact[j] + 1e-8)
+        else:
+            state_logits = np.log(state_probs_compact + 1e-8)
+
+        return pos_logstd, rot_logstd, state_logits
+
+    def gnn_format2(
+        self,
+        raw: np.ndarray,
+        logit_confidence=10.0,
+        base_logstd=-10.0,
+        pos_logstd: np.ndarray | None = None,
+        rot_logstd: np.ndarray | None = None,
+        state_logits: np.ndarray | None = None,
+    ):
+        """
+        Convert raw stepmix format to GNN node format.
+
+        Args:
+            raw: [8] where columns are [pos_x, pos_y, pos_z, qw, qx, qy, qz, state_scalar]
+            logit_confidence: Value to assign to the true class logit (when not overridden).
+            base_logstd: Initial log-std for deterministic entities (when not overridden).
+            pos_logstd: [3] override for position log-std (from StepMix model).
+            rot_logstd: [3] override for rotation log-std (from StepMix model).
+            state_logits: [K] override for state logits (from StepMix model).
+
+        Returns:
+            gnn_node: [13 + K] with structure:
+                    [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
+        """
+        K = self.state_count()
+        node = np.zeros((13 + K), dtype=np.float32)
+
+        # 1. Position mean (raw pos)
+        node[0:3] = raw[0:3]
+
+        # 2. Position log-std (from model if available, else deterministic)
+        if pos_logstd is not None:
+            node[3:6] = pos_logstd
+        else:
+            node[3:6] = base_logstd
+
+        # 3. Quaternion mean (raw quat)
+        node[6:10] = raw[3:7]
+        norms = np.linalg.norm(node[6:10], axis=-1, keepdims=True)
+        node[6:10] = node[6:10] / norms
+
+        # 4. Rotation log-std (from model if available, else deterministic)
+        if rot_logstd is not None:
+            node[10:13] = rot_logstd
+        else:
+            node[10:13] = base_logstd
+
+        # 5. State logits (from model if available, else one-hot-style high confidence)
+        if state_logits is not None:
+            node[13:] = state_logits
+        else:
+            state_ids = int(raw[7])
+            node[13:] = -logit_confidence
+            node[13 + state_ids] = logit_confidence
+
+        return node
