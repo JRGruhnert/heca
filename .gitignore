@@ -112,7 +112,7 @@ data/calvin/tapas/
 # mkdocs documentation
 /site
 
-/data/skills/tapas/
+/data
 /data/states/calvin/
 /results/
 /results_temp/
