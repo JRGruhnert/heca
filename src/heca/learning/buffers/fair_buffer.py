@@ -50,5 +50,5 @@ class FairBuffer(Buffer):
             advantages[t] = gae
             next_value = values[t]
 
-        returns = advantages + torch.tensor(values)
+        returns = advantages + torch.cat(values)
         return advantages, returns

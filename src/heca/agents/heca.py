@@ -35,7 +35,7 @@ class Heca(Agent):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.learner = Learner.get(self.cfg.learner).register(self.cfg.tag)
-
+        self.end_flag = False
         if self.cfg.inference:
             self.learner.eval()
 
@@ -56,7 +56,9 @@ class Heca(Agent):
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
-        self.learner.update(fb.reward, fb.terminal, fb.truncated, self.cfg.tag)
+        self.end_flag = self.learner.update(
+            fb.reward, fb.terminal, fb.truncated, self.cfg.tag
+        )
         return z, fb
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
@@ -83,10 +85,9 @@ class Heca(Agent):
             (x, ix), (y, iy) = scene.sample_task()
         return x, y
 
-    def train(self, max_episodes: int, cfg: Scene.Config):
+    def train(self, cfg: Scene.Config):
         """Train the network with PPO for a given number of episodes."""
-
-        for ep in range(max_episodes):
+        while not self.end_flag:
             x, y = self.sample(cfg)
             z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
 

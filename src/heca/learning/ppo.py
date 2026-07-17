@@ -65,8 +65,6 @@ class PPO(Learner):
                 logprobs, state_values, dist = self.network.evaluate(
                     mb_data, mb_actions
                 )
-                logprobs = logprobs.squeeze(-1)
-                state_values = state_values.squeeze(-1)
                 entropy = dist.mean()
 
                 assert isinstance(entropy, torch.Tensor)
@@ -74,7 +72,7 @@ class PPO(Learner):
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
                 # PPO ratio
-                ratios = torch.exp(logprobs - mb_logprobs.detach().to(device))
+                ratios = torch.exp(logprobs - mb_logprobs)
 
                 # Policy loss
                 surr1 = ratios * mb_adv

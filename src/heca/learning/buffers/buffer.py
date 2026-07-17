@@ -31,33 +31,46 @@ class Buffer(Configurable):
         self.cfg = cfg
 
         self.queue: deque[BufferData] = deque(maxlen=cfg.capacity)
-        self.steps_passed = 0
+        self.step_pointer = 0
         self.tags: set[str] = set()
+        self.tag_capacity = self.cfg.capacity
+        self.additional_capacity = 0
+        self.used_additional = 0
+        self.tag_indices: dict[str, list[int]] = defaultdict(list[int])
+
+    def register(self, tag: str):
+        self.tags.add(tag)
+        self.tag_capacity = self.cfg.capacity // len(self.tags)
+        self.additional_capacity = self.cfg.capacity % len(self.tags)
+
+    def has_free_capacity(self, tag: str):
+        if len(self.tag_indices[tag]) < self.tag_capacity:
+            return True
+        if self.additional_capacity > self.used_additional:
+            return True
+        return False
+
+    def reset(self):
+        self.step_pointer = 0
+        self.used_additional = 0
+        for tag in self.tag_indices.keys():
+            self.tag_indices[tag] = []
+
+    def add(self, data: BufferData) -> bool:
+        if self.has_free_capacity(data.tag):
+            self.queue.append(data)
+            self.tag_indices[data.tag].append(self.step_pointer)
+            self.step_pointer += 1
+
+        return self.full
 
     @abstractmethod
     def compute_advantages(self, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
-    @abstractmethod
-    def is_allowed(self, data: BufferData) -> bool:
-        raise NotImplementedError
-
-    def add(self, data: BufferData) -> bool:
-        if self.is_allowed(data):
-            self.queue.append(data)
-            self.steps_passed += 1
-        return self.full
-
-    @property
-    def tag_indices(self) -> dict[str, list[int]]:
-        indices_by_tag = defaultdict(list[int])
-        for i, item in enumerate(self.queue):
-            indices_by_tag[item.tag].append(i)
-        return indices_by_tag
-
     @property
     def full(self) -> bool:
-        return self.steps_passed >= self.cfg.capacity
+        return self.cfg.capacity <= self.step_pointer
 
     @property
     def data(self) -> list[HeteroData]:
@@ -86,9 +99,6 @@ class Buffer(Configurable):
     @property
     def truncates(self) -> list[float]:
         return [d.truncated for d in self.queue]
-
-    def reset(self):
-        self.steps_passed = 0
 
     def save(self, path: Path, label: str):
         logger.info(f"Saving buffer '{label}'")

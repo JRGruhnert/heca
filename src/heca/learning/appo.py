@@ -27,11 +27,9 @@ class APPO(Learner):
     def learn(self):
         assert isinstance(self.buffer, StreamBuffer)
         old_data = self.buffer.data
-        old_actions = self.buffer.actions
-        old_logprobs = self.buffer.logprobs
+        old_actions = self.buffer.actions.detach().squeeze(-1)
+        old_logprobs = self.buffer.logprobs.detach().squeeze(-1)
         logprobs, values, dist = self.network.evaluate(old_data, old_actions)
-        logprobs = logprobs.squeeze(-1)
-        values = values.squeeze(-1)
         entropy = dist.mean()
 
         adv, rtn = self.buffer.compute_advantages(logprobs, values)

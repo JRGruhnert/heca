@@ -13,7 +13,7 @@ class NodeSet(Generic[T]):
     def __init__(self, type: str):
         self.items: list[T] = []
         self.index: dict[str, int] = {}
-        self.x: torch.Tensor = torch.empty()
+        self.x: torch.Tensor = torch.empty(1)
         self.type = type
 
     def add(self, key: str, value: T):

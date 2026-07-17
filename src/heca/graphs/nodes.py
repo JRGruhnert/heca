@@ -6,14 +6,14 @@ from heca.conditions.condition import Condition
 from heca.misc.data import DCEntity, DCScene
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class GraphNode(ABC):
     changed: bool
     data: DCEntity
     sources: set[tuple[str, str]]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class EntityNode(GraphNode):
     entity: str
     data: DCEntity
@@ -23,7 +23,7 @@ class EntityNode(GraphNode):
     con: Condition | None = None
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class OptionNode(GraphNode):
     agent: Agent.Config
     changed: bool = False

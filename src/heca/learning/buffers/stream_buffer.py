@@ -40,8 +40,12 @@ class StreamBuffer(Buffer):
             group_items = [self.queue[i] for i in indices]
             rewards = [d.reward for d in group_items]
             terminals = [d.terminal or d.truncated for d in group_items]
-            behavior_lp = torch.stack([d.logprob for d in group_items]).squeeze(-1)
-            behavior_v = torch.stack([d.value for d in group_items]).squeeze(-1)
+            behavior_lp = (
+                torch.stack([d.logprob for d in group_items]).detach().squeeze(-1)
+            )
+            behavior_v = (
+                torch.stack([d.value for d in group_items]).detach().squeeze(-1)
+            )
 
             cp = current_logprobs[indices]
             cv = current_values[indices]
@@ -69,14 +73,14 @@ class StreamBuffer(Buffer):
         All tensors are shape [T].
         rewards/terminals are Python lists.
         """
-
+        T = len(rewards)
         ratios = torch.exp(current_logprobs - behavior_logprobs)  # π / μ
-        advantages = torch.zeros(len(self.queue))
-        returns = torch.zeros(len(self.queue))
+        advantages = torch.zeros(T)
+        returns = torch.zeros(T)
         next_val = 0.0 if terminals[-1] else current_values[-1].item()
         v_next = torch.tensor(next_val)
 
-        for i in reversed(range(len(self.queue))):
+        for i in reversed(range(T)):
             rho = torch.clamp(ratios[i], max=1.0)
             c = torch.clamp(ratios[i], max=1.0)
             term = float(terminals[i])
@@ -85,7 +89,7 @@ class StreamBuffer(Buffer):
                 rewards[i] + self.cfg.gamma * next_val * (1 - term) - current_values[i]
             )
             # V-trace target
-            if i < len(self.queue) - 1:
+            if i < T - 1:
                 v_t = (
                     current_values[i]
                     + delta

@@ -36,7 +36,3 @@ class Agent(Persistable, abc.ABC):
     @cached_property
     def conditions(self) -> list[ConPair]:
         raise NotImplementedError
-
-    @abc.abstractmethod
-    def eval(self):
-        raise NotImplementedError

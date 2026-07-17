@@ -1,4 +1,5 @@
 from collections import defaultdict
+from dataclasses import field
 
 import numpy as np
 import torch
@@ -28,9 +29,11 @@ class Graph:
     es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
         ("entity", "tapas", "entity")
     )
-    packages: dict[str, tuple[Agent.Config, DCScene, DCScene]] = {}
-    start_keys: set[str] = set()
-    goal_keys: set[str] = set()
+    packages: dict[str, tuple[Agent.Config, DCScene, DCScene]] = field(
+        default_factory=dict
+    )
+    start_keys: set[str] = field(default_factory=set)
+    goal_keys: set[str] = field(default_factory=set)
     start: DCScene = DCScene.empty()
     goal: DCScene = DCScene.empty()
 
@@ -81,17 +84,6 @@ class Graph:
     def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
         return node.con.score_single(x[node.entity].value, node.entity)[1]
-
-    def _find_condition_for_entity2(self, entity_label: str) -> Condition | None:
-        for key in self.goal_keys:
-            node = self.ns_entity.get_by_key(key)
-            if (
-                isinstance(node, EntityNode)
-                and node.entity == entity_label
-                and node.con is not None
-            ):
-                return node.con
-        return None
 
     def create_subgoal(self, node: EntityNode, x: DCScene | None = None) -> DCEntity:
         assert node.con is not None

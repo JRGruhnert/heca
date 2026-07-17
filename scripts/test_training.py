@@ -72,3 +72,6 @@ heca_cfg = Heca.Config(
         buffer=FairBuffer.Config(),
     ),
 )
+
+heca = Heca.get(heca_cfg)
+heca.train(OGBenchScene.Config())
