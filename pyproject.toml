@@ -22,6 +22,7 @@ dependencies = [
     "questionary",
     "notebook",
     "isort",
+    "captum",
     "einops",
     "decord2",
     "molmo_utils",

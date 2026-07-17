@@ -29,6 +29,27 @@ class WandBConfig:
     enabled: bool = False
 
 
+# class _ExplainerWrapper(nn.Module):
+#     def __init__(self, model: nn.Module):
+#         super().__init__()
+#         self.model = model
+#         self._edge_attr_dict: dict = {}
+
+#     def set_edge_attrs(self, edge_attr_dict: dict):
+#         self._edge_attr_dict = edge_attr_dict
+
+#     def forward(self, x_dict: dict, edge_index_dict: dict):
+#         data = HeteroData()
+#         for key, x in x_dict.items():
+#             data[key].x = x
+#         for key, edge_index in edge_index_dict.items():
+#             data[key].edge_index = edge_index
+#         for key, edge_attr in self._edge_attr_dict.items():
+#             data[key].edge_attr = edge_attr
+#         batch = Batch.from_data_list([data])
+#         return self.model(batch)
+
+
 class Learner(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
@@ -70,6 +91,32 @@ class Learner(Persistable):
                 return_type="probs",
             ),
         )
+
+        # self.actor_explainer = Explainer(
+        #     _ExplainerWrapper(self.actor),
+        #     algorithm=CaptumExplainer("IntegratedGradients"),
+        #     explanation_type="phenomenon",
+        #     node_mask_type="attributes",
+        #     edge_mask_type=None,
+        #     model_config=dict(
+        #         mode="multiclass_classification",
+        #         task_level="graph",
+        #         return_type="raw",
+        #     ),
+        # )
+
+        # self.critic_explainer = Explainer(
+        #     _ExplainerWrapper(self.critic),
+        #     algorithm=CaptumExplainer("IntegratedGradients"),
+        #     explanation_type="model",
+        #     node_mask_type="attributes",
+        #     edge_mask_type=None,
+        #     model_config=dict(
+        #         mode="regression",
+        #         task_level="graph",
+        #         return_type="raw",
+        #     ),
+        # )
         self.current_update = 0
 
     def register(self, tag: str) -> "Learner":
@@ -99,8 +146,53 @@ class Learner(Persistable):
     def eval(self):
         self.train_mode = False
 
-    def explain(self, data: HeteroData):
-        self.explainer.get_prediction()
+    # def explain(
+    #     self,
+    #     obs: StateValueDict,
+    #     goal: StateValueDict,
+    # ) -> tuple[
+    #     torch.Tensor,
+    #     torch.Tensor,
+    #     torch.Tensor,
+    #     HeteroExplanation,
+    #     HeteroExplanation,
+    # ]:
+    #     # Resolve the action first (same logic as act())
+    #     action, logprob, value = self.act(obs, goal)
+
+    #     # Build the graph for the current observation
+    #     data = self.to_data(obs, goal)
+
+    #     # Edge attributes are not perturbed by the explainer; store them in the wrappers
+    #     self.actor_explainer.model.set_edge_attrs(data.edge_attr_dict)
+    #     self.critic_explainer.model.set_edge_attrs(data.edge_attr_dict)
+
+    #     actor_x = {k: v for k, v in data.x_dict.items() if k != "critic"}
+    #     actor_ei = {
+    #         k: v
+    #         for k, v in data.edge_index_dict.items()
+    #         if k[0] != "critic" and k[2] != "critic"
+    #     }
+
+    #     actor_explanation = self.actor_explainer(
+    #         actor_x,
+    #         actor_ei,
+    #         target=torch.tensor([int(action.item())]),
+    #     )
+
+    #     critic_x = {k: v for k, v in data.x_dict.items() if k != "actor"}
+    #     critic_ei = {
+    #         k: v
+    #         for k, v in data.edge_index_dict.items()
+    #         if k[0] != "actor" and k[2] != "actor"
+    #     }
+
+    #     critic_explanation = self.critic_explainer(
+    #         critic_x,
+    #         critic_ei,
+    #     )
+
+    #     return action, logprob, value, actor_explanation, critic_explanation
 
     def predict(self, data: HeteroData, tag: str) -> int:
         if self.train_mode:

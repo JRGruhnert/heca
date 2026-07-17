@@ -70,6 +70,7 @@ heca_cfg = Heca.Config(
         tag="test",
         # buffer=APPOBuffer.Config(),
         buffer=FairBuffer.Config(),
+        normalize_rewards=False,
     ),
 )
 

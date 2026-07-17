@@ -93,7 +93,7 @@ class Entity(Configurable):
     def to_value(
         cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray, soh: np.ndarray
     ) -> DCEntity:
-        value = np.concatenate((pos, rot, ste[:, None]), axis=1)
+        value = np.concatenate((pos, rot, ste))
         feature = cls.gnn_format(value, len(soh))
         return DCEntity(value=value, feature=feature)
 
