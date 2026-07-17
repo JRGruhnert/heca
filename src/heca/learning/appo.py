@@ -10,7 +10,7 @@ from heca.learning.buffers.buffer import Buffer
 class APPO(Learner):
     @dataclass(kw_only=True)
     class Config(Learner.Config):
-        folder: str = "appo"
+        label: str = "appo"
         buffer: Buffer.Config = StreamBuffer.Config()
         # Hyperparameters
         lr: float = 0.0003
@@ -29,6 +29,7 @@ class APPO(Learner):
         old_data = self.buffer.data
         old_actions = self.buffer.actions.detach().squeeze(-1)
         old_logprobs = self.buffer.logprobs.detach().squeeze(-1)
+
         logprobs, values, dist = self.network.evaluate(old_data, old_actions)
         entropy = dist.mean()
 
@@ -36,7 +37,7 @@ class APPO(Learner):
 
         adv = (adv - adv.mean()) / (adv.std() + 1e-8)
 
-        log_ratio = logprobs - old_logprobs.squeeze(-1).detach()
+        log_ratio = logprobs - old_logprobs
         ratios = torch.exp(log_ratio)
 
         surr1 = ratios * adv
@@ -54,3 +55,25 @@ class APPO(Learner):
         loss.backward()
         clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
         self.optim.step()
+
+        with torch.no_grad():
+            approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio)
+            clip_fraction = ((ratios - 1).abs() > self.cfg.eps_clip).float().mean()
+
+        var_returns = rtn.var()
+        if var_returns > 0:
+            explained_var = (1 - (rtn - values.squeeze()).var() / var_returns).item()
+        else:
+            explained_var = 0.0
+
+        self.metrics.update(
+            {
+                "train/policy_loss": policy_loss.item(),
+                "train/value_loss": value_loss.item(),
+                "train/entropy": entropy.item(),
+                "train/approx_kl": approx_kl.item(),
+                "train/clip_fraction": clip_fraction.item(),
+                "train/explained_variance": explained_var,
+                "train/learning_rate": self.optim.param_groups[0]["lr"],
+            }
+        )

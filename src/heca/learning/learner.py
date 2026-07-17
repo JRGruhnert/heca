@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
+from typing import Literal
 import torch
 import copy
+import wandb
 from thop import profile
 from torch import nn
 from torch.distributions import Categorical
@@ -9,15 +12,27 @@ from torch_geometric.explain import Explainer, CaptumExplainer
 from torch_geometric.data import HeteroData
 
 from heca.learning.reward_normalizer import RewardNormalizer
+from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
 
 
+@dataclass(kw_only=True, slots=True)
+class WandBConfig:
+    project: str = "master-thesis"
+    entity: str = "heca-university-freiburg"
+    mode: Literal["online", "offline", "disabled"] = "online"
+    save_code: bool = False  # Uploads training script
+    watch_model: bool = True  # Log gradients & weight histograms
+    watch_freq: int = 100  # Frequency of gradient logging
+    enabled: bool = False
+
+
 class Learner(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        label: str = "learner"
+        folder: str = "learner"
         buffer: Buffer.Config
         network: Network.Config = Network.Config()
         # Hyperparameters
@@ -27,6 +42,8 @@ class Learner(Persistable):
         critic_coef: float
         max_update: int
         eps_clip: float
+        normalize_rewards: bool
+        wandb: WandBConfig = WandBConfig()
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -35,11 +52,12 @@ class Learner(Persistable):
         self.optim: torch.optim.Optimizer = torch.optim.AdamW(
             self.network.parameters(), lr=self.cfg.lr
         )
-        self.reward_normalizer = RewardNormalizer()
+        self.metrics: dict = {}
+        self.normalizers: dict[str, RewardNormalizer] = {}
         self.buffer = Buffer.get(cfg.buffer)
         self.pocket: dict[str, BufferData] = {}
         self.train_mode = True
-
+        self._init_wandb()
         self.explainer = Explainer(
             self.network,
             algorithm=CaptumExplainer("Saliency"),
@@ -55,6 +73,8 @@ class Learner(Persistable):
         self.current_update = 0
 
     def register(self, tag: str) -> "Learner":
+        if tag not in self.normalizers:
+            self.normalizers[tag] = RewardNormalizer()
         self.buffer.tags.add(tag)
         return self
 
@@ -103,8 +123,55 @@ class Learner(Persistable):
             action = logits.argmax(dim=-1)
         return int(action)
 
+    def _init_wandb(self):
+        if not self.cfg.wandb.enabled:
+            return
+        config_dict = {
+            "lr": self.cfg.lr,
+            "max_grad_norm": self.cfg.max_grad_norm,
+            "entropy_coef": self.cfg.entropy_coef,
+            "critic_coef": self.cfg.critic_coef,
+            "max_update": self.cfg.max_update,
+            "eps_clip": self.cfg.eps_clip,
+            "normalize_rewards": self.cfg.normalize_rewards,
+            # Buffer config
+            "buffer/capacity": self.cfg.buffer.capacity,
+            "buffer/label": str(type(self.cfg.buffer)),
+            # Network config
+            "network/input_dim": self.cfg.network.input_dim,
+            "network/feature_dim": self.cfg.network.feature_dim,
+            "network/num_stepmix_layers": self.cfg.network.num_stepmix_layers,
+            "network/num_tapas_layers": self.cfg.network.num_tapas_layers,
+        }
+
+        self._wandb_run = wandb.init(
+            project=self.cfg.wandb.project,
+            entity=self.cfg.wandb.entity,
+            name=self.cfg.tag,
+            config=config_dict,
+            mode=self.cfg.wandb.mode,
+            save_code=self.cfg.wandb.save_code,
+            tags=[self.cfg.label, self.cfg.label],
+        )
+
+        if self.cfg.wandb.watch_model:
+            wandb.watch(
+                self.network,
+                log="gradients",
+                log_freq=self.cfg.wandb.watch_freq,
+                log_graph=True,
+            )
+
+    def training_log(self):
+        metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in self.metrics.items()])
+        logger.info(f"Update {self.current_update:4d} | {metrics_str}")
+
+        if self.cfg.wandb.enabled:
+            wandb.log(self.metrics, step=self.current_update)
+
     def update(self, reward: float, terminal: bool, truncated: bool, tag: str) -> bool:
-        normalized_reward = self.reward_normalizer.update(reward)
+        if self.cfg.normalize_rewards:
+            reward = self.normalizers[tag].update(reward)
         if self.train_mode:
             data = self.pocket[tag]
             data.reward = reward
@@ -114,6 +181,55 @@ class Learner(Persistable):
                 self.learn()
                 self.current_update = min(self.current_update + 1, self.cfg.max_update)
                 self.sync_inference()
+                self.training_log()
                 self.buffer.reset()
 
+                if self.current_update % 100 == 0:
+                    self.save()
+
         return self.current_update >= self.cfg.max_update
+
+    def _save(self, path: Path):
+        filepath = path / f"checkpoint_{self.current_update}.pt"
+
+        checkpoint = {
+            "network": self.network.state_dict(),
+            "optimizer": self.optim.state_dict(),
+            "reward_normalizers": {
+                tag: {
+                    "mean": norm.mean,
+                    "var": norm.var,
+                    "count": norm.count,
+                }
+                for tag, norm in self.normalizers.items()
+            },
+        }
+        torch.save(checkpoint, filepath)
+        logger.info(f"Saved full checkpoint to {filepath}")
+
+    def _load(self, path: Path):
+        filepath = path / "checkpoint.pt"
+        if not filepath.exists():
+            logger.warning(f"No checkpoint found at {filepath}. Starting from scratch.")
+            return
+
+        checkpoint = torch.load(filepath, map_location=hardware.device)
+
+        self.network.load_state_dict(checkpoint["network"])
+        self.optim.load_state_dict(checkpoint["optimizer"])
+
+        # Restore per-tag normalizers
+        if "reward_normalizers" in checkpoint:
+            for tag, stats in checkpoint["reward_normalizers"].items():
+                if tag not in self.normalizers:
+                    self.normalizers[tag] = RewardNormalizer()
+                norm = self.normalizers[tag]
+                norm.mean = stats["mean"]
+                norm.var = stats["var"]
+                norm.count = stats["count"]
+            logger.info(f"Restored {len(self.normalizers)} per-tag normalizers")
+
+        self.sync_inference()
+        logger.info(
+            f"Loaded full checkpoint from {filepath} at update {self.current_update}"
+        )

@@ -5,14 +5,13 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.learner import Learner
-from heca.misc.hardware import device
 from heca.learning.buffers.buffer import Buffer
 
 
 class PPO(Learner):
     @dataclass(kw_only=True)
     class Config(Learner.Config):
-        folder: str = "ppo"
+        label: str = "ppo"
         buffer: Buffer.Config = FairBuffer.Config()
         # Hyperparameters
         batch_size: int = 64
@@ -36,7 +35,10 @@ class PPO(Learner):
         # Count how many steps have a meaningful absolute advantage > 0.01
         meaningful_steps = (adv.abs() > 0.01).sum().item()
         print(f"Meaningful gradient steps: {meaningful_steps} / {len(adv)}")
+        # Computes explained variance over full batch
+
         self._mini_batch_loop(adv, rtn)
+
         if self.cfg.lr_annealing:
             lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
             for pg in self.optim.param_groups:
@@ -47,6 +49,15 @@ class PPO(Learner):
         old_actions = self.buffer.actions.detach().squeeze(-1)
         old_logprobs = self.buffer.logprobs.detach().squeeze(-1)
         old_values = self.buffer.values.detach().squeeze(-1)
+
+        # Accumulators for averaging
+        total_policy_loss = 0.0
+        total_value_loss = 0.0
+        total_entropy = 0.0
+        total_approx_kl = 0.0
+        total_clip_fraction = 0.0
+        total_loss = 0.0
+        num_minibatches = 0
 
         kl_stop = False
         for _ in range(self.cfg.n_epoch):
@@ -110,11 +121,43 @@ class PPO(Learner):
                 with torch.no_grad():
                     log_ratio = logprobs - mb_logprobs
                     approx_kl = torch.mean((torch.exp(log_ratio) - 1) - log_ratio)
+                    clip_fraction = (
+                        ((ratios - 1).abs() > self.cfg.eps_clip).float().mean()
+                    )
+                    total_policy_loss += policy_loss.item()
+                    total_value_loss += value_loss.item()
+                    total_entropy += entropy.item()
+                    total_approx_kl += approx_kl.item()
+                    total_clip_fraction += clip_fraction.item()
+                    total_loss += loss.mean().item()
+                    num_minibatches += 1
+
                     if (
                         self.cfg.target_kl is not None
                         and approx_kl > self.cfg.target_kl
                     ):
                         kl_stop = True
                         break
+
             if kl_stop:
                 break
+
+        all_values = self.buffer.values.detach().squeeze(-1)
+        var_returns = rtn.var()
+        if var_returns > 0:
+            explained_var = (1 - (rtn - all_values).var() / var_returns).item()
+        else:
+            explained_var = 0.0
+
+        self.metrics.update(
+            {
+                "train/policy_loss": total_policy_loss / num_minibatches,
+                "train/value_loss": total_value_loss / num_minibatches,
+                "train/entropy": total_entropy / num_minibatches,
+                "train/approx_kl": total_approx_kl / num_minibatches,
+                "train/clip_fraction": total_clip_fraction / num_minibatches,
+                "train/total_loss": total_loss / num_minibatches,
+                "train/explained_variance": explained_var,
+                "train/learning_rate": self.optim.param_groups[0]["lr"],
+            }
+        )
