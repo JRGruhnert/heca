@@ -4,7 +4,7 @@ from heca.agents.experts.tapas import TapasAgent
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
 from heca.conditions.pair import ConPair
-from heca.learning.buffers.ppo_buffer import PPOBuffer
+from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.ppo import PPO
 from heca.scenes.ogbench.scene import OGBenchScene
 
@@ -65,10 +65,10 @@ agents = [
 heca_cfg = Heca.Config(
     tag="test",
     agents=agents,
-    ppo=PPO.Config(
+    learner=PPO.Config(
         tag="test",
         # buffer=APPOBuffer.Config(),
-        buffer=PPOBuffer.Config(),
+        buffer=FairBuffer.Config(),
     ),
 )
 path = Agent.load_dir(heca_cfg)

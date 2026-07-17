@@ -2,9 +2,16 @@
 
 ## PPO: Network/Agent 1 to 1
 
-## DDPPO: Network/Agent 1 to N
+- Normal Buffer
+- Every Network trained independent
+
+## PPO: Network/Agent 1 to N
+
+- Fair Buffer
 
 ## APPO: Network/Agent 1 to N
+
+- Stream Buffer
 
 ## Reliability
 
@@ -13,7 +20,7 @@
 - Instead of trying to solve the Task the Agent skips and returns the subgoal as it is.
 - Compare it with normal mode.
 - How much better does the network learn if data is not noisy?
-- With and without uncertainty
+- With and without uncertainty (noise)
 
 ### Tapas unchanged
 
@@ -21,4 +28,5 @@
 
 ## Vision Encoder
 
-- Repeat Tests wit vision encoder
+- Repeat Tests with vision encoder
+- I can incorperate the uncertainty of the vision encoder into the gnn

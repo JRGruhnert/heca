@@ -1,15 +1,17 @@
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 from typing import Sequence
 
+from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import Graph
-
+from heca.learning.learner import Learner
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
-from heca.learning.ppo import PPO
+from heca.scenes.ogbench.scene import OGBenchScene
 from heca.scenes.scene import Scene
 
 
@@ -18,17 +20,24 @@ class Heca(Agent):
     class Config(Agent.Config):
         evaluator: Evaluator.Config = Evaluator.Config()
         agents: Sequence[Agent.Config]
-        ppo: PPO.Config
+        learner: Learner.Config
         label: str = "heca"
         visualize: bool = True
         n_samples: int = 1000
         threshold: float = 0.75
         downstream_virtual: bool = False
         upstream_noise: bool = True
+        inference: bool = False
+        ee_agent: Agent.Config = TapasAgent.Config(
+            tag="move_ee", scene=OGBenchScene.Config()
+        )
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.ppo = PPO.get(self.cfg.ppo)
+        self.learner = Learner.get(self.cfg.learner).register(self.cfg.tag)
+
+        if self.cfg.inference:
+            self.learner.eval()
 
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions,
@@ -40,14 +49,24 @@ class Heca(Agent):
     def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_start(x)
         data = self.graph.export()
-        option = self.ppo.predict(data, self.cfg.tag)
+        option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
+        x = self.adjust_ee(a, x, y)
         z = Agent.get(a).act(x, y)
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
-        self.ppo.update(fb.reward, fb.terminal, fb.truncated, self.cfg.tag)
+        self.learner.update(fb.reward, fb.terminal, fb.truncated, self.cfg.tag)
         return z, fb
+
+    def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
+        # Basically adjusts the ee pose for tapas models
+        #  to be in a good position for execution
+        agent = Agent.get(a)
+        if isinstance(agent, TapasAgent):
+            y.ee.value = agent.start_ee
+            return Agent.get(self.cfg.ee_agent).act(x, y)
+        return x
 
     def act(self, x: DCScene, y: DCScene) -> DCScene:
         self.graph.set_goal(y)
@@ -132,3 +151,9 @@ class Heca(Agent):
             if not merged:
                 break
         return cons
+
+    def _load(self, path: Path):
+        pass
+
+    def _save(self, path: Path):
+        pass

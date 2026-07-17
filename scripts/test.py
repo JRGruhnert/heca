@@ -4,7 +4,8 @@ from heca.agents.experts.tapas import TapasAgent
 # from heca.agents.heca import Heca
 from heca.agents.heca import Heca
 from heca.conditions.evaluator import Evaluator
-from heca.learning.buffers.appo_buffer import APPOBuffer
+from heca.learning.appo import APPO
+from heca.learning.buffers.stream_buffer import StreamBuffer
 from heca.learning.ppo import PPO
 from heca.scenes.ogbench.scene import OGBenchScene
 
@@ -65,10 +66,12 @@ agents = [
 heca_cfg = Heca.Config(
     tag="test",
     agents=agents,
-    ppo=PPO.Config(
-        tag="test",
-        buffer=APPOBuffer.Config(),
-    ),
+    learner=PPO.Config(tag="test"),
+)
+heca2_cfg = Heca.Config(
+    tag="test2",
+    agents=agents,
+    learner=APPO.Config(tag="test"),
 )
 
 # heca = Agent.get(heca_cfg, auto_load=False)

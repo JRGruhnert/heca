@@ -1,8 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
 
-import numpy as np
-
 from heca.agents.agent import Agent
 from heca.conditions.condition import Condition
 from heca.misc.data import DCEntity, DCScene

@@ -110,6 +110,8 @@ class TapasAgent(ExpertAgent):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
+        self.start_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+        self.goal_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.policy.reset_episode()
@@ -215,64 +217,39 @@ class TapasAgent(ExpertAgent):
         return temp
 
     def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
-        action = torch.Tensor(dc_obs.extras["action"])
-        reward = torch.Tensor(dc_obs.extras["reward"])
-        joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
-        joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
-        ee_state = torch.Tensor(dc_obs.ee[-1])
-        ee_pose = torch.cat(
-            (torch.Tensor(dc_obs.ee[:3]), torch.Tensor(dc_obs.ee[3:7])),
-            dim=-1,
-        )
-
-        # camera_obs = self.image_tensors(obs)
-        # multicam_obs = dict_to_tensordict(
-        #    {"_order": CameraOrder._create(obs.camera_names)} | camera_obs  # type: ignore
-        # )
         poses = {
-            entity.cfg.label: torch.cat(
-                [
-                    torch.Tensor(dc_obs[entity.cfg.label][:3]),
-                    torch.Tensor(dc_obs[entity.cfg.label][3:7]),
-                ],
-                dim=-1,
-            )
+            entity.cfg.label: dc_obs[entity.cfg.label].tpose
             for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
         }
 
         states = {
-            entity.cfg.label: torch.Tensor(dc_obs[entity.cfg.label][-1])
+            entity.cfg.label: dc_obs[entity.cfg.label].tste
             for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
         }
 
+        # Target parameters
         for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label):
-            # This adds target frames for mobile entities.
-            # Later can be used to set target for the tapas model
             if entity.cfg.mobility == Mobility.FREE:
-                pos = torch.Tensor(dc_goal[entity.cfg.label][:3])
-                rot = torch.Tensor(dc_goal[entity.cfg.label][3:7])
-                state = torch.Tensor(dc_goal[entity.cfg.label][-1])
-                pose = torch.cat((pos, rot), dim=-1)
-                poses[f"{entity.cfg.label}_target"] = pose
-                states[f"{entity.cfg.label}_target"] = state
+                poses[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tpose
+                states[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tste
 
-        gee_state = torch.Tensor(dc_goal.ee[-1])
-        gee_pose = torch.cat(
-            (torch.Tensor(dc_goal.ee[:3]), torch.Tensor(dc_goal.ee[3:7])), dim=-1
-        )
-
-        poses[f"ee_target"] = gee_pose
-        states[f"ee_target"] = gee_state
+        poses[f"ee_target"] = dc_goal.ee.tpose
+        states[f"ee_target"] = dc_goal.ee.tste
 
         object_poses = dict_to_tensordict(poses)
         object_states = dict_to_tensordict(states)
+
+        action = torch.Tensor(dc_obs.extras["action"])
+        reward = torch.Tensor(dc_obs.extras["reward"])
+        joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
+        joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
 
         return SceneObservation(
             feedback=reward,
             action=action,
             cameras=None,  # multicam_obs,
-            ee_pose=ee_pose,
-            gripper_state=ee_state,
+            ee_pose=dc_obs.ee.tpose,
+            gripper_state=dc_obs.ee.tste,
             object_poses=object_poses,
             object_states=object_states,
             joint_pos=joint_pos,
@@ -309,9 +286,11 @@ class TapasAgent(ExpertAgent):
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
         for key in self.elabels:
-            pre_data[key] = np.stack([s[key] for s in start_scenes])
-            post_data[key] = np.stack([s[key] for s in end_scenes])
+            pre_data[key] = np.stack([s[key].value for s in start_scenes])
+            post_data[key] = np.stack([s[key].value for s in end_scenes])
 
+        self.start_ee = np.stack([s.ee.value for s in start_scenes])
+        self.goal_ee = np.stack([s.ee.value for s in end_scenes])
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
         post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
         pair = ConPair(f"{self.cfg.tag}_0", pre, post, self.cfg.threshold)

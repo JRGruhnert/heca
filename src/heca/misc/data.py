@@ -15,6 +15,34 @@ class DCEntity:
     def empty(cls) -> "DCEntity":
         return cls(np.empty(0), np.empty(0))
 
+    @property
+    def pos(self) -> np.ndarray:
+        return self.value[:3]
+
+    @property
+    def rot(self) -> np.ndarray:
+        return self.value[3:7]
+
+    @property
+    def ste(self) -> np.ndarray:
+        return self.value[-1]
+
+    @property
+    def tpos(self) -> torch.Tensor:
+        return torch.Tensor(self.value[:3])
+
+    @property
+    def trot(self) -> torch.Tensor:
+        return torch.Tensor(self.value[3:7])
+
+    @property
+    def tste(self) -> torch.Tensor:
+        return torch.Tensor(self.value[-1])
+
+    @property
+    def tpose(self) -> torch.Tensor:
+        return torch.Tensor(self.value[:7])
+
 
 class DCScene:
     def __init__(
