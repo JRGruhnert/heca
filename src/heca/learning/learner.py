@@ -8,6 +8,7 @@ from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
 from torch_geometric.data import HeteroData
 
+from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
@@ -34,7 +35,7 @@ class Learner(Persistable):
         self.optim: torch.optim.Optimizer = torch.optim.AdamW(
             self.network.parameters(), lr=self.cfg.lr
         )
-
+        self.reward_normalizer = RewardNormalizer()
         self.buffer = Buffer.get(cfg.buffer)
         self.pocket: dict[str, BufferData] = {}
         self.train_mode = True
@@ -103,6 +104,7 @@ class Learner(Persistable):
         return int(action)
 
     def update(self, reward: float, terminal: bool, truncated: bool, tag: str) -> bool:
+        normalized_reward = self.reward_normalizer.update(reward)
         if self.train_mode:
             data = self.pocket[tag]
             data.reward = reward

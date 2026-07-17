@@ -33,6 +33,9 @@ class PPO(Learner):
 
     def learn(self):
         adv, rtn = self.buffer.compute_advantages()
+        # Count how many steps have a meaningful absolute advantage > 0.01
+        meaningful_steps = (adv.abs() > 0.01).sum().item()
+        print(f"Meaningful gradient steps: {meaningful_steps} / {len(adv)}")
         self._mini_batch_loop(adv, rtn)
         if self.cfg.lr_annealing:
             lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
