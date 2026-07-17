@@ -1,6 +1,65 @@
 [build-system]
-requires = ["setuptools", "wheel"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "heca"
+version = "0.0.1"
+description = "Hierarchical Entity-Centric Agent (HECA) is a framework for building, testing and evaluating hierarchical agents that operate on a graph-based world representation."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    {name = "Jan Gruhnert"}
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "thop",
+    "h5py",
+    "click",
+    "stepmix",
+    "questionary",
+    "notebook",
+    "isort",
+    "einops",
+    "decord2",
+    "molmo_utils",
+    "accelerate",
+    "sentencepiece",
+    "transformers==4.57.1",
+    "tensorflow",
+    "numpy==1.26.4",
+    "matplotlib==3.10.8",
+    "wandb==0.25.1",
+    "loguru==0.7.3",
+    "torch==2.5.0",
+    "torch_geometric==2.5.0",
+    "torchvision",
+    "torchaudio==2.5.0",
+    "tensordict>=0.2.0",
+    "omegaconf==2.3.0",
+    "setuptools<81",
+
+    # git dependencies
+    "riepybdlib @ git+https://github.com/vonHartz/riepybdlib.git@a56cbdb7c01e44e50956a8accb973d608449ab77",
+    "ogbench @ git+https://github.com/JRGruhnert/ogbench_modified.git@1d9fcbd03d75aead9edd45d44aa99fd5f909a66b",
+    "tapas_gmm_modified @ git+https://github.com/JRGruhnert/tapas_gmm_modified.git@aacc7231527f6786eaa56321b74d1607fb28fb74",
+    "calvin_env_modified @ git+https://github.com/JRGruhnert/calvin_env_modified.git@1738be9b9ae4ac94fbd572001898b4e36f4c2683",
+]
+
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "black==22.1.0",
+    "flake8==4.0.1",
+    "pytest>=7.0",
+]
+
+
+[project.scripts]
+heca = "cli:entry_point"
 
 
 [tool.isort]
