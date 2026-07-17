@@ -170,8 +170,8 @@ class OGBenchScene(Scene):
                 e_pos = obs[f"privileged_{entity.cfg.label}_pos"]
             wxyz = obs[f"privileged_{entity.cfg.label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
-            e_ste = obs[f"privileged_{entity.cfg.label}_state"]
-            e_soh = entity.one_hot_from_idx_dc(e_ste.item())
+            e_ste = np.atleast_1d(obs[f"privileged_{entity.cfg.label}_state"])
+            e_soh = entity.one_hot_from_idx_dc(e_ste)
             dc_entities[entity.cfg.label] = Entity.to_value(e_pos, e_rot, e_ste, e_soh)
         pos, rot, ste, soh = self.get_ee_dc(obs)
         ee = Entity.to_value(pos, rot, ste, soh)
@@ -282,7 +282,7 @@ class OGBenchScene(Scene):
         yaw = obs["proprio_effector_yaw"].item()
         rot = self.yaw_to_quat(yaw)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
-        ste_idx = obs["proprio_gripper_state"]
+        ste_idx = np.atleast_1d(obs["proprio_gripper_state"])
         ste_oh = self.ee.one_hot_from_idx_dc(ste_idx)
         # print(
         #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
@@ -299,12 +299,6 @@ class OGBenchScene(Scene):
         cosy_cosp = 1 - 2 * (quat[1] ** 2 + quat[2] ** 2)
         yaw = np.arctan2(siny_cosp, cosy_cosp)
         return yaw
-
-    def wxyz_to_xyzw(self, q: np.ndarray):
-        return np.array([q[1], q[2], q[3], q[0]])
-
-    def xyzw_to_wxyz(self, q: np.ndarray):
-        return np.array([q[3], q[0], q[1], q[2]])
 
     def to_internal_action(self, action: np.ndarray) -> np.ndarray:
         pos = action[:3]

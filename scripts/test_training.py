@@ -65,7 +65,28 @@ agents = [
 
 heca_cfg = Heca.Config(
     tag="test",
-    agents=agents,
+    agents=[
+        TapasAgent.Config(
+            tag="open_window",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            tag="close_window",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            tag="lock_right_button",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+        TapasAgent.Config(
+            tag="unlock_right_button",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
+        ),
+    ],
     learner=PPO.Config(
         tag="test",
         # buffer=APPOBuffer.Config(),

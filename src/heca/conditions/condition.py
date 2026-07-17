@@ -71,7 +71,7 @@ class Condition:
             n_observed_outcomes = pis.shape[1]
             total_states = self.model_states[model_name]
 
-            if total_states > n_observed_outcomes:
+            if len(total_states) > n_observed_outcomes:
                 observed_states = np.sort(
                     np.unique(self._data_raw[model_name][:, 7].astype(int))
                 )
@@ -332,9 +332,9 @@ class Condition:
     def mix_with_states(con: "Condition", key: str) -> tuple[StepMix, set[int]]:
         return con.models[key], con.model_states[key]
 
-    def kl_variational_paper(self, con: "Condition", key: str):
+    def kl_variational_paper(self, other: "Condition", key: str):
         m1, s1 = Condition.mix_with_states(self, key)
-        m2, s2 = Condition.mix_with_states(con, key)
+        m2, s2 = Condition.mix_with_states(other, key)
         p1 = m1.get_parameters()
         p2 = m2.get_parameters()
 
@@ -353,15 +353,37 @@ class Condition:
 
         kl = 0.0
         for i in range(len(p1["weights"])):
-            w1 = p1["weights"][i]
+            w_i = p1["weights"][i]
             mu1 = p1["measurement"]["pose"]["means"][i]
             var1 = p1["measurement"]["pose"]["covariances"][i]
             cat1 = padded_cat1[i]
 
+            # Numerator: self-overlap of component i with its OWN model
             log_sum_m1 = 0.0
+            for k in range(len(p1["weights"])):
+                w_k = p1["weights"][k]
+                mu_k = p1["measurement"]["pose"]["means"][k]
+                var_k = p1["measurement"]["pose"]["covariances"][k]
+                cat_k = padded_cat1[k]
+
+                kl_self = 0.5 * np.sum(
+                    np.log(var1)
+                    - np.log(var_k)
+                    + var_k / var1
+                    + (mu_k - mu1) ** 2 / var1
+                    - 1
+                )
+                cat1_safe = np.clip(cat1, 1e-12, 1)
+                cat_k_safe = np.clip(cat_k, 1e-12, 1)
+                kl_cat_self = np.sum(
+                    cat1_safe * (np.log(cat1_safe) - np.log(cat_k_safe))
+                )
+                log_sum_m1 += w_k * np.exp(-(kl_self + kl_cat_self))
+
+            # Denominator: cross-overlap with model 2
             log_sum_m2 = 0.0
             for j in range(len(p2["weights"])):
-                w2 = p2["weights"][j]
+                w_j = p2["weights"][j]
                 mu2 = p2["measurement"]["pose"]["means"][j]
                 var2 = p2["measurement"]["pose"]["covariances"][j]
                 cat2 = padded_cat2[j]
@@ -373,17 +395,56 @@ class Condition:
                     + (mu1 - mu2) ** 2 / var2
                     - 1
                 )
-                cat1_safe = np.clip(cat1, 1e-12, 1)
                 cat2_safe = np.clip(cat2, 1e-12, 1)
                 kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
-                total_kl = kl_gauss + kl_cat
+                log_sum_m2 += w_j * np.exp(-(kl_gauss + kl_cat))
 
-                log_sum_m1 += w1 * np.exp(-total_kl)  # numerator: w_i * exp(-KL)
-                log_sum_m2 += w2 * np.exp(-total_kl)  # denominator: v_j * exp(-KL)
-
-            kl += w1 * np.log(log_sum_m1 / log_sum_m2)
-
+            kl += w_i * np.log(log_sum_m1 / log_sum_m2)
+            if key == "window_handle":
+                print(f"Component {i}:")
+                print(f"mu1={mu1}")
+                print(f"mu2={mu2}")
+                print(f"var1={var1}")
+                print(f"var2={var2}")
+                print(f"cat1={cat1}, cat2={cat2}")
+                print(f"log_sum_m1={log_sum_m1:.4f}")
+                print(f"log_sum_m2={log_sum_m2:.4f}")
+        if key == "window_handle":
+            print(f"Total KL={kl:.4f}, score={np.exp(-kl):.4f}")
         return np.exp(-kl)
+
+    def containment_score(self, other: "Condition", key: str):
+        """How much of B's mass falls inside A's distribution."""
+        m1, s1 = Condition.mix_with_states(self, key)
+        m2, s2 = Condition.mix_with_states(other, key)
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        target = sorted(s1 | s2)
+        padded_cat1 = self._pad_cat_probs(p1["measurement"]["state"]["pis"], s1, target)
+        padded_cat2 = self._pad_cat_probs(p2["measurement"]["state"]["pis"], s2, target)
+
+        score = 0.0
+        for i in range(len(p1["weights"])):
+            w_i = p1["weights"][i]
+            for j in range(len(p2["weights"])):
+                w_j = p2["weights"][j]
+
+                mu1 = p1["measurement"]["pose"]["means"][i]
+                var1 = p1["measurement"]["pose"]["covariances"][i]
+                mu2 = p2["measurement"]["pose"]["means"][j]
+                var2 = p2["measurement"]["pose"]["covariances"][j]
+
+                # Gaussian: height of A at B's mean, relative to A's peak
+                diff = mu1 - mu2
+                gauss_rel = np.exp(-0.5 * np.sum(diff**2 / var1))
+
+                # Categorical: inner product
+                cat_dot = np.sum(padded_cat1[i] * padded_cat2[j])
+
+                score += w_i * w_j * gauss_rel * cat_dot
+
+        return score  # [0, 1]
 
     def score_single(self, sample: np.ndarray, key: str) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""

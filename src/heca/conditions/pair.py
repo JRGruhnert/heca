@@ -87,7 +87,7 @@ class ConPair:
                 if key not in cp1con.model_states or key not in cp2con.model_states:
                     mat[i, j] = np.nan
                 else:
-                    mat[i, j] = cp2con.kl_variational_paper(cp1con, key)
+                    mat[i, j] = cp2con.containment_score(cp1con, key)
         return mat
 
     def compute_sim(self, other: "ConPair") -> dict[str, np.ndarray]:
