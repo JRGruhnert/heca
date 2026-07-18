@@ -173,7 +173,7 @@ class Condition:
     ) -> dict[str, tuple[float, np.ndarray]] | None:
         values = {}
         for key in self.elabels.intersection(other.elabels):
-            score = self.kl_variational_paper(other, key)
+            score = self.containment_score(other, key)
             value = self.best_sample(other, key)
             values[key] = (score, value)
 
@@ -184,7 +184,7 @@ class Condition:
                 return None
         return values
 
-    def best_sample(self, other: "Condition", key: str):
+    def best_sample(self, other: "Condition", key: str, eps: float = 1e-15):
         k_max = self.max_state(other, key)
         p1 = self.secure_mix_parameters(key, k_max)
         p2 = other.secure_mix_parameters(key, k_max)
@@ -214,34 +214,16 @@ class Condition:
                 )
                 # Categorical part — padded to same target space
                 cat_prod = state1[i] * state2[j]  # element-wise over aligned states
-                best_s_idx = int(np.argmax(cat_prod))
-                log_cat = np.log(np.clip(cat_prod[best_s_idx], 1e-12, None))
+                state = int(np.argmax(cat_prod))
+                log_cat = np.log(np.clip(cat_prod[state], eps, None))
                 score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat
-                results.append(
-                    {
-                        "score": score,
-                        "pose": mean,
-                        "state": best_s_idx,
-                        "component1": i,
-                        "component2": j,
-                    }
-                )
+                results.append({"score": score, "pose": mean, "state": state})
 
         results.sort(key=lambda r: r["score"], reverse=True)
         pose = results[0]["pose"]
         state = results[0]["state"]
         assert isinstance(pose, np.ndarray)
         return np.concatenate([pose, [state]])
-
-    def refine_pose(self, initial_pose, m1: StepMix, m2: StepMix):
-
-        def neg_log_product(x):
-            # Minimize the negative sum of log-densities
-            return -(m1.log_prob(x) + m2.log_prob(x))
-
-        # Gradient is automatically computed via finite differences or autograd
-        result = minimize(neg_log_product, initial_pose, method="L-BFGS-B")
-        return result.x
 
     def secure_mix_parameters(self, key: str, k_max: int, eps: float = 1e-15) -> dict:
         self.models[key]
@@ -276,66 +258,49 @@ class Condition:
                 var2 = p2["measurement"]["pose"]["covariances"][j]
                 cat1 = p1["measurement"]["state"]["pis"][i]
                 cat2 = p2["measurement"]["state"]["pis"][j]
-
                 diff = mu1 - mu2
                 pos_score = np.exp(-0.5 * np.sum(diff**2 / var1))
-
                 sigma_target = np.sqrt(var1)
                 sigma_source = np.sqrt(var2)
-
                 per_dim_penalty = np.minimum(1.0, sigma_target / sigma_source)
-
                 width_penalty = np.prod(per_dim_penalty)
-
                 gauss_rel = width_penalty * pos_score
-
                 overlap_cat = np.sum(cat1 * cat2)
                 peak_target = np.max(cat1)
                 cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
                 score += w_i * w_j * gauss_rel * cat_score
-                if key == "window_handle":
-                    print(f"cat1: {cat1}")
-                    print(f"cat2: {cat2}")
-                    print(f"over: {overlap_cat}")
-                    print(f"peak: {peak_target}")
-                    print(f"cats: {cat_score}")
-                    print(f"gess: {score}")
-                    print("")
-
         return score  # [0, 1]
 
     def score_single(
-        self, sample: np.ndarray, key: str, eps: float = 1e-12
+        self, sample: np.ndarray, key: str, eps: float = 1e-15
     ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
         p = self.secure_mix_parameters(key, max(self.model_states[key]))
-        sample_pose = sample[:7]
-        sample_state = int(sample[-1])
-        best_log_prob = -np.inf
+        pose = sample[:7]
+        state = int(sample[-1])
+        best_logprob = -np.inf
         for k in range(len(p["weights"])):
             mu = p["measurement"]["pose"]["means"][k]
             var = p["measurement"]["pose"]["covariances"][k]
             pis = p["measurement"]["state"]["pis"][k]
 
             # Gaussian
-            log_gauss = -0.5 * np.sum(
-                np.log(2 * np.pi * var) + (sample_pose - mu) ** 2 / var
-            )
+            log_gauss = -0.5 * np.sum(np.log(2 * np.pi * var) + (pose - mu) ** 2 / var)
 
             # Categorical
-            state_prob = pis[sample_state] if sample_state < len(pis) else eps
+            state_prob = pis[state] if state < len(pis) else eps
 
             log_cat = np.log(np.clip(state_prob, eps, 1))
             score = np.log(p["weights"][k]) + log_gauss + log_cat
 
-            if score > best_log_prob:
-                best_log_prob = score
+            if score > best_logprob:
+                best_logprob = score
 
-        score = np.exp(best_log_prob)
-        valid = score < self.threshold
+        score = np.exp(best_logprob)
+        valid = score >= self.threshold
         return score, valid
 
-    def kl_variational_paper(self, other: "Condition", key: str):
+    def kl_variational_paper(self, other: "Condition", key: str, eps: float = 1e-15):
         k_max = self.max_state(other, key)
         p1 = self.secure_mix_parameters(key, k_max)
         p2 = other.secure_mix_parameters(key, k_max)
@@ -362,8 +327,8 @@ class Condition:
                     + (mu_k - mu1) ** 2 / var1
                     - 1
                 )
-                cat1_safe = np.clip(cat1, 1e-12, 1)
-                cat_k_safe = np.clip(cat_k, 1e-12, 1)
+                cat1_safe = np.clip(cat1, eps, 1)
+                cat_k_safe = np.clip(cat_k, eps, 1)
                 kl_cat_self = np.sum(
                     cat1_safe * (np.log(cat1_safe) - np.log(cat_k_safe))
                 )
@@ -384,20 +349,9 @@ class Condition:
                     + (mu1 - mu2) ** 2 / var2
                     - 1
                 )
-                cat2_safe = np.clip(cat2, 1e-12, 1)
+                cat2_safe = np.clip(cat2, eps, 1)
                 kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
                 log_sum_m2 += w_j * np.exp(-(kl_gauss + kl_cat))
 
             kl += w_i * np.log(log_sum_m1 / log_sum_m2)
-            if key == "window_handle":
-                print(f"Component {i}:")
-                print(f"mu1={mu1}")
-                print(f"mu2={mu2}")
-                print(f"var1={var1}")
-                print(f"var2={var2}")
-                print(f"cat1={cat1}, cat2={cat2}")
-                print(f"log_sum_m1={log_sum_m1:.4f}")
-                print(f"log_sum_m2={log_sum_m2:.4f}")
-        if key == "window_handle":
-            print(f"Total KL={kl:.4f}, score={np.exp(-kl):.4f}")
         return np.exp(-kl)

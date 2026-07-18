@@ -45,6 +45,8 @@ class Heca(Agent):
             len(self.low_cons) * 2,
         )
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
+        self.graph.plot(Agent.load_dir(self.cfg))
+        self.graph.log()
 
     def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_start(x)
@@ -82,7 +84,6 @@ class Heca(Agent):
         scene = Scene.get(cfg)
         (x, ix), (y, iy) = scene.sample_task()
         while not self.evaluator.valid_task(x, y):
-            print("Starting Episode")
             (x, ix), (y, iy) = scene.sample_task()
         return x, y
 
@@ -90,7 +91,9 @@ class Heca(Agent):
         """Train the network with PPO for a given number of episodes."""
         while not self.end_flag:
             x, y = self.sample(cfg)
+            print("Starting Episode")
             z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
+            print("Ending Episode")
 
     @cached_property
     def elabels(self) -> set[str]:

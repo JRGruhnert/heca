@@ -1,15 +1,19 @@
 from collections import defaultdict
 from dataclasses import field
+from pathlib import Path
 
 import numpy as np
 import torch
 from torch_geometric.data import HeteroData
+import networkx as nx
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 from heca.agents.agent import Agent
 from heca.graphs.nodes import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
-from heca.misc import hardware
+from heca.misc import hardware, logger
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.conditions.condition import Condition
@@ -258,3 +262,103 @@ class Graph:
         assert isinstance(node, OptionNode)
         subgoal = self.assemble_subgoal(node)
         return node.agent, subgoal
+
+    def plot(self, path: Path, figsize=(12, 8), show_labels=False):
+        """Visualize the heterogeneous graph."""
+        plot_path = path / "plots"
+        plot_path.mkdir(parents=True, exist_ok=True)
+
+        G = nx.MultiDiGraph()  # directed, allows multiple edges
+
+        # Add nodes with their type and a label
+        for key in self.ns_entity.index.keys():
+            G.add_node(key, type="entity", label=key)
+        for key in self.ns_option.index.keys():
+            G.add_node(key, type="option", label=key)
+
+        # Add edges with their type
+        for edge in self.es_stepmix.edges:
+            G.add_edge(edge[0], edge[1], type="stepmix")
+        for edge in self.es_summary.edges:
+            G.add_edge(edge[0], edge[1], type="summary")
+        for edge in self.es_tapas.edges:
+            G.add_edge(edge[0], edge[1], type="tapas")
+
+        # Position nodes (spring layout)
+        pos = nx.spring_layout(G, seed=42)
+
+        # Separate nodes by type for color coding
+        entity_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "entity"]
+        option_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "option"]
+
+        plt.figure(figsize=figsize)
+        # Draw entity nodes (blue)
+        nx.draw_networkx_nodes(
+            G, pos, nodelist=entity_nodes, node_color="lightblue", node_size=800
+        )
+        # Draw option nodes (green)
+        nx.draw_networkx_nodes(
+            G, pos, nodelist=option_nodes, node_color="lightgreen", node_size=800
+        )
+
+        # Draw edges with different colors for each relation
+        edge_colors = {"stepmix": "gray", "summary": "orange", "tapas": "red"}
+        for etype, color in edge_colors.items():
+            edges = [(u, v) for u, v, d in G.edges(data=True) if d["type"] == etype]
+            nx.draw_networkx_edges(
+                G,
+                pos,
+                edgelist=edges,
+                edge_color=color,
+                arrows=True,
+                arrowsize=10,
+                alpha=0.6,
+            )
+
+        # Labels (optional)
+        if show_labels:
+            labels = {n: d["label"] for n, d in G.nodes(data=True)}
+            nx.draw_networkx_labels(G, pos, labels, font_size=8)
+
+        # Legend
+        legend_elements = [
+            Patch(facecolor="lightblue", label="Entity"),
+            Patch(facecolor="lightgreen", label="Option"),
+            Patch(facecolor="gray", label="stepmix"),
+            Patch(facecolor="orange", label="summary"),
+            Patch(facecolor="red", label="tapas"),
+        ]
+        plt.legend(handles=legend_elements, loc="upper left")
+        plt.title("Graph Structure")
+        plt.axis("off")
+        plt.tight_layout()
+        plt.savefig(path / f"graph.png", dpi=300, bbox_inches="tight")
+        plt.close()
+
+    def log(self):
+        """Log graph statistics and key attributes."""
+        logger.info("=== Graph Summary ===")
+        logger.info(f"Entities: {len(self.entities)}")
+        logger.info(f"Entity Nodes: {len(self.ns_entity.items)}")
+        logger.info(f"Option Nodes: {len(self.ns_option.items)}")
+        logger.info(f"StepMix Edges: {len(self.es_stepmix.edges)}")
+        logger.info(f"Summary Edges: {len(self.es_summary.edges)}")
+        logger.info(f"Tapas Edges: {len(self.es_tapas.edges)}")
+
+        # Optionally log node details
+        for key, idx in self.ns_entity.index.items():
+            node = self.ns_entity.items[idx]
+            logger.debug(
+                f"Entity Node: {key} | entity={node.entity} | static={node.static}"
+            )
+        for key, idx in self.ns_option.index.items():
+            node = self.ns_option.items[idx]
+            logger.debug(
+                f"Option Node: {key} | agent={node.agent} | sources={node.sources}"
+            )
+
+        # Log edge sources (first few)
+        logger.info("StepMix edge examples:")
+        for src, dst in list(self.es_stepmix.edges)[:3]:
+            logger.info(f"  {src} -> {dst}")
+        # etc.
