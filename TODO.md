@@ -2,6 +2,7 @@
 
 ## Short Horizon:
 
+- containment metric merge and sample logic
 - add the apply noise code for virtual goal (1h)
 
 ## Long Horizon:
