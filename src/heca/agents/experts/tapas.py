@@ -293,7 +293,7 @@ class TapasAgent(ExpertAgent):
         self.goal_ee = np.stack([s.ee.value for s in end_scenes])
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
         post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
-        pair = ConPair(f"{self.cfg.tag}_0", pre, post, self.cfg.threshold)
+        pair = ConPair(f"{self.cfg.tag}", pre, post, self.cfg.threshold)
         pair.plot(path)
         return [pair]
 

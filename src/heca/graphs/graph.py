@@ -118,7 +118,7 @@ class Graph:
         con: Condition,
     ) -> dict[str, set[tuple[str, str]]]:
         keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
-        for entity, comps in con.parameters.items():
+        for entity, comps in con.comp_features(self.entities).items():
             for idx, feat in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
                 keys[entity].add((self.es_stepmix.type[1], key))

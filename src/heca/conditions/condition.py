@@ -5,7 +5,7 @@ import numpy as np
 
 from stepmix import StepMix
 from scipy.optimize import minimize
-from heca.misc.entity import STATE_LOGIT_BASELINE
+from heca.misc.entity import Entity
 from heca.utils.quaternion import Quaternion
 
 
@@ -36,13 +36,11 @@ class Condition:
 
         self._model, self._samples, self._bics = self._fit_model()
 
-    @property
-    def parameters(
-        self,
+    def comp_features(
+        self, entities: dict[str, Entity], eps: float = 1e-8
     ) -> dict[str, list[np.ndarray]]:
         """
-        Extracts node features for the StepMix tree-graph.
-
+        NOTE: ASSUMES MODELS USE DIAG MODE
         Returns:
             dict: Keys are model names. Values are lists of flat feature arrays,
                 one per component. Each feature array has shape (13+K,) where:
@@ -51,79 +49,39 @@ class Condition:
                 - [6:10] = quaternion [w, x, y, z] (rotation mean)
                 - [10:13] = log(σ_rot) (log standard deviations of rotation in tangent space)
                 - [13:] = logits (state logits, unnormalized)
-
-        This format matches the output of :meth:`Entity.gnn_format` and is consumed
-        by :meth:`EdgeSet.compute_edge_feats`.
         """
 
-        # NOTE: ASSUMES MODELS USE DIAG MODE
         result: dict[str, list[np.ndarray]] = {}
 
-        for model_name, mix in self.models.items():
+        for key in self.models.keys():
             # Extract raw parameters from the fitted StepMix model
-            params = mix.get_parameters()
-            weights = params["weights"]  # shape: (K,)
-            means = params["measurement"]["pose"]["means"]  # shape: (K, 7)
-            covariances = params["measurement"]["pose"]["covariances"]  # shape: (K, 7)
+            params = self.secure_mix_parameters(key, len(entities[key].cfg.states))
+            weights = params["weights"]  # shape: (N,)
+            means = params["measurement"]["pose"]["means"]  # shape: (N, 7)
+            covariances = params["measurement"]["pose"]["covariances"]  # shape: (N, 7)
             pis = params["measurement"]["state"]["pis"]  # shape: (K, total_outcomes)
+            N = len(weights)
 
-            n_components = weights.shape[0]  # type: ignore
-            n_observed_outcomes = pis.shape[1]
-            total_states = self.model_states[model_name]
-
-            if len(total_states) > n_observed_outcomes:
-                observed_states = np.sort(
-                    np.unique(self._data_raw[model_name][:, 7].astype(int))
-                )
-            else:
-                observed_states = None
-
-            components_list: list[np.ndarray] = []
-            for i in range(n_components):
-                # --- 1. Position mean (3) ---
+            feat_list: list[np.ndarray] = []
+            for i in range(N):
                 mu_pos = means[i, :3]  # [3]
-
-                # --- 2. Position log-std (3) ---
-                # Convert variance to log standard deviation for unconstrained optimization.
-                lstd_pos = 0.5 * np.log(covariances[i, :3] + 1e-8)  # [3]
-
-                # --- 3. Rotation quaternion mean (4) ---
                 quat = means[i, 3:7]  # [4] - [w, x, y, z]
                 quat /= np.linalg.norm(quat)  # norm
-                # Quaternion.normalize
-                # --- 4. Rotation log-std (3) ---
-                # Rotation uncertainty has 3 DOF in tangent space (axis-angle).
-                # We take the first 3 of the 4 quaternion-component variances.
-                lstd_rot = 0.5 * np.log(covariances[i, 3:6] + 1e-8)  # [3]
-
-                # --- 5. State logits (K) ---
-                # Convert probabilities → logits (unconstrained).
-                logits_compact = np.log(pis[i, :] + 1e-8)  # [C]
-                if observed_states is not None:
-                    logits = np.full(
-                        sorted(total_states), STATE_LOGIT_BASELINE, dtype=np.float32
-                    )
-                    for j, state_idx in enumerate(observed_states):
-                        logits[state_idx] = logits_compact[j]
-                else:
-                    logits = logits_compact
-
-                # Concatenate into flat feature vector [13 + K]
+                lstd_pos = 0.5 * np.log(covariances[i, :3] + eps)  # [3]
+                lstd_rot = 0.5 * np.log(covariances[i, 3:6] + eps)  # [3]
+                logits = np.log(pis[i, :])  # [K]
                 feature = np.concatenate([mu_pos, lstd_pos, quat, lstd_rot, logits])
+                feat_list.append(feature)
 
-                components_list.append(feature)
-
-            result[model_name] = components_list
+            result[key] = feat_list
 
         return result
 
     @property
     def model_states(self) -> dict[str, set[int]]:
         states: dict[str, set[int]] = {}
-
-        for key, values in self._data_raw.items():
+        for key, values in self.data_raw.items():
             states[key] = set(values[:, -1].astype(int))
-
         return states
 
     @property
@@ -195,28 +153,20 @@ class Condition:
             scores[key] = np.exp(clipped)
         return scores
 
-    def plot(self, path: Path):
-        self._plot_bic(path)
-        self._plot_mix(path)
-
-    def _plot_bic(self, path: Path):
+    def plot(self, path: Path, label: str):
         ks = range(1, self._max_components + 1)
-
         plt.figure(figsize=(8, 5))
-
         for name, bic in self._bics.items():
             plt.plot(ks, bic, marker="o", label=f"{name}")
-
         plt.xlabel("Number of latent classes")
         plt.ylabel("BIC")
         plt.title("Model selection")
         plt.grid(True)
         plt.legend()
-        plt.savefig(path / f"{self.label}_bic.png", dpi=300, bbox_inches="tight")
+        plt.savefig(
+            path / f"{label}_{self.label}_bic.png", dpi=300, bbox_inches="tight"
+        )
         plt.close()
-
-    def _plot_mix(self, path: Path):
-        pass
 
     def make_subgoal(
         self, other: "Condition"
@@ -234,11 +184,10 @@ class Condition:
                 return None
         return values
 
-    def best_sample(self, con: "Condition", key: str):
-        m1, s1 = Condition.mix_with_states(self, key)
-        m2, s2 = Condition.mix_with_states(con, key)
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
+    def best_sample(self, other: "Condition", key: str):
+        p1 = self.secure_mix_parameters(key)
+        p2 = other.secure_mix_parameters(key)
+
         weights1 = p1["weights"]
         weights2 = p2["weights"]
         means1 = p1["measurement"]["pose"]["means"]
@@ -249,9 +198,6 @@ class Condition:
         state2 = p2["measurement"]["state"]["pis"]
 
         # Align categorical distributions to the union of observed states
-        target = sorted(s1 | s2)
-        padded1 = self._pad_cat_probs(state1, s1, target)
-        padded2 = self._pad_cat_probs(state2, s2, target)
         K1, K2 = len(weights1), len(weights2)
         results = []
         for i in range(K1):
@@ -266,16 +212,15 @@ class Condition:
                     + np.sum(diff**2 / (vars1[i] + vars2[j]))
                 )
                 # Categorical part — padded to same target space
-                cat_prod = padded1[i] * padded2[j]  # element-wise over aligned states
+                cat_prod = state1[i] * state2[j]  # element-wise over aligned states
                 best_s_idx = int(np.argmax(cat_prod))
-                best_state = target[best_s_idx]
                 log_cat = np.log(np.clip(cat_prod[best_s_idx], 1e-12, None))
                 score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat
                 results.append(
                     {
                         "score": score,
                         "pose": mean,
-                        "state": best_state,
+                        "state": best_s_idx,
                         "component1": i,
                         "component2": j,
                     }
@@ -297,55 +242,30 @@ class Condition:
         result = minimize(neg_log_product, initial_pose, method="L-BFGS-B")
         return result.x
 
-    @staticmethod
-    def _pad_cat_probs(
-        pis_compact: np.ndarray,
-        observed_states: set[int],
-        target_states: list[int],
-        eps: float = 1e-12,
-    ) -> np.ndarray:
-        """Expand compact categorical probs to a full target state space.
+    def secure_mix_parameters(
+        self, key: str, K: int | None = None, eps: float = 1e-12
+    ) -> dict:
+        self.models[key]
+        self.model_states[key]
+        p = self.models[key].get_parameters()
 
-        Args:
-            pis_compact: Shape (n_components, n_observed_outcomes)
-            observed_states: Sorted set of observed state indices (e.g. {0, 2})
-            target_states: Full list of states to pad to (e.g. [0, 1, 2])
-            eps: Small value for missing entries
-
-        Returns:
-            Padded probs of shape (n_components, len(target_states))
-        """
+        padded_cat1 = self._pad_cat_probs(p["measurement"]["state"]["pis"], s1, target)
         n_components = pis_compact.shape[0]
         n_target = len(target_states)
         padded = np.full((n_components, n_target), eps, dtype=np.float32)
 
-        observed_list = sorted(observed_states)
-        for j, state_idx in enumerate(observed_list):
-            idx = target_states.index(state_idx)
+        for j, state_val in enumerate(state_values):
+            idx = target_states.index(state_val)
             padded[:, idx] = pis_compact[:, j]
-
         # Renormalize so probabilities sum to 1
         padded /= padded.sum(axis=1, keepdims=True)
         return padded
-
-    @staticmethod
-    def mix_with_states(con: "Condition", key: str) -> tuple[StepMix, set[int]]:
-        return con.models[key], con.model_states[key]
+        return p
 
     def containment_score(self, other: "Condition", key: str):
         """How much of B's mass falls inside A's distribution."""
-        m1, s1 = Condition.mix_with_states(self, key)
-        m2, s2 = Condition.mix_with_states(other, key)
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
-
-        target = sorted(s1 | s2)
-        if key == "button_1":
-            print(f"self states: {s1} pis: {p1['measurement']['state']['pis']}")
-            print(f"other states: {s2} pis: {p2['measurement']['state']['pis']}")
-            print(f"both states: {target}")
-        padded_cat1 = self._pad_cat_probs(p1["measurement"]["state"]["pis"], s1, target)
-        padded_cat2 = self._pad_cat_probs(p2["measurement"]["state"]["pis"], s2, target)
+        p1 = self.secure_mix_parameters(key)
+        p2 = other.secure_mix_parameters(key)
 
         score = 0.0
         for i in range(len(p1["weights"])):
@@ -356,6 +276,8 @@ class Condition:
                 var1 = p1["measurement"]["pose"]["covariances"][i]
                 mu2 = p2["measurement"]["pose"]["means"][j]
                 var2 = p2["measurement"]["pose"]["covariances"][j]
+                cat1 = p1["measurement"]["state"]["pis"][i]
+                cat2 = p2["measurement"]["state"]["pis"][j]
 
                 diff = mu1 - mu2
                 pos_score = np.exp(-0.5 * np.sum(diff**2 / var1))
@@ -369,13 +291,13 @@ class Condition:
 
                 gauss_rel = width_penalty * pos_score
 
-                overlap_cat = np.sum(padded_cat1[i] * padded_cat2[j])
-                peak_target = np.max(padded_cat1[i])
+                overlap_cat = np.sum(cat1 * cat2)
+                peak_target = np.max(cat1)
                 cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
                 if key == "button_1":
                     print(f"i={i}, j={j}")
-                    print(f"Target cat: {padded_cat1[i]}")
-                    print(f"Source cat: {padded_cat2[j]}")
+                    print(f"Target cat: {cat1}")
+                    print(f"Source cat: {cat2}")
                     print(f"Overlap_cat: {overlap_cat}")
                     print(f"Peak_target: {peak_target}")
                     print(f"Cat_score: {cat_score}")
@@ -385,15 +307,14 @@ class Condition:
 
     def score_single(self, sample: np.ndarray, key: str) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
-        m, s = Condition.mix_with_states(self, key)
+        p = self.secure_mix_parameters(key)
         sample_pose = sample[:7]
         sample_state = sample[-1]
-        params = m.get_parameters()
         best_log_prob = -np.inf
-        for k in range(len(params["weights"])):
-            mu = params["measurement"]["pose"]["means"][k]
-            var = params["measurement"]["pose"]["covariances"][k]
-            pis = params["measurement"]["state"]["pis"][k]
+        for k in range(len(p["weights"])):
+            mu = p["measurement"]["pose"]["means"][k]
+            var = p["measurement"]["pose"]["covariances"][k]
+            pis = p["measurement"]["state"]["pis"][k]
 
             # Gaussian
             log_gauss = -0.5 * np.sum(
@@ -401,19 +322,10 @@ class Condition:
             )
 
             # Categorical
-            if s is not None:
-                sorted_states = sorted(s)
-                try:
-                    idx = sorted_states.index(sample_state)
-                    state_prob = pis[idx]
-                except ValueError:
-                    state_prob = 1e-12  # unseen state
-            else:
-                # Fallback: assumes pis is indexed by state value directly
-                state_prob = pis[sample_state] if sample_state < len(pis) else 1e-12
+            state_prob = pis[sample_state] if sample_state < len(pis) else 1e-12
 
             log_cat = np.log(np.clip(state_prob, 1e-12, 1))
-            score = np.log(params["weights"][k]) + log_gauss + log_cat
+            score = np.log(p["weights"][k]) + log_gauss + log_cat
 
             if score > best_log_prob:
                 best_log_prob = score
@@ -423,30 +335,15 @@ class Condition:
         return score, valid
 
     def kl_variational_paper(self, other: "Condition", key: str):
-        m1, s1 = Condition.mix_with_states(self, key)
-        m2, s2 = Condition.mix_with_states(other, key)
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
-
-        # Align categorical distributions to a common state space
-        if s1 is not None and s2 is not None:
-            target = sorted(s1 | s2)  # union
-            padded_cat1 = self._pad_cat_probs(
-                p1["measurement"]["state"]["pis"], s1, target
-            )
-            padded_cat2 = self._pad_cat_probs(
-                p2["measurement"]["state"]["pis"], s2, target
-            )
-        else:
-            padded_cat1 = p1["measurement"]["state"]["pis"]
-            padded_cat2 = p2["measurement"]["state"]["pis"]
+        p1 = self.secure_mix_parameters(key)
+        p2 = other.secure_mix_parameters(key)
 
         kl = 0.0
         for i in range(len(p1["weights"])):
             w_i = p1["weights"][i]
             mu1 = p1["measurement"]["pose"]["means"][i]
             var1 = p1["measurement"]["pose"]["covariances"][i]
-            cat1 = padded_cat1[i]
+            cat1 = p1["measurement"]["state"]["pis"][i]
 
             # Numerator: self-overlap of component i with its OWN model
             log_sum_m1 = 0.0
@@ -454,7 +351,7 @@ class Condition:
                 w_k = p1["weights"][k]
                 mu_k = p1["measurement"]["pose"]["means"][k]
                 var_k = p1["measurement"]["pose"]["covariances"][k]
-                cat_k = padded_cat1[k]
+                cat_k = p1["measurement"]["state"]["pis"][k]
 
                 kl_self = 0.5 * np.sum(
                     np.log(var1)
@@ -476,7 +373,7 @@ class Condition:
                 w_j = p2["weights"][j]
                 mu2 = p2["measurement"]["pose"]["means"][j]
                 var2 = p2["measurement"]["pose"]["covariances"][j]
-                cat2 = padded_cat2[j]
+                cat2 = p2["measurement"]["state"]["pis"][j]
 
                 kl_gauss = 0.5 * np.sum(
                     np.log(var2)
