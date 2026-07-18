@@ -82,12 +82,12 @@ class ConPair:
         self, cp1: "ConPair", cp2: "ConPair", key: str
     ) -> np.ndarray:
         mat = np.zeros((2, 2))
-        for i, cp1con in enumerate([cp1.pre, cp1.post]):
-            for j, cp2con in enumerate([cp2.pre, cp2.post]):
-                if key not in cp1con.model_states or key not in cp2con.model_states:
+        for i, c1 in enumerate([cp1.pre, cp1.post]):
+            for j, c2 in enumerate([cp2.pre, cp2.post]):
+                if key not in c1.model_states or key not in c2.model_states:
                     mat[i, j] = np.nan
                 else:
-                    mat[i, j] = cp2con.containment_score(cp1con, key)
+                    mat[i, j] = c2.containment_score(c1, key)
         return mat
 
     def compute_sim(self, other: "ConPair") -> dict[str, np.ndarray]:
@@ -96,7 +96,6 @@ class ConPair:
             forward = self.calculate_sim_matrix(self, other, el)
             backward = self.calculate_sim_matrix(other, self, el)
             sim_rating[el] = np.stack((forward, backward), axis=0)
-
         return sim_rating
 
     def plot_similarity(

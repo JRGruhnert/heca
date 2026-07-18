@@ -332,6 +332,96 @@ class Condition:
     def mix_with_states(con: "Condition", key: str) -> tuple[StepMix, set[int]]:
         return con.models[key], con.model_states[key]
 
+    def containment_score(self, other: "Condition", key: str):
+        """How much of B's mass falls inside A's distribution."""
+        m1, s1 = Condition.mix_with_states(self, key)
+        m2, s2 = Condition.mix_with_states(other, key)
+        p1 = m1.get_parameters()
+        p2 = m2.get_parameters()
+
+        target = sorted(s1 | s2)
+        if key == "button_1":
+            print(f"self states: {s1} pis: {p1['measurement']['state']['pis']}")
+            print(f"other states: {s2} pis: {p2['measurement']['state']['pis']}")
+            print(f"both states: {target}")
+        padded_cat1 = self._pad_cat_probs(p1["measurement"]["state"]["pis"], s1, target)
+        padded_cat2 = self._pad_cat_probs(p2["measurement"]["state"]["pis"], s2, target)
+
+        score = 0.0
+        for i in range(len(p1["weights"])):
+            w_i = p1["weights"][i]
+            for j in range(len(p2["weights"])):
+                w_j = p2["weights"][j]
+                mu1 = p1["measurement"]["pose"]["means"][i]
+                var1 = p1["measurement"]["pose"]["covariances"][i]
+                mu2 = p2["measurement"]["pose"]["means"][j]
+                var2 = p2["measurement"]["pose"]["covariances"][j]
+
+                diff = mu1 - mu2
+                pos_score = np.exp(-0.5 * np.sum(diff**2 / var1))
+
+                sigma_target = np.sqrt(var1)
+                sigma_source = np.sqrt(var2)
+
+                per_dim_penalty = np.minimum(1.0, sigma_target / sigma_source)
+
+                width_penalty = np.prod(per_dim_penalty)
+
+                gauss_rel = width_penalty * pos_score
+
+                overlap_cat = np.sum(padded_cat1[i] * padded_cat2[j])
+                peak_target = np.max(padded_cat1[i])
+                cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
+                if key == "button_1":
+                    print(f"i={i}, j={j}")
+                    print(f"Target cat: {padded_cat1[i]}")
+                    print(f"Source cat: {padded_cat2[j]}")
+                    print(f"Overlap_cat: {overlap_cat}")
+                    print(f"Peak_target: {peak_target}")
+                    print(f"Cat_score: {cat_score}")
+                score += w_i * w_j * gauss_rel * cat_score
+
+        return score  # [0, 1]
+
+    def score_single(self, sample: np.ndarray, key: str) -> tuple[float, bool]:
+        """Score a single sample under a StepMix model. Returns [0,1]."""
+        m, s = Condition.mix_with_states(self, key)
+        sample_pose = sample[:7]
+        sample_state = sample[-1]
+        params = m.get_parameters()
+        best_log_prob = -np.inf
+        for k in range(len(params["weights"])):
+            mu = params["measurement"]["pose"]["means"][k]
+            var = params["measurement"]["pose"]["covariances"][k]
+            pis = params["measurement"]["state"]["pis"][k]
+
+            # Gaussian
+            log_gauss = -0.5 * np.sum(
+                np.log(2 * np.pi * var) + (sample_pose - mu) ** 2 / var
+            )
+
+            # Categorical
+            if s is not None:
+                sorted_states = sorted(s)
+                try:
+                    idx = sorted_states.index(sample_state)
+                    state_prob = pis[idx]
+                except ValueError:
+                    state_prob = 1e-12  # unseen state
+            else:
+                # Fallback: assumes pis is indexed by state value directly
+                state_prob = pis[sample_state] if sample_state < len(pis) else 1e-12
+
+            log_cat = np.log(np.clip(state_prob, 1e-12, 1))
+            score = np.log(params["weights"][k]) + log_gauss + log_cat
+
+            if score > best_log_prob:
+                best_log_prob = score
+
+        score = np.exp(best_log_prob)
+        valid = score < self.threshold
+        return score, valid
+
     def kl_variational_paper(self, other: "Condition", key: str):
         m1, s1 = Condition.mix_with_states(self, key)
         m2, s2 = Condition.mix_with_states(other, key)
@@ -412,75 +502,3 @@ class Condition:
         if key == "window_handle":
             print(f"Total KL={kl:.4f}, score={np.exp(-kl):.4f}")
         return np.exp(-kl)
-
-    def containment_score(self, other: "Condition", key: str):
-        """How much of B's mass falls inside A's distribution."""
-        m1, s1 = Condition.mix_with_states(self, key)
-        m2, s2 = Condition.mix_with_states(other, key)
-        p1 = m1.get_parameters()
-        p2 = m2.get_parameters()
-
-        target = sorted(s1 | s2)
-        padded_cat1 = self._pad_cat_probs(p1["measurement"]["state"]["pis"], s1, target)
-        padded_cat2 = self._pad_cat_probs(p2["measurement"]["state"]["pis"], s2, target)
-
-        score = 0.0
-        for i in range(len(p1["weights"])):
-            w_i = p1["weights"][i]
-            for j in range(len(p2["weights"])):
-                w_j = p2["weights"][j]
-
-                mu1 = p1["measurement"]["pose"]["means"][i]
-                var1 = p1["measurement"]["pose"]["covariances"][i]
-                mu2 = p2["measurement"]["pose"]["means"][j]
-                var2 = p2["measurement"]["pose"]["covariances"][j]
-
-                # Gaussian: height of A at B's mean, relative to A's peak
-                diff = mu1 - mu2
-                gauss_rel = np.exp(-0.5 * np.sum(diff**2 / var1))
-
-                # Categorical: inner product
-                cat_dot = np.sum(padded_cat1[i] * padded_cat2[j])
-
-                score += w_i * w_j * gauss_rel * cat_dot
-
-        return score  # [0, 1]
-
-    def score_single(self, sample: np.ndarray, key: str) -> tuple[float, bool]:
-        """Score a single sample under a StepMix model. Returns [0,1]."""
-        m, s = Condition.mix_with_states(self, key)
-        sample_pose = sample[:7]
-        sample_state = sample[-1]
-        params = m.get_parameters()
-        best_log_prob = -np.inf
-        for k in range(len(params["weights"])):
-            mu = params["measurement"]["pose"]["means"][k]
-            var = params["measurement"]["pose"]["covariances"][k]
-            pis = params["measurement"]["state"]["pis"][k]
-
-            # Gaussian
-            log_gauss = -0.5 * np.sum(
-                np.log(2 * np.pi * var) + (sample_pose - mu) ** 2 / var
-            )
-
-            # Categorical
-            if s is not None:
-                sorted_states = sorted(s)
-                try:
-                    idx = sorted_states.index(sample_state)
-                    state_prob = pis[idx]
-                except ValueError:
-                    state_prob = 1e-12  # unseen state
-            else:
-                # Fallback: assumes pis is indexed by state value directly
-                state_prob = pis[sample_state] if sample_state < len(pis) else 1e-12
-
-            log_cat = np.log(np.clip(state_prob, 1e-12, 1))
-            score = np.log(params["weights"][k]) + log_gauss + log_cat
-
-            if score > best_log_prob:
-                best_log_prob = score
-
-        score = np.exp(best_log_prob)
-        valid = score < self.threshold
-        return score, valid
