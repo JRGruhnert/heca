@@ -75,15 +75,14 @@ class ConPair:
     def plot(self, path: Path):
         plot_path = path / "plots"
         plot_path.mkdir(parents=True, exist_ok=True)
-        self.pre.plot(plot_path)
-        self.post.plot(plot_path)
+        self.pre.plot(plot_path, self.label)
+        self.post.plot(plot_path, self.label)
 
-    def calculate_sim_matrix(
-        self, cp1: "ConPair", cp2: "ConPair", key: str
-    ) -> np.ndarray:
+    def calculate_sim_matrix(self, other: "ConPair", key: str) -> np.ndarray:
+        print(self.label, other.label)
         mat = np.zeros((2, 2))
-        for i, c1 in enumerate([cp1.pre, cp1.post]):
-            for j, c2 in enumerate([cp2.pre, cp2.post]):
+        for i, c1 in enumerate([self.pre, self.post]):
+            for j, c2 in enumerate([other.pre, other.post]):
                 if key not in c1.model_states or key not in c2.model_states:
                     mat[i, j] = np.nan
                 else:
@@ -93,8 +92,8 @@ class ConPair:
     def compute_sim(self, other: "ConPair") -> dict[str, np.ndarray]:
         sim_rating = {}
         for el in self.elabels.intersection(other.elabels):
-            forward = self.calculate_sim_matrix(self, other, el)
-            backward = self.calculate_sim_matrix(other, self, el)
+            forward = self.calculate_sim_matrix(other, el)
+            backward = other.calculate_sim_matrix(self, el)
             sim_rating[el] = np.stack((forward, backward), axis=0)
         return sim_rating
 
@@ -162,7 +161,9 @@ class ConPair:
         sim_rating = self.compute_sim(other)
         if path is not None:
             self.plot_similarity(sim_rating, other, path)
-        return self.evaluate_merge(sim_rating)
+        merge = self.evaluate_merge(sim_rating)
+        print(f"{self.label} and {other.label} merge: {merge}")
+        return merge
 
     def mcheck(self, mat: np.ndarray):
         return np.all(mat >= self.threshold)
@@ -171,17 +172,17 @@ class ConPair:
         mat = np.stack(list(sim_rating.values()), axis=0)
         mat = np.nan_to_num(mat, nan=1.0)  # nan values should be ignored
         if self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 1, 0]):
-            return True  # pre0 = post1
-        elif self.mcheck(mat[:, 1, 0, 1]) and self.mcheck(mat[:, 0, 1, 0]):
-            return True  # pre1 = post0
+            return True  # pre0 ↔ post1 (bidirectional equivalence)
+        elif self.mcheck(mat[:, 0, 1, 0]) and self.mcheck(mat[:, 1, 1, 0]):
+            return True  # post0 ⊆ pre1 AND post1 ⊆ pre0 (sequential)
         elif self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 0, 1]):
-            return True  # pre0 <= post1 and pre1 <= post0
+            return True  # pre0 in post1 and pre1 in post0
         elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 1, 1]):
-            return True  # pre0 <= pre1 and post0 <= post1
+            return True  # pre0 in pre1 and post0 in post1
         elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 1, 1]):
-            return True  # pre1 <= pre0 and post1 <= post0
+            return True  # pre1 in pre0 and post1 in post0
         elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 0, 1]):
-            return True  # pre0 <= pre1 and pre0 <= post1
+            return True  # pre0 in pre1 and pre0 in post1
         elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 0, 1]):
-            return True  # pre1 <= pre0 and pre1 <= post0
+            return True  # pre1 in pre0 and pre1 in post0
         return False

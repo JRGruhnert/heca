@@ -220,7 +220,6 @@ class OGBenchScene(Scene):
             yaw = obs["proprio_effector_yaw"].item()
             state = obs["proprio_gripper_opening"]
             action = np.concatenate([pos, self.yaw_to_quat(yaw), state])
-            print(f"bench {np.concatenate([pos, [yaw], state])}")
             reward = np.array([0])
         return {
             "action": action,

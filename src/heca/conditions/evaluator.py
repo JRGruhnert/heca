@@ -46,7 +46,7 @@ class Evaluator(Configurable):
                 return False
         return True
 
-    def test_task(self, x: DCScene, y: DCScene) -> bool:
+    def valid_task(self, x: DCScene, y: DCScene) -> bool:
         for pair in self.conditions:
             pair_match = True
             for label in pair.pre.elabels:
@@ -54,7 +54,7 @@ class Evaluator(Configurable):
                 if not valid:
                     pair_match = valid
             for label in pair.post.elabels:
-                _, valid = pair.pre.score_single(y.get(label).value, label)
+                _, valid = pair.post.score_single(y.get(label).value, label)
                 if not valid:
                     pair_match = valid
             if pair_match:

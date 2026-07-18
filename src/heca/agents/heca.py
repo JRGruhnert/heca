@@ -24,7 +24,7 @@ class Heca(Agent):
         label: str = "heca"
         visualize: bool = True
         n_samples: int = 1000
-        threshold: float = 0.75
+        threshold: float = 0.5
         downstream_virtual: bool = False
         upstream_noise: bool = True
         inference: bool = False
@@ -81,7 +81,8 @@ class Heca(Agent):
     def sample(self, cfg: Scene.Config) -> tuple[DCScene, DCScene]:
         scene = Scene.get(cfg)
         (x, ix), (y, iy) = scene.sample_task()
-        while not self.evaluator.test_task(x, y):
+        while not self.evaluator.valid_task(x, y):
+            print("Starting Episode")
             (x, ix), (y, iy) = scene.sample_task()
         return x, y
 
@@ -151,6 +152,7 @@ class Heca(Agent):
                     break
             if not merged:
                 break
+        print(len(cons))
         return cons
 
     def _load(self, path: Path):

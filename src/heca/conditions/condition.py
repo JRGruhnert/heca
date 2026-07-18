@@ -55,7 +55,7 @@ class Condition:
 
         for key in self.models.keys():
             # Extract raw parameters from the fitted StepMix model
-            params = self.secure_mix_parameters(key, len(entities[key].cfg.states))
+            params = self.secure_mix_parameters(key, len(entities[key].cfg.states) - 1)
             weights = params["weights"]  # shape: (N,)
             means = params["measurement"]["pose"]["means"]  # shape: (N, 7)
             covariances = params["measurement"]["pose"]["covariances"]  # shape: (N, 7)
@@ -164,7 +164,7 @@ class Condition:
         plt.grid(True)
         plt.legend()
         plt.savefig(
-            path / f"{label}_{self.label}_bic.png", dpi=300, bbox_inches="tight"
+            path / f"bic_{label}_{self.label}.png", dpi=300, bbox_inches="tight"
         )
         plt.close()
 
@@ -185,8 +185,9 @@ class Condition:
         return values
 
     def best_sample(self, other: "Condition", key: str):
-        p1 = self.secure_mix_parameters(key)
-        p2 = other.secure_mix_parameters(key)
+        k_max = self.max_state(other, key)
+        p1 = self.secure_mix_parameters(key, k_max)
+        p2 = other.secure_mix_parameters(key, k_max)
 
         weights1 = p1["weights"]
         weights2 = p2["weights"]
@@ -242,30 +243,27 @@ class Condition:
         result = minimize(neg_log_product, initial_pose, method="L-BFGS-B")
         return result.x
 
-    def secure_mix_parameters(
-        self, key: str, K: int | None = None, eps: float = 1e-12
-    ) -> dict:
+    def secure_mix_parameters(self, key: str, k_max: int, eps: float = 1e-15) -> dict:
         self.models[key]
-        self.model_states[key]
         p = self.models[key].get_parameters()
-
-        padded_cat1 = self._pad_cat_probs(p["measurement"]["state"]["pis"], s1, target)
-        n_components = pis_compact.shape[0]
-        n_target = len(target_states)
-        padded = np.full((n_components, n_target), eps, dtype=np.float32)
-
-        for j, state_val in enumerate(state_values):
-            idx = target_states.index(state_val)
-            padded[:, idx] = pis_compact[:, j]
+        pis = p["measurement"]["state"]["pis"]
+        padded = np.full((pis.shape[0], k_max + 1), eps, dtype=np.float32)
+        padded[:, : pis.shape[1]] = pis
         # Renormalize so probabilities sum to 1
         padded /= padded.sum(axis=1, keepdims=True)
-        return padded
+        p["measurement"]["state"]["pis"] = padded
         return p
 
+    def max_state(self, other: "Condition", key: str) -> int:
+        s1_max = max(self.model_states[key])
+        s2_max = max(other.model_states[key])
+        return max(s1_max, s2_max)
+
     def containment_score(self, other: "Condition", key: str):
-        """How much of B's mass falls inside A's distribution."""
-        p1 = self.secure_mix_parameters(key)
-        p2 = other.secure_mix_parameters(key)
+        """How much of others mass falls inside selfs distribution."""
+        k_max = self.max_state(other, key)
+        p1 = self.secure_mix_parameters(key, k_max)
+        p2 = other.secure_mix_parameters(key, k_max)
 
         score = 0.0
         for i in range(len(p1["weights"])):
@@ -294,22 +292,25 @@ class Condition:
                 overlap_cat = np.sum(cat1 * cat2)
                 peak_target = np.max(cat1)
                 cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
-                if key == "button_1":
-                    print(f"i={i}, j={j}")
-                    print(f"Target cat: {cat1}")
-                    print(f"Source cat: {cat2}")
-                    print(f"Overlap_cat: {overlap_cat}")
-                    print(f"Peak_target: {peak_target}")
-                    print(f"Cat_score: {cat_score}")
                 score += w_i * w_j * gauss_rel * cat_score
+                if key == "window_handle":
+                    print(f"cat1: {cat1}")
+                    print(f"cat2: {cat2}")
+                    print(f"over: {overlap_cat}")
+                    print(f"peak: {peak_target}")
+                    print(f"cats: {cat_score}")
+                    print(f"gess: {score}")
+                    print("")
 
         return score  # [0, 1]
 
-    def score_single(self, sample: np.ndarray, key: str) -> tuple[float, bool]:
+    def score_single(
+        self, sample: np.ndarray, key: str, eps: float = 1e-12
+    ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
-        p = self.secure_mix_parameters(key)
+        p = self.secure_mix_parameters(key, max(self.model_states[key]))
         sample_pose = sample[:7]
-        sample_state = sample[-1]
+        sample_state = int(sample[-1])
         best_log_prob = -np.inf
         for k in range(len(p["weights"])):
             mu = p["measurement"]["pose"]["means"][k]
@@ -322,9 +323,9 @@ class Condition:
             )
 
             # Categorical
-            state_prob = pis[sample_state] if sample_state < len(pis) else 1e-12
+            state_prob = pis[sample_state] if sample_state < len(pis) else eps
 
-            log_cat = np.log(np.clip(state_prob, 1e-12, 1))
+            log_cat = np.log(np.clip(state_prob, eps, 1))
             score = np.log(p["weights"][k]) + log_gauss + log_cat
 
             if score > best_log_prob:
@@ -335,8 +336,9 @@ class Condition:
         return score, valid
 
     def kl_variational_paper(self, other: "Condition", key: str):
-        p1 = self.secure_mix_parameters(key)
-        p2 = other.secure_mix_parameters(key)
+        k_max = self.max_state(other, key)
+        p1 = self.secure_mix_parameters(key, k_max)
+        p2 = other.secure_mix_parameters(key, k_max)
 
         kl = 0.0
         for i in range(len(p1["weights"])):
