@@ -35,6 +35,7 @@ class Heca(Agent):
             use_gt=True,
         )
         adjust_ee: bool = False
+        step_multiplier: int = 3
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -46,7 +47,7 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions,
             self.entities,
-            len(self.downstream_conditions) * 2,
+            len(self.downstream_conditions) * self.cfg.step_multiplier,
         )
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
