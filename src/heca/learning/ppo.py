@@ -151,9 +151,9 @@ class PPO(Learner):
                 "train/value_loss": total_value_loss / num_minibatches,
                 "train/entropy": total_entropy / num_minibatches,
                 "train/approx_kl": total_approx_kl / num_minibatches,
-                "train/clip_fraction": total_clip_fraction / num_minibatches,
+                "train/clip_frac": total_clip_fraction / num_minibatches,
                 "train/total_loss": total_loss / num_minibatches,
-                "train/explained_variance": explained_var,
-                "train/learning_rate": self.optim.param_groups[0]["lr"],
+                "train/expl_var": explained_var,
+                "train/lr": self.optim.param_groups[0]["lr"],
             }
         )

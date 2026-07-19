@@ -112,7 +112,9 @@ class Persistable(Registerable, abc.ABC):
     def get(cls: Type[P], cfg: "Persistable.Config", auto_load: bool = True) -> P:
         target_cls = cls._config_registry.get(type(cfg), cls)
         key = cls._key(cfg)
+        # print(key)
         if key not in cls._persisted_instances:
+            # print("new")
             instance = cast(P, target_cls(cfg))
             if auto_load:
                 instance.load()

@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 import functools
+import logging
 import pprint
 from typing import Callable
 from loguru import logger
@@ -9,13 +10,19 @@ from wandb import util as wandb_util
 import wandb
 from wandb.wandb_run import Run
 
-DEBUG = True
+DEBUG = False
 logger.remove()
+
+
+def exclude_external(record):
+    suppressed = ["riepybdlib", "tapas_gmm_modified", "ogbench"]
+    return not any(name in record["name"] for name in suppressed)
+
 
 if DEBUG:
     logger.add(lambda msg: print(msg, end=""), level="DEBUG")
 else:
-    logger.add(lambda msg: print(msg, end=""), level="WARNING")
+    logger.add(lambda msg: print(msg, end=""), level="INFO", filter=exclude_external)
 
 
 def debug(message: str):

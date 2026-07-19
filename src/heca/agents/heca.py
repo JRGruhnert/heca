@@ -3,8 +3,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import Sequence
 
-import numpy as np
-
 from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
@@ -62,15 +60,12 @@ class Heca(Agent):
         data = self.graph.export()
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
-        # print(x.ee.value)
         if self.cfg.adjust_ee:
             x = self.adjust_ee(a, x, y)
-        z, lfb = Agent.get(a).act(x, y)
-        # print(f"z.ee.value shape: {z.ee.value.shape}, value: {z.ee.value}")
 
-        # print(a.tag)
-        # assert False
-        z, lfb = Agent.get(a).act(x, y)
+        if not self.cfg.downstream_virtual or not isinstance(a, TapasAgent.Config):
+            z, lfb = Agent.get(a).act(x, y)
+
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
@@ -87,9 +82,9 @@ class Heca(Agent):
         if fb.truncated:
             self.n_truncated += 1
 
-        if self.n_feedback % 1000 == 0:
-            logger.debug(
-                f"fb  terminal={self.n_terminals/self.n_feedback}  truncated={self.n_truncated/self.n_feedback}"
+        if self.n_feedback % 2048 == 0:
+            logger.info(
+                f"terminal={self.n_terminals/self.n_feedback}  truncated={self.n_truncated/self.n_feedback}"
             )
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
@@ -104,7 +99,7 @@ class Heca(Agent):
         self.graph.set_goal(y)
         self.evaluator.reset(y)
         z, fb = self.step(x)
-        while not fb.truncated or not fb.terminal:
+        while not (fb.truncated or fb.terminal):
             z, fb = self.step(z)
         return z, fb
 

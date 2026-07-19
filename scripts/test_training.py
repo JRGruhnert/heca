@@ -31,11 +31,12 @@ heca_cfg = Heca.Config(
         ),
     ],
     learner=PPO.Config(
-        tag="test",
+        tag="test_virt_norm",
         # buffer=APPOBuffer.Config(),
         buffer=FairBuffer.Config(),
-        normalize_rewards=False,
+        normalize_rewards=True,
     ),
+    downstream_virtual=True,
 )
 
 heca = Heca.get(heca_cfg)

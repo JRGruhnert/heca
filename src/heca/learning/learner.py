@@ -26,7 +26,7 @@ class WandBConfig:
     save_code: bool = False  # Uploads training script
     watch_model: bool = True  # Log gradients & weight histograms
     watch_freq: int = 100  # Frequency of gradient logging
-    enabled: bool = False
+    enabled: bool = True
 
 
 # class _ExplainerWrapper(nn.Module):
@@ -73,7 +73,7 @@ class Learner(Persistable):
         self.optim: torch.optim.Optimizer = torch.optim.AdamW(
             self.network.parameters(), lr=self.cfg.lr
         )
-        self.metrics: dict = {}
+        self.metrics: dict[str, float] = {}
         self.normalizers: dict[str, RewardNormalizer] = {}
         self.buffer = Buffer.get(cfg.buffer)
         self.pocket: dict[str, BufferData] = {}
@@ -255,7 +255,8 @@ class Learner(Persistable):
             )
 
     def training_log(self):
-        metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in self.metrics.items()])
+        display_metrics = {k.removeprefix("train/"): v for k, v in self.metrics.items()}
+        metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in display_metrics.items()])
         logger.info(f"Update {self.current_update:4d} | {metrics_str}")
 
         if self.cfg.wandb.enabled:
