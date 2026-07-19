@@ -304,10 +304,18 @@ class OGBenchScene(Scene):
         quat = action[3:7]
         yaw = self.quat_to_yaw(quat)
         state = action[7]
-        return np.concatenate([pos, [yaw], [state]], axis=0)
+        result = np.concatenate([pos, [yaw], [state]], axis=0)
+        print(
+            f"internal action: {result.shape} {result.dtype}  yaw type: {type(yaw)}  yaw: {yaw}"
+        )
+        return result
 
     def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
+        print(f"Before intrnal action: {action}")
         action = self.to_internal_action(action)
+        print(
+            f"Passing to ogbench: shape={action.shape}, ndim={action.ndim}, action={action}"
+        )
         ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         assert isinstance(reward, float)

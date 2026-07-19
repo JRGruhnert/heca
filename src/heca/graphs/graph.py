@@ -89,18 +89,12 @@ class Graph:
 
     def create_subgoal(self, node: EntityNode) -> DCEntity:
         assert node.con is not None
-        # value = node.con.models[node.entity].sample(1)
-        # if isinstance(value, torch.Tensor):
-        #    value = value.detach().cpu().numpy()
-        # value = value.squeeze()  # type: ignore
-        # Get a representative sample from the model parameters
-        p = node.con.secure_mix_parameters(node.entity, 19)  # 19 = max_states
-        # Take the first component's mean as the sample
-        mean_pose = p["measurement"]["pose"]["means"][0]  # [7]
-        # Most likely state
-        state = np.argmax(p["measurement"]["state"]["pis"][0])  # scalar
-        value = np.concatenate([mean_pose, [state]])  # [8]
-        feat = Entity.gnn_format(value, len(self.entities[node.entity].cfg.states))
+        value = node.con.models[node.entity].sample(1)[0]
+        if isinstance(value, torch.Tensor):
+            value = value.detach().cpu().numpy()
+        value = value.squeeze()
+
+        feat = Entity.gnn_format(value, self.entities[node.entity].n_states)
         return DCEntity(value=value, feature=feat)
 
     def update_subgoals(self):

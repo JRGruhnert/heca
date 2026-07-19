@@ -13,7 +13,6 @@ class Evaluator(Configurable):
         success_reward: float = 25.0
         # Small step penalty to encourage efficiency
         step_penalty: float = -0.002
-        sample_threshold: float = 0.75
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

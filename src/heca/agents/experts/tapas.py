@@ -28,6 +28,7 @@ from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Mobility
 from heca.misc import logger
 from heca.misc.hardware import device
+from heca.utils.quaternion import Quaternion
 
 
 class TapasAgent(ExpertAgent):
@@ -128,6 +129,7 @@ class TapasAgent(ExpertAgent):
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
+                print(action.shape)
                 tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
@@ -288,8 +290,24 @@ class TapasAgent(ExpertAgent):
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        self.start_ee = np.stack([s.ee.value for s in start_scenes])
-        self.goal_ee = np.stack([s.ee.value for s in end_scenes])
+        start_ee = np.stack([s.ee.value for s in start_scenes])  # (N, 8)
+        self.start_ee = np.zeros(8, dtype=np.float32)
+        self.start_ee[:3] = start_ee[:, :3].mean(axis=0)  # mean position
+        quats = start_ee[:, 3:7]
+        mean_quat = quats.mean(axis=0)
+        self.start_ee[3:7] = Quaternion.normalize(mean_quat)
+        states = start_ee[:, -1]
+        self.start_ee[-1] = np.bincount(states.astype(int)).argmax()
+
+        goal_ee = np.stack([s.ee.value for s in end_scenes])
+        self.goal_ee = np.zeros(8, dtype=np.float32)
+        self.goal_ee[:3] = goal_ee[:, :3].mean(axis=0)  # mean position
+        quats = goal_ee[:, 3:7]
+        mean_quat = quats.mean(axis=0)
+        self.goal_ee[3:7] = Quaternion.normalize(mean_quat)
+        states = goal_ee[:, -1]
+        self.goal_ee[-1] = np.bincount(states.astype(int)).argmax()
+
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
         post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
         pair = ConPair(f"{self.cfg.tag}", pre, post, self.cfg.threshold)

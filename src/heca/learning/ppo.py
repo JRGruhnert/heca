@@ -32,10 +32,6 @@ class PPO(Learner):
 
     def learn(self):
         adv, rtn = self.buffer.compute_advantages()
-        # Count how many steps have a meaningful absolute advantage > 0.01
-        meaningful_steps = (adv.abs() > 0.01).sum().item()
-        print(f"Meaningful gradient steps: {meaningful_steps} / {len(adv)}")
-        # Computes explained variance over full batch
 
         self._mini_batch_loop(adv, rtn)
 

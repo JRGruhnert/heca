@@ -3,12 +3,15 @@ from functools import cached_property
 from pathlib import Path
 from typing import Sequence
 
+import numpy as np
+
 from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
 from heca.conditions.evaluator import Evaluator
 from heca.graphs.graph import Graph
 from heca.learning.learner import Learner
+from heca.misc import logger
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
 from heca.scenes.ogbench.scene import OGBenchScene
@@ -33,6 +36,7 @@ class Heca(Agent):
             scene=OGBenchScene.Config(),
             use_gt=True,
         )
+        adjust_ee: bool = True
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -49,23 +53,44 @@ class Heca(Agent):
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
         self.graph.log()
+        self.n_terminals = 0
+        self.n_truncated = 0
+        self.n_feedback = 0
 
     def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_start(x)
         data = self.graph.export()
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
-        print(x.ee)
-        x = self.adjust_ee(a, x, y)
-        print(x.ee)
+        print(x.ee.value)
+        if self.cfg.adjust_ee:
+            x = self.adjust_ee(a, x, y)
+        z, lfb = Agent.get(a).act(x, y)
+        print(f"z.ee.value shape: {z.ee.value.shape}, value: {z.ee.value}")
+
+        print(a.tag)
+        assert False
         z, lfb = Agent.get(a).act(x, y)
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
+        self.debug_log(fb)
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
         return z, fb
+
+    def debug_log(self, fb: AgentFeedback):
+        self.n_feedback += 1
+        if fb.terminal:
+            self.n_terminals += 1
+        if fb.truncated:
+            self.n_truncated += 1
+
+        if self.n_feedback % 1000 == 0:
+            logger.debug(
+                f"fb  terminal={self.n_terminals/self.n_feedback}  truncated={self.n_truncated/self.n_feedback}"
+            )
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
         agent = Agent.get(a)
@@ -87,6 +112,7 @@ class Heca(Agent):
         scene = Scene.get(cfg)
         (x, ix), (y, iy) = scene.sample_task()
         while not self.evaluator.valid_task(x, y):
+            print("Sample New")
             (x, ix), (y, iy) = scene.sample_task()
         return x, y
 
