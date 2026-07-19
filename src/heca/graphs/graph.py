@@ -372,15 +372,15 @@ class Graph:
 
         stepmix_lines = []
         for src, dst in list(self.es_stepmix.edges):
-            stepmix_lines.append(f"{src} -> {dst}")
-        logger.info("StepMix edges:\n" + "\n".join(stepmix_lines))
+            stepmix_lines.append(f"({src}->{dst})")
+        logger.info("StepMix edges:\n" + ", ".join(stepmix_lines))
 
         tapas_lines = []
         for src, dst in list(self.es_tapas.edges):
-            tapas_lines.append(f"{src} -> {dst}")
-        logger.info("Tapas edges:\n" + "\n".join(tapas_lines))
+            tapas_lines.append(f"({src}->{dst})")
+        logger.info("Tapas edges:\n" + ", ".join(tapas_lines))
 
         summary_lines = []
         for src, dst in list(self.es_summary.edges):
-            summary_lines.append(f"{src} -> {dst}")
-        logger.info("Summary edges:\n" + "\n".join(summary_lines))
+            summary_lines.append(f"({src}->{dst})")
+        logger.info("Summary edges:\n" + ", ".join(summary_lines))

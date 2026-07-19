@@ -221,8 +221,7 @@ class Condition:
         return np.concatenate([pose, [state]])
 
     def secure_mix_parameters(self, key: str, k_max: int, eps: float = 1e-15) -> dict:
-        self.models[key]
-        p = self.models[key].get_parameters()
+        p = self.models[key].get_parameters().copy()
         pis = p["measurement"]["state"]["pis"]
         padded = np.full((pis.shape[0], k_max + 1), eps, dtype=np.float32)
         padded[:, : pis.shape[1]] = pis

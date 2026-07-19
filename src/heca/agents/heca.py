@@ -68,7 +68,7 @@ class Heca(Agent):
             z, lfb = Agent.get(a).act(x, y)
 
         if self.cfg.downstream_virtual:
-            z = y  # pretend that downstream perfectly achieved the goal
+            z = y.copy()  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
         self.debug_log(fb)
         self.end_flag = self.learner.update(
@@ -91,7 +91,8 @@ class Heca(Agent):
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
         agent = Agent.get(a)
         if isinstance(agent, TapasAgent):
-            y.ee.value = agent.start_ee
+            z = y.copy()
+            z.ee.value = agent.start_ee.copy()
             result, _ = Agent.get(self.cfg.ee_agent).act(x, y)
             return result
         return x
@@ -132,7 +133,7 @@ class Heca(Agent):
         cons: list[ConPair] = []
         for cfg in self.cfg.agents:
             cons.extend(Agent.get(cfg).conditions)
-        logger.info(f"{self.cfg.tag} works with {len(cons)} downstream conditions.")
+        logger.info(f"{self.cfg.tag} works with {len(cons)} downstream condition(s).")
         return cons
 
     @cached_property
@@ -175,7 +176,7 @@ class Heca(Agent):
             if not merged:
                 break
         logger.info(
-            f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} conditions."
+            f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} condition(s)."
         )
         return cons
 
