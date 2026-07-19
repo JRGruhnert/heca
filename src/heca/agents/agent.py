@@ -30,6 +30,10 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError
 
     @cached_property
+    def elabels(self) -> set[str]:
+        raise NotImplementedError
+
+    @cached_property
     def entities(self) -> set[Entity]:
         raise NotImplementedError
 

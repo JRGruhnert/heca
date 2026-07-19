@@ -18,6 +18,12 @@ class DCEntity:
     def copy(self) -> "DCEntity":
         return DCEntity(value=self.value.copy(), feature=self.feature.copy())
 
+    def __str__(self) -> str:
+        val_str = np.array2string(
+            self.value, max_line_width=80, precision=3, suppress_small=True
+        )
+        return f"DCEntity(v:{val_str}, fs:{self.feature.shape})"
+
     @property
     def pos(self) -> np.ndarray:
         return self.value[:3]
@@ -90,6 +96,14 @@ class DCScene:
         new_ee = self._ee.copy()
         new_extras = {k: v.copy() for k, v in self._extras.items()}
         return DCScene(new_ee, new_entities, new_extras)
+
+    def __str__(self) -> str:
+        max_key_len = max((len(k) for k in self._entities), default=0)
+
+        entity_lines = "\n".join(
+            f"  {k:<{max_key_len}}: {v}" for k, v in self._entities.items()
+        )
+        return f"DCScene(ee={self._ee},\nentities=\n{entity_lines})"
 
 
 class TDImage(TensorDict):

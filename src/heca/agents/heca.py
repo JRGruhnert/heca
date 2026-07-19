@@ -47,6 +47,7 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions,
             self.entities,
+            self.elabels,
             len(self.downstream_conditions) * self.cfg.step_multiplier,
         )
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
@@ -120,6 +121,13 @@ class Heca(Agent):
             # print("Starting Episode")
             z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
             # print("Ending Episode")
+
+    @cached_property
+    def elabels(self) -> set[str]:
+        values = set()
+        for cfg in self.cfg.agents:
+            values.update(Agent.get(cfg).elabels)
+        return values
 
     @cached_property
     def entities(self) -> set[Entity]:

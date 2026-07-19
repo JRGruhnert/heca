@@ -20,6 +20,7 @@ class Evaluator(Configurable):
         self.max_steps: int = 0
         self.conditions: list[ConPair] = []
         self.entities: set[Entity] = set()
+        self.elabels: set[str] = set()
 
     def reset(self, y: DCScene):
         self.y = y
@@ -27,7 +28,6 @@ class Evaluator(Configurable):
 
     def step(self, x: DCScene) -> AgentFeedback:
         success = self.evaluate(x, self.y)
-        print(f"[EVAL] step={self.current_step} success={success} max={self.max_steps}")
         reward = self.cfg.step_penalty + self.cfg.success_reward * int(success)
 
         self.current_step += 1
@@ -37,8 +37,9 @@ class Evaluator(Configurable):
 
     def evaluate(self, x: DCScene, y: DCScene) -> bool:
         for e in self.entities:
-            if not e.evaluate(x.get(e.cfg.label), y.get(e.cfg.label)):
-                return False
+            if e.cfg.label in self.elabels:
+                if not e.evaluate(x.get(e.cfg.label), y.get(e.cfg.label)):
+                    return False
         return True
 
     def valid_task(self, x: DCScene, y: DCScene) -> bool:
@@ -46,25 +47,23 @@ class Evaluator(Configurable):
             pair_matches = True
             for label in pair.pre.elabels:
                 score, valid = pair.pre.score_single(x.get(label).value, label)
-                if not valid:
-                    print(f"[VALID] {pair.label} pre.{label} FAIL score={score:.4f}")
                 pair_matches = pair_matches and valid
             for label in pair.post.elabels:
                 score, valid = pair.post.score_single(y.get(label).value, label)
-                if not valid:
-                    print(f"[VALID] {pair.label} post.{label} FAIL score={score:.4f}")
                 pair_matches = pair_matches and valid
             if pair_matches:
-                print(f"[VALID] {pair.label} MATCHES")
                 return True
-            else:
-                print(f"[VALID] {pair.label} DOES NOT MATCH")
         return False
 
     def setup(
-        self, conditions: list[ConPair], entities: set[Entity], max_steps: int
+        self,
+        conditions: list[ConPair],
+        entities: set[Entity],
+        elabels: set[str],
+        max_steps: int,
     ) -> "Evaluator":
         self.conditions = conditions
         self.entities = entities
+        self.elabels = elabels
         self.max_steps = max_steps
         return self

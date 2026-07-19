@@ -265,6 +265,7 @@ class TapasAgent(ExpertAgent):
         for idx, key in enumerate(self.demos.idx_key_list):
             if idx in self.model._used_frames and key in elabels:
                 labels.add(key)
+        logger.info(f"{self.cfg.tag} entities: {labels}")
         return labels
 
     @cached_property
