@@ -27,7 +27,6 @@ class TapasDemoProcessor(Configurable):
         self.data = {}
         for k in self.file.keys():
             self.data[k] = np.asarray(self.file[k])
-        print(self.file.keys())
         self.demo_slices = self._build_demo_slices()
 
         self.demo_idx = 0

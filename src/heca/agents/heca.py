@@ -29,7 +29,9 @@ class Heca(Agent):
         upstream_noise: bool = True
         inference: bool = False
         ee_agent: Agent.Config = TapasAgent.Config(
-            tag="move_ee", scene=OGBenchScene.Config()
+            tag="move_ee",
+            scene=OGBenchScene.Config(),
+            use_gt=True,
         )
 
     def __init__(self, cfg: Config):
@@ -54,7 +56,7 @@ class Heca(Agent):
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
         x = self.adjust_ee(a, x, y)
-        z = Agent.get(a).act(x, y)
+        z, lfb = Agent.get(a).act(x, y)
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
@@ -64,21 +66,20 @@ class Heca(Agent):
         return z, fb
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
-        # Basically adjusts the ee pose for tapas models
-        #  to be in a good position for execution
         agent = Agent.get(a)
         if isinstance(agent, TapasAgent):
             y.ee.value = agent.start_ee
-            return Agent.get(self.cfg.ee_agent).act(x, y)
+            result, _ = Agent.get(self.cfg.ee_agent).act(x, y)
+            return result
         return x
 
-    def act(self, x: DCScene, y: DCScene) -> DCScene:
+    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_goal(y)
         self.evaluator.reset(y)
         z, fb = self.step(x)
-        while not fb.truncated:
+        while not fb.truncated or not fb.terminal:
             z, fb = self.step(z)
-        return z
+        return z, fb
 
     def sample(self, cfg: Scene.Config) -> tuple[DCScene, DCScene]:
         scene = Scene.get(cfg)
@@ -91,9 +92,9 @@ class Heca(Agent):
         """Train the network with PPO for a given number of episodes."""
         while not self.end_flag:
             x, y = self.sample(cfg)
-            print("Starting Episode")
+            # print("Starting Episode")
             z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
-            print("Ending Episode")
+            # print("Ending Episode")
 
     @cached_property
     def elabels(self) -> set[str]:
@@ -155,7 +156,6 @@ class Heca(Agent):
                     break
             if not merged:
                 break
-        print(len(cons))
         return cons
 
     def _load(self, path: Path):

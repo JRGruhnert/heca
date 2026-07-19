@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
 from heca.agents.agent import Agent
-from heca.graphs.nodes import *
+from heca.graphs.node import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
 from heca.misc import hardware, logger
@@ -82,22 +82,26 @@ class Graph:
         self.goal = goal
         for node in self.ns_option.items:
             node.data = goal
-        self.update_subgoals()
-        self.rebuild()
 
     def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
         return node.con.score_single(x[node.entity].value, node.entity)[1]
 
-    def create_subgoal(self, node: EntityNode, x: DCScene | None = None) -> DCEntity:
+    def create_subgoal(self, node: EntityNode) -> DCEntity:
         assert node.con is not None
-        if x is not None:
-            dc_entity = x[node.entity]
-        else:
-            value = node.con.models[node.entity].sample(1)[0]
-            feat = value
-            dc_entity = DCEntity(value=value, feature=feat)
-        return dc_entity
+        # value = node.con.models[node.entity].sample(1)
+        # if isinstance(value, torch.Tensor):
+        #    value = value.detach().cpu().numpy()
+        # value = value.squeeze()  # type: ignore
+        # Get a representative sample from the model parameters
+        p = node.con.secure_mix_parameters(node.entity, 19)  # 19 = max_states
+        # Take the first component's mean as the sample
+        mean_pose = p["measurement"]["pose"]["means"][0]  # [7]
+        # Most likely state
+        state = np.argmax(p["measurement"]["state"]["pis"][0])  # scalar
+        value = np.concatenate([mean_pose, [state]])  # [8]
+        feat = Entity.gnn_format(value, len(self.entities[node.entity].cfg.states))
+        return DCEntity(value=value, feature=feat)
 
     def update_subgoals(self):
         for key in self.goal_keys:
@@ -112,6 +116,8 @@ class Graph:
             self.ns_entity.key_update(key, x)
 
     def rebuild(self):
+        self.ns_entity.build()
+        self.ns_option.build()
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_tapas.build(self.ns_entity, self.ns_entity)
@@ -130,6 +136,7 @@ class Graph:
                     key,
                     EntityNode(
                         entity=entity,
+                        n_states=self.entities[entity].n_states,
                         data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
                         sources=set(),
@@ -149,6 +156,7 @@ class Graph:
                 key=key,
                 value=EntityNode(
                     entity=entity,
+                    n_states=self.entities[entity].n_states,
                     data=DCEntity.empty(),
                     sources=sources,
                     con=con,
@@ -173,6 +181,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
+                    n_states=self.entities[entity].n_states,
                     data=DCEntity.empty(),
                     sources=sources,
                     con=con,
@@ -199,6 +208,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
+                    n_states=self.entities[entity].n_states,
                     data=DCEntity(value=value, feature=feat),
                     static=True,
                     sources=sources,
@@ -263,33 +273,39 @@ class Graph:
         subgoal = self.assemble_subgoal(node)
         return node.agent, subgoal
 
-    def plot(self, path: Path, figsize=(12, 8), show_labels=False):
+    def plot(self, path: Path, figsize=(12, 8), show_labels=True):
         """Visualize the heterogeneous graph."""
         plot_path = path / "plots"
         plot_path.mkdir(parents=True, exist_ok=True)
 
         G = nx.MultiDiGraph()  # directed, allows multiple edges
 
+        # Build key lookup: index → key (insertion order matches edge indices)
+        entity_keys = list(self.ns_entity.index.keys())
+        option_keys = list(self.ns_option.index.keys())
+
         # Add nodes with their type and a label
-        for key in self.ns_entity.index.keys():
+        for key in entity_keys:
             G.add_node(key, type="entity", label=key)
-        for key in self.ns_option.index.keys():
+        for key in option_keys:
             G.add_node(key, type="option", label=key)
 
-        # Add edges with their type
-        for edge in self.es_stepmix.edges:
-            G.add_edge(edge[0], edge[1], type="stepmix")
-        for edge in self.es_summary.edges:
-            G.add_edge(edge[0], edge[1], type="summary")
-        for edge in self.es_tapas.edges:
-            G.add_edge(edge[0], edge[1], type="tapas")
-
-        # Position nodes (spring layout)
-        pos = nx.spring_layout(G, seed=42)
+        # Add edges with their type (resolve positional indices → keys)
+        for src, dst in self.es_stepmix.edges:
+            G.add_edge(entity_keys[src], entity_keys[dst], type="stepmix")
+        for src, dst in self.es_summary.edges:
+            G.add_edge(entity_keys[src], option_keys[dst], type="summary")
+        for src, dst in self.es_tapas.edges:
+            G.add_edge(entity_keys[src], entity_keys[dst], type="tapas")
 
         # Separate nodes by type for color coding
         entity_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "entity"]
         option_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "option"]
+
+        # Position nodes (spring layout)
+        # pos = nx.spring_layout(G, seed=42, k=2.0)
+        shells = [option_nodes, entity_nodes]
+        pos = nx.shell_layout(G, nlist=shells, scale=3.0)
 
         plt.figure(figsize=figsize)
         # Draw entity nodes (blue)
@@ -332,7 +348,7 @@ class Graph:
         plt.title("Graph Structure")
         plt.axis("off")
         plt.tight_layout()
-        plt.savefig(path / f"graph.png", dpi=300, bbox_inches="tight")
+        plt.savefig(plot_path / f"graph.png", dpi=300, bbox_inches="tight")
         plt.close()
 
     def log(self):
@@ -346,19 +362,31 @@ class Graph:
         logger.info(f"Tapas Edges: {len(self.es_tapas.edges)}")
 
         # Optionally log node details
+        entity_lines = []
         for key, idx in self.ns_entity.index.items():
             node = self.ns_entity.items[idx]
-            logger.debug(
-                f"Entity Node: {key} | entity={node.entity} | static={node.static}"
+            entity_lines.append(
+                f"{idx}:\tstatic={int(node.static)}\t{node.entity}\t{key}"
             )
+        logger.debug(f"Entity Nodes:\n" + "\n".join(entity_lines))
+
+        option_lines = []
         for key, idx in self.ns_option.index.items():
             node = self.ns_option.items[idx]
-            logger.debug(
-                f"Option Node: {key} | agent={node.agent} | sources={node.sources}"
-            )
+            option_lines.append(f"{idx}:\tagent={node.agent.tag}\t\t{key}")
+        logger.debug(f"Option Nodes:\n" + "\n".join(option_lines))
 
-        # Log edge sources (first few)
-        logger.info("StepMix edge examples:")
-        for src, dst in list(self.es_stepmix.edges)[:3]:
-            logger.info(f"  {src} -> {dst}")
-        # etc.
+        stepmix_lines = []
+        for src, dst in list(self.es_stepmix.edges):
+            stepmix_lines.append(f"{src} -> {dst}")
+        logger.info("StepMix edges:\n" + "\n".join(stepmix_lines))
+
+        tapas_lines = []
+        for src, dst in list(self.es_tapas.edges):
+            tapas_lines.append(f"{src} -> {dst}")
+        logger.info("Tapas edges:\n" + "\n".join(tapas_lines))
+
+        summary_lines = []
+        for src, dst in list(self.es_summary.edges):
+            summary_lines.append(f"{src} -> {dst}")
+        logger.info("Summary edges:\n" + "\n".join(summary_lines))

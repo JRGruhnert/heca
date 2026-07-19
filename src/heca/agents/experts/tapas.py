@@ -190,7 +190,6 @@ class TapasAgent(ExpertAgent):
         else:
             logger.warning(f"No tapas policy found at given path: {filepath}")
         self.policy = temp.to(device)
-        print(self.policy)
 
     def eval(self):
         self.policy.eval()

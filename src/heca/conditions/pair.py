@@ -79,7 +79,6 @@ class ConPair:
         self.post.plot(plot_path, self.label)
 
     def calculate_sim_matrix(self, other: "ConPair", key: str) -> np.ndarray:
-        print(self.label, other.label)
         mat = np.zeros((2, 2))
         for i, c1 in enumerate([self.pre, self.post]):
             for j, c2 in enumerate([other.pre, other.post]):

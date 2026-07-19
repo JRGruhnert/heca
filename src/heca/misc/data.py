@@ -37,7 +37,7 @@ class DCEntity:
 
     @property
     def tste(self) -> torch.Tensor:
-        return torch.Tensor(self.value[-1])
+        return torch.Tensor([self.value[-1]])
 
     @property
     def tpose(self) -> torch.Tensor:

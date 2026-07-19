@@ -4,7 +4,6 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from stepmix import StepMix
-from scipy.optimize import minimize
 from heca.misc.entity import Entity
 from heca.utils.quaternion import Quaternion
 
@@ -38,7 +37,7 @@ class Condition:
 
     def comp_features(
         self, entities: dict[str, Entity], eps: float = 1e-8
-    ) -> dict[str, list[np.ndarray]]:
+    ) -> dict[str, np.ndarray]:
         """
         NOTE: ASSUMES MODELS USE DIAG MODE
         Returns:
@@ -51,30 +50,26 @@ class Condition:
                 - [13:] = logits (state logits, unnormalized)
         """
 
-        result: dict[str, list[np.ndarray]] = {}
+        result: dict[str, np.ndarray] = {}
 
         for key in self.models.keys():
             # Extract raw parameters from the fitted StepMix model
-            params = self.secure_mix_parameters(key, len(entities[key].cfg.states) - 1)
+            n_states = entities[key].n_states
+            params = self.secure_mix_parameters(key, n_states - 1)
             weights = params["weights"]  # shape: (N,)
             means = params["measurement"]["pose"]["means"]  # shape: (N, 7)
             covariances = params["measurement"]["pose"]["covariances"]  # shape: (N, 7)
             pis = params["measurement"]["state"]["pis"]  # shape: (K, total_outcomes)
             N = len(weights)
 
-            feat_list: list[np.ndarray] = []
-            for i in range(N):
-                mu_pos = means[i, :3]  # [3]
-                quat = means[i, 3:7]  # [4] - [w, x, y, z]
-                quat /= np.linalg.norm(quat)  # norm
-                lstd_pos = 0.5 * np.log(covariances[i, :3] + eps)  # [3]
-                lstd_rot = 0.5 * np.log(covariances[i, 3:6] + eps)  # [3]
-                logits = np.log(pis[i, :])  # [K]
-                feature = np.concatenate([mu_pos, lstd_pos, quat, lstd_rot, logits])
-                feat_list.append(feature)
-
-            result[key] = feat_list
-
+            feat = np.zeros((N, Entity.input_feat_dim), dtype=np.float32)
+            feat[:, 0:3] = means[:, 0:3]  # [3]
+            feat[:, 3:6] = 0.5 * np.log(covariances[:, 0:3] + eps)
+            feat[:, 6:10] = Quaternion.normalize(means[:, 3:7])
+            feat[:, 10:13] = 0.5 * np.log(covariances[:, 3:6] + eps)
+            logits = np.log(pis)  # [K]
+            feat[:, 13 : 13 + n_states] = logits
+            result[key] = feat
         return result
 
     @property

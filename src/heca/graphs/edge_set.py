@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from heca.graphs.node_set import NodeSet
-from heca.graphs.nodes import EntityNode, GraphNode, OptionNode
+from heca.graphs.node import EntityNode, GraphNode, OptionNode
 from heca.utils.quaternion import Quaternion
 
 S = TypeVar("S", bound=GraphNode)
@@ -36,19 +36,21 @@ class EdgeSet(Generic[S, D]):
             dst = dnset.idx_get(edge[1])
             if src.changed or dst.changed:
                 self.update_attr(src, dst, i)
-        self.edge_attr = torch.from_numpy(self.attrs).float()
+        self.edge_attr = torch.from_numpy(np.stack(self.attrs)).float()
 
     def update_attr(self, src: S, dst: D, index: int):
         if self.type == ("entity", "stepmix", "entity"):
             assert isinstance(src, EntityNode)
+            assert isinstance(dst, EntityNode)
+            assert src.n_states == dst.n_states, "Sanity check"
             self.attrs[index] = self.stepmix_feat(
-                src.data.feature, dst.data.feature, src.weight
+                src.data.feature, dst.data.feature, src.weight, src.n_states
             )
         elif self.type == ("entity", "summary", "option"):
             assert isinstance(src, EntityNode)
             assert isinstance(dst, OptionNode)
             self.attrs[index] = self.summary_feat(
-                src.data.feature, dst.data[src.entity].feature
+                src.data.feature, dst.data[src.entity].feature, src.n_states
             )
         elif self.type == ("entity", "tapas", "entity"):
             self.attrs[index] = np.empty(1)
@@ -56,18 +58,22 @@ class EdgeSet(Generic[S, D]):
             raise NotImplementedError
 
     def stepmix_feat(
-        self, x_src: np.ndarray, x_dst: np.ndarray, w_src: float
+        self, x_src: np.ndarray, x_dst: np.ndarray, w_src: float, n_states: int
     ) -> np.ndarray:
-        feat = self.residual(x_src, x_dst)
-        return np.concatenate([feat, w_src])
+        feat = self.residual(x_src, x_dst, n_states)
+        return np.concatenate([feat, [w_src]])
 
-    def summary_feat(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
-        return self.residual(x_src, x_dst)
+    def summary_feat(
+        self, x_src: np.ndarray, x_dst: np.ndarray, n_states: int
+    ) -> np.ndarray:
+        return self.residual(x_src, x_dst, n_states)
 
     def tapas_feat(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
-        return np.empty(1)
+        return np.empty(1)  # We dont have edge features
 
-    def residual(self, x_src: np.ndarray, x_dst: np.ndarray) -> np.ndarray:
+    def residual(
+        self, x_src: np.ndarray, x_dst: np.ndarray, n_states: int, eps: float = 1e-15
+    ) -> np.ndarray:
         """
         Compute directed edge features from source nodes to destination nodes.
 
@@ -83,23 +89,20 @@ class EdgeSet(Generic[S, D]):
         lstd_pos_a = x_src[3:6]
         q_a = x_src[6:10]
         lstd_rot_a = x_src[10:13]
-        logits_a = x_src[13:]
+        logits_a = x_src[13 : 13 + n_states]
 
         # Unpack destination (B)
         mu_pos_b = x_dst[0:3]
         lstd_pos_b = x_dst[3:6]
         q_b = x_dst[6:10]
         lstd_rot_b = x_dst[10:13]
-        logits_b = x_dst[13:]
+        logits_b = x_dst[13 : 13 + n_states]
 
-        # --- 1. Position Residual ---
         var_pos_a = np.exp(2 * lstd_pos_a)
         var_pos_b = np.exp(2 * lstd_pos_b)
         var_comb_pos = var_pos_a + var_pos_b
-        z_pos = (mu_pos_b - mu_pos_a) / np.sqrt(var_comb_pos + 1e-8)
+        z_pos = (mu_pos_b - mu_pos_a) / np.sqrt(var_comb_pos + eps)
 
-        # --- 2. Rotation Residual ---
-        # q_rel = q_b * q_a^{-1}
         q_inv = Quaternion.inv(q_a)
         q_rel = Quaternion.mul(q_b, q_inv)
         r_vec = Quaternion.log_map(q_rel)  # [E, 3]
@@ -107,10 +110,8 @@ class EdgeSet(Generic[S, D]):
         var_rot_a = np.exp(2 * lstd_rot_a)
         var_rot_b = np.exp(2 * lstd_rot_b)
         var_comb_rot = var_rot_a + var_rot_b
-        z_rot = r_vec / np.sqrt(var_comb_rot + 1e-8)
+        z_rot = r_vec / np.sqrt(var_comb_rot + eps)
 
-        # --- 3. State Residual (Cross-Entropy) ---
-        # Softmax of both distributions
         logits_a_max = np.max(logits_a, axis=-1, keepdims=True)
         logits_b_max = np.max(logits_b, axis=-1, keepdims=True)
         softmax_a = np.exp(logits_a - logits_a_max) / np.sum(
@@ -120,24 +121,19 @@ class EdgeSet(Generic[S, D]):
             np.exp(logits_b - logits_b_max), axis=-1, keepdims=True
         )
 
-        # Cross-entropy H(B, A) = -Σ P_B(c) * log P_A(c)
-        # This is the expected surprise of B's full distribution under A's belief.
-        z_state = -np.sum(softmax_b * np.log(softmax_a + 1e-8), axis=-1)
+        # Cross-entropy
+        z_state = -np.sum(softmax_b * np.log(softmax_a + eps), axis=-1)
+
         # Clip to prevent extreme outliers from dominating the edge feature
         z_state = np.clip(z_state, 0.0, 10.0)
 
-        # Stack
-        edge_feat = np.concatenate(
-            [z_pos, z_rot, z_state[:, np.newaxis]], axis=-1
-        )  # [8]
-
-        return edge_feat
+        return np.concatenate([z_pos, z_rot, np.atleast_1d(z_state)], axis=-1)
 
     def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
         """Create edges by matching node source entries to this edge type."""
         for i, node in enumerate(tnset.items):
             for e, key in node.sources:
-                if e == self.type[1]:  # matches e.g. "stepmix", "summar y", "tapas"
+                if e == self.type[1]:
                     if snset.has_key(key):
                         j = snset.get_index(key)
                         self.add(j, i)

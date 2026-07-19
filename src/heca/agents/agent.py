@@ -26,7 +26,7 @@ class Agent(Persistable, abc.ABC):
         self.cfg = cfg
 
     @abc.abstractmethod
-    def act(self, x: DCScene, y: DCScene) -> DCScene:
+    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         raise NotImplementedError
 
     @cached_property

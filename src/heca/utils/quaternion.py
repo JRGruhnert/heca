@@ -25,9 +25,9 @@ class Quaternion:
         return q[..., [1, 2, 3, 0]]
 
     @staticmethod
-    def normalize(q: np.ndarray) -> np.ndarray:
+    def normalize(q: np.ndarray, eps: float = 1e-15) -> np.ndarray:
         norm = np.linalg.norm(q, axis=-1, keepdims=True)
-        nx = q / np.where(norm < 1e-12, 1.0, norm)
+        nx = q / np.where(norm < eps, 1.0, norm)
         # Ensure w >= 0 by flipping sign of whole quaternion where w < 0
         flip = nx[..., 0:1] < 0  # (..., 1)
         return np.where(flip, -nx, nx)

@@ -17,6 +17,7 @@ class GraphNode(ABC):
 class EntityNode(GraphNode):
     entity: str
     data: DCEntity
+    n_states: int
     changed: bool = True
     static: bool = False
     weight: float = 1.0

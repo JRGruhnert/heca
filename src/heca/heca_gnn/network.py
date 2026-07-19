@@ -94,9 +94,9 @@ class OptionReadout(nn.Module):
 class Network(Configurable, nn.Module):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        input_dim: int = 64  # 13 + max_state_count
-        feature_dim: int = 128
+        input_feat_dim: int = 56  # 13 + max_state_count
         type_embed_dim: int = 8
+        feature_dim: int = 128
         max_entity_types: int = 64  # just an upper bound
         num_stepmix_layers: int = 1
         num_tapas_layers: int = 1
@@ -107,7 +107,7 @@ class Network(Configurable, nn.Module):
 
         self.type_embedding = nn.Embedding(cfg.max_entity_types, cfg.type_embed_dim)
 
-        total_input_dim = cfg.input_dim + cfg.type_embed_dim
+        total_input_dim = cfg.input_feat_dim + cfg.type_embed_dim
 
         self.entity_encoder = nn.Sequential(
             nn.Linear(total_input_dim, cfg.feature_dim),

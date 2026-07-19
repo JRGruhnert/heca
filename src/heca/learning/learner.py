@@ -230,7 +230,7 @@ class Learner(Persistable):
             "buffer/capacity": self.cfg.buffer.capacity,
             "buffer/label": str(type(self.cfg.buffer)),
             # Network config
-            "network/input_dim": self.cfg.network.input_dim,
+            "network/input_dim": self.cfg.network.input_feat_dim,
             "network/feature_dim": self.cfg.network.feature_dim,
             "network/num_stepmix_layers": self.cfg.network.num_stepmix_layers,
             "network/num_tapas_layers": self.cfg.network.num_tapas_layers,

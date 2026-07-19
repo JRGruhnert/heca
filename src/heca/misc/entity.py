@@ -2,9 +2,10 @@ from typing import Callable
 
 import numpy as np
 
+from functools import total_ordering
 from dataclasses import dataclass
 from enum import Enum
-from functools import total_ordering
+
 
 import torch
 
@@ -23,6 +24,8 @@ class Mobility(Enum):
 
 @total_ordering
 class Entity(Configurable):
+    input_feat_dim: int = 56
+
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         label: str
@@ -32,13 +35,17 @@ class Entity(Configurable):
         answers: set[str]
         mobility: Mobility
         eval_func: Callable[[np.ndarray, np.ndarray], bool] = lambda a, b: False
-        max_states: int = 19  # 13 (pos+rot) + 19 = 32 (dim of gnn features)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    def state_count(self) -> int:
+    @property
+    def n_states(self) -> int:
         return len(self.cfg.states)
+
+    @classmethod
+    def n_states_static(cls, e: "Entity") -> int:
+        return len(e.cfg.states)
 
     def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
         return self.cfg.eval_func(a.value, b.value)
@@ -116,18 +123,18 @@ class Entity(Configurable):
                     [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
         """
         # Initialize with zeros
-        node = np.zeros((32), dtype=np.float32)
-        node[0:3] = raw[0:3]
-        node[3:6] = base_logstd
-        node[6:10] = raw[3:7]
-        norms = np.linalg.norm(node[6:10], axis=-1, keepdims=True)
-        node[6:10] = node[6:10] / norms
-        node[10:13] = base_logstd
+        feat = np.zeros((cls.input_feat_dim), dtype=np.float32)
+        # print(
+        #    f"raw type: {type(raw)}, raw shape: {raw.shape if hasattr(raw, 'shape') else 'no shape'}, raw: {raw}"
+        # )
+        feat[0:3] = raw[0:3]
+        feat[3:6] = base_logstd
+        feat[6:10] = Quaternion.normalize(feat[6:10])
+        feat[10:13] = base_logstd
         state_ids = raw[7].astype(int)  # [N]
-        node[13 : 13 + n_states] = -logit_confidence
-        node[13 + state_ids] = logit_confidence
-
-        return node
+        feat[13 : 13 + n_states] = -logit_confidence
+        feat[13 + state_ids] = logit_confidence
+        return feat
 
     @classmethod
     def apply_artificial_uncertainty(
@@ -208,60 +215,3 @@ class Entity(Configurable):
         noisy[:, 13:] = noisy_logits
 
         return noisy
-
-    def gnn_format2(
-        self,
-        raw: np.ndarray,
-        logit_confidence=10.0,
-        base_logstd=-10.0,
-        pos_logstd: np.ndarray | None = None,
-        rot_logstd: np.ndarray | None = None,
-        state_logits: np.ndarray | None = None,
-    ):
-        """
-        Convert raw stepmix format to GNN node format.
-
-        Args:
-            raw: [8] where columns are [pos_x, pos_y, pos_z, qw, qx, qy, qz, state_scalar]
-            logit_confidence: Value to assign to the true class logit (when not overridden).
-            base_logstd: Initial log-std for deterministic entities (when not overridden).
-            pos_logstd: [3] override for position log-std (from StepMix model).
-            rot_logstd: [3] override for rotation log-std (from StepMix model).
-            state_logits: [K] override for state logits (from StepMix model).
-
-        Returns:
-            gnn_node: [13 + K] with structure:
-                    [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
-        """
-        K = self.state_count()
-        node = np.zeros((13 + K), dtype=np.float32)
-
-        # 1. Position mean (raw pos)
-        node[0:3] = raw[0:3]
-
-        # 2. Position log-std (from model if available, else deterministic)
-        if pos_logstd is not None:
-            node[3:6] = pos_logstd
-        else:
-            node[3:6] = base_logstd
-
-        # 3. Quaternion mean (raw quat)
-        node[6:10] = raw[3:7]
-        norms = np.linalg.norm(node[6:10], axis=-1, keepdims=True)
-        node[6:10] = node[6:10] / norms
-
-        # 4. Rotation log-std (from model if available, else deterministic)
-        if rot_logstd is not None:
-            node[10:13] = rot_logstd
-        else:
-            node[10:13] = base_logstd
-
-        # 5. State logits (from model if available, else one-hot-style high confidence)
-        if state_logits is not None:
-            node[13:] = state_logits
-        else:
-            state_ids = int(raw[7])
-            node[13:] = -logit_confidence
-            node[13 + state_ids] = logit_confidence
-
-        return node
