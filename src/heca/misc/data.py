@@ -15,6 +15,9 @@ class DCEntity:
     def empty(cls) -> "DCEntity":
         return cls(np.empty(0), np.empty(0))
 
+    def copy(self) -> "DCEntity":
+        return DCEntity(value=self.value.copy(), feature=self.feature.copy())
+
     @property
     def pos(self) -> np.ndarray:
         return self.value[:3]
@@ -81,6 +84,12 @@ class DCScene:
     @classmethod
     def empty(cls) -> "DCScene":
         return cls(DCEntity.empty(), {})
+
+    def copy(self) -> "DCScene":
+        new_entities = {k: v.copy() for k, v in self._entities.items()}
+        new_ee = self._ee.copy()
+        new_extras = {k: v.copy() for k, v in self._extras.items()}
+        return DCScene(new_ee, new_entities, new_extras)
 
 
 class TDImage(TensorDict):

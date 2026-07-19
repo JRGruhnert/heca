@@ -61,7 +61,7 @@ class Graph:
         return data.to(device=hardware.device.type)
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
-        subgoal = self.start
+        subgoal = self.start.copy()
         for src in option.sources:
             node = self.ns_entity.get_by_key(src[1])
             assert isinstance(node, EntityNode)
@@ -69,7 +69,7 @@ class Graph:
         return subgoal
 
     def set_start(self, start: DCScene):
-        self.start = start
+        self.start = start.copy()
         for key in self.start_keys:
             node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
@@ -79,9 +79,9 @@ class Graph:
         self.rebuild()
 
     def set_goal(self, goal: DCScene):
-        self.goal = goal
+        self.goal = goal.copy()
         for node in self.ns_option.items:
-            node.data = goal
+            node.data = goal.copy()
 
     def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
@@ -229,7 +229,7 @@ class Graph:
                 for b in agents:
                     for bc in b.conditions:
                         otag = ac.label + bc.label
-                        if ac.label + bc.label:  # pre == post
+                        if ac.label == bc.label:  # pre == post
                             sources = {src for src in post_sources.values()}
                             graph.ns_option.add(
                                 otag,
