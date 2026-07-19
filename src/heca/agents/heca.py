@@ -46,7 +46,7 @@ class Heca(Agent):
         self.evaluator = Evaluator.get(cfg.evaluator).setup(
             self.conditions,
             self.entities,
-            len(self.low_cons) * 2,
+            len(self.downstream_conditions) * 2,
         )
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
@@ -120,14 +120,6 @@ class Heca(Agent):
             # print("Ending Episode")
 
     @cached_property
-    def elabels(self) -> set[str]:
-        values = set()
-        for cfg in self.cfg.agents:
-            for con in Agent.get(cfg).conditions:
-                values.update(con.elabels)
-        return values
-
-    @cached_property
     def entities(self) -> set[Entity]:
         values = set()
         for cfg in self.cfg.agents:
@@ -135,16 +127,17 @@ class Heca(Agent):
         return values
 
     @cached_property
-    def low_cons(self) -> list[ConPair]:
+    def downstream_conditions(self) -> list[ConPair]:
         cons: list[ConPair] = []
         for cfg in self.cfg.agents:
             cons.extend(Agent.get(cfg).conditions)
+        logger.info(f"{self.cfg.tag} works with {len(cons)} downstream conditions.")
         return cons
 
     @cached_property
     def conditions(self) -> list[ConPair]:
         path = Agent.load_dir(self.cfg)
-        cons: list[ConPair] = self.low_cons
+        cons: list[ConPair] = self.downstream_conditions.copy()
         sets = [{i} for i in range(len(cons))]
         while True:
             merged = False
@@ -153,6 +146,7 @@ class Heca(Agent):
                     a = cons[i]
                     b = cons[j]
                     if a.can_merge(b, path):
+                        logger.info(f"{self.cfg.tag}: Merging {a.label} and {b.label}.")
                         a_set = sets[i]
                         b_set = sets[j]
                         new_set = a_set | b_set
@@ -179,6 +173,9 @@ class Heca(Agent):
                     break
             if not merged:
                 break
+        logger.info(
+            f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} conditions."
+        )
         return cons
 
     def _load(self, path: Path):

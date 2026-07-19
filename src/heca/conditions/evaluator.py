@@ -26,18 +26,14 @@ class Evaluator(Configurable):
         self.current_step = 0
 
     def step(self, x: DCScene) -> AgentFeedback:
-        reward = 0.0 + self.cfg.step_penalty
-        terminal = self.evaluate(x, self.y)
+        success = self.evaluate(x, self.y)
 
-        if terminal:
-            reward += self.cfg.success_reward
-            return AgentFeedback(reward=reward, terminal=terminal, truncated=False)
-
-        if self.current_step >= self.max_steps:
-            return AgentFeedback(reward=reward, terminal=terminal, truncated=True)
+        reward = self.cfg.step_penalty + self.cfg.success_reward * int(success)
 
         self.current_step += 1
-        return AgentFeedback(reward=reward, terminal=terminal, truncated=False)
+        truncated = self.current_step >= self.max_steps
+
+        return AgentFeedback(reward=reward, terminal=success, truncated=truncated)
 
     def evaluate(self, x: DCScene, y: DCScene) -> bool:
         for e in self.entities:
