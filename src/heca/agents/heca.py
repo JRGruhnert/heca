@@ -55,7 +55,9 @@ class Heca(Agent):
         data = self.graph.export()
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
+        print(x.ee)
         x = self.adjust_ee(a, x, y)
+        print(x.ee)
         z, lfb = Agent.get(a).act(x, y)
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal
