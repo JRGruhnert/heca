@@ -36,7 +36,7 @@ class Heca(Agent):
             scene=OGBenchScene.Config(),
             use_gt=True,
         )
-        adjust_ee: bool = True
+        adjust_ee: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -62,14 +62,14 @@ class Heca(Agent):
         data = self.graph.export()
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
-        print(x.ee.value)
+        # print(x.ee.value)
         if self.cfg.adjust_ee:
             x = self.adjust_ee(a, x, y)
         z, lfb = Agent.get(a).act(x, y)
-        print(f"z.ee.value shape: {z.ee.value.shape}, value: {z.ee.value}")
+        # print(f"z.ee.value shape: {z.ee.value.shape}, value: {z.ee.value}")
 
-        print(a.tag)
-        assert False
+        # print(a.tag)
+        # assert False
         z, lfb = Agent.get(a).act(x, y)
         if self.cfg.downstream_virtual:
             z = y  # pretend that downstream perfectly achieved the goal

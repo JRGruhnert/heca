@@ -129,7 +129,7 @@ class TapasAgent(ExpertAgent):
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-                print(action.shape)
+                # print(action.shape)
                 tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
