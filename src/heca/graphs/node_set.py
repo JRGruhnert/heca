@@ -12,6 +12,7 @@ T = TypeVar("T", bound=GraphNode)
 class NodeSet(Generic[T]):
     def __init__(self, type: str):
         self.items: list[T] = []
+        self.keys: list[str] = []  # ← add this
         self.index: dict[str, int] = {}
         self.x: torch.Tensor = torch.empty(1)
         self.type = type
@@ -19,11 +20,15 @@ class NodeSet(Generic[T]):
     def add(self, key: str, value: T):
         self.index[key] = len(self.items)
         self.items.append(value)
+        self.keys.append(key)
 
     def key_update(self, key: str, data: DCEntity):
         idx = self.index[key]
         self.items[idx].data = data
         self.items[idx].changed = True
+
+    def key_at(self, idx: int) -> str:
+        return self.keys[idx]
 
     def get_by_key(self, key: str) -> T:
         return self.items[self.index[key]]
@@ -49,3 +54,9 @@ class NodeSet(Generic[T]):
         else:
             x_np = np.zeros((len(self.items), 128), dtype=np.float32)
         self.x = torch.from_numpy(x_np).float()
+
+    def __str__(self) -> str:
+        lines = [f"NodeSet<{self.type}> ({len(self.items)} nodes):"]
+        for i, (key, item) in enumerate(zip(self.keys, self.items)):
+            lines.append(f"  [{i}] {key}: {item}")
+        return "\n".join(lines)

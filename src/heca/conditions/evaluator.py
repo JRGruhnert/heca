@@ -10,9 +10,8 @@ from heca.misc.entity import Entity
 class Evaluator(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        success_reward: float = 25.0
-        # Small step penalty to encourage efficiency
-        step_penalty: float = -0.002
+        success_reward: float = 1.0
+        step: float = 0.0
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -28,7 +27,7 @@ class Evaluator(Configurable):
 
     def step(self, x: DCScene) -> AgentFeedback:
         success = self.evaluate(x, self.y)
-        reward = self.cfg.step_penalty + self.cfg.success_reward * int(success)
+        reward = self.cfg.step + self.cfg.success_reward * int(success)
 
         self.current_step += 1
         truncated = self.current_step >= self.max_steps

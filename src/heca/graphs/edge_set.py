@@ -137,3 +137,9 @@ class EdgeSet(Generic[S, D]):
                     if snset.has_key(key):
                         j = snset.get_index(key)
                         self.add(j, i)
+
+    def __str__(self) -> str:
+        return (
+            f"EdgeSet({self.type[0]}→{self.type[2]}): "
+            f"{self.size()} edges, attr.shape={self.edge_attr.shape}"
+        )

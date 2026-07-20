@@ -20,9 +20,14 @@ class DCEntity:
 
     def __str__(self) -> str:
         val_str = np.array2string(
-            self.value, max_line_width=80, precision=3, suppress_small=True
+            self.value, max_line_width=200, precision=3, suppress_small=True
         )
-        return f"DCEntity(v:{val_str}, fs:{self.feature.shape})"
+        feat_str = np.array2string(
+            self.feature[:20], max_line_width=200, precision=3, suppress_small=True
+        )
+        if len(self.feature) > 20:
+            feat_str += f" ... ({len(self.feature)} total)"
+        return f"DCEntity:\n" f"  value:      {val_str}\n" f"  feature:    {feat_str}"
 
     @property
     def pos(self) -> np.ndarray:

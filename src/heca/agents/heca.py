@@ -37,7 +37,7 @@ class Heca(Agent):
             use_gt=True,
         )
         adjust_ee: bool = False
-        step_multiplier: int = 3
+        step_multiplier: int = 2
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -73,6 +73,9 @@ class Heca(Agent):
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
+        if logger.DEBUG:
+            input("Press Enter to continue...")
+
         return z, fb
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):

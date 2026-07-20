@@ -109,12 +109,28 @@ class Graph:
                 x = self.create_subgoal(node)
             self.ns_entity.key_update(key, x)
 
+    def __str__(self) -> str:
+        lines = ["=== Graph ==="]
+        lines.append(f"Entities: {len(self.entities)}")
+        lines.append(str(self.ns_entity))
+        lines.append(str(self.ns_option))
+        lines.append(f"start: {len(self.start_keys)} keys")
+        lines.append(f"goal:  {len(self.goal_keys)} keys")
+        lines.append(f"StepMix: {self.es_stepmix}")
+        lines.append(f"Summary: {self.es_summary}")
+        lines.append(f"Tapas:   {self.es_tapas}")
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
     def rebuild(self):
         self.ns_entity.build()
         self.ns_option.build()
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_tapas.build(self.ns_entity, self.ns_entity)
+        logger.debug(str(self))
 
     def set_comps(
         self,
@@ -152,7 +168,7 @@ class Graph:
                     entity=entity,
                     n_states=self.entities[entity].n_states,
                     data=DCEntity.empty(),
-                    sources=sources,
+                    sources=set(sources),
                     con=con,
                 ),
             )
@@ -168,7 +184,7 @@ class Graph:
         post_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in pre_sources.items():
             key = "post" + entity + label
-            sources = comp_sources[entity]
+            sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
             self.goal_keys.add(key)
             self.ns_entity.add(
@@ -195,7 +211,7 @@ class Graph:
         temp_sources = post_sources
         for entity, (_, value) in subgoal.items():
             key = entity + label
-            sources = comp_sources[entity]
+            sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
             feat = Entity.gnn_format(value, len(self.entities[entity].cfg.states))
             self.ns_entity.add(
@@ -265,6 +281,7 @@ class Graph:
         node = self.ns_option.idx_get(index)
         assert isinstance(node, OptionNode)
         subgoal = self.assemble_subgoal(node)
+        logger.debug(f"Selected Option: {self.ns_option.key_at(index)}")
         return node.agent, subgoal
 
     def plot(self, path: Path, figsize=(12, 8), show_labels=True):
