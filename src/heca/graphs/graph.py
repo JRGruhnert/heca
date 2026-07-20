@@ -60,14 +60,6 @@ class Graph:
         data[self.es_tapas.type].edge_index = self.es_tapas.edge_index
         return data.to(device=hardware.device.type)
 
-    def assemble_subgoal(self, option: OptionNode) -> DCScene:
-        subgoal = self.start.copy()
-        for src in option.sources:
-            node = self.ns_entity.get_by_key(src[1])
-            assert isinstance(node, EntityNode)
-            subgoal.set(node.entity, node.data)
-        return subgoal
-
     def set_start(self, start: DCScene):
         self.start = start.copy()
         for key in self.start_keys:
@@ -109,13 +101,19 @@ class Graph:
                 x = self.create_subgoal(node)
             self.ns_entity.key_update(key, x)
 
+    def assemble_subgoal(self, option: OptionNode) -> DCScene:
+        subgoal = self.start.copy()
+        for src in option.sources:
+            node = self.ns_entity.get_by_key(src[1])
+            assert isinstance(node, EntityNode)
+            subgoal.set(node.entity, node.data)
+        return subgoal
+
     def __str__(self) -> str:
         lines = ["=== Graph ==="]
         lines.append(f"Entities: {len(self.entities)}")
         lines.append(str(self.ns_entity))
         lines.append(str(self.ns_option))
-        lines.append(f"start: {len(self.start_keys)} keys")
-        lines.append(f"goal:  {len(self.goal_keys)} keys")
         lines.append(f"StepMix: {self.es_stepmix}")
         lines.append(f"Summary: {self.es_summary}")
         lines.append(f"Tapas:   {self.es_tapas}")
@@ -130,7 +128,6 @@ class Graph:
         self.es_stepmix.build(self.ns_entity, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_tapas.build(self.ns_entity, self.ns_entity)
-        logger.debug(str(self))
 
     def set_comps(
         self,
@@ -159,7 +156,7 @@ class Graph:
     ) -> dict[str, tuple[str, str]]:
         pre_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in comp_sources.items():
-            key = "pre" + entity + label
+            key = "pre_" + entity + label
             pre_sources[entity] = (self.es_tapas.type[1], key)
             self.start_keys.add(key)
             self.ns_entity.add(
@@ -183,7 +180,7 @@ class Graph:
     ) -> dict[str, tuple[str, str]]:
         post_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in pre_sources.items():
-            key = "post" + entity + label
+            key = "post_" + entity + label
             sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
             self.goal_keys.add(key)
@@ -210,10 +207,10 @@ class Graph:
     ) -> set[tuple[str, str]]:
         temp_sources = post_sources
         for entity, (_, value) in subgoal.items():
-            key = entity + label
+            key = "sub_" + entity + label
             sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
-            feat = Entity.gnn_format(value, len(self.entities[entity].cfg.states))
+            feat = Entity.gnn_format(value, self.entities[entity].n_states)
             self.ns_entity.add(
                 key,
                 EntityNode(
@@ -244,11 +241,10 @@ class Graph:
                 )
                 for b in agents:
                     for bc in b.conditions:
-                        otag = ac.label + bc.label
                         if ac.label == bc.label:  # pre == post
                             sources = {src for src in post_sources.values()}
                             graph.ns_option.add(
-                                otag,
+                                ac.label,
                                 OptionNode(
                                     agent=a.cfg,
                                     sources=sources,
@@ -258,14 +254,14 @@ class Graph:
                             subgoal = ac.post.make_subgoal(bc.pre)
                             if subgoal is not None:
                                 sources = graph.set_subgoal(
-                                    otag,
+                                    ac.label + bc.label,
                                     post_comp_sources,
                                     pre_sources,
                                     post_sources,
                                     subgoal,
                                 )
                                 graph.ns_option.add(
-                                    otag,
+                                    ac.label + bc.label,
                                     OptionNode(
                                         agent=a.cfg,
                                         sources=sources,

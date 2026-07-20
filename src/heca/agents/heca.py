@@ -61,6 +61,12 @@ class Heca(Agent):
         data = self.graph.export()
         option = self.learner.predict(data, self.cfg.tag)
         a, y = self.graph.select(option)
+        if logger.DEBUG:
+            logger.debug(f"Start:\n{str(x)}")
+            logger.debug(f"Goal:\n{str(y)}")
+            # logger.debug(str(self.graph.ns_entity))
+            input("Press Enter to continue...")
+
         if self.cfg.adjust_ee:
             x = self.adjust_ee(a, x, y)
 
@@ -73,9 +79,6 @@ class Heca(Agent):
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
-        if logger.DEBUG:
-            input("Press Enter to continue...")
-
         return z, fb
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
@@ -101,6 +104,13 @@ class Heca(Agent):
         while not self.evaluator.valid_task(x, y):
             print("Sample New")
             (x, ix), (y, iy) = scene.sample_task()
+        for key in list(x._entities.keys()):
+            if key not in self.elabels:
+                x.remove(key)
+        for key in list(y._entities.keys()):
+            if key not in self.elabels:
+                y.remove(key)
+        logger.debug("New Episode")
         return x, y
 
     def train(self, cfg: Scene.Config):

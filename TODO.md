@@ -2,7 +2,8 @@
 
 ## Short Horizon:
 
-- containment metric merge and sample logic
+- debug further (graph options)
+- gea and vtrace check termin/truncation logic (30sec)
 - add the apply noise code for virtual goal (1h)
 
 ## Long Horizon:

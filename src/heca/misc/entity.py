@@ -30,9 +30,9 @@ class Entity(Configurable):
     class Config(Configurable.Config):
         label: str
         scene: str
-        states: set[str]
+        states: list[str]
         question: str
-        answers: set[str]
+        answers: list[str]
         mobility: Mobility
         eval_func: Callable[[np.ndarray, np.ndarray], bool] = lambda a, b: False
 

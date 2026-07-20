@@ -27,7 +27,7 @@ class DCEntity:
         )
         if len(self.feature) > 20:
             feat_str += f" ... ({len(self.feature)} total)"
-        return f"DCEntity:\n" f"  value:      {val_str}\n" f"  feature:    {feat_str}"
+        return f"\n\tvalue:      {val_str}"  # f"\n\tfeature:    {feat_str}"
 
     @property
     def pos(self) -> np.ndarray:
@@ -92,6 +92,12 @@ class DCScene:
         for key, value in self._entities.items():
             yield key, value
 
+    def remove(self, key: str) -> DCEntity:
+        """Remove the entity with the given key and return it.
+        Raises KeyError if the key does not exist.
+        """
+        return self._entities.pop(key)
+
     @classmethod
     def empty(cls) -> "DCScene":
         return cls(DCEntity.empty(), {})
@@ -108,7 +114,7 @@ class DCScene:
         entity_lines = "\n".join(
             f"  {k:<{max_key_len}}: {v}" for k, v in self._entities.items()
         )
-        return f"DCScene(ee={self._ee},\nentities=\n{entity_lines})"
+        return f"DCScene:\nee\n\t{self._ee}\nentities{entity_lines})"
 
 
 class TDImage(TensorDict):

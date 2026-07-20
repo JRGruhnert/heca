@@ -91,8 +91,8 @@ class OGBenchScene(Scene):
                 label="drawer_handle",
                 scene="ogbench",
                 question="What describes the drawer the best?",
-                answers={"It is open", "It is closed"},
-                states={"open", "closed"},  # 0, 1
+                answers=["It is open", "It is closed"],
+                states=["open", "closed"],  # 0, 1
                 mobility=Mobility.ARTICULATED,
                 eval_func=eval_pos,
             ),
@@ -100,11 +100,11 @@ class OGBenchScene(Scene):
                 label="window_handle",
                 scene="ogbench",
                 question="What describes the sliding window the best?",
-                answers={
+                answers=[
                     "it is open and therefore moved to the front",
                     "it is closed and therefore moved to the back",
-                },
-                states={"open", "closed"},  # 0, 1
+                ],
+                states=["open", "closed"],  # 0, 1
                 mobility=Mobility.ARTICULATED,
                 eval_func=eval_pos,
             ),
@@ -112,8 +112,8 @@ class OGBenchScene(Scene):
                 label="button_0",
                 scene="ogbench",
                 question="What is the color of the left button?",
-                answers={"white", "red"},
-                states={"free", "locked"},  # 0, 1
+                answers=["white", "red"],
+                states=["free", "locked"],  # 0, 1
                 mobility=Mobility.STATIC,
                 eval_func=eval_state,
             ),
@@ -121,8 +121,8 @@ class OGBenchScene(Scene):
                 label="button_1",
                 scene="ogbench",
                 question="What is the color of the right button?",
-                answers={"white", "red"},
-                states={"free", "locked"},  # 0, 1
+                answers=["white", "red"],
+                states=["free", "locked"],  # 0, 1
                 mobility=Mobility.STATIC,
                 eval_func=eval_state,
             ),
@@ -130,12 +130,12 @@ class OGBenchScene(Scene):
                 label="block_0",
                 scene="ogbench",
                 question="Where is the red cube in the scene?",
-                answers={
+                answers=[
                     "inside the drawer",
                     "on the floor",
                     "unknown, cause it is not visible",
-                },
-                states={"drawer", "floor", "unknown"},  # 0, 1
+                ],
+                states=["drawer", "floor", "unknown"],  # 0, 1
                 mobility=Mobility.FREE,
                 eval_func=eval_pos,
             ),
@@ -148,12 +148,12 @@ class OGBenchScene(Scene):
             label="ee",
             scene="ogbench",
             question="Where is the red cube in the scene?",
-            answers={
+            answers=[
                 "on the floor",
                 "inside the drawer",
                 "unknown, cause it is not visible",
-            },
-            states={"open", "closed"},  # 0, 1
+            ],
+            states=["open", "closed"],  # 0, 1
             mobility=Mobility.FREE,
         )
         return Entity.get(config)
