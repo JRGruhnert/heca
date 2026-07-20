@@ -67,7 +67,7 @@ class Graph:
             assert isinstance(node, EntityNode)
             self.ns_entity.key_update(key, start[node.entity])
 
-        self.update_subgoals()
+        self.update_nodes()
         self.rebuild()
 
     def set_goal(self, goal: DCScene):
@@ -75,11 +75,11 @@ class Graph:
         for node in self.ns_option.items:
             node.data = goal.copy()
 
-    def test_subgoal(self, node: EntityNode, x: DCScene) -> bool:
+    def test_value(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
         return node.con.score_single(x[node.entity].value, node.entity)[1]
 
-    def create_subgoal(self, node: EntityNode) -> DCEntity:
+    def create_value(self, node: EntityNode) -> DCEntity:
         assert node.con is not None
         value = node.con.models[node.entity].sample(1)[0]
         if isinstance(value, torch.Tensor):
@@ -89,16 +89,20 @@ class Graph:
         feat = Entity.gnn_format(value, self.entities[node.entity].n_states)
         return DCEntity(value=value, feature=feat)
 
-    def update_subgoals(self):
+    def update_nodes(self):
         for key in self.goal_keys:
             node = self.ns_entity.get_by_key(key)
+            logger.debug(f"Update Subgoal {node.entity} {key}")
             assert isinstance(node, EntityNode)
-            if self.test_subgoal(node, self.goal):
+            if self.test_value(node, self.goal):
                 x = self.goal.get(node.entity)
-            elif self.test_subgoal(node, self.start):
+                logger.debug(f"From Goal:   {x}")
+            elif self.test_value(node, self.start):
                 x = self.start.get(node.entity)
+                logger.debug(f"From Start:  {x}")
             else:
-                x = self.create_subgoal(node)
+                x = self.create_value(node)
+                logger.debug(f"From New:    {x}")
             self.ns_entity.key_update(key, x)
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
@@ -251,7 +255,7 @@ class Graph:
                                 ),
                             )
                         else:  # pre != post
-                            subgoal = ac.post.make_subgoal(bc.pre)
+                            subgoal = ac.post.make_subgoal(bc.pre, ac.label + bc.label)
                             if subgoal is not None:
                                 sources = graph.set_subgoal(
                                     ac.label + bc.label,

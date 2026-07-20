@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from stepmix import StepMix
+from heca.misc import logger
 from heca.misc.entity import Entity
 from heca.utils.quaternion import Quaternion
 
@@ -164,13 +165,15 @@ class Condition:
         plt.close()
 
     def make_subgoal(
-        self, other: "Condition"
+        self, other: "Condition", label: str
     ) -> dict[str, tuple[float, np.ndarray]] | None:
         values = {}
+        logger.debug(f"{label}")
         for key in self.elabels.intersection(other.elabels):
             score = self.containment_score(other, key)
             value = self.best_sample(other, key)
             values[key] = (score, value)
+            logger.debug(f"{key}: score={score}, value={value}")
 
         if len(values) == 0:
             return None  # No matching keys so no option at all
