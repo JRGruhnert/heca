@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 from functools import cached_property
 
+from heca.conditions.evaluator import Evaluator
 from heca.conditions.pair import ConPair
 from heca.misc.base import Persistable
 from heca.misc.data import DCScene
@@ -21,9 +22,16 @@ class Agent(Persistable, abc.ABC):
         n_samples: int = 1000
         folder: str = "agents"
         threshold: float = 0.75
+        evaluator: Evaluator.Config = Evaluator.Config()
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+
+        self.evaluator = Evaluator.get(cfg.evaluator).setup(
+            self.conditions,
+            self.entities,
+            self.elabels,
+        )
 
     @abc.abstractmethod
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
@@ -34,7 +42,7 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError
 
     @cached_property
-    def entities(self) -> set[Entity]:
+    def entities(self) -> dict[str, Entity]:
         raise NotImplementedError
 
     @cached_property

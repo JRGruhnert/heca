@@ -37,8 +37,8 @@ class ExpertAgent(Agent, abc.ABC):
         return [self.cfg.scene]
 
     @cached_property
-    def entities(self) -> list[Entity]:
-        return self.scene.entities
+    def entities(self) -> dict[str, Entity]:
+        return {entity.cfg.label: entity for entity in self.scene.entities}
 
     def from_image(self, image: TDImage) -> DCScene:
         kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)

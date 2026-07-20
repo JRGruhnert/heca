@@ -11,14 +11,14 @@ class Evaluator(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         success_reward: float = 1.0
-        step: float = 0.0
+        step: float = -0.01
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.current_step: int = 0
-        self.max_steps: int = 0
+        self.max_steps: int = 1
         self.conditions: list[ConPair] = []
-        self.entities: set[Entity] = set()
+        self.entities: dict[str, Entity] = {}
         self.elabels: set[str] = set()
 
     def reset(self, y: DCScene):
@@ -35,20 +35,28 @@ class Evaluator(Configurable):
         return AgentFeedback(reward=reward, terminal=success, truncated=truncated)
 
     def evaluate(self, x: DCScene, y: DCScene) -> bool:
-        for e in self.entities:
-            if e.cfg.label in self.elabels:
-                if not e.evaluate(x.get(e.cfg.label), y.get(e.cfg.label)):
-                    return False
+        for key in self.elabels:
+            e = self.entities[key]
+            if not e.evaluate(x.get(key), y.get(key)):
+                return False
         return True
 
     def valid_task(self, x: DCScene, y: DCScene) -> bool:
         for pair in self.conditions:
             pair_matches = True
-            for label in pair.pre.elabels:
-                score, valid = pair.pre.score_single(x.get(label).value, label)
+            for key in pair.pre.elabels:
+                score, valid = pair.pre.score_single(
+                    x.get(key).value,
+                    self.entities[key],
+                    key,
+                )
                 pair_matches = pair_matches and valid
-            for label in pair.post.elabels:
-                score, valid = pair.post.score_single(y.get(label).value, label)
+            for key in pair.post.elabels:
+                score, valid = pair.post.score_single(
+                    y.get(key).value,
+                    self.entities[key],
+                    key,
+                )
                 pair_matches = pair_matches and valid
             if pair_matches:
                 return True
@@ -57,12 +65,13 @@ class Evaluator(Configurable):
     def setup(
         self,
         conditions: list[ConPair],
-        entities: set[Entity],
+        entities: dict[str, Entity],
         elabels: set[str],
-        max_steps: int,
     ) -> "Evaluator":
         self.conditions = conditions
         self.entities = entities
         self.elabels = elabels
-        self.max_steps = max_steps
         return self
+
+    def set_max_steps(self, steps: int):
+        self.max_steps = steps

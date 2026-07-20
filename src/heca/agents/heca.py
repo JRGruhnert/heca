@@ -3,8 +3,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Sequence
 
-import wandb
-
+from heca.agents.experts.expert import ExpertAgent
 from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
@@ -21,7 +20,6 @@ from heca.scenes.scene import Scene
 class Heca(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        evaluator: Evaluator.Config = Evaluator.Config()
         agents: Sequence[Agent.Config]
         learner: Learner.Config
         label: str = "heca"
@@ -45,12 +43,8 @@ class Heca(Agent):
         self.end_flag = False
         if self.cfg.inference:
             self.learner.eval()
-
-        self.evaluator = Evaluator.get(cfg.evaluator).setup(
-            self.conditions,
-            self.entities,
-            self.elabels,
-            len(self.downstream_conditions) * self.cfg.step_multiplier,
+        self.evaluator.set_max_steps(
+            len(self.downstream_conditions) * self.cfg.step_multiplier
         )
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
@@ -70,11 +64,16 @@ class Heca(Agent):
         if self.cfg.adjust_ee:
             x = self.adjust_ee(a, x, y)
 
-        if not self.cfg.downstream_virtual or not isinstance(a, TapasAgent.Config):
-            z, lfb = Agent.get(a).act(x, y)
+        ds_agent = Agent.get(a)
+        if ds_agent.evaluator.valid_task(x, y):
+            if self.cfg.downstream_virtual:
+                z = y.copy()  # pretend that downstream perfectly achieved the goal
+            else:
+                z, lfb = Agent.get(a).act(x, y)
+        else:
+            # Sub Agent rejects goal
+            z = x.copy()
 
-        if self.cfg.downstream_virtual:
-            z = y.copy()  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
@@ -129,8 +128,8 @@ class Heca(Agent):
         return values
 
     @cached_property
-    def entities(self) -> set[Entity]:
-        values = set()
+    def entities(self) -> dict[str, Entity]:
+        values = {}
         for cfg in self.cfg.agents:
             values.update(Agent.get(cfg).entities)
         return values
@@ -154,7 +153,7 @@ class Heca(Agent):
                 for j in range(i + 1, len(cons)):
                     a = cons[i]
                     b = cons[j]
-                    if a.can_merge(b, path):
+                    if a.can_merge(b, self.entities, path):
                         logger.info(f"{self.cfg.tag}: Merging {a.label} and {b.label}.")
                         a_set = sets[i]
                         b_set = sets[j]

@@ -77,7 +77,11 @@ class Graph:
 
     def test_value(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
-        return node.con.score_single(x[node.entity].value, node.entity)[1]
+        return node.con.score_single(
+            x[node.entity].value,
+            self.entities[node.entity],
+            node.entity,
+        )[1]
 
     def create_value(self, node: EntityNode) -> DCEntity:
         assert node.con is not None
@@ -229,8 +233,8 @@ class Graph:
         return {src for src in temp_sources.values()}
 
     @classmethod
-    def generate(cls, cfgs: list[Agent.Config], entities: set[Entity]) -> "Graph":
-        graph = cls(entities={e.cfg.label: e for e in entities})
+    def generate(cls, cfgs: list[Agent.Config], entities: dict[str, Entity]) -> "Graph":
+        graph = cls(entities=entities)
         agents = [Agent.get(cfg) for cfg in cfgs]
         for a in agents:
             for ac in a.conditions:
@@ -255,7 +259,9 @@ class Graph:
                                 ),
                             )
                         else:  # pre != post
-                            subgoal = ac.post.make_subgoal(bc.pre, ac.label + bc.label)
+                            subgoal = bc.pre.make_subgoal(
+                                ac.post, entities, ac.label + bc.label
+                            )
                             if subgoal is not None:
                                 sources = graph.set_subgoal(
                                     ac.label + bc.label,

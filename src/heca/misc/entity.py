@@ -43,10 +43,6 @@ class Entity(Configurable):
     def n_states(self) -> int:
         return len(self.cfg.states)
 
-    @classmethod
-    def n_states_static(cls, e: "Entity") -> int:
-        return len(e.cfg.states)
-
     def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
         return self.cfg.eval_func(a.value, b.value)
 
@@ -73,14 +69,14 @@ class Entity(Configurable):
         assert label is not None, "Label cannot be None."
         assert label in self.cfg.states, "Label must be in state values."
         one_hot = self.make_zeros()
-        index = list(self.cfg.states).index(label)
+        index = self.cfg.states.index(label)
         one_hot[index] = 1.0
         return one_hot
 
     def make_idx(self, label: str) -> int:
         assert label is not None, "Label cannot be None."
         assert label in self.cfg.states, "Label must be in state values."
-        return list(self.cfg.states).index(label)
+        return self.cfg.states.index(label)
 
     def one_hot_from_idx(self, idx: int) -> torch.Tensor:
         idx = int(idx)

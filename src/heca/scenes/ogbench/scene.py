@@ -305,17 +305,10 @@ class OGBenchScene(Scene):
         yaw = self.quat_to_yaw(quat)
         state = action[7]
         result = np.concatenate([pos, [yaw], [state]], axis=0)
-        # print(
-        #    f"internal action: {result.shape} {result.dtype}  yaw type: {type(yaw)}  yaw: {yaw}"
-        # )
         return result
 
     def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
-        # print(f"Before intrnal action: {action}")
         action = self.to_internal_action(action)
-        # print(
-        #    f"Passing to ogbench: shape={action.shape}, ndim={action.ndim}, action={action}"
-        # )
         ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         assert isinstance(reward, float)
@@ -373,10 +366,8 @@ class OGBenchScene(Scene):
 
                 obs, _ = self.to_internal(image, ob)
                 dc_scene, td_image, _ = self.from_internal(obs)
-
                 segment_scene.append(dc_scene)
                 segment_image.append(td_image)
-
             segments_scene.append(segment_scene)
             segments_image.append(segment_image)
 

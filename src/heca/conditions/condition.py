@@ -55,12 +55,11 @@ class Condition:
 
         for key in self.models.keys():
             # Extract raw parameters from the fitted StepMix model
-            n_states = entities[key].n_states
-            params = self.secure_mix_parameters(key, n_states - 1)
-            weights = params["weights"]  # shape: (N,)
-            means = params["measurement"]["pose"]["means"]  # shape: (N, 7)
-            covariances = params["measurement"]["pose"]["covariances"]  # shape: (N, 7)
-            pis = params["measurement"]["state"]["pis"]  # shape: (K, total_outcomes)
+            p = self.secure_mix_parameters(key, entities[key].n_states)
+            weights = p["weights"]  # shape: (N,)
+            means = p["measurement"]["pose"]["means"]  # shape: (N, 7)
+            covariances = p["measurement"]["pose"]["covariances"]  # shape: (N, 7)
+            pis = p["measurement"]["state"]["pis"]  # shape: (N, K)
             N = len(weights)
 
             feat = np.zeros((N, Entity.input_feat_dim), dtype=np.float32)
@@ -69,16 +68,9 @@ class Condition:
             feat[:, 6:10] = Quaternion.normalize(means[:, 3:7])
             feat[:, 10:13] = 0.5 * np.log(covariances[:, 3:6] + eps)
             logits = np.log(pis)  # [K]
-            feat[:, 13 : 13 + n_states] = logits
+            feat[:, 13 : 13 + entities[key].n_states] = logits
             result[key] = feat
         return result
-
-    @property
-    def model_states(self) -> dict[str, set[int]]:
-        states: dict[str, set[int]] = {}
-        for key, values in self.data_raw.items():
-            states[key] = set(values[:, -1].astype(int))
-        return states
 
     @property
     def data_raw(self) -> dict[str, np.ndarray]:
@@ -165,13 +157,13 @@ class Condition:
         plt.close()
 
     def make_subgoal(
-        self, other: "Condition", label: str
+        self, other: "Condition", entities: dict[str, Entity], label: str
     ) -> dict[str, tuple[float, np.ndarray]] | None:
         values = {}
         logger.debug(f"{label}")
         for key in self.elabels.intersection(other.elabels):
-            score = self.containment_score(other, key)
-            value = self.best_sample(other, key)
+            score = self.containment_score(other, entities[key], key)
+            value = self.best_sample(other, entities[key], key)
             values[key] = (score, value)
             logger.debug(f"{key}: score={score}, value={value}")
 
@@ -182,10 +174,11 @@ class Condition:
                 return None
         return values
 
-    def best_sample(self, other: "Condition", key: str, eps: float = 1e-15):
-        k_max = self.max_state(other, key)
-        p1 = self.secure_mix_parameters(key, k_max)
-        p2 = other.secure_mix_parameters(key, k_max)
+    def best_sample(
+        self, other: "Condition", entity: Entity, key: str, eps: float = 1e-15
+    ):
+        p1 = self.secure_mix_parameters(key, entity.n_states)
+        p2 = other.secure_mix_parameters(key, entity.n_states)
 
         weights1 = p1["weights"]
         weights2 = p2["weights"]
@@ -211,7 +204,10 @@ class Condition:
                     + np.sum(diff**2 / (vars1[i] + vars2[j]))
                 )
                 # Categorical part — padded to same target space
+                print(state1)
+                print(state2)
                 cat_prod = state1[i] * state2[j]  # element-wise over aligned states
+                print(f"catprod: {cat_prod}")
                 state = int(np.argmax(cat_prod))
                 log_cat = np.log(np.clip(cat_prod[state], eps, None))
                 score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat
@@ -223,26 +219,20 @@ class Condition:
         assert isinstance(pose, np.ndarray)
         return np.concatenate([pose, [state]])
 
-    def secure_mix_parameters(self, key: str, k_max: int, eps: float = 1e-15) -> dict:
+    def secure_mix_parameters(self, key: str, n_state: int, eps: float = 1e-15) -> dict:
         p = self.models[key].get_parameters().copy()
         pis = p["measurement"]["state"]["pis"]
-        padded = np.full((pis.shape[0], k_max + 1), eps, dtype=np.float32)
+        padded = np.full((pis.shape[0], n_state), eps, dtype=np.float32)
         padded[:, : pis.shape[1]] = pis
         # Renormalize so probabilities sum to 1
         padded /= padded.sum(axis=1, keepdims=True)
         p["measurement"]["state"]["pis"] = padded
         return p
 
-    def max_state(self, other: "Condition", key: str) -> int:
-        s1_max = max(self.model_states[key])
-        s2_max = max(other.model_states[key])
-        return max(s1_max, s2_max)
-
-    def containment_score(self, other: "Condition", key: str):
+    def containment_score(self, other: "Condition", entity: Entity, key: str):
         """How much of others mass falls inside selfs distribution."""
-        k_max = self.max_state(other, key)
-        p1 = self.secure_mix_parameters(key, k_max)
-        p2 = other.secure_mix_parameters(key, k_max)
+        p1 = self.secure_mix_parameters(key, entity.n_states)
+        p2 = other.secure_mix_parameters(key, entity.n_states)
 
         score = 0.0
         for i in range(len(p1["weights"])):
@@ -269,10 +259,10 @@ class Condition:
         return score  # [0, 1]
 
     def score_single(
-        self, sample: np.ndarray, key: str, eps: float = 1e-15
+        self, sample: np.ndarray, entity: Entity, key: str, eps: float = 1e-15
     ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
-        p = self.secure_mix_parameters(key, max(self.model_states[key]))
+        p = self.secure_mix_parameters(key, entity.n_states)
         pose = sample[:7]
         state = int(sample[-1])
         best_logprob = -np.inf
@@ -297,58 +287,57 @@ class Condition:
         valid = score >= self.threshold
         return score, valid
 
-    def kl_variational_paper(self, other: "Condition", key: str, eps: float = 1e-15):
-        k_max = self.max_state(other, key)
-        p1 = self.secure_mix_parameters(key, k_max)
-        p2 = other.secure_mix_parameters(key, k_max)
+    # def kl_variational_paper(self, other: "Condition", key: str, eps: float = 1e-15):
+    #     p1 = self.secure_mix_parameters(key, k_max)
+    #     p2 = other.secure_mix_parameters(key, k_max)
 
-        kl = 0.0
-        for i in range(len(p1["weights"])):
-            w_i = p1["weights"][i]
-            mu1 = p1["measurement"]["pose"]["means"][i]
-            var1 = p1["measurement"]["pose"]["covariances"][i]
-            cat1 = p1["measurement"]["state"]["pis"][i]
+    #     kl = 0.0
+    #     for i in range(len(p1["weights"])):
+    #         w_i = p1["weights"][i]
+    #         mu1 = p1["measurement"]["pose"]["means"][i]
+    #         var1 = p1["measurement"]["pose"]["covariances"][i]
+    #         cat1 = p1["measurement"]["state"]["pis"][i]
 
-            # Numerator: self-overlap of component i with its OWN model
-            log_sum_m1 = 0.0
-            for k in range(len(p1["weights"])):
-                w_k = p1["weights"][k]
-                mu_k = p1["measurement"]["pose"]["means"][k]
-                var_k = p1["measurement"]["pose"]["covariances"][k]
-                cat_k = p1["measurement"]["state"]["pis"][k]
+    #         # Numerator: self-overlap of component i with its OWN model
+    #         log_sum_m1 = 0.0
+    #         for k in range(len(p1["weights"])):
+    #             w_k = p1["weights"][k]
+    #             mu_k = p1["measurement"]["pose"]["means"][k]
+    #             var_k = p1["measurement"]["pose"]["covariances"][k]
+    #             cat_k = p1["measurement"]["state"]["pis"][k]
 
-                kl_self = 0.5 * np.sum(
-                    np.log(var1)
-                    - np.log(var_k)
-                    + var_k / var1
-                    + (mu_k - mu1) ** 2 / var1
-                    - 1
-                )
-                cat1_safe = np.clip(cat1, eps, 1)
-                cat_k_safe = np.clip(cat_k, eps, 1)
-                kl_cat_self = np.sum(
-                    cat1_safe * (np.log(cat1_safe) - np.log(cat_k_safe))
-                )
-                log_sum_m1 += w_k * np.exp(-(kl_self + kl_cat_self))
+    #             kl_self = 0.5 * np.sum(
+    #                 np.log(var1)
+    #                 - np.log(var_k)
+    #                 + var_k / var1
+    #                 + (mu_k - mu1) ** 2 / var1
+    #                 - 1
+    #             )
+    #             cat1_safe = np.clip(cat1, eps, 1)
+    #             cat_k_safe = np.clip(cat_k, eps, 1)
+    #             kl_cat_self = np.sum(
+    #                 cat1_safe * (np.log(cat1_safe) - np.log(cat_k_safe))
+    #             )
+    #             log_sum_m1 += w_k * np.exp(-(kl_self + kl_cat_self))
 
-            # Denominator: cross-overlap with model 2
-            log_sum_m2 = 0.0
-            for j in range(len(p2["weights"])):
-                w_j = p2["weights"][j]
-                mu2 = p2["measurement"]["pose"]["means"][j]
-                var2 = p2["measurement"]["pose"]["covariances"][j]
-                cat2 = p2["measurement"]["state"]["pis"][j]
+    #         # Denominator: cross-overlap with model 2
+    #         log_sum_m2 = 0.0
+    #         for j in range(len(p2["weights"])):
+    #             w_j = p2["weights"][j]
+    #             mu2 = p2["measurement"]["pose"]["means"][j]
+    #             var2 = p2["measurement"]["pose"]["covariances"][j]
+    #             cat2 = p2["measurement"]["state"]["pis"][j]
 
-                kl_gauss = 0.5 * np.sum(
-                    np.log(var2)
-                    - np.log(var1)
-                    + var1 / var2
-                    + (mu1 - mu2) ** 2 / var2
-                    - 1
-                )
-                cat2_safe = np.clip(cat2, eps, 1)
-                kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
-                log_sum_m2 += w_j * np.exp(-(kl_gauss + kl_cat))
+    #             kl_gauss = 0.5 * np.sum(
+    #                 np.log(var2)
+    #                 - np.log(var1)
+    #                 + var1 / var2
+    #                 + (mu1 - mu2) ** 2 / var2
+    #                 - 1
+    #             )
+    #             cat2_safe = np.clip(cat2, eps, 1)
+    #             kl_cat = np.sum(cat1_safe * (np.log(cat1_safe) - np.log(cat2_safe)))
+    #             log_sum_m2 += w_j * np.exp(-(kl_gauss + kl_cat))
 
-            kl += w_i * np.log(log_sum_m1 / log_sum_m2)
-        return np.exp(-kl)
+    #         kl += w_i * np.log(log_sum_m1 / log_sum_m2)
+    #     return np.exp(-kl)
