@@ -64,6 +64,16 @@ class Buffer(Configurable):
 
         return self.full
 
+    def stats(self) -> dict[str, float]:
+        n_terms = sum(self.terminals)
+        n_truncs = sum(self.truncates)
+        total = n_terms + n_truncs
+        return {
+            "stats/n_episodes": total,
+            "stats/success_rate": n_terms / total if total > 0 else 0.0,
+            "stats/mean_length": 2048 / total if total > 0 else 0.0,
+        }
+
     @abstractmethod
     def compute_advantages(self, **kwargs) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
@@ -97,7 +107,7 @@ class Buffer(Configurable):
         return [d.terminal for d in self.queue]
 
     @property
-    def truncates(self) -> list[float]:
+    def truncates(self) -> list[bool]:
         return [d.truncated for d in self.queue]
 
     def save(self, path: Path, label: str):

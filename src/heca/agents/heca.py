@@ -3,6 +3,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import Sequence
 
+import wandb
+
 from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent, AgentFeedback
@@ -53,9 +55,6 @@ class Heca(Agent):
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
         self.graph.log()
-        self.n_terminals = 0
-        self.n_truncated = 0
-        self.n_feedback = 0
 
     def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_start(x)
@@ -71,23 +70,10 @@ class Heca(Agent):
         if self.cfg.downstream_virtual:
             z = y.copy()  # pretend that downstream perfectly achieved the goal
         fb = self.evaluator.step(z)
-        self.debug_log(fb)
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
         return z, fb
-
-    def debug_log(self, fb: AgentFeedback):
-        self.n_feedback += 1
-        if fb.terminal:
-            self.n_terminals += 1
-        if fb.truncated:
-            self.n_truncated += 1
-
-        if self.n_feedback % 2048 == 0:
-            logger.info(
-                f"terminal={self.n_terminals/self.n_feedback}  truncated={self.n_truncated/self.n_feedback}"
-            )
 
     def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
         agent = Agent.get(a)

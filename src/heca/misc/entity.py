@@ -129,7 +129,7 @@ class Entity(Configurable):
         # )
         feat[0:3] = raw[0:3]
         feat[3:6] = base_logstd
-        feat[6:10] = Quaternion.normalize(feat[6:10])
+        feat[6:10] = Quaternion.normalize(raw[3:7])
         feat[10:13] = base_logstd
         state_ids = raw[7].astype(int)  # [N]
         feat[13 : 13 + n_states] = -logit_confidence

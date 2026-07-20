@@ -26,7 +26,7 @@ class WandBConfig:
     save_code: bool = False  # Uploads training script
     watch_model: bool = True  # Log gradients & weight histograms
     watch_freq: int = 100  # Frequency of gradient logging
-    enabled: bool = False
+    enabled: bool = True
 
 
 # class _ExplainerWrapper(nn.Module):
@@ -92,6 +92,10 @@ class Learner(Persistable):
             ),
         )
 
+        self.n_terminals = 0
+        self.n_truncated = 0
+        self.n_feedback = 0
+        self.n_episodes = 0
         # self.actor_explainer = Explainer(
         #     _ExplainerWrapper(self.actor),
         #     algorithm=CaptumExplainer("IntegratedGradients"),
@@ -274,6 +278,7 @@ class Learner(Persistable):
                 self.learn()
                 self.current_update = min(self.current_update + 1, self.cfg.max_update)
                 self.sync_inference()
+                self.metrics.update(self.buffer.stats())
                 self.training_log()
                 self.buffer.reset()
 
