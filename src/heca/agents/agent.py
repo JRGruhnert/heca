@@ -2,18 +2,11 @@ import abc
 from dataclasses import dataclass
 from functools import cached_property
 
-from heca.conditions.evaluator import Evaluator
+from heca.conditions.evaluator import AgentFeedback, Evaluator
 from heca.conditions.pair import ConPair
 from heca.misc.base import Persistable
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
-
-
-@dataclass(kw_only=True, slots=True)
-class AgentFeedback:
-    terminal: bool
-    reward: float
-    truncated: bool
 
 
 class Agent(Persistable, abc.ABC):
@@ -26,12 +19,17 @@ class Agent(Persistable, abc.ABC):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+        self._evaluator = None
 
-        self.evaluator = Evaluator.get(cfg.evaluator).setup(
-            self.conditions,
-            self.entities,
-            self.elabels,
-        )
+    @property
+    def evaluator(self) -> Evaluator:
+        if self._evaluator is None:
+            self._evaluator = Evaluator.get(self.cfg.evaluator).setup(
+                self.conditions,
+                self.entities,
+                self.elabels,
+            )
+        return self._evaluator
 
     @abc.abstractmethod
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:

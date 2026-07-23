@@ -9,51 +9,51 @@ cfg = AgentTester.Config(
             scene=OGBenchScene.Config(),
             use_gt=True,
         ),
-        TapasAgent.Config(
-            tag="close_drawer",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="open_window",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="close_window",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="lock_left_button",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="lock_right_button",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="unlock_left_button",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="unlock_right_button",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="move_block",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
-        TapasAgent.Config(
-            tag="move_ee",
-            scene=OGBenchScene.Config(),
-            use_gt=True,
-        ),
+        # TapasAgent.Config(
+        #     tag="close_drawer",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="open_window",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="close_window",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="lock_left_button",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="lock_right_button",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="unlock_left_button",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="unlock_right_button",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="move_block",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
+        # TapasAgent.Config(
+        #     tag="move_ee",
+        #     scene=OGBenchScene.Config(),
+        #     use_gt=True,
+        # ),
     ],
     scene=OGBenchScene.Config(),
 )

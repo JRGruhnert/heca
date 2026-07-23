@@ -65,12 +65,18 @@ class Buffer(Configurable):
         return self.full
 
     def stats(self) -> dict[str, float]:
-        n_terms = sum(self.terminals)
         n_truncs = sum(self.truncates)
+        n_terms = sum(self.terminals)
+
+        # Count episodes where last step has terminal=True and reward > step penalty
+        n_success = sum(
+            1 for d in self.queue if d.terminal and d.reward > 0.0  # or > 0
+        )
+
         total = n_terms + n_truncs
         return {
             "stats/n_episodes": total,
-            "stats/success_rate": n_terms / total if total > 0 else 0.0,
+            "stats/success_rate": n_success / total if total > 0 else 0.0,
             "stats/mean_length": 2048 / total if total > 0 else 0.0,
         }
 

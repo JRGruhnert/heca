@@ -20,9 +20,9 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     DemoSegmentationConfig,
     CascadeConfig,
 )
-from heca.agents.agent import AgentFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
+from heca.conditions.evaluator import AgentFeedback
 from heca.conditions.pair import ConPair
 from heca.misc.data import DCScene, TDImage
 from heca.misc.entity import Mobility
@@ -121,9 +121,9 @@ class TapasAgent(ExpertAgent):
             predictions = self.make_batch_prediction(xt)
             if predictions is None:
                 return x, AgentFeedback(
-                    reward=0,
-                    terminal=False,
-                    truncated=True,
+                    reward=0.0,
+                    terminal=True,
+                    truncated=False,
                 )  # Error
 
             while not predictions.is_finished:
@@ -137,9 +137,9 @@ class TapasAgent(ExpertAgent):
                 action, _ = pred
                 if action is None:
                     return x, AgentFeedback(
-                        reward=0,
-                        terminal=False,
-                        truncated=True,
+                        reward=0.0,
+                        terminal=True,
+                        truncated=False,
                     )  # Error
                 tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
                 z = self.make_scene(tdscene, tdimage)

@@ -26,7 +26,7 @@ class WandBConfig:
     save_code: bool = False  # Uploads training script
     watch_model: bool = True  # Log gradients & weight histograms
     watch_freq: int = 100  # Frequency of gradient logging
-    enabled: bool = False
+    enabled: bool = True
 
 
 # class _ExplainerWrapper(nn.Module):

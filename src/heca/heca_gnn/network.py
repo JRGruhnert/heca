@@ -53,6 +53,7 @@ class SummaryBlock(nn.Module):
         super().__init__()
         self.nn = nn.Sequential(
             nn.Linear(dim, dim),
+            nn.LayerNorm(dim),
             nn.ReLU(),
             nn.Linear(dim, dim),
         )
@@ -110,6 +111,7 @@ class Network(Configurable, nn.Module):
         total_input_dim = cfg.input_feat_dim + cfg.type_embed_dim
 
         self.entity_encoder = nn.Sequential(
+            nn.LayerNorm(total_input_dim),
             nn.Linear(total_input_dim, cfg.feature_dim),
             nn.LayerNorm(cfg.feature_dim),
             nn.ReLU(),
@@ -127,29 +129,40 @@ class Network(Configurable, nn.Module):
         self.option_readout = OptionReadout(cfg.feature_dim)
 
     def forward(self, data: HeteroData) -> tuple[torch.Tensor, torch.Tensor]:
+
+        # print(
+        #    f"DEBUG entity.x: min={data['entity'].x.min():.2f} max={data['entity'].x.max():.2f} mean={data['entity'].x.mean():.2f}"
+        # )
+
         type_embeds = self.type_embedding(
             data["entity"].type_ids
         )  # [N, type_embed_dim]
         entity_x = torch.cat([data["entity"].x, type_embeds], dim=-1)
+        # print(f"entity_x: {entity_x.min():.2f} {entity_x.max():.2f}")
 
         entity_x = self.entity_encoder(entity_x)
-
+        # print(f"after encoder: {entity_x.min():.2f} {entity_x.max():.2f}")
         stepmix_idx = data[("entity", "stepmix", "entity")].edge_index
         stepmix_attr = data[("entity", "stepmix", "entity")].edge_attr
         for layer in self.stepmix_layers:
             entity_x = layer(entity_x, stepmix_idx, stepmix_attr)
+        # print(f"after stepmix: {entity_x.min():.2f} {entity_x.max():.2f}")
 
         tapas_idx = data[("entity", "tapas", "entity")].edge_index
         for layer in self.tapas_layers:
             entity_x = layer(entity_x, tapas_idx)
+        # print(f"after tapas: {entity_x.min():.2f} {entity_x.max():.2f}")
 
         summary_idx = data[("entity", "summary", "option")].edge_index
         summary_attr = data[("entity", "summary", "option")].edge_attr
         option_x = self.summary_layer(
             entity_x, data["option"].x, summary_idx, summary_attr
         )
+        # print(f"option_x: {option_x.min():.2f} {option_x.max():.2f}")
 
         logits, value = self.option_readout(option_x)
+        # print(f"value: {value.item():.2f}")
+
         return logits, value
 
     def actor(self, data: HeteroData) -> torch.Tensor:

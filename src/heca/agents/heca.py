@@ -6,8 +6,8 @@ from typing import Sequence
 from heca.agents.experts.expert import ExpertAgent
 from heca.agents.experts.tapas import TapasAgent
 from heca.conditions.pair import ConPair
-from heca.agents.agent import Agent, AgentFeedback
-from heca.conditions.evaluator import Evaluator
+from heca.agents.agent import Agent
+from heca.conditions.evaluator import AgentFeedback, Evaluator
 from heca.graphs.graph import Graph
 from heca.learning.learner import Learner
 from heca.misc import logger
@@ -38,11 +38,13 @@ class Heca(Agent):
         step_multiplier: int = 2
 
     def __init__(self, cfg: Config):
+        super().__init__(cfg)
         self.cfg = cfg
         self.learner = Learner.get(self.cfg.learner).register(self.cfg.tag)
         self.end_flag = False
         if self.cfg.inference:
             self.learner.eval()
+
         self.evaluator.set_max_steps(
             len(self.downstream_conditions) * self.cfg.step_multiplier
         )
@@ -68,13 +70,16 @@ class Heca(Agent):
         if ds_agent.evaluator.valid_task(x, y):
             if self.cfg.downstream_virtual:
                 z = y.copy()  # pretend that downstream perfectly achieved the goal
+                lfb = AgentFeedback(terminal=True, reward=1.0, truncated=False)
+
             else:
                 z, lfb = Agent.get(a).act(x, y)
         else:
             # Sub Agent rejects goal
             z = x.copy()
+            lfb = AgentFeedback(terminal=True, reward=0.0, truncated=False)
 
-        fb = self.evaluator.step(z)
+        fb = self.evaluator.step(z, lfb)
         self.end_flag = self.learner.update(
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
@@ -103,12 +108,12 @@ class Heca(Agent):
         while not self.evaluator.valid_task(x, y):
             print("Sample New")
             (x, ix), (y, iy) = scene.sample_task()
-        for key in list(x._entities.keys()):
-            if key not in self.elabels:
-                x.remove(key)
-        for key in list(y._entities.keys()):
-            if key not in self.elabels:
-                y.remove(key)
+        # for key in list(x._entities.keys()):
+        #     if key not in self.elabels:
+        #         x.remove(key)
+        # for key in list(y._entities.keys()):
+        #     if key not in self.elabels:
+        #         y.remove(key)
         logger.debug("New Episode")
         return x, y
 

@@ -204,10 +204,7 @@ class Condition:
                     + np.sum(diff**2 / (vars1[i] + vars2[j]))
                 )
                 # Categorical part — padded to same target space
-                print(state1)
-                print(state2)
                 cat_prod = state1[i] * state2[j]  # element-wise over aligned states
-                print(f"catprod: {cat_prod}")
                 state = int(np.argmax(cat_prod))
                 log_cat = np.log(np.clip(cat_prod[state], eps, None))
                 score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat

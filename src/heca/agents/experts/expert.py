@@ -23,8 +23,8 @@ class ExpertAgent(Agent, abc.ABC):
         use_gt: bool = False
 
     def __init__(self, cfg: Config):
+        super().__init__(cfg)
         self.cfg = cfg
-
         self.scene = Scene.get(self.cfg.scene, auto_load=not cfg.use_gt)
 
         if not self.cfg.use_gt:
@@ -32,9 +32,6 @@ class ExpertAgent(Agent, abc.ABC):
             self.state_extractor = ImageEncoder.get(self.cfg.state_extraction)
             self.kp_extractor.prepare_for_scene(self.cfg.scene)
             self.state_extractor.prepare_for_scene(self.cfg.scene)
-
-    def required_scenes(self) -> list[Scene.Config]:
-        return [self.cfg.scene]
 
     @cached_property
     def entities(self) -> dict[str, Entity]:

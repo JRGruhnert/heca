@@ -1,10 +1,16 @@
 from dataclasses import dataclass
 
-from heca.agents.agent import AgentFeedback
 from heca.conditions.pair import ConPair
 from heca.misc.base import Configurable
 from heca.misc.data import DCScene
 from heca.misc.entity import Entity
+
+
+@dataclass(kw_only=True, slots=True)
+class AgentFeedback:
+    terminal: bool
+    reward: float
+    truncated: bool
 
 
 class Evaluator(Configurable):
@@ -25,8 +31,11 @@ class Evaluator(Configurable):
         self.y = y
         self.current_step = 0
 
-    def step(self, x: DCScene) -> AgentFeedback:
-        success = self.evaluate(x, self.y)
+    def step(self, x: DCScene, lfb: AgentFeedback) -> AgentFeedback:
+        if lfb.terminal and lfb.reward < 0:
+            success = lfb.terminal
+        else:
+            success = self.evaluate(x, self.y)
         reward = self.cfg.step + self.cfg.success_reward * int(success)
 
         self.current_step += 1

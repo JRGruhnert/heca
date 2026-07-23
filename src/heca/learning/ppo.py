@@ -78,6 +78,18 @@ class PPO(Learner):
                 # Normalize advantages
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
 
+                # Right after line 79, before value loss:
+                # if num_minibatches == 0 and self.current_update < 3:
+                #    print(
+                #        f"DEBUG: mb_rtn min={mb_rtn.min():.2f} max={mb_rtn.max():.2f} mean={mb_rtn.mean():.2f}"
+                #    )
+                #    print(
+                #        f"DEBUG: mb_old_val min={mb_old_val.min():.2f} max={mb_old_val.max():.2f}"
+                #    )
+                #    print(
+                #        f"DEBUG: state_values min={state_values.min():.2f} max={state_values.max():.2f}"
+                #    )
+
                 # PPO ratio
                 ratios = torch.exp(logprobs - mb_logprobs)
 
