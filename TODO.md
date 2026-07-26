@@ -2,15 +2,15 @@
 
 ## Short Horizon:
 
-- debug further (graph options)
-- gea and vtrace check termin/truncation logic (30sec)
+- gea and vtrace check termin/truncation logic (30min)
 - add the apply noise code for virtual goal (1h)
+- finalize tapas model (8h)
+- adjust_ee (1-8h) (depending on solution)
 
 ## Long Horizon:
 
-- clean up recorded data
+- vtrace simulate async (4h)
 - record tapas models
-- reward normalizer (2h)
 - update image encoder (uncertainty)
 - record image samples
 - record image encoder tapas model
