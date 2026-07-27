@@ -40,6 +40,9 @@ class PPO(Learner):
             for pg in self.optim.param_groups:
                 pg["lr"] = lr
 
+    def _fedprox_term(self) -> torch.Tensor:
+        return torch.tensor(0.0, device=next(self.network.parameters()).device)
+
     def _mini_batch_loop(self, adv: torch.Tensor, rtn: torch.Tensor):
         old_data = self.buffer.data
         old_actions = self.buffer.actions.detach().squeeze(-1)
@@ -53,6 +56,7 @@ class PPO(Learner):
         total_approx_kl = 0.0
         total_clip_fraction = 0.0
         total_loss = 0.0
+        total_fedprox_loss = 0.0
         num_minibatches = 0
 
         kl_stop = False
@@ -77,18 +81,6 @@ class PPO(Learner):
                 assert isinstance(entropy, torch.Tensor)
                 # Normalize advantages
                 mb_adv = (mb_adv - mb_adv.mean()) / (mb_adv.std() + 1e-8)
-
-                # Right after line 79, before value loss:
-                # if num_minibatches == 0 and self.current_update < 3:
-                #    print(
-                #        f"DEBUG: mb_rtn min={mb_rtn.min():.2f} max={mb_rtn.max():.2f} mean={mb_rtn.mean():.2f}"
-                #    )
-                #    print(
-                #        f"DEBUG: mb_old_val min={mb_old_val.min():.2f} max={mb_old_val.max():.2f}"
-                #    )
-                #    print(
-                #        f"DEBUG: state_values min={state_values.min():.2f} max={state_values.max():.2f}"
-                #    )
 
                 # PPO ratio
                 ratios = torch.exp(logprobs - mb_logprobs)
@@ -119,6 +111,9 @@ class PPO(Learner):
                     - self.cfg.entropy_coef * entropy
                 )
 
+                fedprox = self._fedprox_term()
+                loss = loss + fedprox
+
                 # Gradient step
                 self.optim.zero_grad()
                 loss.mean().backward()
@@ -138,6 +133,7 @@ class PPO(Learner):
                     total_approx_kl += approx_kl.item()
                     total_clip_fraction += clip_fraction.item()
                     total_loss += loss.mean().item()
+                    total_fedprox_loss += fedprox.item()
                     num_minibatches += 1
 
                     if (
@@ -165,6 +161,7 @@ class PPO(Learner):
                 "train/approx_kl": total_approx_kl / num_minibatches,
                 "train/clip_frac": total_clip_fraction / num_minibatches,
                 "train/total_loss": total_loss / num_minibatches,
+                "train/fedprox_loss": total_fedprox_loss / num_minibatches,
                 "train/expl_var": explained_var,
                 "train/lr": self.optim.param_groups[0]["lr"],
             }

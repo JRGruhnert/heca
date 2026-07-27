@@ -10,17 +10,22 @@ from heca.misc import hardware
 from heca.misc.base import Configurable
 
 
-class StepMixBlock(nn.Module):
-    """GIN layer for entity→stepmix→entity edges (8-dim edge features)."""
+def _make_gnn_mlp(dim: int, num_layers: int) -> nn.Sequential:
+    layers = []
+    for _ in range(num_layers):
+        layers.append(nn.Linear(dim, dim))
+        layers.append(nn.LayerNorm(dim))
+        layers.append(nn.ReLU())
+    layers.append(nn.Linear(dim, dim))
+    return nn.Sequential(*layers)
 
-    def __init__(self, dim: int):
+
+class StepMixBlock(nn.Module):
+    """GINE layer for entity→stepmix→entity edges (8-dim edge features)."""
+
+    def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
-        self.nn = nn.Sequential(
-            nn.Linear(dim, dim),
-            nn.LayerNorm(dim),
-            nn.ReLU(),
-            nn.Linear(dim, dim),
-        )
+        self.nn = _make_gnn_mlp(dim, num_layers)
         self.conv = GINEConv(nn=self.nn, edge_dim=8)
 
     def forward(
@@ -32,14 +37,9 @@ class StepMixBlock(nn.Module):
 class TapasBlock(nn.Module):
     """GIN layer for entity→tapas→entity edges (no edge features)."""
 
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
-        self.nn = nn.Sequential(
-            nn.Linear(dim, dim),
-            nn.LayerNorm(dim),
-            nn.ReLU(),
-            nn.Linear(dim, dim),
-        )
+        self.nn = _make_gnn_mlp(dim, num_layers)
         self.conv = GINConv(nn=self.nn)
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
@@ -49,14 +49,9 @@ class TapasBlock(nn.Module):
 class SummaryBlock(nn.Module):
     """GINE layer for entity→summary→option edges (7-dim edge features)."""
 
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
-        self.nn = nn.Sequential(
-            nn.Linear(dim, dim),
-            nn.LayerNorm(dim),
-            nn.ReLU(),
-            nn.Linear(dim, dim),
-        )
+        self.nn = _make_gnn_mlp(dim, num_layers)
         self.conv = GINEConv(nn=self.nn, edge_dim=7)
 
     def forward(
@@ -69,36 +64,18 @@ class SummaryBlock(nn.Module):
         return self.conv((x_entity, x_option), edge_index, edge_attr)
 
 
-class OptionReadout(nn.Module):
-    """Separate MLPs for Actor and Critic to avoid task interference."""
-
-    def __init__(self, dim: int):
-        super().__init__()
-        self.actor_net = nn.Sequential(
-            nn.Linear(dim, dim), nn.ReLU(), nn.Linear(dim, 1)
-        )
-
-        self.critic_net = nn.Sequential(
-            nn.Linear(dim, dim), nn.ReLU(), nn.Linear(dim, 1)
-        )
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        actor_out = self.actor_net(x)  # [num_options, 1]
-        logits = actor_out.view(1, -1)  # [1, num_options]
-
-        pooled_x = x.mean(dim=0, keepdim=True)  # [1, feature_dim]
-        value = self.critic_net(pooled_x).squeeze(-1)  # scalar [1]
-
-        return logits, value
-
-
 class Network(Configurable, nn.Module):
+    """Shared base class for GNN architectures.
+
+    Subclasses must override ``__init__`` and ``forward()``.
+    ``actor()``, ``critic()``, ``upgrade()``, and ``evaluate()`` are
+    inherited and delegate to ``self.forward()``.
+    """
+
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        input_feat_dim: int = 56  # 13 + max_state_count
-        type_embed_dim: int = 8
+        input_feat_dim: int = 56
         feature_dim: int = 128
-        max_entity_types: int = 64  # just an upper bound
         num_stepmix_layers: int = 1
         num_tapas_layers: int = 1
 
@@ -106,64 +83,8 @@ class Network(Configurable, nn.Module):
         nn.Module.__init__(self)
         self.cfg = cfg
 
-        self.type_embedding = nn.Embedding(cfg.max_entity_types, cfg.type_embed_dim)
-
-        total_input_dim = cfg.input_feat_dim + cfg.type_embed_dim
-
-        self.entity_encoder = nn.Sequential(
-            nn.LayerNorm(total_input_dim),
-            nn.Linear(total_input_dim, cfg.feature_dim),
-            nn.LayerNorm(cfg.feature_dim),
-            nn.ReLU(),
-        )
-
-        self.stepmix_layers = nn.ModuleList(
-            [StepMixBlock(cfg.feature_dim) for _ in range(cfg.num_stepmix_layers)]
-        )
-
-        self.tapas_layers = nn.ModuleList(
-            [TapasBlock(cfg.feature_dim) for _ in range(cfg.num_tapas_layers)]
-        )
-
-        self.summary_layer = SummaryBlock(cfg.feature_dim)
-        self.option_readout = OptionReadout(cfg.feature_dim)
-
     def forward(self, data: HeteroData) -> tuple[torch.Tensor, torch.Tensor]:
-
-        # print(
-        #    f"DEBUG entity.x: min={data['entity'].x.min():.2f} max={data['entity'].x.max():.2f} mean={data['entity'].x.mean():.2f}"
-        # )
-
-        type_embeds = self.type_embedding(
-            data["entity"].type_ids
-        )  # [N, type_embed_dim]
-        entity_x = torch.cat([data["entity"].x, type_embeds], dim=-1)
-        # print(f"entity_x: {entity_x.min():.2f} {entity_x.max():.2f}")
-
-        entity_x = self.entity_encoder(entity_x)
-        # print(f"after encoder: {entity_x.min():.2f} {entity_x.max():.2f}")
-        stepmix_idx = data[("entity", "stepmix", "entity")].edge_index
-        stepmix_attr = data[("entity", "stepmix", "entity")].edge_attr
-        for layer in self.stepmix_layers:
-            entity_x = layer(entity_x, stepmix_idx, stepmix_attr)
-        # print(f"after stepmix: {entity_x.min():.2f} {entity_x.max():.2f}")
-
-        tapas_idx = data[("entity", "tapas", "entity")].edge_index
-        for layer in self.tapas_layers:
-            entity_x = layer(entity_x, tapas_idx)
-        # print(f"after tapas: {entity_x.min():.2f} {entity_x.max():.2f}")
-
-        summary_idx = data[("entity", "summary", "option")].edge_index
-        summary_attr = data[("entity", "summary", "option")].edge_attr
-        option_x = self.summary_layer(
-            entity_x, data["option"].x, summary_idx, summary_attr
-        )
-        # print(f"option_x: {option_x.min():.2f} {option_x.max():.2f}")
-
-        logits, value = self.option_readout(option_x)
-        # print(f"value: {value.item():.2f}")
-
-        return logits, value
+        raise NotImplementedError
 
     def actor(self, data: HeteroData) -> torch.Tensor:
         logits, _ = self.forward(data)
@@ -184,15 +105,15 @@ class Network(Configurable, nn.Module):
         entropies = []
 
         for i, data in enumerate(data_list):
-            logits, value = self.forward(data)  # value is now [1] scalar!
+            logits, value = self.forward(data)
             dist = Categorical(logits=logits)
 
             action = actions[i : i + 1]
-            logprob = dist.log_prob(action)  # [1]
-            entropy = dist.entropy()  # [1]
+            logprob = dist.log_prob(action)
+            entropy = dist.entropy()
 
             logprobs.append(logprob)
-            state_values.append(value)  # No indexing! Just append the scalar.
+            state_values.append(value)
             entropies.append(entropy)
 
         return (

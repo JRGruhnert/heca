@@ -15,6 +15,7 @@ from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
+from heca.heca_gnn.network1 import Network1
 from heca.learning.buffers.buffer import Buffer, BufferData
 
 
@@ -55,7 +56,7 @@ class Learner(Persistable):
     class Config(Persistable.Config):
         folder: str = "learner"
         buffer: Buffer.Config
-        network: Network.Config = Network.Config()
+        network: Network.Config = Network1.Config()
         # Hyperparameters
         lr: float
         max_grad_norm: float
@@ -69,7 +70,7 @@ class Learner(Persistable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.mse_loss = nn.MSELoss()
-        self.network: Network = Network.get(cfg.network)
+        self.network = self._create_network(cfg)
         self.optim: torch.optim.Optimizer = torch.optim.AdamW(
             self.network.parameters(), lr=self.cfg.lr
         )
@@ -122,6 +123,9 @@ class Learner(Persistable):
         #     ),
         # )
         self.current_update = 0
+
+    def _create_network(self, cfg: Config):
+        return Network.get(cfg.network)
 
     def register(self, tag: str) -> "Learner":
         if tag not in self.normalizers:
