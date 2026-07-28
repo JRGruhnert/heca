@@ -69,27 +69,22 @@ class TapasAgent(ExpertAgent):
                         gt_frames=None,  # Frames per segment
                     ),
                     demos_segmentation=DemoSegmentationConfig(
-                        gripper_based=False,
                         distance_based=False,
                         velocity_based=True,
                         repeat_final_step=0,  # 1
-                        repeat_first_step=0,
                         components_prop_to_len=True,
                         velocity_threshold=0.05,
                     ),
-                    cascade=CascadeConfig(
-                        kl_keep_time_dim=True,
-                        kl_keep_rotation_dim=True,
-                    ),
+                    cascade=CascadeConfig(),
                 ),
                 time_based=True,
                 predict_dx_in_xdx_models=False,
                 binary_gripper_action=False,
                 binary_gripper_closed_threshold=0.0,
-                dbg_prediction=False,
-                force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
+                dbg_prediction=True,
+                force_overwrite_checkpoint_config=True,
                 time_scale=1.0,
-                postprocess_prediction=True,  # TODO:  abs quaternions if False else delta quaternions
+                postprocess_prediction=True,
                 invert_prediction_batch=False,
                 return_full_batch=True,
                 batch_predict_in_t_models=True,
