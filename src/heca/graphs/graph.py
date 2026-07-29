@@ -15,7 +15,7 @@ from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
 from heca.misc import hardware, logger
 from heca.data.data import DCScene
-from heca.data.entity import Entity, Mobility
+from heca.data.entity import Entity
 from heca.conditions.condition import Condition
 
 
@@ -41,27 +41,18 @@ class Graph:
     start: DCScene = DCScene.empty()
     goal: DCScene = DCScene.empty()
 
-    _MOBILITY_ORDER = [Mobility.STATIC, Mobility.ARTICULATED, Mobility.FREE]
-    _MOBILITY_TO_IDX = {m: i for i, m in enumerate(_MOBILITY_ORDER)}
-
     def export(self) -> HeteroData:
         data = HeteroData()
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_option.type].x = self.ns_option.x
 
+        # TODO replace entity label id with type information
         entity_labels = [node.entity for node in self.ns_entity.items]
-
         unique_types = sorted(set(entity_labels))
         type_to_id = {t: i for i, t in enumerate(unique_types)}
         data[self.ns_entity.type].type_ids = torch.tensor(
             [type_to_id[t] for t in entity_labels], dtype=torch.long
         )
-
-        mobility = torch.zeros(len(entity_labels), len(self._MOBILITY_ORDER))
-        for i, label in enumerate(entity_labels):
-            mob = self.entities[label].cfg.mobility
-            mobility[i, self._MOBILITY_TO_IDX[mob]] = 1.0
-        data[self.ns_entity.type].mobility = mobility
 
         data[self.es_stepmix.type].edge_attr = self.es_stepmix.edge_attr
         data[self.es_summary.type].edge_attr = self.es_summary.edge_attr

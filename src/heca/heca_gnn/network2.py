@@ -20,33 +20,24 @@ class OptionMemory(nn.Module):
         super().__init__()
         self.feature_dim = feature_dim
         self.gru_cell = nn.GRUCell(feature_dim, feature_dim)
-        # Dictionary mapping option ID (int) -> hidden state (tensor of shape [feature_dim])
-        self.memory: dict[int, torch.Tensor] = {}
 
-    def forward(self, option_x: torch.Tensor, option_ids: torch.Tensor) -> torch.Tensor:
-        hidden_states = []
-        for opt_id_tensor in option_ids:
-            opt_id = int(opt_id_tensor.item())
-            if opt_id not in self.memory:
-                self.memory[opt_id] = torch.zeros(
-                    self.feature_dim, device=option_x.device
-                )
-            hidden_states.append(self.memory[opt_id])
+        self._memory_initialized = False
 
-        hidden_states = torch.stack(hidden_states, dim=0)
+    def _init_memory(self, num_options: int, device: torch.device):
+        buf = torch.zeros(num_options, self.feature_dim, device=device)
+        self.register_buffer("memory", buf, persistent=False)
+        self._memory_initialized = True
 
-        new_hidden_states = self.gru_cell(option_x, hidden_states)
-
-        new_hidden_states_detached = new_hidden_states.detach()
-        for i, opt_id_tensor in enumerate(option_ids):
-            opt_id = int(opt_id_tensor.item())
-            self.memory[opt_id] = new_hidden_states_detached[i]
-
-        return option_x + new_hidden_states_detached
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not self._memory_initialized:
+            self._init_memory(x.size(0), x.device)
+        hidden = self.gru_cell(x, self.memory)
+        self.memory.copy_(hidden.detach())
+        return x + hidden
 
     def reset_memory(self) -> None:
-        """Clear all stored hidden states. Call at the start of each episode."""
-        self.memory.clear()
+        """Zero out all memory states. Call at the start of each episode."""
+        self.memory.zero_()
 
 
 class OptionInteraction(nn.Module):
@@ -57,17 +48,13 @@ class OptionInteraction(nn.Module):
         self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
         self.norm = nn.LayerNorm(dim)
 
-    def forward(self, option_x: torch.Tensor) -> torch.Tensor:
-        if option_x.size(0) <= 1:
-            return option_x
-        x = option_x.unsqueeze(0)
-        attended, _ = self.attn(x, x, x)
-        return self.norm(x.squeeze(0) + attended.squeeze(0))
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        xs = x.unsqueeze(0)
+        attended, _ = self.attn(xs, xs, xs)
+        return self.norm(xs.squeeze(0) + attended.squeeze(0))
 
 
 class OptionReadout(nn.Module):
-    """Shared processing MLP with thin actor/critic heads for FL."""
-
     def __init__(self, dim: int, hidden_ratio: float = 0.5):
         super().__init__()
         hidden_dim = max(int(dim * hidden_ratio), 16)
@@ -177,12 +164,12 @@ class Network2(Network):
             option_x = self.interaction_layer(option_x)
 
         if self.memory_layer is not None:
-            option_x = self.memory_layer(option_x, data["option"].id)
+            option_x = self.memory_layer(option_x)
 
         logits, value = self.option_readout(option_x)
 
         return logits, value
 
-    def reset_memory(self) -> None:
+    def reset_memory(self):
         if self.memory_layer is not None:
             self.memory_layer.reset_memory()

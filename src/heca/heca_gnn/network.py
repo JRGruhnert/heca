@@ -65,13 +65,6 @@ class SummaryBlock(nn.Module):
 
 
 class Network(Configurable, nn.Module):
-    """Shared base class for GNN architectures.
-
-    Subclasses must override ``__init__`` and ``forward()``.
-    ``actor()``, ``critic()``, ``upgrade()``, and ``evaluate()`` are
-    inherited and delegate to ``self.forward()``.
-    """
-
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         input_feat_dim: int = 56
@@ -121,3 +114,6 @@ class Network(Configurable, nn.Module):
             torch.cat(state_values).to(hardware.device),
             torch.cat(entropies).to(hardware.device),
         )
+
+    def reset_memory(self):
+        pass

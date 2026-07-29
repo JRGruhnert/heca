@@ -56,7 +56,7 @@ class Learner(Persistable):
     class Config(Persistable.Config):
         folder: str = "learner"
         buffer: Buffer.Config
-        network: Network.Config = Network1.Config()
+        network: Network.Config
         # Hyperparameters
         lr: float
         max_grad_norm: float
@@ -93,37 +93,6 @@ class Learner(Persistable):
             ),
         )
 
-        self.n_terminals = 0
-        self.n_truncated = 0
-        self.n_feedback = 0
-        self.n_episodes = 0
-        # self.actor_explainer = Explainer(
-        #     _ExplainerWrapper(self.actor),
-        #     algorithm=CaptumExplainer("IntegratedGradients"),
-        #     explanation_type="phenomenon",
-        #     node_mask_type="attributes",
-        #     edge_mask_type=None,
-        #     model_config=dict(
-        #         mode="multiclass_classification",
-        #         task_level="graph",
-        #         return_type="raw",
-        #     ),
-        # )
-
-        # self.critic_explainer = Explainer(
-        #     _ExplainerWrapper(self.critic),
-        #     algorithm=CaptumExplainer("IntegratedGradients"),
-        #     explanation_type="model",
-        #     node_mask_type="attributes",
-        #     edge_mask_type=None,
-        #     model_config=dict(
-        #         mode="regression",
-        #         task_level="graph",
-        #         return_type="raw",
-        #     ),
-        # )
-        self.current_update = 0
-
     def _create_network(self, cfg: Config):
         return Network.get(cfg.network)
 
@@ -154,55 +123,12 @@ class Learner(Persistable):
     def eval(self):
         self.train_mode = False
 
-    # def explain(
-    #     self,
-    #     obs: StateValueDict,
-    #     goal: StateValueDict,
-    # ) -> tuple[
-    #     torch.Tensor,
-    #     torch.Tensor,
-    #     torch.Tensor,
-    #     HeteroExplanation,
-    #     HeteroExplanation,
-    # ]:
-    #     # Resolve the action first (same logic as act())
-    #     action, logprob, value = self.act(obs, goal)
-
-    #     # Build the graph for the current observation
-    #     data = self.to_data(obs, goal)
-
-    #     # Edge attributes are not perturbed by the explainer; store them in the wrappers
-    #     self.actor_explainer.model.set_edge_attrs(data.edge_attr_dict)
-    #     self.critic_explainer.model.set_edge_attrs(data.edge_attr_dict)
-
-    #     actor_x = {k: v for k, v in data.x_dict.items() if k != "critic"}
-    #     actor_ei = {
-    #         k: v
-    #         for k, v in data.edge_index_dict.items()
-    #         if k[0] != "critic" and k[2] != "critic"
-    #     }
-
-    #     actor_explanation = self.actor_explainer(
-    #         actor_x,
-    #         actor_ei,
-    #         target=torch.tensor([int(action.item())]),
-    #     )
-
-    #     critic_x = {k: v for k, v in data.x_dict.items() if k != "actor"}
-    #     critic_ei = {
-    #         k: v
-    #         for k, v in data.edge_index_dict.items()
-    #         if k[0] != "actor" and k[2] != "actor"
-    #     }
-
-    #     critic_explanation = self.critic_explainer(
-    #         critic_x,
-    #         critic_ei,
-    #     )
-
-    #     return action, logprob, value, actor_explanation, critic_explanation
-
-    def predict(self, data: HeteroData, tag: str) -> int:
+    def predict(self, data: HeteroData, tag: str, new_episode: bool) -> int:
+        if new_episode:
+            if self.train_mode:
+                self.inference_network.reset_memory()
+            else:
+                self.network.reset_memory()
         if self.train_mode:
             net = self.inference_network
             with torch.inference_mode():
