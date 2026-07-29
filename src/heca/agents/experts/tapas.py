@@ -24,8 +24,8 @@ from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
 from heca.conditions.evaluator import AgentFeedback
 from heca.conditions.pair import ConPair
-from heca.misc.data import DCScene, TDImage
-from heca.misc.entity import Mobility
+from heca.data.data import DCScene, TDImage
+from heca.data.entity import Mobility
 from heca.misc import logger
 from heca.misc.hardware import device
 from heca.utils.quaternion import Quaternion

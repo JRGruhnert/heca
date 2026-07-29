@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from textwrap import dedent
 from typing import Any, cast
 
 import h5py
@@ -8,42 +7,35 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
-from heca.misc.data import DCEntity, DCScene, TDImage
-from heca.misc.entity import Entity, Mobility
-from heca.scenes.ogbench.utils import eval_pos, eval_state
+from heca.data.data import DCScene, TDImage
+from heca.data.ee import EEEntity
 from heca.scenes.scene import Scene
 
 
-class OGBenchScene(Scene):
+class OGScene(Scene):
     @dataclass(kw_only=True)
     class Config(Scene.Config):
         label: str = "ogbench"
-        tag: str = "samples"
-        id: str = "visual-scene-play-v0"
-        mode: str = "task"
-        ob_type: str = "pixels"  # states, pixels
-        width: int = 256
-        height: int = 256
-        visualize_info: bool = False
+        vis: bool
+        tag: str
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.reset_options = {"render_goal": True}
+        env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
         self.env = cast(
             ManipSpaceEnv,
             ogbench.make_env_and_datasets(
-                dataset_name=cfg.id,
+                dataset_name=env_id,
                 env_only=True,
                 dataset_only=False,
-                # ob_type=cfg.ob_type,
-                # mode=cfg.mode,
-                # visualize_info=cfg.visualize_info,
-                # width=cfg.width,
-                # height=cfg.height,
                 control_timestep=0.5,
             ),
         )
+
+    @property
+    def ee(self) -> EEEntity:
+        return EEEntity.get(EEEntity.Config())
 
     def close(self):
         self.env.close()
@@ -112,7 +104,7 @@ class OGBenchScene(Scene):
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
-        ob, info = self.env.reset(options=self.reset_options)
+        ob, info = self.env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
@@ -125,7 +117,7 @@ class OGBenchScene(Scene):
         tuple[DCScene, TDImage, np.ndarray],
         tuple[DCScene, TDImage, np.ndarray],
     ]:
-        ob, info = self.env.reset(options=self.reset_options)
+        ob, info = self.env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]

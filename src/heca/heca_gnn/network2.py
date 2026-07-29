@@ -1,7 +1,3 @@
-"""Extended GNN with explicit mobility features, deeper encoder, cross‑option
-self‑attention and a shared readout head for federated learning.
-"""
-
 from dataclasses import dataclass
 import torch
 from torch import nn
@@ -13,6 +9,44 @@ from heca.heca_gnn.network import (
     TapasBlock,
     SummaryBlock,
 )
+
+
+class OptionMemory(nn.Module):
+    """
+    Temporal memory for option nodes using a GRU cell.
+    """
+
+    def __init__(self, feature_dim: int):
+        super().__init__()
+        self.feature_dim = feature_dim
+        self.gru_cell = nn.GRUCell(feature_dim, feature_dim)
+        # Dictionary mapping option ID (int) -> hidden state (tensor of shape [feature_dim])
+        self.memory: dict[int, torch.Tensor] = {}
+
+    def forward(self, option_x: torch.Tensor, option_ids: torch.Tensor) -> torch.Tensor:
+        hidden_states = []
+        for opt_id_tensor in option_ids:
+            opt_id = int(opt_id_tensor.item())
+            if opt_id not in self.memory:
+                self.memory[opt_id] = torch.zeros(
+                    self.feature_dim, device=option_x.device
+                )
+            hidden_states.append(self.memory[opt_id])
+
+        hidden_states = torch.stack(hidden_states, dim=0)
+
+        new_hidden_states = self.gru_cell(option_x, hidden_states)
+
+        new_hidden_states_detached = new_hidden_states.detach()
+        for i, opt_id_tensor in enumerate(option_ids):
+            opt_id = int(opt_id_tensor.item())
+            self.memory[opt_id] = new_hidden_states_detached[i]
+
+        return option_x + new_hidden_states_detached
+
+    def reset_memory(self) -> None:
+        """Clear all stored hidden states. Call at the start of each episode."""
+        self.memory.clear()
 
 
 class OptionInteraction(nn.Module):
@@ -40,8 +74,10 @@ class OptionReadout(nn.Module):
 
         self.shared = nn.Sequential(
             nn.LayerNorm(dim),
-            nn.Linear(dim, dim), nn.ReLU(),
-            nn.Linear(dim, hidden_dim), nn.ReLU(),
+            nn.Linear(dim, dim),
+            nn.ReLU(),
+            nn.Linear(dim, hidden_dim),
+            nn.ReLU(),
         )
 
         self.actor_head = nn.Linear(hidden_dim, 1)
@@ -71,6 +107,7 @@ class Network2(Network):
         encoder_depth: int = 3
         gnn_mlp_depth: int = 3
         use_option_interaction: bool = True
+        use_option_memory: bool = True
         attn_heads: int = 4
         readout_hidden_ratio: float = 0.5
 
@@ -80,15 +117,13 @@ class Network2(Network):
 
         total_input_dim = cfg.input_feat_dim + cfg.mobility_feat_dim
 
-        encoder_layers = [nn.LayerNorm(total_input_dim)]
-        for i in range(cfg.encoder_depth):
-            in_dim = total_input_dim if i == 0 else cfg.feature_dim
-            encoder_layers.append(nn.Linear(in_dim, cfg.feature_dim))
-            if i < cfg.encoder_depth - 1:
-                encoder_layers.append(nn.LayerNorm(cfg.feature_dim))
-                encoder_layers.append(nn.ReLU())
-        self.entity_encoder = nn.Sequential(*encoder_layers)
-
+        # TODO: Entity Encoder
+        self.entity_encoder = nn.Sequential(
+            nn.LayerNorm(total_input_dim),
+            nn.Linear(total_input_dim, cfg.feature_dim),
+            nn.LayerNorm(cfg.feature_dim),
+            nn.ReLU(),
+        )
         self.stepmix_layers = nn.ModuleList(
             [
                 StepMixBlock(cfg.feature_dim, cfg.gnn_mlp_depth)
@@ -106,14 +141,20 @@ class Network2(Network):
         self.summary_layer = SummaryBlock(cfg.feature_dim, cfg.gnn_mlp_depth)
 
         if cfg.use_option_interaction:
-            self.option_interaction = OptionInteraction(cfg.feature_dim, cfg.attn_heads)
+            self.interaction_layer = OptionInteraction(cfg.feature_dim, cfg.attn_heads)
         else:
-            self.option_interaction = None
+            self.interaction_layer = None
+
+        if cfg.use_option_memory:
+            self.memory_layer = OptionMemory(cfg.feature_dim)
+        else:
+            self.memory_layer = None
 
         self.option_readout = OptionReadout(cfg.feature_dim, cfg.readout_hidden_ratio)
 
     def forward(self, data: HeteroData) -> tuple[torch.Tensor, torch.Tensor]:
-        entity_x = torch.cat([data["entity"].x, data["entity"].mobility], dim=-1)
+
+        entity_x = torch.cat([data["entity"].x, data["entity"].type_ids], dim=-1)
 
         entity_x = self.entity_encoder(entity_x)
 
@@ -132,9 +173,16 @@ class Network2(Network):
             entity_x, data["option"].x, summary_idx, summary_attr
         )
 
-        if self.option_interaction is not None:
-            option_x = self.option_interaction(option_x)
+        if self.interaction_layer is not None:
+            option_x = self.interaction_layer(option_x)
+
+        if self.memory_layer is not None:
+            option_x = self.memory_layer(option_x, data["option"].id)
 
         logits, value = self.option_readout(option_x)
 
         return logits, value
+
+    def reset_memory(self) -> None:
+        if self.memory_layer is not None:
+            self.memory_layer.reset_memory()

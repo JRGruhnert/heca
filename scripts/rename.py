@@ -3,7 +3,7 @@ import numpy as np
 
 from heca.agents.experts.expert import ExpertAgent
 from heca.agents.experts.tapas import TapasAgent
-from heca.scenes.ogbench.scene import OGBenchScene
+from heca.scenes.ogbench.scene import OGScene
 
 configs: list[TapasAgent.Config] = [
     # TapasAgent.Config(
@@ -53,7 +53,7 @@ configs: list[TapasAgent.Config] = [
     # ),
     TapasAgent.Config(
         tag="move_block_drawer",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
 ]

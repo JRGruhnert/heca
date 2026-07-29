@@ -4,7 +4,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from heca.conditions.condition import Condition
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 
 # Condition saves raw datapoints per entity
 

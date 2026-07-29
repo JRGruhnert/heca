@@ -2,8 +2,8 @@ from dataclasses import dataclass
 
 from heca.conditions.pair import ConPair
 from heca.misc.base import Configurable
-from heca.misc.data import DCScene
-from heca.misc.entity import Entity
+from heca.data.data import DCScene
+from heca.data.entity import Entity
 
 
 @dataclass(kw_only=True, slots=True)

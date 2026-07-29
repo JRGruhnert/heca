@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from heca.graphs.node import EntityNode, GraphNode
-from heca.misc.data import DCEntity
+from heca.data.data import DCEntity
 
 T = TypeVar("T", bound=GraphNode)
 

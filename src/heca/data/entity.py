@@ -1,25 +1,16 @@
-from typing import Callable
-
 import numpy as np
 
 from functools import total_ordering
 from dataclasses import dataclass
-from enum import Enum
 
 
 import torch
 
 from heca.misc.base import Configurable
-from heca.misc.data import DCEntity
+from heca.data.data import DCEntity
 from heca.utils.quaternion import Quaternion
 
 STATE_LOGIT_BASELINE = -10.0
-
-
-class Mobility(Enum):
-    FREE = "free"  # Can move freely in the scene
-    STATIC = "static"  # Has a fixed position and rotation in the scene
-    ARTICULATED = "articulated"  # Has a fixed position but can have a variable rotation in the scene
 
 
 @total_ordering
@@ -29,12 +20,9 @@ class Entity(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         label: str
-        scene: str
         states: list[str]
-        question: str
-        answers: list[str]
-        mobility: Mobility
-        eval_func: Callable[[np.ndarray, np.ndarray], bool] = lambda a, b: False
+        question: str = ""
+        answers: list[str] = []
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -42,9 +30,6 @@ class Entity(Configurable):
     @property
     def n_states(self) -> int:
         return len(self.cfg.states)
-
-    def evaluate(self, a: DCEntity, b: DCEntity) -> bool:
-        return self.cfg.eval_func(a.value, b.value)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, Entity):

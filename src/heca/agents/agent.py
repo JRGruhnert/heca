@@ -5,8 +5,8 @@ from functools import cached_property
 from heca.conditions.evaluator import AgentFeedback, Evaluator
 from heca.conditions.pair import ConPair
 from heca.misc.base import Persistable
-from heca.misc.data import DCScene
-from heca.misc.entity import Entity
+from heca.data.data import DCScene
+from heca.data.entity import Entity
 
 
 class Agent(Persistable, abc.ABC):

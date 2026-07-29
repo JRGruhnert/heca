@@ -9,8 +9,8 @@ from typing import Any
 from PIL import Image
 
 
-from heca.misc.data import DCScene, TDImage
-from heca.misc.entity import Entity
+from heca.data.data import DCScene, TDImage
+from heca.data.entity import Entity
 from heca.misc.base import Persistable
 
 

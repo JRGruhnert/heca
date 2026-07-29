@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from heca.misc import logger
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 from heca.runners.plotter import HecaPlotter
 from heca.runners.plots.entity_3d import (
     Entity3DHelper,

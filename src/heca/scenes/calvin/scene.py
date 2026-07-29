@@ -3,8 +3,8 @@ from functools import cached_property
 import torch
 import numpy as np
 from dataclasses import dataclass, field
-from heca.misc.data import DCEntity, DCScene, TDImage
-from heca.misc.entity import Entity, Mobility
+from heca.data.data import DCEntity, DCScene, TDImage
+from heca.data.entity import Entity, Mobility
 from heca.scenes.scene import Scene
 from heca.utils.state import State
 from heca.utils.area import Area

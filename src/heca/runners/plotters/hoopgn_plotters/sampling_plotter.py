@@ -6,7 +6,7 @@ from heca.properties.default.v1.area import CalvinAreaConfig
 from heca.entities.entities import tdp_to_tde
 from conf.agents import get_skill_set
 from heca.learning.buffers.fair_buffer import BufferConfig
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 from heca.scenes.calvin import CalvinEnvironmentConfig
 from heca.evaluators import select_evaluator
 from heca.evaluators.dense import Dense3EvaluatorConfig

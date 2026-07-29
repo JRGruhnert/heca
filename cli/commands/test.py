@@ -7,52 +7,52 @@ from heca.conditions.evaluator import Evaluator
 from heca.learning.appo import APPO
 from heca.learning.buffers.stream_buffer import StreamBuffer
 from heca.learning.ppo import PPO
-from heca.scenes.ogbench.scene import OGBenchScene
+from heca.scenes.ogbench.scene import OGScene
 
 agents = [
     TapasAgent.Config(
         tag="open_drawer",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="close_drawer",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="open_window",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="close_window",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="lock_left_button",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="lock_right_button",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="unlock_left_button",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="unlock_right_button",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     TapasAgent.Config(
         tag="move_block",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
     # TapasAgent.Config(
@@ -80,7 +80,7 @@ heca2_cfg = Heca.Config(
 agent = Agent.get(
     TapasAgent.Config(
         tag="unlock_right_button",
-        scene=OGBenchScene.Config(),
+        scene=OGScene.Config(),
         use_gt=True,
     ),
 )

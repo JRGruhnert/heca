@@ -14,8 +14,8 @@ from PIL import Image
 from heca.scenes.scene import Scene
 from heca.misc import logger
 from heca.misc.base import Configurable
-from heca.misc.data import TDImage, TDSceneReferences
-from heca.misc.entity import Entity
+from heca.data.data import TDImage, TDSceneReferences
+from heca.data.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from PIL import Image, ImageTk
 import tkinter as tk
 
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.misc.base import Configurable
 from heca.scenes.scene import Scene

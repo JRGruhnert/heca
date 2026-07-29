@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from heca.agents.agent import Agent
 from heca.conditions.condition import Condition
-from heca.misc.data import DCEntity, DCScene
+from heca.data.data import DCEntity, DCScene
 
 
 @dataclass(slots=True, kw_only=True)

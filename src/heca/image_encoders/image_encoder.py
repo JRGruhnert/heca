@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from heca.misc.base import Registerable
 from heca.scenes.scene import Scene
-from heca.misc.data import TDImage
+from heca.data.data import TDImage
 from heca.utils.quaternion import Quaternion
 
 

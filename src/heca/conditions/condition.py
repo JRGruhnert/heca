@@ -5,7 +5,7 @@ import numpy as np
 
 from stepmix import StepMix
 from heca.misc import logger
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 from heca.utils.quaternion import Quaternion
 
 

@@ -1,11 +1,9 @@
 from dataclasses import dataclass
-from collections import OrderedDict
 import torch
 
-from heca.heca_gnn.network import Network
 from heca.heca_gnn.network1 import Network1
+from heca.learning.server import FLServer
 from heca.learning.ppo import PPO
-from heca.misc.base import Registerable
 
 
 class FPPO(PPO):
@@ -13,11 +11,14 @@ class FPPO(PPO):
     class Config(PPO.Config):
         label: str = "fppo"
         fedprox_mu: float = 0.01
-        server: Server.Config = Server.Config(label="global")
+        server: FLServer.Config = FLServer.Config(
+            label="global", network=Network1.Config()
+        )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
-        self.server = Server.get(cfg.server)
+        self.cfg = cfg
+        self.server = FLServer.get(cfg.server)
 
     def _fedprox_term(self) -> torch.Tensor:
         if self.cfg.fedprox_mu == 0:
@@ -27,7 +28,7 @@ class FPPO(PPO):
         for local_p, global_p in zip(
             self.network.parameters(), self.server.global_network.parameters()
         ):
-            loss += torch.sum((local_p - global_p) ** 2)
+            loss += torch.sum((local_p - global_p) ** 2)  # euklidische distanz squared
         return (self.cfg.fedprox_mu / 2) * loss
 
     def pull_global(self):

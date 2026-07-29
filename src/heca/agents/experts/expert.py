@@ -5,8 +5,8 @@ from functools import cached_property
 import numpy as np
 import torch
 from heca.agents.agent import Agent
-from heca.misc.data import DCEntity, DCScene, TDImage
-from heca.misc.entity import Entity
+from heca.data.data import DCEntity, DCScene, TDImage
+from heca.data.entity import Entity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder

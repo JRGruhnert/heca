@@ -3,11 +3,10 @@ from collections import OrderedDict
 import torch
 
 from heca.heca_gnn.network import Network
-from heca.learning.ppo import PPO
 from heca.misc.base import Registerable
 
 
-class Server(Registerable):
+class FLServer(Registerable):
 
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
@@ -21,7 +20,6 @@ class Server(Registerable):
             p.requires_grad = False
         self._momentum: dict[str, torch.Tensor] = {}
         self._momentum_beta = cfg.fedavgm_beta
-
 
     def aggregate(self, state_dicts: list[OrderedDict[str, torch.Tensor]]):
         avg = self.fedavg(state_dicts)

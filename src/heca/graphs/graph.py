@@ -14,8 +14,8 @@ from heca.graphs.node import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
 from heca.misc import hardware, logger
-from heca.misc.data import DCScene
-from heca.misc.entity import Entity, Mobility
+from heca.data.data import DCScene
+from heca.data.entity import Entity, Mobility
 from heca.conditions.condition import Condition
 
 

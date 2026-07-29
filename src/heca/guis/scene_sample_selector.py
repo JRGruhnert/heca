@@ -7,7 +7,7 @@ import tkinter as tk
 import h5py
 import numpy as np
 
-from heca.misc.entity import Entity
+from heca.data.entity import Entity
 from heca.misc.base import Configurable
 from heca.scenes.scene import Scene
 from heca.misc import logger

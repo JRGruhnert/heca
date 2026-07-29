@@ -11,9 +11,9 @@ from heca.conditions.evaluator import AgentFeedback, Evaluator
 from heca.graphs.graph import Graph
 from heca.learning.learner import Learner
 from heca.misc import logger
-from heca.misc.data import DCScene
-from heca.misc.entity import Entity
-from heca.scenes.ogbench.scene import OGBenchScene
+from heca.data.data import DCScene
+from heca.data.entity import Entity
+from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene
 
 
@@ -77,7 +77,6 @@ class Heca(Agent):
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
         return z, fb
-
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_goal(y)
