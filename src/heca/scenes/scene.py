@@ -114,7 +114,7 @@ class Scene(Persistable):
                 )
 
     def _save(self, path: Path, tag: str):
-        for label, entity in self.entities.items():
+        for label in self.entities.keys():
             entity_dir = path / tag / label
             entity_dir.mkdir(parents=True, exist_ok=True)
             for state, samples in self.state_references[label].items():
@@ -142,24 +142,21 @@ class Scene(Persistable):
             seg_starts = [0] + list(done_idxs)
             seg_ends = list(done_idxs) + [len(done)]
 
-            # Bucket successful segments by task + direction
-            buckets = defaultdict(list)  # key → list of (start, end) index tuples
+            agent_data = defaultdict(list)
 
             for start, end in zip(seg_starts, seg_ends):
                 if start >= end:
                     continue
-                # Success is judged at the last step BEFORE the switch
-                last_step = end - 1
-                if success[last_step] != 1.0:
+                if success[end - 1] != 1.0:
                     continue
 
-                bucket_key = self._bucket_key(f, task[last_step], start, last_step)
-                buckets[bucket_key].append((start, end - 1))
+                agent_key = self.entities[task[end - 1]].agent_key(f, start, end - 1)
+                agent_data[agent_key].append((start, end - 1))
 
             # Write each bucket to a separate HDF5 file
             all_keys = list(f.keys())
-            for bucket_key, segments in buckets.items():
-                out_path = self.output_dir / f"{bucket_key}.h5"
+            for agent_key, segments in agent_data.items():
+                out_path = self.output_dir / f"{agent_key}.h5"
                 with h5py.File(out_path, "w") as out:
                     demo_id = 0
                     for start, end in segments:
@@ -193,27 +190,4 @@ class Scene(Persistable):
                             ds[n : n + len(demo_ids)] = demo_ids
                         demo_id += 1
 
-                print(f"  {bucket_key}: {len(segments)} demos → {out_path}")
-
-    def _bucket_key(self, f, key: str, seg_start: int, seg_end: int) -> str:
-        # Determine direction for joint-based objects
-        entity = self.entities[key]
-        if base in ("faucet", "doorlock", "lever", "drawer", "window"):
-            pos_key = f"privileged_{key}_pos"
-            target_key = f"heca_target_{key}_pos"
-            start_val = f[pos_key][seg_start][0]
-            target_val = f[target_key][seg_end][0]
-            direction = "open" if target_val > start_val else "close"
-            return f"{key}_{direction}"
-
-        # Button: pressed or unpressed
-        if base == "button":
-            start_state = f[f"privileged_{key}_state"][seg_start][0]
-            direction = "press" if start_state == 0 else "unpress"
-            return f"{base}_{direction}"
-
-        # Cube / peg / lid: pick-and-place (always both in one oracle)
-        if base in ("cube", "peg", "lid"):
-            return f"{base}_pick_place"
-
-        return base
+                print(f"  {agent_key}: {len(segments)} demos → {out_path}")

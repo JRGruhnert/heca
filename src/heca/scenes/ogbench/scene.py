@@ -57,18 +57,18 @@ class OGScene(Scene):
     def get_extras(self, obs: dict) -> dict[str, Any]:
         pos = obs["proprio_effector_pos"]
         rot = obs["proprio_effector_quat"]
-        opening = obs["proprio_gripper_opening"]
+        ste = obs["proprio_gripper_opening"]
         rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
         ee_pose = np.concatenate((pos, rot))
         if "actions" in obs.keys():  # is demo
             action_raw = obs["actions"]
             yaw = action_raw[3]
             axis_angle = np.array([0, 0, yaw])
-            action = np.concatenate([action_raw[:3], axis_angle, opening])
+            action = np.concatenate([action_raw[:3], axis_angle, ste])
             reward = obs["success"]
         else:
             yaw = obs["proprio_effector_yaw"].item()
-            action = np.concatenate([pos, np.array([0, 0, yaw]), opening])
+            action = np.concatenate([pos, np.array([0, 0, yaw]), ste])
             reward = np.array([0])
         return {
             "action": action,
@@ -96,7 +96,7 @@ class OGScene(Scene):
         obs, goal = self.to_internal(ob, info)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
-        self.last_state = obs["proprio_gripper_opening"]
+        self.last_ste = obs["proprio_gripper_opening"]
         s_scene, s_image, _ = self.from_internal(obs)
         g_scene, g_image, _ = self.from_internal(goal)
         return (s_scene, s_image), (g_scene, g_image)
@@ -109,7 +109,7 @@ class OGScene(Scene):
         obs, goal = self.to_internal(ob, info)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
-        self.last_state = obs["proprio_gripper_opening"]
+        self.last_ste = obs["proprio_gripper_opening"]
         return self.from_internal(obs), self.from_internal(goal)
 
     def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:

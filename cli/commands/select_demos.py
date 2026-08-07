@@ -1,6 +1,6 @@
 from heca.agents.experts.tapas import TapasAgent
 from heca.scenes.ogbench.scene import OGScene
-from heca.guis.tapas_demo_selector import TapasDemoSelector
+from heca.guis.demo_selector import TapasDemoSelector
 
 cfg = TapasDemoSelector.Config(
     agent=TapasAgent.Config(

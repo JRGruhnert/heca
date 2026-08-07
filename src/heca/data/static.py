@@ -36,3 +36,8 @@ class StaticEntity(Entity):
         feat[13 : 13 + self.n_states] = -self.LOGIT_CONFIDENCE
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
+
+    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
+        start_state = obs[f"privileged_{label}_state"][start][0]
+        direction = "press" if start_state == 0 else "unpress"
+        return f"{label}_{direction}"

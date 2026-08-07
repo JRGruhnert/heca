@@ -36,3 +36,6 @@ class FreeEntity(Entity):
         feat[13 : 13 + self.n_states] = -self.LOGIT_CONFIDENCE
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
+
+    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
+        return f"{label}_pick_place"
