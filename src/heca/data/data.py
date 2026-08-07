@@ -61,11 +61,9 @@ class DCEntity:
 class DCScene:
     def __init__(
         self,
-        ee: DCEntity,
         entities: dict[str, DCEntity],
         extras: dict[str, np.ndarray] = {},
     ):
-        self._ee = ee
         self._entities = entities
         self._extras = extras if extras is not None else {}
 
@@ -84,29 +82,21 @@ class DCScene:
     def extras(self) -> dict[str, np.ndarray]:
         return self._extras
 
-    @property
-    def ee(self) -> DCEntity:
-        return self._ee
-
     def entities(self) -> Iterator[tuple[str, DCEntity]]:
         for key, value in self._entities.items():
             yield key, value
 
     def remove(self, key: str) -> DCEntity:
-        """Remove the entity with the given key and return it.
-        Raises KeyError if the key does not exist.
-        """
         return self._entities.pop(key)
 
     @classmethod
     def empty(cls) -> "DCScene":
-        return cls(DCEntity.empty(), {})
+        return cls({})
 
     def copy(self) -> "DCScene":
         new_entities = {k: v.copy() for k, v in self._entities.items()}
-        new_ee = self._ee.copy()
         new_extras = {k: v.copy() for k, v in self._extras.items()}
-        return DCScene(new_ee, new_entities, new_extras)
+        return DCScene(new_entities, new_extras)
 
     def __str__(self) -> str:
         max_key_len = max((len(k) for k in self._entities), default=0)
@@ -114,7 +104,7 @@ class DCScene:
         entity_lines = "\n".join(
             f"  {k:<{max_key_len}}: {v}" for k, v in self._entities.items()
         )
-        return f"DCScene:\nee\n\t{self._ee}\nentities{entity_lines})"
+        return f"DCScene:\nentities{entity_lines})"
 
 
 class TDImage(TensorDict):

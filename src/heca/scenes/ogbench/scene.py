@@ -7,8 +7,7 @@ import ogbench
 import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
-from heca.data.data import DCScene, TDImage
-from heca.data.ee import EEEntity
+from heca.data.data import DCEntity, DCScene, TDImage
 from heca.scenes.scene import Scene
 
 
@@ -33,10 +32,6 @@ class OGScene(Scene):
             ),
         )
 
-    @property
-    def ee(self) -> EEEntity:
-        return EEEntity.get(EEEntity.Config())
-
     def close(self):
         self.env.close()
 
@@ -60,32 +55,25 @@ class OGScene(Scene):
         return obs["image"]["rgb"]
 
     def get_extras(self, obs: dict) -> dict[str, Any]:
+        pos = obs["proprio_effector_pos"]
+        rot = obs["proprio_effector_quat"]
+        opening = obs["proprio_gripper_opening"]
+        rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
+        ee_pose = np.concatenate((pos, rot))
         if "actions" in obs.keys():  # is demo
             action_raw = obs["actions"]
-            # qpos = obs["prev_qpos"]
-            # print(qpos)
-            # assert False
             yaw = action_raw[3]
-            # quat = self.yaw_to_quat(yaw)
-            # = np.concatenate([action_raw[:3], quat, np.array([action_raw[4]])])
             axis_angle = np.array([0, 0, yaw])
-            # gripper = action_raw[4]
-            # action = np.concatenate([action_raw[:3], axis_angle, np.array([gripper])])
-            opening = obs["proprio_gripper_opening"]
             action = np.concatenate([action_raw[:3], axis_angle, opening])
             reward = obs["success"]
         else:
-            # print(obs.keys())
-            # assert False
-            pos = obs["proprio_effector_pos"]
-            # quat = obs["proprio_effector_quat"]
             yaw = obs["proprio_effector_yaw"].item()
-            state = obs["proprio_gripper_opening"]
-            action = np.concatenate([pos, self.yaw_to_quat(yaw), state])
+            action = np.concatenate([pos, np.array([0, 0, yaw]), opening])
             reward = np.array([0])
         return {
             "action": action,
             "reward": reward,
+            "ee_pose": ee_pose,
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
         }
@@ -124,31 +112,17 @@ class OGScene(Scene):
         self.last_state = obs["proprio_gripper_opening"]
         return self.from_internal(obs), self.from_internal(goal)
 
-    def get_ee(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        pos = torch.tensor(obs["proprio_effector_pos"], dtype=torch.float32)
-        # wxyz = obs["proprio/effector_quat"]
-        yaw = obs["proprio_effector_yaw"].item()
-        rot = torch.tensor(self.yaw_to_quat(yaw), dtype=torch.float32)
-        # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
-        idx = obs["proprio_gripper_state"]
-        state = self.ee.one_hot_from_idx(idx)
-        # print(
-        #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
-        # )
-        return pos, rot, state
-
-    def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pos = obs["proprio_effector_pos"]
         # wxyz = obs["proprio/effector_quat"]
         yaw = obs["proprio_effector_yaw"].item()
         rot = self.yaw_to_quat(yaw)
         # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         ste_idx = np.atleast_1d(obs["proprio_gripper_state"])
-        ste_oh = self.ee.one_hot_from_idx_dc(ste_idx)
         # print(
         #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
         # )
-        return pos, rot, ste_idx, ste_oh
+        return pos, rot, ste_idx
 
     def yaw_to_quat(self, yaw: float) -> np.ndarray:
         half_yaw = yaw / 2
@@ -234,3 +208,10 @@ class OGScene(Scene):
             segments_image.append(segment_image)
 
         return segments_scene, segments_image
+
+    def to_dc_scene(self, obs: dict) -> DCScene:
+        dc_entities: dict[str, DCEntity] = {}
+        for label, entity in self.entities.items():
+            dc_entities[label] = entity.value_from_gt(obs)
+        extras = self.get_extras(obs)
+        return DCScene(dc_entities, extras=extras)

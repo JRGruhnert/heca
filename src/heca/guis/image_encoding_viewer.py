@@ -77,9 +77,9 @@ class ImageEncodingViewer(Configurable):
         (s_scene, s_tdimage, s_npimage), (g_scene, g_tdimage, g_npimage) = (
             self.scene.sample_task_vis()
         )
-        l_kp3d, l_kp2d, l_scores = self.kp_encoder.extract_entities(s_tdimage)
+        l_kp3d, l_kp2d, l_scores = self.kp_encoder.extract_poses(s_tdimage)
         l_states = self.state_encoder.extract_states(s_tdimage, l_kp2d)
-        r_kp3d, r_kp2d, r_scores = self.kp_encoder.extract_entities(g_tdimage)
+        r_kp3d, r_kp2d, r_scores = self.kp_encoder.extract_poses(g_tdimage)
         r_states = self.state_encoder.extract_states(g_tdimage, r_kp2d)
 
         # TODO:

@@ -29,12 +29,6 @@ class Heca(Agent):
         downstream_virtual: bool = False
         upstream_noise: bool = True
         inference: bool = False
-        ee_agent: Agent.Config = TapasAgent.Config(
-            tag="move_ee",
-            scene=OGScene.Config(),
-            use_gt=True,
-        )
-        adjust_ee: bool = False
         step_multiplier: int = 2
 
     def __init__(self, cfg: Config):
@@ -63,9 +57,6 @@ class Heca(Agent):
             # logger.debug(str(self.graph.ns_entity))
             input("Press Enter to continue...")
 
-        if self.cfg.adjust_ee:
-            x = self.adjust_ee(a, x, y)
-
         ds_agent = Agent.get(a)
         if ds_agent.evaluator.valid_task(x, y):
             if self.cfg.downstream_virtual:
@@ -84,15 +75,6 @@ class Heca(Agent):
             fb.reward, fb.terminal, fb.truncated, self.cfg.tag
         )
         return z, fb
-
-    def adjust_ee(self, a: Agent.Config, x: DCScene, y: DCScene):
-        agent = Agent.get(a)
-        if isinstance(agent, TapasAgent):
-            z = y.copy()
-            z.ee.value = agent.start_ee.copy()
-            result, _ = Agent.get(self.cfg.ee_agent).act(x, y)
-            return result
-        return x
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_goal(y)

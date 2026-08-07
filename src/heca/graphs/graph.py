@@ -90,8 +90,7 @@ class Graph:
         if isinstance(value, torch.Tensor):
             value = value.detach().cpu().numpy()
         value = value.squeeze()
-
-        feat = Entity.gnn_format(value, self.entities[node.entity].n_states)
+        feat = self.entities[node.entity].gnn_format(value)
         return DCEntity(value=value, feature=feat)
 
     def update_nodes(self):
@@ -219,7 +218,7 @@ class Graph:
             key = "sub_" + entity + label
             sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
-            feat = Entity.gnn_format(value, self.entities[entity].n_states)
+            feat = self.entities[entity].gnn_format(value)
             self.ns_entity.add(
                 key,
                 EntityNode(

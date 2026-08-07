@@ -5,7 +5,7 @@ from functools import cached_property
 import numpy as np
 import torch
 from heca.agents.agent import Agent
-from heca.data.data import DCEntity, DCScene, TDImage
+from heca.data.data import DCEntity, TDImage
 from heca.data.entity import Entity
 from heca.scenes.scene import Scene
 from heca.image_encoders.dino_encoder import DinoEncoder
@@ -35,34 +35,25 @@ class ExpertAgent(Agent, abc.ABC):
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
-        return {entity.cfg.label: entity for entity in self.scene.entities}
+        return self.scene.entities
 
-    def from_image(self, image: TDImage) -> DCScene:
-        kps3d, kps2d, kp_scores = self.kp_extractor.extract_entities(image)
-        states, state_scores = self.state_extractor.extract_states(image, kps2d)
+    def from_image(self, image: TDImage) -> dict[str, DCEntity]:
+        kps3d, kps2d, kp_scores = self.kp_extractor.extract_poses(image)
+        states, state_scores = self.state_extractor.extract_states(image)
 
         # Sanity check on dimensions
-        assert kps3d.shape[1] == len(self.scene.entities) + 1  # ee at index 0
+        assert kps3d.shape[1] == len(self.scene.entities)
 
         dc_entities: dict[str, DCEntity] = {}
-        for idx, entity in enumerate(self.scene.entities):
+        for idx, (key, entity) in enumerate(self.scene.entities.items()):
             pos, rot, ste = self.get_entity_pose_and_state(
                 kps3d[:, idx + 1],
                 kp_scores[:, idx + 1],
                 states[:, idx + 1],
                 state_scores[:, idx + 1],
             )
-            soh = entity.one_hot_from_idx_dc(ste.item())
-            dc_entities[entity.cfg.label] = Entity.to_value(pos, rot, ste, soh)
-        c_pos, c_rot, c_ste = self.get_entity_pose_and_state(
-            kps3d[:, 0],
-            kp_scores[:, 0],
-            states[:, 0],
-            state_scores[:, 0],
-        )
-        c_soh = entity.one_hot_from_idx_dc(c_ste.item())
-        ee = Entity.to_value(c_pos, c_rot, c_ste, c_soh)
-        return DCScene(ee, dc_entities)
+            dc_entities[key] = entity.value_from_gt(pos, rot, ste)
+        return dc_entities
 
     def get_entity_pose_and_state(
         self,

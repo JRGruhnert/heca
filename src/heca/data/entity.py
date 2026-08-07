@@ -1,6 +1,4 @@
 import numpy as np
-
-from functools import total_ordering
 from dataclasses import dataclass
 
 
@@ -13,14 +11,12 @@ from heca.utils.quaternion import Quaternion
 STATE_LOGIT_BASELINE = -10.0
 
 
-@total_ordering
 class Entity(Configurable):
     input_feat_dim: int = 56
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        label: str
-        states: list[str]
+        states: list[str] = []
         question: str = ""
         answers: list[str] = []
 
@@ -31,32 +27,8 @@ class Entity(Configurable):
     def n_states(self) -> int:
         return len(self.cfg.states)
 
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Entity):
-            return NotImplemented
-        return self.cfg.label == other.cfg.label
-
-    def __hash__(self) -> int:
-        return hash(self.cfg.label)
-
-    def __lt__(self, other: "Entity") -> bool:
-        if not isinstance(other, Entity):
-            return NotImplemented
-        return self.cfg.label < other.cfg.label
-
     def make_zeros(self) -> torch.Tensor:
         return torch.zeros(len(self.cfg.states), dtype=torch.float32)
-
-    def make_zeros_dc(self) -> np.ndarray:
-        return np.zeros(len(self.cfg.states))
-
-    def make_one_hot(self, label: str) -> torch.Tensor:
-        assert label is not None, "Label cannot be None."
-        assert label in self.cfg.states, "Label must be in state values."
-        one_hot = self.make_zeros()
-        index = self.cfg.states.index(label)
-        one_hot[index] = 1.0
-        return one_hot
 
     def make_idx(self, label: str) -> int:
         assert label is not None, "Label cannot be None."
@@ -66,56 +38,25 @@ class Entity(Configurable):
     def one_hot_from_idx(self, idx: int) -> torch.Tensor:
         idx = int(idx)
         assert 0 <= idx < len(self.cfg.states), "Index out of bounds."
-        one_hot = self.make_zeros()
-        one_hot[idx] = 1.0
-        return one_hot
-
-    def one_hot_from_idx_dc(self, idx: int) -> np.ndarray:
-        idx = int(idx)
-        assert 0 <= idx < len(self.cfg.states), "Index out of bounds."
-        one_hot = self.make_zeros_dc()
+        one_hot = torch.zeros(len(self.cfg.states), dtype=torch.float32)
         one_hot[idx] = 1.0
         return one_hot
 
     @classmethod
-    def to_value(
-        cls, pos: np.ndarray, rot: np.ndarray, ste: np.ndarray, soh: np.ndarray
-    ) -> DCEntity:
-        value = np.concatenate((pos, rot, ste))
-        feature = cls.gnn_format(value, len(soh))
-        return DCEntity(value=value, feature=feature)
+    def one_hot_from_idx_dc(cls, idx: int, n_states: int) -> np.ndarray:
+        assert 0 <= idx < n_states, "Index out of bounds."
+        one_hot = np.zeros(n_states)
+        one_hot[idx] = 1.0
+        return one_hot
 
-    @classmethod
-    def gnn_format(
-        cls, raw: np.ndarray, n_states: int, logit_confidence=10.0, base_logstd=-10.0
-    ):
-        """
-        Convert raw stepmix format to GNN node format.
+    def value_from_gt(self, obs: dict) -> DCEntity:
+        raise NotImplementedError
 
-        Args:
-            raw_entities: [N, 8] where columns are:
-                        [pos_x, pos_y, pos_z, qw, qx, qy, qz, state_scalar]
-            K: Number of state categories.
-            logit_confidence: Value to assign to the true class logit.
-            base_logstd: Initial log-std for deterministic entities (e.g., -10).
+    def value_from_image(self, obs: dict) -> DCEntity:
+        raise NotImplementedError
 
-        Returns:
-            gnn_nodes: [N, 13 + K] with structure:
-                    [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
-        """
-        # Initialize with zeros
-        feat = np.zeros((cls.input_feat_dim), dtype=np.float32)
-        # print(
-        #    f"raw type: {type(raw)}, raw shape: {raw.shape if hasattr(raw, 'shape') else 'no shape'}, raw: {raw}"
-        # )
-        feat[0:3] = raw[0:3]
-        feat[3:6] = base_logstd
-        feat[6:10] = Quaternion.normalize(raw[3:7])
-        feat[10:13] = base_logstd
-        state_ids = raw[7].astype(int)  # [N]
-        feat[13 : 13 + n_states] = -logit_confidence
-        feat[13 + state_ids] = logit_confidence
-        return feat
+    def gnn_format(self, value: np.ndarray):
+        raise NotImplementedError
 
     @classmethod
     def apply_artificial_uncertainty(
@@ -127,21 +68,6 @@ class Entity(Configurable):
         base_eps=1e-5,
         rng=None,
     ):
-        """
-        Inject Gaussian noise into Real/Entity nodes and update their stored uncertainty.
-
-        Args:
-            entity_features: [N, 13+K] Clean or base entity features.
-                            Structure: [μ_pos(3), logσ_pos(3), q(4), logσ_rot(3), logits_state(K)]
-            pos_noise_std: Standard deviation of position noise (in world units).
-            rot_noise_std: Standard deviation of rotation noise (in radians, in tangent space).
-            state_noise_std: Standard deviation of noise added to logits.
-            base_eps: Minimum standard deviation to keep for numerical stability (if noise is 0).
-            rng: np.random.Generator for reproducibility.
-
-        Returns:
-            noisy_entities: [N, 13+K] Modified entity features with updated means and log-stds.
-        """
         if rng is None:
             rng = np.random.default_rng()
 

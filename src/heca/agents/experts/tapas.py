@@ -25,7 +25,6 @@ from heca.conditions.condition import Condition
 from heca.conditions.evaluator import AgentFeedback
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
-from heca.data.entity import Mobility
 from heca.misc import logger
 from heca.misc.hardware import device
 from heca.utils.quaternion import Quaternion
@@ -106,8 +105,6 @@ class TapasAgent(ExpertAgent):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.start_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
-        self.goal_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.policy.reset_episode()
@@ -150,7 +147,7 @@ class TapasAgent(ExpertAgent):
         if self.cfg.use_gt:
             return scene
         else:
-            return self.from_image(image)
+            return DCScene(self.from_image(image), scene.extras)
 
     def make_batch_prediction(
         self, x: SceneObservation  # type: ignore
@@ -213,41 +210,27 @@ class TapasAgent(ExpertAgent):
         return temp
 
     def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
-        poses = {
-            entity.cfg.label: dc_obs[entity.cfg.label].tpose
-            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
-        }
+        poses = {l: dc_obs[l].tpose for l in self.scene.entities.keys()}
 
-        states = {
-            entity.cfg.label: dc_obs[entity.cfg.label].tste
-            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
-        }
-
-        # Target parameters
-        for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label):
-            if entity.cfg.mobility == Mobility.FREE:
-                poses[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tpose
-                states[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tste
-
-        poses[f"ee_target"] = dc_goal.ee.tpose
-        states[f"ee_target"] = dc_goal.ee.tste
-
+        for l in self.scene.entities.keys():
+            poses[f"{l}_target"] = dc_goal[l].tpose
+        poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)
-        object_states = dict_to_tensordict(states)
 
         action = torch.Tensor(dc_obs.extras["action"])
         reward = torch.Tensor(dc_obs.extras["reward"])
         joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
         joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
+        ee_pose = torch.tensor(dc_obs.extras["ee_pose"])
 
         return SceneObservation(
             feedback=reward,
             action=action,
             cameras=None,  # multicam_obs,
-            ee_pose=dc_obs.ee.tpose,
-            gripper_state=dc_obs.ee.tste,
+            ee_pose=ee_pose,
+            # gripper_state=dc_obs.ee.tste,
             object_poses=object_poses,
-            object_states=object_states,
+            # object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
             batch_size=torch.Size([]),
@@ -256,9 +239,9 @@ class TapasAgent(ExpertAgent):
     @cached_property
     def elabels(self) -> set[str]:
         labels = set()
-        elabels = [e.cfg.label for e in self.scene.entities]
         for idx, key in enumerate(self.demos.idx_key_list):
-            if idx in self.model._used_frames and key in elabels:
+            if idx in self.model._used_frames:
+                assert key in self.scene.entities.keys()
                 labels.add(key)
         logger.info(f"{self.cfg.tag} entities: {labels}")
         return labels
@@ -286,24 +269,6 @@ class TapasAgent(ExpertAgent):
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        start_ee = np.stack([s.ee.value for s in start_scenes])  # (N, 8)
-        self.start_ee = np.zeros(8, dtype=np.float32)
-        self.start_ee[:3] = start_ee[:, :3].mean(axis=0)  # mean position
-        quats = start_ee[:, 3:7]
-        mean_quat = quats.mean(axis=0)
-        self.start_ee[3:7] = Quaternion.normalize(mean_quat)
-        states = start_ee[:, -1]
-        self.start_ee[-1] = np.bincount(states.astype(int)).argmax()
-
-        goal_ee = np.stack([s.ee.value for s in end_scenes])
-        self.goal_ee = np.zeros(8, dtype=np.float32)
-        self.goal_ee[:3] = goal_ee[:, :3].mean(axis=0)  # mean position
-        quats = goal_ee[:, 3:7]
-        mean_quat = quats.mean(axis=0)
-        self.goal_ee[3:7] = Quaternion.normalize(mean_quat)
-        states = goal_ee[:, -1]
-        self.goal_ee[-1] = np.bincount(states.astype(int)).argmax()
-
         pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
         post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
         pair = ConPair(f"{self.cfg.tag}", pre, post, self.cfg.threshold)
@@ -324,9 +289,10 @@ class TapasAgent(ExpertAgent):
                 stacked = self.dcscenes_to_tdtapas(demo_scenes)
             else:
                 demo_extracted: list[DCScene] = []
-                for td_img in demo_images:
+                for idx, td_img in enumerate(demo_images):
                     extracted = self.from_image(td_img)
-                    demo_extracted.append(extracted)
+                    extr_scene = DCScene(extracted, demo_scenes[idx].extras)
+                    demo_extracted.append(extr_scene)
                 stacked = self.dcscenes_to_tdtapas(demo_extracted)
             observations.append(stacked)
         return observations

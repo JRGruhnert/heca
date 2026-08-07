@@ -19,16 +19,12 @@ class ImageEncoder(Registerable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-    @abc.abstractmethod
-    def extract_entities(
+    def extract_poses(
         self, image: TDImage
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
-    @abc.abstractmethod
-    def extract_states(
-        self, image: TDImage, kps: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def extract_states(self, image: TDImage) -> tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 
     def normalize_coords(

@@ -47,12 +47,7 @@ class MolmoEncoder(ImageEncoder):
 
         self.task_str = "Answer the following question about the image with only the single letter of the correct answer. There can only be one correct answer."
 
-    def extract_entities(self, image: TDImage) -> torch.Tensor:
-        raise NotImplementedError()
-
-    def extract_states(
-        self, image: TDImage, kps_raw_2d: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def extract_states(self, image: TDImage) -> tuple[torch.Tensor, torch.Tensor]:
         images = [image] * len(self.chat_texts)
         inputs = self.processor(
             images=images,
@@ -90,7 +85,7 @@ class MolmoEncoder(ImageEncoder):
     def prepare_for_scene(self, cfg: Scene.Config):
 
         scene = Scene.get(cfg)
-        for entity in scene.entities:
+        for key, entity in scene.entities.items():
             letters = molmo.ALPHABET[: len(entity.cfg.answers)]
             choices = "\n".join(
                 f"{letter}: {state}"

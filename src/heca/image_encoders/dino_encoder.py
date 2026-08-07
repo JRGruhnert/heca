@@ -264,7 +264,7 @@ class DinoEncoder(ImageEncoder):
 
         return descr
 
-    def extract_entities(
+    def extract_poses(
         self, image: TDImage, entities: list[Entity]
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
@@ -272,30 +272,30 @@ class DinoEncoder(ImageEncoder):
         kps3d = self.kps_2d_to_3d(image, kps)  # (1, Nref, 3)
         return kps3d, kps, scores
 
-    def extract_states(
-        self, image: TDImage, entities: list[Entity], kps: torch.Tensor
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        #
-        if self.image_desc is None:
-            self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
-        # kps_raw_2d is (1, 2*Nref)
-        # image_desc is (1, C, H, W)
-        kernels = self.get_state_kernel(
-            self.image_desc,
-            kps,
-            self.kp_patch_descr.state_coords,
-        )  # (1, C, k, k)
-        one_hots = []
-        scores = []
-        for idx, entity in enumerate(entities):
-            prediction, score = self.state_knn.query(
-                entity_label=entity.cfg.label,
-                state_desc_kernel=kernels[idx],
-            )
-            one_hot_state = entity.make_one_hot(prediction)
-            one_hots.append(one_hot_state)
-            scores.append(score)
-        return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
+    # def extract_states(
+    #     self, image: TDImage, entities: list[Entity], kps: torch.Tensor
+    # ) -> tuple[torch.Tensor, torch.Tensor]:
+    #     #
+    #     if self.image_desc is None:
+    #         self.image_desc = self.compute_descriptor(image.rgb)  # (1, D, H, W)
+    #     # kps_raw_2d is (1, 2*Nref)
+    #     # image_desc is (1, C, H, W)
+    #     kernels = self.get_state_kernel(
+    #         self.image_desc,
+    #         kps,
+    #         self.kp_patch_descr.state_coords,
+    #     )  # (1, C, k, k)
+    #     one_hots = []
+    #     scores = []
+    #     for idx, entity in enumerate(entities):
+    #         prediction, score = self.state_knn.query(
+    #             entity_label=entity.cfg.label,
+    #             state_desc_kernel=kernels[idx],
+    #         )
+    #         one_hot_state = entity.make_one_hot(prediction)
+    #         one_hots.append(one_hot_state)
+    #         scores.append(score)
+    #     return torch.stack(one_hots, dim=0), torch.stack(scores, dim=0)
 
     def compute_keypoints(
         self, image_desc: torch.Tensor, ref_patch_desc: torch.Tensor | None = None
@@ -446,8 +446,8 @@ class DinoEncoder(ImageEncoder):
 
     def prepare_for_scene(self, config: Scene.Config):
         scene = Scene.get(config)
-        for entity in scene.entities:
-            image, x1, y1, x2, y2 = scene.kp_references[entity.cfg.label]
+        for label, entity in scene.entities.items():
+            image, x1, y1, x2, y2 = scene.kp_references[label]
             image_desc = self.compute_descriptor(image)  # (1, D, H, W)
             dc_py, dc_px = self.transform_coords(
                 x1,
@@ -464,12 +464,8 @@ class DinoEncoder(ImageEncoder):
                     (x2 - x1) / image.width * 2,
                 ]
             )
-            self.kp_patch_descr.add_scene(
-                entity.cfg.label, dc_ref_patch_desc, state_coords
-            )
-            for state_label, state_imgs in scene.state_references[
-                entity.cfg.label
-            ].items():
+            self.kp_patch_descr.add_scene(label, dc_ref_patch_desc, state_coords)
+            for state_label, state_imgs in scene.state_references[label].items():
                 for state_img in state_imgs:
                     state_img_desc = self.compute_descriptor(state_img)  # (1, D, H, W)
                     kp_2d, _ = self.compute_keypoints(
@@ -480,8 +476,4 @@ class DinoEncoder(ImageEncoder):
                         kp_2d,
                         state_coords.unsqueeze(0),
                     )  # (1, C, k, k)
-                    self.state_knn.register(
-                        entity.cfg.label,
-                        state_label,
-                        kernel,
-                    )
+                    self.state_knn.register(label, state_label, kernel)

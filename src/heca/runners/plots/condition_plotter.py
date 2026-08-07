@@ -72,7 +72,7 @@ class HecaConditionPlotter(HecaPlotter):
                 )
                 break
         if not skip:
-            return Entity.to_value(
+            return Entity.value_from_gt(
                 pos=conditions[f"{label}_position"].value,
                 rot=conditions[f"{label}_rotation"].value,
                 ste=conditions[f"{label}_scalar"].value,

@@ -11,7 +11,7 @@ from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
 
 
-class OGScene0(OGScene):
+class OGSceneOG(OGScene):
     @dataclass(kw_only=True)
     class Config(OGScene.Config):
         tag: str = "scene0"
@@ -94,3 +94,18 @@ class OGScene0(OGScene):
             ),
         }
         return {l: Entity.get(e) for l, e in ents.items()}
+
+    def to_dc_scene(self, obs: dict) -> DCScene:
+        dc_entities: dict[str, DCEntity] = {}
+        for label, entity in self.entities.items():
+            if label in ["button_0", "button_1"]:  # hack
+                e_pos = obs[f"privileged_{label}_pos_full"]
+            else:
+                e_pos = obs[f"privileged_{label}_pos"]
+            wxyz = obs[f"privileged_{label}_quat"]
+            e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
+            e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])
+            e_soh = entity.one_hot_from_idx_dc(e_ste)
+            dc_entities[label] = Entity.value_from_gt(e_pos, e_rot, e_ste, e_soh)
+        extras = self.get_extras(obs)
+        return DCScene(dc_entities, extras=extras)
