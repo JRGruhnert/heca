@@ -105,7 +105,6 @@ class OGSceneOG(OGScene):
             wxyz = obs[f"privileged_{label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])
-            e_soh = entity.one_hot_from_idx_dc(e_ste)
             dc_entities[label] = Entity.value_from_gt(e_pos, e_rot, e_ste, e_soh)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
