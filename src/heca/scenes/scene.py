@@ -88,15 +88,15 @@ class Scene(Persistable):
     def _load(self, path: Path, tag: str):
         dc_pattern = re.compile(rf"xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png")
         sample_postfix = r"_sample(\d+)\.png"
-        for entity in self.entities:
-            edir = path / tag / entity.cfg.label
-            self.state_references[entity.cfg.label] = {}
+        for label, entity in self.entities.items():
+            edir = path / tag / label
+            self.state_references[label] = {}
             for state in entity.cfg.states:
-                self.state_references[entity.cfg.label][state] = []
+                self.state_references[label][state] = []
                 state_pattern = re.compile(rf"{re.escape(state)}{sample_postfix}")
                 for file in edir.glob(f"{state}_sample*.png"):
                     if state_pattern.fullmatch(file.name):
-                        self.state_references[entity.cfg.label][state].append(
+                        self.state_references[label][state].append(
                             Image.open(file),
                         )
             files = list(edir.glob(f"xk*_yk*_xs*_ys*.png"))
@@ -105,7 +105,7 @@ class Scene(Persistable):
             file = files[0]
             match = dc_pattern.fullmatch(file.name)
             if match:
-                self.kp_references[entity.cfg.label] = (
+                self.kp_references[label] = (
                     Image.open(file),
                     int(match.group(1)),
                     int(match.group(2)),
@@ -114,13 +114,13 @@ class Scene(Persistable):
                 )
 
     def _save(self, path: Path, tag: str):
-        for entity in self.entities:
-            entity_dir = path / tag / entity.cfg.label
+        for label, entity in self.entities.items():
+            entity_dir = path / tag / label
             entity_dir.mkdir(parents=True, exist_ok=True)
-            for state, samples in self.state_references[entity.cfg.label].items():
+            for state, samples in self.state_references[label].items():
                 for idx, img in enumerate(samples):
                     img.save(entity_dir / f"{state}_sample{idx}.png")
-            img, x1, y1, x2, y2 = self.kp_references[entity.cfg.label]
+            img, x1, y1, x2, y2 = self.kp_references[label]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
 
     @property
@@ -197,6 +197,7 @@ class Scene(Persistable):
 
     def _bucket_key(self, f, key: str, seg_start: int, seg_end: int) -> str:
         # Determine direction for joint-based objects
+        entity = self.entities[key]
         if base in ("faucet", "doorlock", "lever", "drawer", "window"):
             pos_key = f"privileged_{key}_pos"
             target_key = f"heca_target_{key}_pos"
