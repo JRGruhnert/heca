@@ -1,18 +1,13 @@
 import numpy as np
 from dataclasses import dataclass
-
-
 import torch
 
 from heca.misc.base import Configurable
 from heca.data.data import DCEntity
-from heca.utils.quaternion import Quaternion
-
-STATE_LOGIT_BASELINE = -10.0
 
 
 class Entity(Configurable):
-    input_feat_dim: int = 56
+    input_feat_dim: int = 64
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
@@ -58,5 +53,7 @@ class Entity(Configurable):
     def gnn_format(self, value: np.ndarray) -> np.ndarray:
         raise NotImplementedError
 
-    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
+    def make_agent_key(
+        self, label: str, obs: dict[str, list], start: int, end: int
+    ) -> str:
         raise NotImplementedError

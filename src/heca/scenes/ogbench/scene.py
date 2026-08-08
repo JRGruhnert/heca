@@ -1,3 +1,4 @@
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -21,11 +22,11 @@ class OGScene(Scene):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
+        self.env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
         self.env = cast(
             ManipSpaceEnv,
             ogbench.make_env_and_datasets(
-                dataset_name=env_id,
+                dataset_name=self.env_id,
                 env_only=True,
                 dataset_only=False,
                 control_timestep=0.5,
@@ -215,3 +216,65 @@ class OGScene(Scene):
             dc_entities[label] = entity.value_from_gt(obs)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
+
+    def demo_auto_extract(self):
+        scene_path = Scene.load_dir(self.cfg) / "demos"
+        with h5py.File(scene_path / f"{self.env_id}.h5", "r") as f:
+            done = np.asarray(f["oracle_done"])[:, 0]
+            success = np.asarray(f["oracle_success"])[:, 0]
+            task = np.asarray(f["privileged_target_task"], dtype=str)
+
+            # Find segment boundaries (indices where oracle switches)
+            done_idxs = np.where(done == 1.0)[0]
+            starts = [0] + list(done_idxs)
+            ends = list(done_idxs) + [len(done)]
+
+            agent_data = defaultdict(list)
+
+            for s, e in zip(starts, ends):
+                if s >= e:
+                    continue
+                t = e - 1
+                if success[t] != 1.0:
+                    continue
+
+                agent_key = self.entities[task[t]].make_agent_key(f, s, t)
+                agent_data[agent_key].append((s, t))
+
+            all_keys = list(f.keys())
+            for agent_key, segments in agent_data.items():
+                out_path = scene_path / f"{agent_key}.h5"
+                with h5py.File(out_path, "w") as out:
+                    demo_id = 0
+                    for s, e in segments:
+                        demo_ids = np.full(e - s + 1, demo_id, dtype=np.int32)
+                        for key in all_keys:
+                            data = f[key][s : e + 1]
+                            if "demo" not in out and key == "demo":
+                                continue  # skip if demo dataset doesn't exist yet
+                            if key not in out:
+                                maxshape = (None,) + data.shape[1:]
+                                out.create_dataset(
+                                    key,
+                                    data=data,
+                                    maxshape=maxshape,
+                                    chunks=(1,) + data.shape[1:],
+                                )
+                            else:
+                                ds = out[key]
+                                n = ds.shape[0]
+                                ds.resize(n + len(data), axis=0)
+                                ds[n : n + len(data)] = data
+                        # Add demo_id dataset
+                        if "demo" not in out:
+                            out.create_dataset(
+                                "demo", data=demo_ids[:1], maxshape=(None,), chunks=(1,)
+                            )
+                        else:
+                            ds = out["demo"]
+                            n = ds.shape[0]
+                            ds.resize(n + len(demo_ids), axis=0)
+                            ds[n : n + len(demo_ids)] = demo_ids
+                        demo_id += 1
+
+                print(f"  {agent_key}: {len(segments)}, demo_path: {out_path}")

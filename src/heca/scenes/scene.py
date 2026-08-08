@@ -131,63 +131,9 @@ class Scene(Persistable):
     def entities(self) -> dict[str, Entity]:
         raise NotImplementedError()
 
+    @property
+    def dataset_path(self) -> str:
+        raise NotImplementedError()
+
     def demo_auto_extract(self):
-        with h5py.File(self.dataset_path, "r") as f:
-            done = np.asarray(f["oracle_done"])[:, 0]
-            success = np.asarray(f["oracle_success"])[:, 0]
-            task = np.asarray(f["privileged_target_task"], dtype=str)
-
-            # Find segment boundaries (indices where oracle switches)
-            done_idxs = np.where(done == 1.0)[0]
-            seg_starts = [0] + list(done_idxs)
-            seg_ends = list(done_idxs) + [len(done)]
-
-            agent_data = defaultdict(list)
-
-            for start, end in zip(seg_starts, seg_ends):
-                if start >= end:
-                    continue
-                if success[end - 1] != 1.0:
-                    continue
-
-                agent_key = self.entities[task[end - 1]].agent_key(f, start, end - 1)
-                agent_data[agent_key].append((start, end - 1))
-
-            # Write each bucket to a separate HDF5 file
-            all_keys = list(f.keys())
-            for agent_key, segments in agent_data.items():
-                out_path = self.output_dir / f"{agent_key}.h5"
-                with h5py.File(out_path, "w") as out:
-                    demo_id = 0
-                    for start, end in segments:
-                        demo_ids = np.full(end - start + 1, demo_id, dtype=np.int32)
-                        for key in all_keys:
-                            data = f[key][start : end + 1]
-                            if "demo" not in out and key == "demo":
-                                continue  # skip if demo dataset doesn't exist yet
-                            if key not in out:
-                                maxshape = (None,) + data.shape[1:]
-                                out.create_dataset(
-                                    key,
-                                    data=data,
-                                    maxshape=maxshape,
-                                    chunks=(1,) + data.shape[1:],
-                                )
-                            else:
-                                ds = out[key]
-                                n = ds.shape[0]
-                                ds.resize(n + len(data), axis=0)
-                                ds[n : n + len(data)] = data
-                        # Add demo_id dataset
-                        if "demo" not in out:
-                            out.create_dataset(
-                                "demo", data=demo_ids[:1], maxshape=(None,), chunks=(1,)
-                            )
-                        else:
-                            ds = out["demo"]
-                            n = ds.shape[0]
-                            ds.resize(n + len(demo_ids), axis=0)
-                            ds[n : n + len(demo_ids)] = demo_ids
-                        demo_id += 1
-
-                print(f"  {agent_key}: {len(segments)} demos → {out_path}")
+        raise NotImplementedError

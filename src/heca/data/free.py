@@ -26,7 +26,6 @@ class FreeEntity(Entity):
         return DCEntity(value=value, feature=feature)
 
     def gnn_format(self, value: np.ndarray):
-        # Initialize with zeros
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
         feat[0:3] = value[0:3]
         feat[3:6] = self.BASE_LOGSTD
@@ -37,5 +36,7 @@ class FreeEntity(Entity):
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
 
-    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
-        return f"{label}_pick_place"
+    def make_agent_key(
+        self, label: str, obs: dict[str, list], start: int, end: int
+    ) -> str:
+        return f"{label}_move"

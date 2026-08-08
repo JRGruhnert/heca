@@ -2,14 +2,15 @@
 
 ## Short Horizon:
 
-- gea and vtrace check termin/truncation logic (30min)
-- add the apply noise code for virtual goal (1h)
-- finalize tapas model (8h)
-- adjust_ee (1-8h) (depending on solution)
+- finalize federated scenes
+- fix oracles
+- fix entities in ogbench
+- fix entities in heca
+- update network (entity types)
+- update graph (entity types)
 
 ## Long Horizon:
 
-- vtrace simulate async (4h)
 - record tapas models
 - update image encoder (uncertainty)
 - record image samples

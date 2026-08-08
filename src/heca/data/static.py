@@ -26,7 +26,6 @@ class StaticEntity(Entity):
         return DCEntity(value=value, feature=feature)
 
     def gnn_format(self, value: np.ndarray):
-        # Initialize with zeros
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
         feat[0:3] = value[0:3]
         feat[3:6] = self.BASE_LOGSTD
@@ -37,7 +36,11 @@ class StaticEntity(Entity):
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
 
-    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
-        start_state = obs[f"privileged_{label}_state"][start][0]
-        direction = "press" if start_state == 0 else "unpress"
-        return f"{label}_{direction}"
+    def make_agent_key(
+        self, label: str, obs: dict[str, list], start: int, end: int
+    ) -> str:
+        ste_id_start = obs[f"heca_{label}_ste"][start][0]
+        ste_id_end = obs[f"heca_{label}_ste"][end][0]
+        ste_label_start = self.cfg.states[ste_id_start]
+        ste_label_end = self.cfg.states[ste_id_end]
+        return f"{label}_{ste_label_start}_{ste_label_end}"

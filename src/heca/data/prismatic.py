@@ -26,7 +26,6 @@ class PrismaticEntity(Entity):
         return DCEntity(value=value, feature=feature)
 
     def gnn_format(self, value: np.ndarray):
-        # Initialize with zeros
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
         feat[0:3] = value[0:3]
         feat[3:6] = self.BASE_LOGSTD
@@ -37,23 +36,10 @@ class PrismaticEntity(Entity):
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
 
-    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
-        pos_key = f"privileged_{label}_pos"
-        target_key = f"heca_target_{label}_pos"
-        start_val = obs[pos_key][start][0]
-        target_val = obs[target_key][end][0]
-        direction = "open" if target_val > start_val else "close"
+    def make_agent_key(
+        self, label: str, obs: dict[str, list], start: int, end: int
+    ) -> str:
+        start_val = obs[f"heca_{label}_displacement"][start][0]
+        target_val = obs[f"heca_{label}_displacement"][end][0]
+        direction = "a_b" if target_val > start_val else "b_a"
         return f"{label}_{direction}"
-
-        for i in range(len(data)):
-            if oracle_done[i] == 1.0:
-                # Success of PREVIOUS oracle (last step before switch)
-                success = oracle_success[i - 1] == 1.0
-                # Direction: compare start vs target
-                start = privileged_faucet_0_pos[seg_start]
-                target = heca_target_faucet_0_pos[i - 1]
-                direction = "open" if target > start else "close"
-
-                if success:
-                    save_segment(data[seg_start:i], direction)
-                seg_start = i

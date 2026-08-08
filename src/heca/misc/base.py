@@ -50,6 +50,9 @@ class Configurable(abc.ABC):
 
     @classmethod
     def base_dir(cls, cfg: "Configurable.Config", folder: str) -> Path:
+        """
+        cls.root / folder
+        """
         path = cls.root / folder
         path.mkdir(parents=True, exist_ok=True)
         return path
@@ -82,6 +85,9 @@ class Registerable(Configurable):
 
     @classmethod
     def instance_dir(cls, cfg: "Registerable.Config", folder: str) -> Path:
+        """
+        cls.root / folder / cfg.label
+        """
         path = cls.base_dir(cfg, folder) / cfg.label
         path.mkdir(parents=True, exist_ok=True)
         return path
@@ -123,6 +129,9 @@ class Persistable(Registerable, abc.ABC):
 
     @classmethod
     def load_dir(cls, cfg: "Persistable.Config") -> Path:
+        """
+        cls.root / cfg.folder / cfg.label / cfg.tag
+        """
         tag = cfg.load_tag or cfg.tag
         path = cls.instance_dir(cfg, cfg.folder) / tag
         path.mkdir(parents=True, exist_ok=True)
@@ -130,6 +139,9 @@ class Persistable(Registerable, abc.ABC):
 
     @classmethod
     def save_dir(cls, cfg: "Persistable.Config") -> Path:
+        """
+        cls.root / cfg.folder / cfg.label / cfg.tag
+        """
         path = cls.instance_dir(cfg, cfg.folder) / cfg.tag
         path.mkdir(parents=True, exist_ok=True)
         return path

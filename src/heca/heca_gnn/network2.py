@@ -3,19 +3,10 @@ import torch
 from torch import nn
 from torch_geometric.data import HeteroData
 
-from heca.heca_gnn.network import (
-    Network,
-    StepMixBlock,
-    TapasBlock,
-    SummaryBlock,
-)
+from heca.heca_gnn.network import Network, StepMixBlock, TapasBlock, SummaryBlock
 
 
 class OptionMemory(nn.Module):
-    """
-    Temporal memory for option nodes using a GRU cell.
-    """
-
     def __init__(self, feature_dim: int):
         super().__init__()
         self.feature_dim = feature_dim
@@ -36,13 +27,10 @@ class OptionMemory(nn.Module):
         return x + hidden
 
     def reset_memory(self) -> None:
-        """Zero out all memory states. Call at the start of each episode."""
         self.memory.zero_()
 
 
 class OptionInteraction(nn.Module):
-    """Self-attention over option nodes for cross-option reasoning."""
-
     def __init__(self, dim: int, num_heads: int = 4):
         super().__init__()
         self.attn = nn.MultiheadAttention(dim, num_heads, batch_first=True)
@@ -83,10 +71,6 @@ class OptionReadout(nn.Module):
 
 
 class Network2(Network):
-    """Extended GNN: mobility features → deeper encoder → stepmix → tapas
-    → summary → cross‑option attention → shared readout.
-    """
-
     @dataclass(kw_only=True)
     class Config(Network.Config):
         mobility_feat_dim: int = 3

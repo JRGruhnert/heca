@@ -26,7 +26,6 @@ class RevoluteEntity(Entity):
         return DCEntity(value=value, feature=feature)
 
     def gnn_format(self, value: np.ndarray):
-        # Initialize with zeros
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
         feat[0:3] = value[0:3]
         feat[3:6] = self.BASE_LOGSTD
@@ -37,10 +36,10 @@ class RevoluteEntity(Entity):
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
 
-    def agent_key(self, label: str, obs: dict[str, list], start: int, end: int) -> str:
-        pos_key = f"privileged_{label}_pos"
-        target_key = f"heca_target_{label}_pos"
-        start_val = obs[pos_key][start][0]
-        target_val = obs[target_key][end][0]
-        direction = "open" if target_val > start_val else "close"
+    def make_agent_key(
+        self, label: str, obs: dict[str, list], start: int, end: int
+    ) -> str:
+        start_val = obs[f"heca_{label}_angle"][start][0]
+        target_val = obs[f"heca_{label}_angle"][end][0]
+        direction = "a_b" if target_val > start_val else "b_a"
         return f"{label}_{direction}"

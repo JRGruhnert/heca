@@ -9,6 +9,7 @@ from heca.data.static import StaticEntity
 from heca.scenes.ogbench.scene import OGScene
 from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
+from heca.utils.quaternion import Quaternion
 
 
 class OGSceneOG(OGScene):
@@ -105,6 +106,20 @@ class OGSceneOG(OGScene):
             wxyz = obs[f"privileged_{label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])
-            dc_entities[label] = Entity.value_from_gt(e_pos, e_rot, e_ste, e_soh)
+            value = np.concatenate((e_pos, e_rot, e_ste))
+            feature = self.gnn_format(value, len(entity.cfg.states))
+            dc_entities[label] = DCEntity(value=value, feature=feature)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
+
+    def gnn_format(self, value: np.ndarray, n_states):
+        # Initialize with zeros
+        feat = np.zeros((56), dtype=np.float32)
+        feat[0:3] = value[0:3]
+        feat[3:6] = -10.0
+        feat[6:10] = Quaternion.normalize(value[3:7])
+        feat[10:13] = -10.0
+        state_ids = value[7].astype(int)  # [N]
+        feat[13 : 13 + n_states] = -10.0
+        feat[13 + state_ids] = 10.0
+        return feat

@@ -21,8 +21,6 @@ def _make_gnn_mlp(dim: int, num_layers: int) -> nn.Sequential:
 
 
 class StepMixBlock(nn.Module):
-    """GINE layer for entity→stepmix→entity edges (8-dim edge features)."""
-
     def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
         self.nn = _make_gnn_mlp(dim, num_layers)
@@ -35,8 +33,6 @@ class StepMixBlock(nn.Module):
 
 
 class TapasBlock(nn.Module):
-    """GIN layer for entity→tapas→entity edges (no edge features)."""
-
     def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
         self.nn = _make_gnn_mlp(dim, num_layers)
@@ -47,8 +43,6 @@ class TapasBlock(nn.Module):
 
 
 class SummaryBlock(nn.Module):
-    """GINE layer for entity→summary→option edges (7-dim edge features)."""
-
     def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
         self.nn = _make_gnn_mlp(dim, num_layers)
