@@ -59,7 +59,6 @@ class Scene(Persistable):
     ]:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def get_ee(self, obs) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError()
 

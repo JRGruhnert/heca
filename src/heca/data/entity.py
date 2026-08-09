@@ -1,7 +1,7 @@
 from typing import Any
 
 import numpy as np
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from heca.misc.base import Configurable
 from heca.data.data import DCEntity
@@ -18,9 +18,9 @@ class Entity(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         threshold: float
-        states: list[str] = []
+        states: list[str] = field(default_factory=list)
         question: str = ""
-        answers: list[str] = []
+        answers: list[str] = field(default_factory=list)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

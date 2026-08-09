@@ -245,7 +245,7 @@ class OGScene(Scene):
                     continue
 
                 label = str(task[t])
-                agent_key = self.entities[str(task[t])].make_agent_key(label, f, s, t)
+                agent_key = self.entities[label].make_agent_key(label, f, s, t)
                 agent_data[agent_key].append((s, t))
 
             all_keys = list(f.keys())
