@@ -13,17 +13,20 @@ class PrismaticEntity(Entity):
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        pass
+        threshold: float = 0.6
 
-    def value_from_gt(self, label: str, obs: dict) -> DCEntity:
-        pos = obs[f"heca_{label}_pos"]
-        rot = obs[f"heca_{label}_rot"]
-        ste = obs[f"heca_{label}_ste"]
-        rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
-        ste = np.atleast_1d(ste)
-        value = np.concatenate((pos, rot, ste))
-        feature = self.gnn_format(value)
-        return DCEntity(value=value, feature=feature)
+    @property
+    def measurement(self) -> dict:
+        return {
+            "pose": {
+                "model": "gaussian_diag",
+                "n_columns": 10,
+            },
+            "state": {
+                "model": "categorical",
+                "n_columns": 1,
+            },
+        }
 
     def gnn_format(self, value: np.ndarray):
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
@@ -35,6 +38,25 @@ class PrismaticEntity(Entity):
         feat[13 : 13 + self.n_states] = -self.LOGIT_CONFIDENCE
         feat[13 + state_ids] = self.LOGIT_CONFIDENCE
         return feat
+
+        # Inputs: current_pos, min_pos, max_pos (all in same unit, e.g., meters)
+
+    def extra_part(self, label: str, obs: dict) -> np.ndarray:
+        raise NotImplementedError
+
+        relative = (current_pos - min_pos) / (max_pos - min_pos)  # Always [0, 1]
+        range_raw = max_pos - min_pos  # Absolute stroke
+        midpoint_raw = (max_pos + min_pos) / 2  # Absolute center
+
+        # Optional: If range spans multiple orders of magnitude, use log transform
+        # range_transformed = np.log(range_raw + 1e-6)
+
+        # Normalize using pre-computed dataset statistics (mean and std)
+        range_norm = (range_raw - range_mean) / range_std
+        midpoint_norm = (midpoint_raw - midpoint_mean) / midpoint_std
+
+        # Feed these 3 numbers into your network
+        network_input = [relative, range_norm, midpoint_norm]
 
     def make_agent_key(
         self, label: str, obs: dict[str, list], start: int, end: int

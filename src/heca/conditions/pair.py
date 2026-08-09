@@ -4,9 +4,6 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from heca.conditions.condition import Condition
-from heca.data.entity import Entity
-
-# Condition saves raw datapoints per entity
 
 
 class ConPair:
@@ -22,39 +19,32 @@ class ConPair:
         self.post = post
         self.threshold = threshold
 
-    @property
-    def elabels(self) -> set[str]:
-        # Convienience. elbales should never be different
-        assert self.pre.elabels == self.post.elabels
-        return self.pre.elabels
-
-    @classmethod
-    def merge(
-        cls,
-        label: str,
-        a: "ConPair",
-        b: "ConPair",
-        n_samples: int,
-        threshold: float,
-    ) -> "ConPair":
-        pre_max, post_max = cls.make_max_components(a, b)
-        pre_data = cls._merge_data(a.pre, b.pre)
-        post_data = cls._merge_data(a.post, b.post)
-        pre = Condition(
-            "pre",
-            pre_data,
-            pre_max,
-            n_samples,
-            threshold,
-        )
-        post = Condition(
-            "post",
-            post_data,
-            post_max,
-            n_samples,
-            threshold,
-        )
-        return cls(label, pre, post, threshold)
+    # @classmethod
+    # def merge(
+    #     cls,
+    #     label: str,
+    #     a: "ConPair",
+    #     b: "ConPair",
+    #     n_samples: int,
+    #     threshold: float,
+    # ) -> "ConPair":
+    #     pre_max, post_max = cls.make_max_components(a, b)
+    #     pre_data = cls._merge_data(a.pre, b.pre)
+    #     post_data = cls._merge_data(a.post, b.post)
+    #     pre = Condition(
+    #         "pre",
+    #         pre_data,
+    #         pre_max,
+    #         n_samples,
+    #     )
+    #     post = Condition(
+    #         "post",
+    #         post_data,
+    #         post_max,
+    #         n_samples,
+    #         threshold,
+    #     )
+    #     return cls(label, pre, post, threshold)
 
     @classmethod
     def make_max_components(cls, a: "ConPair", b: "ConPair") -> tuple[int, int]:
@@ -79,26 +69,23 @@ class ConPair:
         self.pre.plot(plot_path, self.label)
         self.post.plot(plot_path, self.label)
 
-    def calculate_sim_matrix(
-        self, other: "ConPair", entity: Entity, key: str
-    ) -> np.ndarray:
+    def calculate_sim_matrix(self, other: "ConPair", key: str) -> np.ndarray:
         mat = np.zeros((2, 2))
         for i, c1 in enumerate([self.pre, self.post]):
             for j, c2 in enumerate([other.pre, other.post]):
-                if key not in c1.elabels or key not in c2.elabels:
+                if key not in c1.entities or key not in c2.entities:
                     mat[i, j] = np.nan
                 else:
-                    mat[i, j] = c2.containment_score(c1, entity, key)
+                    up1 = c2.models[key].get_parameters().copy()
+                    up2 = c1.models[key].get_parameters().copy()
+                    mat[i, j] = c1.entities[key].containment_score(up1, up2)
         return mat
 
-    def compute_sim(
-        self, other: "ConPair", entities: dict[str, Entity]
-    ) -> dict[str, np.ndarray]:
+    def compute_sim(self, other: "ConPair") -> dict[str, np.ndarray]:
         sim_rating = {}
-        for key in self.elabels.intersection(other.elabels):
-            entity = entities[key]
-            forward = self.calculate_sim_matrix(other, entity, key)
-            backward = other.calculate_sim_matrix(self, entity, key)
+        for key in set(self.pre.entities).intersection(set(other.pre.entities)):
+            forward = self.calculate_sim_matrix(other, key)
+            backward = other.calculate_sim_matrix(self, key)
             sim_rating[key] = np.stack((forward, backward), axis=0)
         return sim_rating
 
@@ -162,10 +149,8 @@ class ConPair:
         plt.savefig(path / "plots" / f"sim_{other.label}_{self.label}.png", dpi=300)
         plt.close(fig)
 
-    def can_merge(
-        self, other: "ConPair", entities: dict[str, Entity], path: Path | None = None
-    ) -> bool:
-        sim_rating = self.compute_sim(other, entities)
+    def can_merge(self, other: "ConPair", path: Path | None = None) -> bool:
+        sim_rating = self.compute_sim(other)
         if path is not None:
             self.plot_similarity(sim_rating, other, path)
         return self.evaluate_sim(sim_rating)

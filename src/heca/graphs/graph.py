@@ -78,11 +78,8 @@ class Graph:
 
     def test_value(self, node: EntityNode, x: DCScene) -> bool:
         assert node.con is not None
-        return node.con.score_single(
-            x[node.entity].value,
-            self.entities[node.entity],
-            node.entity,
-        )[1]
+        up = node.con.models[node.entity].get_parameters().copy()
+        return node.con.entities[node.entity].score_single(x[node.entity].value, up)[1]
 
     def create_value(self, node: EntityNode) -> DCEntity:
         assert node.con is not None
@@ -143,7 +140,7 @@ class Graph:
         con: Condition,
     ) -> dict[str, set[tuple[str, str]]]:
         keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
-        for entity, comps in con.comp_features(self.entities).items():
+        for entity, comps in con.comp_features().items():
             for idx, feat in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
                 keys[entity].add((self.es_stepmix.type[1], key))
@@ -259,9 +256,7 @@ class Graph:
                                 ),
                             )
                         else:  # pre != post
-                            subgoal = bc.pre.make_subgoal(
-                                ac.post, entities, ac.label + bc.label
-                            )
+                            subgoal = bc.pre.make_subgoal(ac.post)
                             if subgoal is not None:
                                 sources = graph.set_subgoal(
                                     ac.label + bc.label,

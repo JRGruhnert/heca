@@ -129,49 +129,49 @@ class Heca(Agent):
         logger.info(f"{self.cfg.tag} works with {len(cons)} downstream condition(s).")
         return cons
 
-    @cached_property
-    def conditions(self) -> list[ConPair]:
-        path = Agent.load_dir(self.cfg)
-        cons: list[ConPair] = self.downstream_conditions.copy()
-        sets = [{i} for i in range(len(cons))]
-        while True:
-            merged = False
-            for i in range(len(cons)):
-                for j in range(i + 1, len(cons)):
-                    a = cons[i]
-                    b = cons[j]
-                    if a.can_merge(b, self.entities, path):
-                        logger.info(f"{self.cfg.tag}: Merging {a.label} and {b.label}.")
-                        a_set = sets[i]
-                        b_set = sets[j]
-                        new_set = a_set | b_set
-                        ids = map(str, sorted(new_set))
-                        label = f"{self.cfg.tag}_{''.join(ids)}"
-                        new_pair = ConPair.merge(
-                            label=label,
-                            a=a,
-                            b=b,
-                            n_samples=self.cfg.n_samples,
-                            threshold=self.cfg.threshold,
-                        )
-                        new_pair.plot(path)
-                        cons.pop(j)
-                        cons.pop(i)
-                        sets.pop(j)
-                        sets.pop(i)
-                        sets.append(new_set)
-                        cons.append(new_pair)
+    # @cached_property
+    # def conditions(self) -> list[ConPair]:
+    #     path = Agent.load_dir(self.cfg)
+    #     cons: list[ConPair] = self.downstream_conditions.copy()
+    #     sets = [{i} for i in range(len(cons))]
+    #     while True:
+    #         merged = False
+    #         for i in range(len(cons)):
+    #             for j in range(i + 1, len(cons)):
+    #                 a = cons[i]
+    #                 b = cons[j]
+    #                 if a.can_merge(b, self.entities, path):
+    #                     logger.info(f"{self.cfg.tag}: Merging {a.label} and {b.label}.")
+    #                     a_set = sets[i]
+    #                     b_set = sets[j]
+    #                     new_set = a_set | b_set
+    #                     ids = map(str, sorted(new_set))
+    #                     label = f"{self.cfg.tag}_{''.join(ids)}"
+    #                     new_pair = ConPair.merge(
+    #                         label=label,
+    #                         a=a,
+    #                         b=b,
+    #                         n_samples=self.cfg.n_samples,
+    #                         threshold=self.cfg.threshold,
+    #                     )
+    #                     new_pair.plot(path)
+    #                     cons.pop(j)
+    #                     cons.pop(i)
+    #                     sets.pop(j)
+    #                     sets.pop(i)
+    #                     sets.append(new_set)
+    #                     cons.append(new_pair)
 
-                        merged = True
-                        break
-                if merged:
-                    break
-            if not merged:
-                break
-        logger.info(
-            f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} condition(s)."
-        )
-        return cons
+    #                     merged = True
+    #                     break
+    #             if merged:
+    #                 break
+    #         if not merged:
+    #             break
+    #     logger.info(
+    #         f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} condition(s)."
+    #     )
+    #     return cons
 
     def _load(self, path: Path):
         pass

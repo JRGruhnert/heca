@@ -213,7 +213,7 @@ class OGScene(Scene):
     def to_dc_scene(self, obs: dict) -> DCScene:
         dc_entities: dict[str, DCEntity] = {}
         for label, entity in self.entities.items():
-            dc_entities[label] = entity.value_from_gt(obs)
+            dc_entities[label] = entity.value_from_gt(label, obs)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
 

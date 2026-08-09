@@ -13,17 +13,23 @@ class FreeEntity(Entity):
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        pass
+        threshold: float = 0.4
 
-    def value_from_gt(self, label: str, obs: dict) -> DCEntity:
-        pos = obs[f"heca_{label}_pos"]
-        rot = obs[f"heca_{label}_rot"]
-        ste = obs[f"heca_{label}_ste"]
-        rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
-        ste = np.atleast_1d(ste)
-        value = np.concatenate((pos, rot, ste))
-        feature = self.gnn_format(value)
-        return DCEntity(value=value, feature=feature)
+    @property
+    def measurement(self) -> dict:
+        return {
+            "pose": {
+                "model": "gaussian_diag",
+                "n_columns": 7,
+            },
+            "state": {
+                "model": "categorical",
+                "n_columns": 1,
+            },
+        }
+
+    def extra_part(self, label: str, obs: dict) -> np.ndarray:
+        raise NotImplementedError
 
     def gnn_format(self, value: np.ndarray):
         feat = np.zeros((self.input_feat_dim), dtype=np.float32)
