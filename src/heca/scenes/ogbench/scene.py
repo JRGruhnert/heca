@@ -220,9 +220,15 @@ class OGScene(Scene):
     def demo_auto_extract(self):
         scene_path = Scene.load_dir(self.cfg) / "demos"
         with h5py.File(scene_path / f"{self.env_id}.h5", "r") as f:
-            done = np.asarray(f["oracle_done"])[:, 0]
-            success = np.asarray(f["oracle_success"])[:, 0]
-            task = np.asarray(f["privileged_target_task"], dtype=str)
+            done_ds = f["oracle_done"]
+            assert isinstance(done_ds, h5py.Dataset)
+            done = np.asarray(done_ds)[:, 0]
+            success_ds = f["oracle_success"]
+            assert isinstance(success_ds, h5py.Dataset)
+            success = np.asarray(success_ds)[:, 0]
+            task_ds = f["privileged_target_task"]
+            assert isinstance(task_ds, h5py.Dataset)
+            task = np.asarray(task_ds, dtype=str)
 
             # Find segment boundaries (indices where oracle switches)
             done_idxs = np.where(done == 1.0)[0]
@@ -238,7 +244,8 @@ class OGScene(Scene):
                 if success[t] != 1.0:
                     continue
 
-                agent_key = self.entities[task[t]].make_agent_key(f, s, t)
+                label = str(task[t])
+                agent_key = self.entities[str(task[t])].make_agent_key(label, f, s, t)
                 agent_data[agent_key].append((s, t))
 
             all_keys = list(f.keys())
@@ -249,7 +256,10 @@ class OGScene(Scene):
                     for s, e in segments:
                         demo_ids = np.full(e - s + 1, demo_id, dtype=np.int32)
                         for key in all_keys:
-                            data = f[key][s : e + 1]
+                            ds = f[key]
+                            if not isinstance(ds, h5py.Dataset):
+                                continue
+                            data = np.asarray(ds[s : e + 1])
                             if "demo" not in out and key == "demo":
                                 continue  # skip if demo dataset doesn't exist yet
                             if key not in out:
@@ -262,6 +272,7 @@ class OGScene(Scene):
                                 )
                             else:
                                 ds = out[key]
+                                assert isinstance(ds, h5py.Dataset)
                                 n = ds.shape[0]
                                 ds.resize(n + len(data), axis=0)
                                 ds[n : n + len(data)] = data
@@ -272,6 +283,7 @@ class OGScene(Scene):
                             )
                         else:
                             ds = out["demo"]
+                            assert isinstance(ds, h5py.Dataset)
                             n = ds.shape[0]
                             ds.resize(n + len(demo_ids), axis=0)
                             ds[n : n + len(demo_ids)] = demo_ids

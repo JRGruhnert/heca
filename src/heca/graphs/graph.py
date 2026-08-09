@@ -45,14 +45,7 @@ class Graph:
         data = HeteroData()
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_option.type].x = self.ns_option.x
-
-        # TODO replace entity label id with type information
-        entity_labels = [node.entity for node in self.ns_entity.items]
-        unique_types = sorted(set(entity_labels))
-        type_to_id = {t: i for i, t in enumerate(unique_types)}
-        data[self.ns_entity.type].type_ids = torch.tensor(
-            [type_to_id[t] for t in entity_labels], dtype=torch.long
-        )
+        data[self.ns_entity.type].type_ids = self.ns_entity.type_ids
 
         data[self.es_stepmix.type].edge_attr = self.es_stepmix.edge_attr
         data[self.es_summary.type].edge_attr = self.es_summary.edge_attr
@@ -148,6 +141,7 @@ class Graph:
                     key,
                     EntityNode(
                         entity=entity,
+                        type_id=type(self.entities[entity]).TYPE_ID,
                         n_states=self.entities[entity].n_states,
                         data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
@@ -168,6 +162,7 @@ class Graph:
                 key=key,
                 value=EntityNode(
                     entity=entity,
+                    type_id=type(self.entities[entity]).TYPE_ID,
                     n_states=self.entities[entity].n_states,
                     data=DCEntity.empty(),
                     sources=set(sources),
@@ -193,6 +188,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
+                    type_id=type(self.entities[entity]).TYPE_ID,
                     n_states=self.entities[entity].n_states,
                     data=DCEntity.empty(),
                     sources=sources,
@@ -220,6 +216,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
+                    type_id=type(self.entities[entity]).TYPE_ID,
                     n_states=self.entities[entity].n_states,
                     data=DCEntity(value=value, feature=feat),
                     static=True,

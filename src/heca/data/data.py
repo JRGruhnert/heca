@@ -38,6 +38,10 @@ class DCEntity:
         return self.value[3:7]
 
     @property
+    def ext(self) -> np.ndarray:
+        return self.value[7:-1]
+
+    @property
     def ste(self) -> np.ndarray:
         return self.value[-1]
 
@@ -52,6 +56,10 @@ class DCEntity:
     @property
     def tste(self) -> torch.Tensor:
         return torch.Tensor([self.value[-1]])
+
+    @property
+    def text(self) -> torch.Tensor:
+        return torch.Tensor(self.value[7:-1])
 
     @property
     def tpose(self) -> torch.Tensor:

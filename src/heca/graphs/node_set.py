@@ -12,9 +12,10 @@ T = TypeVar("T", bound=GraphNode)
 class NodeSet(Generic[T]):
     def __init__(self, type: str):
         self.items: list[T] = []
-        self.keys: list[str] = []  # ← add this
+        self.keys: list[str] = []
         self.index: dict[str, int] = {}
         self.x: torch.Tensor = torch.empty(1)
+        self.type_ids: torch.Tensor = torch.empty(0, dtype=torch.long)
         self.type = type
 
     def add(self, key: str, value: T):
@@ -51,6 +52,9 @@ class NodeSet(Generic[T]):
     def build(self):
         if self.items and isinstance(self.items[0], EntityNode):
             x_np = np.stack([node.data.feature for node in self.items], axis=0)
+            self.type_ids = torch.tensor(
+                [node.type_id for node in self.items], dtype=torch.long
+            )
         else:
             x_np = np.zeros((len(self.items), 128), dtype=np.float32)
         self.x = torch.from_numpy(x_np).float()

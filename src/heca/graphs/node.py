@@ -22,6 +22,7 @@ class GraphNode(ABC):
 @dataclass(slots=True, kw_only=True)
 class EntityNode(GraphNode):
     entity: str
+    type_id: int
     data: DCEntity
     n_states: int
     changed: bool = True

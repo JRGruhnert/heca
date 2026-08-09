@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 from dataclasses import dataclass
 
@@ -7,8 +9,11 @@ from heca.utils.quaternion import Quaternion
 
 
 class Entity(Configurable):
-    input_feat_dim: int = 56
-    max_state_dim: int = 16
+    FEATURE_DIM: int = 35  # 16 (logits) + 13 (pose) + 6 (max extra: prismatic)
+    MAX_STATE_DIM: int = 16
+    BASE_LOGSTD = -10.0
+    LOGIT_CONFIDENCE = 10.0
+    TYPE_ID: int = -1  # overridden by subclasses
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
@@ -52,10 +57,38 @@ class Entity(Configurable):
         raise NotImplementedError
 
     def gnn_format(self, value: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
+        """Encode a ground-truth value into the GNN feature vector.
+
+        value layout: [pos(3), quat(4), extra(D), state_id(1)]
+        D = len(value) - 8  (extra continuous dims beyond the 7 pose dims)
+        """
+        M = Entity.MAX_STATE_DIM
+        D = len(value) - 8  # extra dims
+
+        feat = np.zeros(Entity.FEATURE_DIM, dtype=np.float32)
+
+        # State logits (GT: one-hot with confidence markers)
+        state_id = value[7 + D].astype(int)
+        feat[: self.n_states] = -self.LOGIT_CONFIDENCE
+        feat[state_id] = self.LOGIT_CONFIDENCE
+
+        # Pose: position mean + assumed std
+        feat[M : M + 3] = value[0:3]
+        feat[M + 3 : M + 6] = self.BASE_LOGSTD
+
+        # Pose: quaternion + assumed rotation std
+        feat[M + 6 : M + 10] = Quaternion.normalize(value[3:7])
+        feat[M + 10 : M + 13] = self.BASE_LOGSTD
+
+        # Extra continuous dims: mean + assumed std
+        if D > 0:
+            feat[M + 13 : M + 13 + D] = value[7 : 7 + D]
+            feat[M + 13 + D : M + 13 + 2 * D] = self.BASE_LOGSTD
+
+        return feat
 
     def make_agent_key(
-        self, label: str, obs: dict[str, list], start: int, end: int
+        self, label: str, obs: Any, start: int, end: int
     ) -> str:
         raise NotImplementedError
 
@@ -170,28 +203,43 @@ class Entity(Configurable):
         """
         NOTE: ASSUMES MODELS USE DIAG MODE
         Returns:
-            dict: Keys are model names. Values are lists of flat feature arrays,
-                one per component. Each feature array has shape (13+K,) where:
-                - [0:3] = μ_pos (position means)
-                - [3:6] = log(σ_pos) (log standard deviations of position)
-                - [6:10] = quaternion [w, x, y, z] (rotation mean)
-                - [10:13] = log(σ_rot) (log standard deviations of rotation in tangent space)
-                - [13:] = logits (state logits, unnormalized)
+            np.ndarray of shape (N, FEATURE_DIM) with layout:
+                - [0:MAX_STATE_DIM]             = logits (state logits, unnormalized)
+                - [M:M+3]                       = μ_pos
+                - [M+3:M+6]                     = log(σ_pos)
+                - [M+6:M+10]                    = quaternion [w, x, y, z]
+                - [M+10:M+13]                   = log(σ_rot, tangent space)
+                - [M+13:M+13+D]                 = μ_extra
+                - [M+13+D:M+13+2D]              = log(σ_extra)
+            where M = MAX_STATE_DIM, D = n_columns - 7
         """
 
         p = self.secure_mix_parameters(up)
-        weights = p["weights"]  # shape: (N,)
-        means = p["measurement"]["pose"]["means"]  # shape: (N, 7)
-        covariances = p["measurement"]["pose"]["covariances"]  # shape: (N, 7)
-        pis = p["measurement"]["state"]["pis"]  # shape: (N, K)
-        N = len(weights)
+        means = p["measurement"]["pose"]["means"]  # (N, n_columns)
+        covariances = p["measurement"]["pose"]["covariances"]  # (N, n_columns)
+        pis = p["measurement"]["state"]["pis"]  # (N, K)
+        N = len(p["weights"])
+        M = Entity.MAX_STATE_DIM
+        D = means.shape[1] - 7  # extra continuous dims beyond base 7 pose
 
-        feat = np.zeros((N, Entity.input_feat_dim), dtype=np.float32)
-        feat[:, 0:3] = means[:, 0:3]  # [3]
-        feat[:, 3:6] = 0.5 * np.log(covariances[:, 0:3] + eps)
-        feat[:, 6:10] = Quaternion.normalize(means[:, 3:7])
-        feat[:, 10:13] = 0.5 * np.log(covariances[:, 3:6] + eps)
-        logits = np.log(pis)  # [K]
-        feat[:, 13 : 13 + self.n_states] = logits
+        feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
+
+        # State logits
+        feat[:, : self.n_states] = np.log(pis)
+
+        # Pose: position mean + logstd
+        feat[:, M : M + 3] = means[:, 0:3]
+        feat[:, M + 3 : M + 6] = 0.5 * np.log(covariances[:, 0:3] + eps)
+
+        # Pose: quaternion + rotation logstd (3 dof in tangent space)
+        feat[:, M + 6 : M + 10] = Quaternion.normalize(means[:, 3:7])
+        feat[:, M + 10 : M + 13] = 0.5 * np.log(covariances[:, 3:6] + eps)
+
+        # Extra continuous dims: mean + logstd
+        if D > 0:
+            feat[:, M + 13 : M + 13 + D] = means[:, 7:]
+            feat[:, M + 13 + D : M + 13 + 2 * D] = (
+                0.5 * np.log(covariances[:, 7:] + eps)
+            )
 
         return feat

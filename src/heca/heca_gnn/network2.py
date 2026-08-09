@@ -73,6 +73,7 @@ class OptionReadout(nn.Module):
 class Network2(Network):
     @dataclass(kw_only=True)
     class Config(Network.Config):
+        type_embed_dim: int = 8
         mobility_feat_dim: int = 3
         feature_dim: int = 256
         encoder_depth: int = 3
@@ -86,14 +87,22 @@ class Network2(Network):
         nn.Module.__init__(self)
         self.cfg = cfg
 
-        total_input_dim = cfg.input_feat_dim + cfg.mobility_feat_dim
+        # Maps TYPE_ID → encoder name
+        self._type_names = ["free", "static", "prismatic", "revolute"]
 
-        # TODO: Entity Encoder
-        self.entity_encoder = nn.Sequential(
-            nn.LayerNorm(total_input_dim),
-            nn.Linear(total_input_dim, cfg.feature_dim),
-            nn.LayerNorm(cfg.feature_dim),
-            nn.ReLU(),
+        self.type_embedding = nn.Embedding(len(self._type_names), cfg.type_embed_dim)
+
+        encoder_in = cfg.input_feat_dim + cfg.type_embed_dim
+        self.entity_encoders = nn.ModuleDict(
+            {
+                name: nn.Sequential(
+                    nn.LayerNorm(encoder_in),
+                    nn.Linear(encoder_in, cfg.feature_dim),
+                    nn.LayerNorm(cfg.feature_dim),
+                    nn.ReLU(),
+                )
+                for name in self._type_names
+            }
         )
         self.stepmix_layers = nn.ModuleList(
             [
@@ -125,9 +134,18 @@ class Network2(Network):
 
     def forward(self, data: HeteroData) -> tuple[torch.Tensor, torch.Tensor]:
 
-        entity_x = torch.cat([data["entity"].x, data["entity"].type_ids], dim=-1)
+        x = data["entity"].x
+        type_ids = data["entity"].type_ids
+        type_embeds = self.type_embedding(type_ids)
 
-        entity_x = self.entity_encoder(entity_x)
+        # Route each row through its type's encoder
+        N = x.shape[0]
+        entity_x = torch.zeros(N, self.cfg.feature_dim, device=x.device, dtype=x.dtype)
+        for t, name in enumerate(self._type_names):
+            mask = type_ids == t
+            if mask.any():
+                inp = torch.cat([x[mask], type_embeds[mask]], dim=-1)
+                entity_x[mask] = self.entity_encoders[name](inp)
 
         stepmix_idx = data[("entity", "stepmix", "entity")].edge_index
         stepmix_attr = data[("entity", "stepmix", "entity")].edge_attr

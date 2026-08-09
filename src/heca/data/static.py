@@ -1,15 +1,13 @@
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-from heca.data.data import DCEntity
 from heca.data.entity import Entity
-from heca.utils.quaternion import Quaternion
 
 
 class StaticEntity(Entity):
-    BASE_LOGSTD = -10.0
-    LOGIT_CONFIDENCE = 10.0
+    TYPE_ID = 1
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
@@ -31,19 +29,8 @@ class StaticEntity(Entity):
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
         raise NotImplementedError
 
-    def gnn_format(self, value: np.ndarray):
-        feat = np.zeros((self.input_feat_dim), dtype=np.float32)
-        feat[0:3] = value[0:3]
-        feat[3:6] = self.BASE_LOGSTD
-        feat[6:10] = Quaternion.normalize(value[3:7])
-        feat[10:13] = self.BASE_LOGSTD
-        state_ids = value[7].astype(int)  # [N]
-        feat[13 : 13 + self.n_states] = -self.LOGIT_CONFIDENCE
-        feat[13 + state_ids] = self.LOGIT_CONFIDENCE
-        return feat
-
     def make_agent_key(
-        self, label: str, obs: dict[str, list], start: int, end: int
+        self, label: str, obs: Any, start: int, end: int
     ) -> str:
         ste_id_start = obs[f"heca_{label}_ste"][start][0]
         ste_id_end = obs[f"heca_{label}_ste"][end][0]

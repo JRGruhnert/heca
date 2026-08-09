@@ -5,6 +5,7 @@ import torch
 
 from heca.graphs.node_set import NodeSet
 from heca.graphs.node import EntityNode, GraphNode, OptionNode
+from heca.data.entity import Entity
 from heca.utils.quaternion import Quaternion
 
 S = TypeVar("S", bound=GraphNode)
@@ -78,25 +79,27 @@ class EdgeSet(Generic[S, D]):
         Compute directed edge features from source nodes to destination nodes.
 
         Args:
-            x_src: [13+K] features for src nodes
-            x_dst: [13+K] features for dst nodes
+            x_src: [feature_dim] features for src nodes
+            x_dst: [feature_dim] features for dst nodes
 
         Returns:
             edge_feat: [8] normalized residuals (z_pos + z_rot + z_state + w_src)
         """
+        O = Entity.MAX_STATE_DIM
+
         # Unpack source (A)
-        mu_pos_a = x_src[0:3]
-        lstd_pos_a = x_src[3:6]
-        q_a = x_src[6:10]
-        lstd_rot_a = x_src[10:13]
-        logits_a = x_src[13 : 13 + n_states]
+        logits_a = x_src[:n_states]
+        mu_pos_a = x_src[O : O + 3]
+        lstd_pos_a = x_src[O + 3 : O + 6]
+        q_a = x_src[O + 6 : O + 10]
+        lstd_rot_a = x_src[O + 10 : O + 13]
 
         # Unpack destination (B)
-        mu_pos_b = x_dst[0:3]
-        lstd_pos_b = x_dst[3:6]
-        q_b = x_dst[6:10]
-        lstd_rot_b = x_dst[10:13]
-        logits_b = x_dst[13 : 13 + n_states]
+        logits_b = x_dst[:n_states]
+        mu_pos_b = x_dst[O : O + 3]
+        lstd_pos_b = x_dst[O + 3 : O + 6]
+        q_b = x_dst[O + 6 : O + 10]
+        lstd_rot_b = x_dst[O + 10 : O + 13]
 
         var_pos_a = np.exp(2 * lstd_pos_a)
         var_pos_b = np.exp(2 * lstd_pos_b)
