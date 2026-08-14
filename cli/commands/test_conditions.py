@@ -2,7 +2,7 @@ from heca.agents.agent import Agent
 from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
-from heca.agents.heca import Heca
+from heca.agents.heca_old import Heca
 from heca.conditions.pair import ConPair
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.ppo import PPO

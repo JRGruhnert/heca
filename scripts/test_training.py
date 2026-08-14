@@ -1,7 +1,7 @@
 from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
-from heca.agents.heca import Heca
+from heca.agents.heca_old import Heca
 from heca.learning.ppo import PPO
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.scenes.ogbench.scene import OGScene

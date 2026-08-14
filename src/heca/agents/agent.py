@@ -24,11 +24,7 @@ class Agent(Persistable, abc.ABC):
     @property
     def evaluator(self) -> Evaluator:
         if self._evaluator is None:
-            self._evaluator = Evaluator.get(self.cfg.evaluator).setup(
-                self.conditions,
-                self.entities,
-                self.elabels,
-            )
+            self._evaluator = Evaluator.get(self.cfg.evaluator).setup(self.entities)
         return self._evaluator
 
     @abc.abstractmethod
@@ -36,13 +32,5 @@ class Agent(Persistable, abc.ABC):
         raise NotImplementedError
 
     @cached_property
-    def elabels(self) -> set[str]:
-        raise NotImplementedError
-
-    @cached_property
     def entities(self) -> dict[str, Entity]:
-        raise NotImplementedError
-
-    @cached_property
-    def conditions(self) -> list[ConPair]:
         raise NotImplementedError

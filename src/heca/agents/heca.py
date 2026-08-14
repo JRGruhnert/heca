@@ -4,30 +4,25 @@ from pathlib import Path
 from typing import Sequence
 
 from heca.agents.experts.expert import ExpertAgent
-from heca.agents.experts.tapas import TapasAgent
-from heca.conditions.pair import ConPair
 from heca.agents.agent import Agent
-from heca.conditions.evaluator import AgentFeedback, Evaluator
+from heca.conditions.evaluator import AgentFeedback
 from heca.graphs.graph import Graph
 from heca.learning.learner import Learner
 from heca.misc import logger
 from heca.data.data import DCScene
 from heca.data.entity import Entity
-from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene
 
 
 class Heca(Agent):
     @dataclass(kw_only=True)
     class Config(Agent.Config):
-        agents: Sequence[Agent.Config]
+        agents: Sequence[ExpertAgent.Config]
+        scene: Scene.Config
         learner: Learner.Config
         label: str = "heca"
         visualize: bool = True
-        n_samples: int = 1000
-        threshold: float = 0.5
         downstream_virtual: bool = False
-        upstream_noise: bool = True
         inference: bool = False
         step_multiplier: int = 2
 
@@ -39,17 +34,17 @@ class Heca(Agent):
         if self.cfg.inference:
             self.learner.eval()
 
-        self.evaluator.set_max_steps(
-            len(self.downstream_conditions) * self.cfg.step_multiplier
-        )
+        self.evaluator.set_max_steps(len(self.cfg.agents) * self.cfg.step_multiplier)
         self.graph = Graph.generate(list(self.cfg.agents), self.entities)
         self.graph.plot(Agent.load_dir(self.cfg))
         self.graph.log()
 
-    def step(self, x: DCScene) -> tuple[DCScene, AgentFeedback]:
+    def step(
+        self, x: DCScene, new_episode: bool = False
+    ) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_start(x)
         data = self.graph.export()
-        option = self.learner.predict(data, self.cfg.tag)
+        option = self.learner.predict(data, self.cfg.tag, new_episode)
         a, y = self.graph.select(option)
         if logger.DEBUG:
             logger.debug(f"Start:\n{str(x)}")
@@ -57,14 +52,14 @@ class Heca(Agent):
             # logger.debug(str(self.graph.ns_entity))
             input("Press Enter to continue...")
 
-        ds_agent = Agent.get(a)
+        ds_agent = ExpertAgent.get(a)
         if ds_agent.evaluator.valid_task(x, y):
             if self.cfg.downstream_virtual:
                 z = y.copy()  # pretend that downstream perfectly achieved the goal
                 lfb = AgentFeedback(terminal=True, reward=1.0, truncated=False)
 
             else:
-                z, lfb = Agent.get(a).act(x, y)
+                z, lfb = ExpertAgent.get(a).act(x, y)
         else:
             # Sub Agent rejects goal
             z = x.copy()
@@ -79,40 +74,16 @@ class Heca(Agent):
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_goal(y)
         self.evaluator.reset(y)
-        z, fb = self.step(x)
+        z, fb = self.step(x, True)
         while not (fb.truncated or fb.terminal):
             z, fb = self.step(z)
         return z, fb
 
-    def sample(self, cfg: Scene.Config) -> tuple[DCScene, DCScene]:
-        scene = Scene.get(cfg)
+    def sample(self) -> tuple[DCScene, DCScene]:
+        scene = Scene.get(self.cfg.scene)
         (x, ix), (y, iy) = scene.sample_task()
-        while not self.evaluator.valid_task(x, y):
-            print("Sample New")
-            (x, ix), (y, iy) = scene.sample_task()
-        # for key in list(x._entities.keys()):
-        #     if key not in self.elabels:
-        #         x.remove(key)
-        # for key in list(y._entities.keys()):
-        #     if key not in self.elabels:
-        #         y.remove(key)
         logger.debug("New Episode")
         return x, y
-
-    def train(self, cfg: Scene.Config):
-        """Train the network with PPO for a given number of episodes."""
-        while not self.end_flag:
-            x, y = self.sample(cfg)
-            # print("Starting Episode")
-            z = self.act(x, y)  # runs a full episode to terminal, accumulates PPO data
-            # print("Ending Episode")
-
-    @cached_property
-    def elabels(self) -> set[str]:
-        values = set()
-        for cfg in self.cfg.agents:
-            values.update(Agent.get(cfg).elabels)
-        return values
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
@@ -120,58 +91,6 @@ class Heca(Agent):
         for cfg in self.cfg.agents:
             values.update(Agent.get(cfg).entities)
         return values
-
-    @cached_property
-    def downstream_conditions(self) -> list[ConPair]:
-        cons: list[ConPair] = []
-        for cfg in self.cfg.agents:
-            cons.extend(Agent.get(cfg).conditions)
-        logger.info(f"{self.cfg.tag} works with {len(cons)} downstream condition(s).")
-        return cons
-
-    # @cached_property
-    # def conditions(self) -> list[ConPair]:
-    #     path = Agent.load_dir(self.cfg)
-    #     cons: list[ConPair] = self.downstream_conditions.copy()
-    #     sets = [{i} for i in range(len(cons))]
-    #     while True:
-    #         merged = False
-    #         for i in range(len(cons)):
-    #             for j in range(i + 1, len(cons)):
-    #                 a = cons[i]
-    #                 b = cons[j]
-    #                 if a.can_merge(b, self.entities, path):
-    #                     logger.info(f"{self.cfg.tag}: Merging {a.label} and {b.label}.")
-    #                     a_set = sets[i]
-    #                     b_set = sets[j]
-    #                     new_set = a_set | b_set
-    #                     ids = map(str, sorted(new_set))
-    #                     label = f"{self.cfg.tag}_{''.join(ids)}"
-    #                     new_pair = ConPair.merge(
-    #                         label=label,
-    #                         a=a,
-    #                         b=b,
-    #                         n_samples=self.cfg.n_samples,
-    #                         threshold=self.cfg.threshold,
-    #                     )
-    #                     new_pair.plot(path)
-    #                     cons.pop(j)
-    #                     cons.pop(i)
-    #                     sets.pop(j)
-    #                     sets.pop(i)
-    #                     sets.append(new_set)
-    #                     cons.append(new_pair)
-
-    #                     merged = True
-    #                     break
-    #             if merged:
-    #                 break
-    #         if not merged:
-    #             break
-    #     logger.info(
-    #         f"{self.cfg.tag}: Compressed {len(self.downstream_conditions)} into {len(cons)} condition(s)."
-    #     )
-    #     return cons
 
     def _load(self, path: Path):
         pass

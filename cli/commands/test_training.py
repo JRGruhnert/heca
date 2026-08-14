@@ -2,7 +2,7 @@ from heca.agents.agent import Agent
 from heca.agents.experts.tapas import TapasAgent
 
 # from heca.agents.heca import Heca
-from heca.agents.heca import Heca
+from heca.agents.heca_old import Heca
 from heca.conditions.evaluator import Evaluator
 from heca.learning.buffers.stream_buffer import StreamBuffer
 from heca.learning.buffers.fair_buffer import FairBuffer
