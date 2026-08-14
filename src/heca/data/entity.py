@@ -18,16 +18,12 @@ class Entity(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         threshold: float
-        states: list[str] = field(default_factory=list)
+        n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-
-    @property
-    def n_states(self) -> int:
-        return len(self.cfg.states)
 
     @property
     def measurement(self) -> dict:
@@ -69,7 +65,7 @@ class Entity(Configurable):
 
         # State logits (GT: one-hot with confidence markers)
         state_id = value[7 + D].astype(int)
-        feat[: self.n_states] = -self.LOGIT_CONFIDENCE
+        feat[: self.cfg.n_states] = -self.LOGIT_CONFIDENCE
         feat[state_id] = self.LOGIT_CONFIDENCE
 
         # Pose: position mean + assumed std
@@ -87,14 +83,12 @@ class Entity(Configurable):
 
         return feat
 
-    def make_agent_key(
-        self, label: str, obs: Any, start: int, end: int
-    ) -> str:
+    def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
         raise NotImplementedError
 
     def secure_mix_parameters(self, p: dict, eps: float = 1e-15) -> dict:
         pis = p["measurement"]["state"]["pis"]
-        padded = np.full((pis.shape[0], self.n_states), eps, dtype=np.float32)
+        padded = np.full((pis.shape[0], self.cfg.n_states), eps, dtype=np.float32)
         padded[:, : pis.shape[1]] = pis
         # Renormalize so probabilities sum to 1
         padded /= padded.sum(axis=1, keepdims=True)
@@ -225,7 +219,7 @@ class Entity(Configurable):
         feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
 
         # State logits
-        feat[:, : self.n_states] = np.log(pis)
+        feat[:, : self.cfg.n_states] = np.log(pis)
 
         # Pose: position mean + logstd
         feat[:, M : M + 3] = means[:, 0:3]
@@ -238,8 +232,8 @@ class Entity(Configurable):
         # Extra continuous dims: mean + logstd
         if D > 0:
             feat[:, M + 13 : M + 13 + D] = means[:, 7:]
-            feat[:, M + 13 + D : M + 13 + 2 * D] = (
-                0.5 * np.log(covariances[:, 7:] + eps)
+            feat[:, M + 13 + D : M + 13 + 2 * D] = 0.5 * np.log(
+                covariances[:, 7:] + eps
             )
 
         return feat

@@ -25,7 +25,7 @@ class Scene(Persistable):
         self.cfg = cfg
 
         self.kp_references: dict[str, tuple[Image.Image, int, int, int, int]] = {}
-        self.state_references: dict[str, dict[str, list[Image.Image]]] = {}
+        self.state_references: dict[str, dict[int, list[Image.Image]]] = {}
 
     def from_internal(self, data) -> tuple[DCScene, TDImage, np.ndarray]:
         tdscene = self.to_dc_scene(data)
@@ -83,43 +83,45 @@ class Scene(Persistable):
     ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 
-    def _load(self, path: Path, tag: str):
+    def _load(self, path: Path) -> bool:
         dc_pattern = re.compile(rf"xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png")
         sample_postfix = r"_sample(\d+)\.png"
         for label, entity in self.entities.items():
-            edir = path / tag / label
+            edir = path / label
             self.state_references[label] = {}
-            for state in entity.cfg.states:
-                self.state_references[label][state] = []
-                state_pattern = re.compile(rf"{re.escape(state)}{sample_postfix}")
-                for file in edir.glob(f"{state}_sample*.png"):
+            for idx in range(entity.cfg.n_states):
+                self.state_references[label][idx] = []
+                state_pattern = re.compile(rf"{idx}{sample_postfix}")
+                for file in edir.glob(f"{idx}_sample*.png"):
                     if state_pattern.fullmatch(file.name):
-                        self.state_references[label][state].append(
+                        self.state_references[label][idx].append(
                             Image.open(file),
                         )
-            files = list(edir.glob(f"xk*_yk*_xs*_ys*.png"))
-            assert files is not None
-            assert len(files) == 1
-            file = files[0]
-            match = dc_pattern.fullmatch(file.name)
-            if match:
-                self.kp_references[label] = (
-                    Image.open(file),
-                    int(match.group(1)),
-                    int(match.group(2)),
-                    int(match.group(3)),
-                    int(match.group(4)),
-                )
+            files = list(edir.glob("xk*_yk*_xs*_ys*.png"))
+            if files:
+                assert len(files) == 1
+                file = files[0]
+                match = dc_pattern.fullmatch(file.name)
+                if match:
+                    self.kp_references[label] = (
+                        Image.open(file),
+                        int(match.group(1)),
+                        int(match.group(2)),
+                        int(match.group(3)),
+                        int(match.group(4)),
+                    )
+        return True
 
-    def _save(self, path: Path, tag: str):
+    def _save(self, path: Path) -> bool:
         for label in self.entities.keys():
-            entity_dir = path / tag / label
+            entity_dir = path / label
             entity_dir.mkdir(parents=True, exist_ok=True)
             for state, samples in self.state_references[label].items():
                 for idx, img in enumerate(samples):
                     img.save(entity_dir / f"{state}_sample{idx}.png")
             img, x1, y1, x2, y2 = self.kp_references[label]
             img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
+        return True
 
     @property
     def description(self) -> str:

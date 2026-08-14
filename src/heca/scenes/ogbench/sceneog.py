@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from textwrap import dedent
+from typing import cast
 
 import numpy as np
+import ogbench
 
 from heca.data.free import FreeEntity
 from heca.data.prismatic import PrismaticEntity
@@ -10,6 +12,7 @@ from heca.scenes.ogbench.scene import OGScene
 from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
 from heca.utils.quaternion import Quaternion
+from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
 
 class OGSceneOG(OGScene):
@@ -21,6 +24,15 @@ class OGSceneOG(OGScene):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
+        self.env = cast(
+            ManipSpaceEnv,
+            ogbench.make_env_and_datasets(
+                dataset_name="visual-scene-play-v0",
+                env_only=True,
+                dataset_only=False,
+                control_timestep=0.5,
+            ),
+        )
 
     @property
     def description(self) -> str:
@@ -64,7 +76,7 @@ class OGSceneOG(OGScene):
             "drawer_handle": PrismaticEntity.Config(
                 question="What describes the drawer the best?",
                 answers=["It is open", "It is closed"],
-                states=["open", "closed"],  # 0, 1
+                # states=["open", "closed"],  # 0, 1
             ),
             "window_handle": PrismaticEntity.Config(
                 question="What describes the sliding window the best?",
@@ -72,17 +84,19 @@ class OGSceneOG(OGScene):
                     "it is open and therefore moved to the front",
                     "it is closed and therefore moved to the back",
                 ],
-                states=["open", "closed"],  # 0, 1
+                # states=["open", "closed"],  # 0, 1
             ),
             "button_0": StaticEntity.Config(
                 question="What is the color of the left button?",
                 answers=["white", "red"],
-                states=["free", "locked"],  # 0, 1
+                # states=["free", "locked"],  # 0, 1
+                n_states=2,
             ),
             "button_1": StaticEntity.Config(
                 question="What is the color of the right button?",
                 answers=["white", "red"],
-                states=["free", "locked"],  # 0, 1
+                # states=["free", "locked"],  # 0, 1
+                n_states=2,
             ),
             "block_0": FreeEntity.Config(
                 question="Where is the red cube in the scene?",
@@ -91,7 +105,7 @@ class OGSceneOG(OGScene):
                     "on the floor",
                     "unknown, cause it is not visible",
                 ],
-                states=["drawer", "floor", "unknown"],  # 0, 1
+                # states=["drawer", "floor", "unknown"],  # 0, 1
             ),
         }
         return {l: Entity.get(e) for l, e in ents.items()}
@@ -107,7 +121,7 @@ class OGSceneOG(OGScene):
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
             e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])
             value = np.concatenate((e_pos, e_rot, e_ste))
-            feature = self.gnn_format(value, len(entity.cfg.states))
+            feature = self.gnn_format(value, entity.cfg.n_states)
             dc_entities[label] = DCEntity(value=value, feature=feature)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)

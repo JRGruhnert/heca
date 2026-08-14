@@ -1,6 +1,7 @@
 from heca.agents.experts.tapas import TapasAgent
 from heca.scenes.ogbench.scene import OGScene
 from heca.guis.tapas_demo_processor import TapasDemoProcessor
+from heca.scenes.ogbench.scene1 import OGScene1
 from heca.scenes.ogbench.scene2 import OGScene2
 from heca.scenes.scene import Scene
 

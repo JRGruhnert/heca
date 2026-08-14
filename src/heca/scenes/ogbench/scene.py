@@ -28,6 +28,7 @@ class OGScene(Scene):
             ogbench.make_env_and_datasets(
                 dataset_name=self.env_id,
                 env_only=True,
+                mode="randomized",
                 dataset_only=False,
                 control_timestep=0.5,
             ),
@@ -223,30 +224,38 @@ class OGScene(Scene):
             done_ds = f["oracle_done"]
             assert isinstance(done_ds, h5py.Dataset)
             done = np.asarray(done_ds)[:, 0]
+
             success_ds = f["oracle_success"]
             assert isinstance(success_ds, h5py.Dataset)
             success = np.asarray(success_ds)[:, 0]
+
             task_ds = f["privileged_target_task"]
             assert isinstance(task_ds, h5py.Dataset)
             task = np.asarray(task_ds, dtype=str)
 
-            # Find segment boundaries (indices where oracle switches)
-            done_idxs = np.where(done == 1.0)[0]
-            starts = [0] + list(done_idxs)
-            ends = list(done_idxs) + [len(done)]
+            start_ds = f["oracle_start"]
+            assert isinstance(start_ds, h5py.Dataset)
+            start = np.asarray(start_ds)[:, 0]
+
+            start_idxs = np.where(start == 1.0)[0]
 
             agent_data = defaultdict(list)
+            discarded = defaultdict(int)
 
-            for s, e in zip(starts, ends):
+            for i in range(len(start_idxs) - 1):
+                s = start_idxs[i]
+                e = start_idxs[i + 1] - 1  # inclusive end / oracle_done boundary
                 if s >= e:
                     continue
-                t = e - 1
-                if success[t] != 1.0:
+
+                label = str(task[e])
+                agent_key = self.entities[label].make_agent_key(label, f, s, e)
+
+                if success[e] != 1.0:
+                    discarded[agent_key] += 1
                     continue
 
-                label = str(task[t])
-                agent_key = self.entities[label].make_agent_key(label, f, s, t)
-                agent_data[agent_key].append((s, t))
+                agent_data[agent_key].append((s, e))
 
             all_keys = list(f.keys())
             for agent_key, segments in agent_data.items():
@@ -289,4 +298,12 @@ class OGScene(Scene):
                             ds[n : n + len(demo_ids)] = demo_ids
                         demo_id += 1
 
-                print(f"  {agent_key}: {len(segments)}, demo_path: {out_path}")
+                print(
+                    f"  {agent_key}: kept={len(segments)}, "
+                    f"discarded={discarded.get(agent_key, 0)}, demo_path={out_path}"
+                )
+
+            # Print discarded-only keys (if any).
+            for agent_key, count in discarded.items():
+                if agent_key not in agent_data:
+                    print(f"  {agent_key}: kept=0, discarded={count}")

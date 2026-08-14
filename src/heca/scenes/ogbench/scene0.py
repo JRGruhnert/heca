@@ -63,7 +63,7 @@ class OGScene0(OGScene):
             "drawer_handle": PrismaticEntity.Config(
                 question="What describes the drawer the best?",
                 answers=["It is open", "It is closed"],
-                states=["open", "closed"],  # 0, 1
+                # states=["open", "closed"],  # 0, 1
             ),
             "window_handle": PrismaticEntity.Config(
                 question="What describes the sliding window the best?",
@@ -71,17 +71,19 @@ class OGScene0(OGScene):
                     "it is open and therefore moved to the front",
                     "it is closed and therefore moved to the back",
                 ],
-                states=["open", "closed"],  # 0, 1
+                # states=["open", "closed"],  # 0, 1
             ),
             "button_0": StaticEntity.Config(
                 question="What is the color of the left button?",
                 answers=["white", "red"],
-                states=["free", "locked"],  # 0, 1
+                # states=["free", "locked"],  # 0, 1
+                n_states=2,
             ),
             "button_1": StaticEntity.Config(
                 question="What is the color of the right button?",
                 answers=["white", "red"],
-                states=["free", "locked"],  # 0, 1
+                # states=["free", "locked"],  # 0, 1
+                n_states=2,
             ),
             "block_0": FreeEntity.Config(
                 question="Where is the red cube in the scene?",
@@ -90,7 +92,7 @@ class OGScene0(OGScene):
                     "on the floor",
                     "unknown, cause it is not visible",
                 ],
-                states=["drawer", "floor", "unknown"],  # 0, 1
+                # states=["drawer", "floor", "unknown"],  # 0, 1
             ),
         }
         return {l: Entity.get(e) for l, e in ents.items()}

@@ -39,9 +39,7 @@ class RevoluteEntity(Entity):
 
         network_input = [relative, range_norm, midpoint_norm]
 
-    def make_agent_key(
-        self, label: str, obs: Any, start: int, end: int
-    ) -> str:
+    def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
         start_val = obs[f"heca_{label}_ang"][start][0]
         target_val = obs[f"heca_{label}_ang"][end][0]
         direction = "a_b" if target_val > start_val else "b_a"

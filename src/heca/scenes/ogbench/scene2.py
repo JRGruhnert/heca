@@ -21,23 +21,11 @@ class OGScene2(OGScene):
     @property
     def entities(self) -> dict[str, Entity]:
         ents = {
-            "box0": StaticEntity.Config(
-                states=["open", "closed"],  # 0, 1
-            ),
-            "faucet0": RevoluteEntity.Config(
-                states=["default"],  # 0, 1
-            ),
-            "button0": StaticEntity.Config(
-                states=["free", "locked"],  # 0, 1
-            ),
-            "button1": StaticEntity.Config(
-                states=["free", "locked"],  # 0, 1
-            ),
-            "lid0": FreeEntity.Config(
-                states=["default"],  # 0, 1
-            ),
-            "peg0": FreeEntity.Config(
-                states=["default"],  # 0, 1
-            ),
+            "box0": StaticEntity.Config(n_states=2),
+            "faucet0": RevoluteEntity.Config(),
+            "button0": StaticEntity.Config(n_states=3),
+            "button1": StaticEntity.Config(n_states=2),
+            "lid0": FreeEntity.Config(),
+            "peg0": FreeEntity.Config(),
         }
         return {l: Entity.get(e) for l, e in ents.items()}

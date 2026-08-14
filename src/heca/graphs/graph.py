@@ -142,7 +142,7 @@ class Graph:
                     EntityNode(
                         entity=entity,
                         type_id=type(self.entities[entity]).TYPE_ID,
-                        n_states=self.entities[entity].n_states,
+                        n_states=self.entities[entity].cfg.n_states,
                         data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
                         sources=set(),
@@ -163,7 +163,7 @@ class Graph:
                 value=EntityNode(
                     entity=entity,
                     type_id=type(self.entities[entity]).TYPE_ID,
-                    n_states=self.entities[entity].n_states,
+                    n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
                     sources=set(sources),
                     con=con,
@@ -189,7 +189,7 @@ class Graph:
                 EntityNode(
                     entity=entity,
                     type_id=type(self.entities[entity]).TYPE_ID,
-                    n_states=self.entities[entity].n_states,
+                    n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
                     sources=sources,
                     con=con,
@@ -217,7 +217,7 @@ class Graph:
                 EntityNode(
                     entity=entity,
                     type_id=type(self.entities[entity]).TYPE_ID,
-                    n_states=self.entities[entity].n_states,
+                    n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity(value=value, feature=feat),
                     static=True,
                     sources=sources,

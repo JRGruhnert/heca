@@ -152,7 +152,7 @@ class Persistable(Registerable, abc.ABC):
         self._save(path)
 
     def load(self):
-        path = self.save_dir(self.cfg)
+        path = self.load_dir(self.cfg)
         logger.info(f"Loading {type(self)} from {path}")
         self._load(path)
 
