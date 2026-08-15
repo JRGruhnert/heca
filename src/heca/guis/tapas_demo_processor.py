@@ -5,22 +5,22 @@ import matplotlib.pyplot as plt
 
 from matplotlib.widgets import Slider, Button, TextBox
 
-from heca.agents.experts.expert import ExpertAgent
+from heca.experts.expert import ExpertModel
 from heca.misc.base import Configurable
 
 
 class TapasDemoProcessor(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        agent: ExpertAgent.Config
+        agent: ExpertModel.Config
         file_name: str = "demos.h5"
         save_name: str = "demos_post.h5"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
-        self.load_path = ExpertAgent.resolve(cfg.agent) / cfg.file_name
-        self.save_path = ExpertAgent.resolve(cfg.agent) / cfg.save_name
+        self.load_path = ExpertModel.resolve(cfg.agent) / cfg.file_name
+        self.save_path = ExpertModel.resolve(cfg.agent) / cfg.save_name
 
         self.file = h5py.File(self.load_path, "r")
 

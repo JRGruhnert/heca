@@ -5,7 +5,7 @@ import h5py
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider, Button
 
-from heca.agents.experts.expert import ExpertAgent
+from heca.experts.expert import ExpertModel
 from heca.scenes.scene import Scene
 from heca.misc.base import Configurable
 
@@ -13,7 +13,7 @@ from heca.misc.base import Configurable
 class TapasDemoSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        agent: ExpertAgent.Config
+        agent: ExpertModel.Config
         dataset_name: str = "visual-scene-play-v0.h5"
         file_name: str = "demos.h5"
         random_ep: bool = True
@@ -23,7 +23,7 @@ class TapasDemoSelector(Configurable):
         self.load_path = (
             Scene.resolve_base(cfg.agent.scene) / "demos" / cfg.dataset_name
         )
-        self.save_path = ExpertAgent.resolve(cfg.agent) / cfg.file_name
+        self.save_path = ExpertModel.resolve(cfg.agent) / cfg.file_name
         self.train_dataset = h5py.File(self.load_path, "r")
         self.observations = self.train_dataset["rgb"]  # type: ignore
         self.actions = self.train_dataset["actions"]  # type: ignore

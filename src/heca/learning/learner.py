@@ -11,11 +11,11 @@ from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
 from torch_geometric.data import HeteroData
 
+from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
-from heca.heca_gnn.network1 import Network1
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
 
@@ -27,7 +27,7 @@ class WandBConfig:
     mode: Literal["online", "offline", "disabled"] = "online"
     save_code: bool = False  # Uploads training script
     watch_model: bool = True  # Log gradients & weight histograms
-    watch_freq: int = 100  # Frequency of gradient logging
+    watch_freq: int = 5  # Frequency of gradient logging
     enabled: bool = True
 
 
@@ -52,20 +52,45 @@ class WandBConfig:
 #         return self.model(batch)
 
 
+@dataclass(slots=True)
+class TempStore:
+    data: HeteroData
+    action: torch.Tensor
+    logprob: torch.Tensor
+    value: torch.Tensor
+
+    def complete(self, fb: SceneFeedback) -> BufferData:
+        return BufferData(
+            data=self.data,
+            action=self.action,
+            logprob=self.logprob,
+            value=self.value,
+            reward=fb.reward,
+            terminal=fb.terminal,
+            truncated=fb.truncated,
+        )
+
+
 class Learner(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
-        folder: str = "learner"
-        buffer: Buffer.Config
+        folder: str = "network"
+        label: str = "standard"
+        buffer: Buffer.Config = FairBuffer.Config()
         network: Network.Config
+        wandb: WandBConfig = WandBConfig()
         # Hyperparameters
         lr: float
         max_grad_norm: float
         entropy_coef: float
         critic_coef: float
         eps_clip: float
-        normalize_rewards: bool
-        wandb: WandBConfig = WandBConfig()
+        # Additional Training Hyperparameters
+        normalize_rewards: bool = False
+        virtual: bool = False
+        step_multiplier: int = 2
+        success_reward: float = 1.0
+        step_reward: float = -0.01
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -75,9 +100,9 @@ class Learner(Persistable):
             self.network.parameters(), lr=self.cfg.lr
         )
         self.metrics: dict[str, float] = {}
-        self.normalizers: dict[str, RewardNormalizer] = {}
+        self.normalizer: RewardNormalizer = RewardNormalizer()
         self.buffer = Buffer.get(cfg.buffer)
-        self.pocket: dict[str, BufferData] = {}
+        self.pocket: TempStore | None = None
         self.train_mode = True
         self._init_wandb()
         self.explainer = Explainer(
@@ -96,20 +121,20 @@ class Learner(Persistable):
     def _create_network(self, cfg: Config):
         return Network.get(cfg.network)
 
-    def register(self, tag: str) -> "Learner":
-        if tag not in self.normalizers:
-            self.normalizers[tag] = RewardNormalizer()
-        self.buffer.tags.add(tag)
-        return self
-
     @cached_property
-    def inference_network(self) -> Network:
+    def inference_net(self) -> Network:
         """All agents attached to this PPO share this frozen copy."""
         return copy.deepcopy(self.network)
 
-    def sync_inference(self):
+    def _sync_inference(self):
         """Push training weights into the shared inference copy."""
-        self.inference_network.load_state_dict(self.network.state_dict())
+        self.inference_net.load_state_dict(self.network.state_dict())
+
+    async def sync(self):
+        """Post-update synchronization hook. Overridden by FPPO."""
+        self._sync_inference()
+        if self.current_update % 50 == 0:
+            self.save()
 
     def learn(self):
         raise NotImplementedError
@@ -123,21 +148,20 @@ class Learner(Persistable):
     def eval(self):
         self.train_mode = False
 
-    def predict(self, data: HeteroData, tag: str, new_episode: bool) -> int:
+    def predict(self, data: HeteroData, new_episode: bool) -> int:
         if new_episode:
             if self.train_mode:
-                self.inference_network.reset_memory()
+                self.inference_net.reset_memory()
             else:
                 self.network.reset_memory()
         if self.train_mode:
-            net = self.inference_network
+            net = self.inference_net
             with torch.inference_mode():
                 logits, value = net.forward(data)
             dist = Categorical(logits=logits)
             action = dist.sample()
             logprob = dist.log_prob(action)
-            self.pocket[tag] = BufferData(
-                tag=tag,
+            self.pocket = TempStore(
                 data=data,
                 action=action,
                 logprob=logprob,
@@ -195,43 +219,31 @@ class Learner(Persistable):
         if self.cfg.wandb.enabled:
             wandb.log(self.metrics, step=self.current_update)
 
-    def complete_pocket(self, fb: SceneFeedback, tag: str) -> BufferData:
-        data = self.pocket[tag]
-        data.reward = fb.reward
-        data.terminal = fb.terminal
-        data.truncated = fb.truncated
-        return data
-
-    def update(self, fb: SceneFeedback, tag: str) -> bool:
+    def update(self, fb: SceneFeedback) -> bool:
         if self.cfg.normalize_rewards:
-            fb.reward = self.normalizers[tag].update(fb.reward)
+            fb.reward = self.normalizer.update(fb.reward)
         if self.train_mode:
-            data = self.complete_pocket(fb, tag)
+            assert isinstance(self.pocket, TempStore)
+            data = self.pocket.complete(fb)
             if self.buffer.add(data):
                 self.learn()
                 self.current_update += 1
                 self.metrics.update(self.buffer.stats())
                 self.training_log()
                 self.buffer.reset()
-
-                if self.current_update % 50 == 0:
-                    self.save()
                 return True
         return False
 
     def _save(self, path: Path):
-        filepath = path / f"checkpoint_{self.current_update}.pt"
+        filepath = path / f"ckp_{self.current_update}.pt"
 
         checkpoint = {
             "network": self.network.state_dict(),
             "optimizer": self.optim.state_dict(),
-            "reward_normalizers": {
-                tag: {
-                    "mean": norm.mean,
-                    "var": norm.var,
-                    "count": norm.count,
-                }
-                for tag, norm in self.normalizers.items()
+            "reward_normalizer": {
+                "mean": self.normalizer.mean,
+                "var": self.normalizer.var,
+                "count": self.normalizer.count,
             },
         }
         torch.save(checkpoint, filepath)
@@ -249,17 +261,13 @@ class Learner(Persistable):
         self.optim.load_state_dict(checkpoint["optimizer"])
 
         # Restore per-tag normalizers
-        if "reward_normalizers" in checkpoint:
-            for tag, stats in checkpoint["reward_normalizers"].items():
-                if tag not in self.normalizers:
-                    self.normalizers[tag] = RewardNormalizer()
-                norm = self.normalizers[tag]
-                norm.mean = stats["mean"]
-                norm.var = stats["var"]
-                norm.count = stats["count"]
-            logger.info(f"Restored {len(self.normalizers)} per-tag normalizers")
+        if "reward_normalizer" in checkpoint:
+            self.normalizer.mean = checkpoint["reward_normalizer"]["mean"]
+            self.normalizer.var = checkpoint["reward_normalizer"]["var"]
+            self.normalizer.count = checkpoint["reward_normalizer"]["count"]
+            logger.info(f"Restored normalizer")
 
-        self.sync_inference()
+        self._sync_inference()
         logger.info(
             f"Loaded full checkpoint from {filepath} at update {self.current_update}"
         )

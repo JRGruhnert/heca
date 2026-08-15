@@ -1,9 +1,9 @@
-from heca.agents.experts.tapas import TapasAgent
+from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene import OGScene
 from heca.guis.tapas_demo_processor import TapasDemoProcessor
 
 cfg = TapasDemoProcessor.Config(
-    agent=TapasAgent.Config(
+    agent=TapasExpert.Config(
         tag="move_block_drawer",
         scene=OGScene.Config(),
     )

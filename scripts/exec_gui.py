@@ -1,10 +1,10 @@
-from heca.agents.experts.tapas import TapasAgent
+from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene1 import OGScene1
 from heca.guis.tapas_agent_tester import AgentTester
 
 cfg = AgentTester.Config(
     agents=[
-        TapasAgent.Config(
+        TapasExpert.Config(
             tag="open_drawer",
             scene=OGScene1.Config(),
             use_gt=True,

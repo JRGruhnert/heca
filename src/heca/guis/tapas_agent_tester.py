@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
 import numpy as np
 
-from heca.agents.experts.expert import ExpertAgent
-from heca.agents.experts.tapas import TapasAgent
+from heca.experts.expert import ExpertModel
+from heca.experts.tapas import TapasExpert
 from heca.scenes.scene import Scene
 from heca.misc.base import Configurable
 
@@ -13,14 +13,14 @@ from heca.misc.base import Configurable
 class AgentTester(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        agents: list[ExpertAgent.Config]
+        agents: list[ExpertModel.Config]
         scene: Scene.Config
         frame_time: float = 0.05
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.scene = Scene.get(self.cfg.scene, auto_load=False)
-        self.agents = [ExpertAgent.get(cfg) for cfg in cfg.agents]
+        self.agents = [ExpertModel.get(cfg) for cfg in cfg.agents]
         assert all(
             agent.cfg.scene == self.cfg.scene for agent in self.agents
         ), "Every agent must use the same scene config as cfg.scene."
@@ -70,9 +70,9 @@ class AgentTester(Configurable):
 
             self.buttons.append(button)
 
-    def on_agent_selected(self, agent: ExpertAgent):
+    def on_agent_selected(self, agent: ExpertModel):
         # self.x = agent.act(self.x, self.y)
-        assert isinstance(agent, TapasAgent), "Currently only supports TapasAgent"
+        assert isinstance(agent, TapasExpert), "Currently only supports TapasAgent"
         agent.policy.reset_episode()
         # print(f"drawer pose: {self.x['drawer_handle'].position}")
         xt = agent.tapas_td(self.x, self.y)

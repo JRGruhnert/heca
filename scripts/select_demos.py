@@ -1,11 +1,11 @@
-from heca.agents.experts.tapas import TapasAgent
-from heca.scenes.ogbench.scene import OGScene
+from heca.experts.tapas import TapasExpert
+from heca.scenes.ogbench.sceneog import OGSceneOG
 from heca.guis.demo_selector import TapasDemoSelector
 
 cfg = TapasDemoSelector.Config(
-    agent=TapasAgent.Config(
+    agent=TapasExpert.Config(
         tag="close_drawer",
-        scene=OGScene.Config(),
+        scene=OGSceneOG.Config(),
     ),
 )
 selector = TapasDemoSelector.get(cfg)

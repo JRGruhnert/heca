@@ -32,32 +32,20 @@ class StreamBuffer(Buffer):
         Returns:
             advantages, returns: Tensors of shape [len(items)].
         """
-        adv_flat = torch.zeros(len(self.queue))
-        ret_flat = torch.zeros(len(self.queue))
-
         # Compute V-trace independently for each contiguous tag sequence
-        for _, indices in self.tag_indices.items():
-            group_items = [self.queue[i] for i in indices]
-            rewards = [d.reward for d in group_items]
-            terminals = [d.terminal or d.truncated for d in group_items]
-            behavior_lp = (
-                torch.stack([d.logprob for d in group_items]).detach().squeeze(-1)
-            )
-            behavior_v = (
-                torch.stack([d.value for d in group_items]).detach().squeeze(-1)
-            )
+        rewards = [d.reward for d in self.queue]
+        terminals = [d.terminal or d.truncated for d in self.queue]
+        behavior_lp = torch.stack([d.logprob for d in self.queue]).detach().squeeze(-1)
+        behavior_v = torch.stack([d.value for d in self.queue]).detach().squeeze(-1)
 
-            cp = current_logprobs[indices]
-            cv = current_values[indices]
-
-            advs, rets = self._vtrace(
-                rewards, terminals, behavior_lp, behavior_v, cp, cv
-            )
-
-            adv_flat[indices] = advs
-            ret_flat[indices] = rets
-
-        return adv_flat, ret_flat
+        return self._vtrace(
+            rewards,
+            terminals,
+            behavior_lp,
+            behavior_v,
+            current_logprobs,
+            current_values,
+        )
 
     def _vtrace(
         self,

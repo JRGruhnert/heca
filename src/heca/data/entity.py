@@ -48,6 +48,11 @@ class Entity(Configurable):
         pose = self.common_pose_part(label, obs)
         extra = self.extra_part(label, obs)
         ste = obs[f"heca_{label}_ste"]
+        return self.dc_from_parsed(pose, extra, ste)
+
+    def dc_from_parsed(
+        self, pose: np.ndarray, extra: np.ndarray, ste: np.ndarray
+    ) -> DCEntity:
         value = np.concatenate((pose, extra, ste))
         feature = self.gnn_format(value)
         return DCEntity(value=value, feature=feature)

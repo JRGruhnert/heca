@@ -1,5 +1,5 @@
 from heca.agents.agent import Agent
-from heca.agents.experts.tapas import TapasAgent
+from heca.experts.tapas import TapasExpert
 
 # from heca.agents.heca import Heca
 from heca.agents.heca_old import Heca
@@ -19,12 +19,12 @@ agents = [
     #     scene=OGBenchScene.Config(),
     #     use_gt=True,
     # ),
-    TapasAgent.Config(
+    TapasExpert.Config(
         tag="open_window",
         scene=OGScene.Config(),
         use_gt=True,
     ),
-    TapasAgent.Config(
+    TapasExpert.Config(
         tag="close_window",
         scene=OGScene.Config(),
         use_gt=True,
@@ -34,7 +34,7 @@ agents = [
     #     scene=OGBenchScene.Config(),
     #     use_gt=True,
     # ),
-    TapasAgent.Config(
+    TapasExpert.Config(
         tag="lock_right_button",
         scene=OGScene.Config(),
         use_gt=True,
@@ -44,7 +44,7 @@ agents = [
     #     scene=OGBenchScene.Config(),
     #     use_gt=True,
     # ),
-    TapasAgent.Config(
+    TapasExpert.Config(
         tag="unlock_right_button",
         scene=OGScene.Config(),
         use_gt=True,

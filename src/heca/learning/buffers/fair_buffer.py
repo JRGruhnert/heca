@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 import torch
 
-from heca.learning.buffers.buffer import Buffer, BufferData
+from heca.learning.buffers.buffer import Buffer
 
 
 class FairBuffer(Buffer):
@@ -15,22 +15,11 @@ class FairBuffer(Buffer):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def is_allowed(self, data: BufferData) -> bool:
-        raise NotImplementedError
-
     def compute_advantages(self) -> tuple[torch.Tensor, torch.Tensor]:
-        adv_flat = torch.zeros(len(self.queue))
-        ret_flat = torch.zeros(len(self.queue))
-
-        for _, indices in self.tag_indices.items():
-            group_items = [self.queue[i] for i in indices]
-            rewards = [d.reward for d in group_items]
-            terminals = [d.terminal or d.truncated for d in group_items]
-            values = [d.value for d in group_items]
-            advs, rets = self._gae_for_bucket(rewards, terminals, values)
-            adv_flat[indices] = advs
-            ret_flat[indices] = rets
-        return adv_flat, ret_flat
+        rewards = [d.reward for d in self.queue]
+        terminals = [d.terminal or d.truncated for d in self.queue]
+        values = [d.value for d in self.queue]
+        return self._gae_for_bucket(rewards, terminals, values)
 
     def _gae_for_bucket(self, rewards, terminals, values):
         T = len(rewards)  # Use the actual length of this group!

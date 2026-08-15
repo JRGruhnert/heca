@@ -1,11 +1,11 @@
 import h5py
 import numpy as np
 
-from heca.agents.experts.expert import ExpertAgent
-from heca.agents.experts.tapas import TapasAgent
+from heca.experts.expert import ExpertModel
+from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene import OGScene
 
-configs: list[TapasAgent.Config] = [
+configs: list[TapasExpert.Config] = [
     # TapasAgent.Config(
     #     folder="open_drawer",
     #     scene=OGBenchScene.Config(),
@@ -51,7 +51,7 @@ configs: list[TapasAgent.Config] = [
     #     scene=OGBenchScene.Config(),
     #     use_gt=True,
     # ),
-    TapasAgent.Config(
+    TapasExpert.Config(
         tag="move_block_drawer",
         scene=OGScene.Config(),
         use_gt=True,
@@ -60,8 +60,8 @@ configs: list[TapasAgent.Config] = [
 
 for cfg in configs:
     for name in ["demos", "demos_post"]:
-        load_path = ExpertAgent.load_dir(cfg) / f"{name}.h5"
-        save_path = ExpertAgent.load_dir(cfg) / f"{name}_new.h5"
+        load_path = ExpertModel.load_dir(cfg) / f"{name}.h5"
+        save_path = ExpertModel.load_dir(cfg) / f"{name}_new.h5"
 
         with h5py.File(load_path, "r") as f:
             data = {k: np.asarray(f[k]) for k in f.keys()}

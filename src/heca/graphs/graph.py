@@ -9,7 +9,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-from heca.agents.experts.expert import ExpertAgent
+from heca.experts.expert import ExpertModel
 from heca.graphs.node import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
@@ -33,7 +33,7 @@ class Graph:
     es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
         ("entity", "tapas", "entity")
     )
-    packages: dict[str, tuple[ExpertAgent.Config, DCScene, DCScene]] = field(
+    packages: dict[str, tuple[ExpertModel.Config, DCScene, DCScene]] = field(
         default_factory=dict
     )
     start_keys: set[str] = field(default_factory=set)
@@ -227,11 +227,12 @@ class Graph:
         return {src for src in temp_sources.values()}
 
     @classmethod
-    def generate(
-        cls, cfgs: list[ExpertAgent.Config], entities: dict[str, Entity]
-    ) -> "Graph":
+    def generate(cls, cfgs: list[ExpertModel.Config]) -> "Graph":
+        entities = {}
+        for cfg in cfgs:
+            entities.update(ExpertModel.get(cfg).entities)
         graph = cls(entities=entities)
-        agents = [ExpertAgent.get(cfg) for cfg in cfgs]
+        agents = [ExpertModel.get(cfg) for cfg in cfgs]
         for a in agents:
             ac = a.conditions
             pre_comp_sources = graph.set_comps(ac.label, ac.pre)

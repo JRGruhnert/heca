@@ -2,17 +2,13 @@ from dataclasses import dataclass
 import torch
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
-
-from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.learner import Learner
-from heca.learning.buffers.buffer import Buffer
+from heca.misc import hardware
 
 
 class PPO(Learner):
     @dataclass(kw_only=True)
     class Config(Learner.Config):
-        label: str = "ppo"
-        buffer: Buffer.Config = FairBuffer.Config()
         # Hyperparameters
         batch_size: int = 64
         n_epoch: int = 10
@@ -40,7 +36,7 @@ class PPO(Learner):
         #         pg["lr"] = lr
 
     def _fedprox_term(self) -> torch.Tensor:
-        return torch.tensor(0.0, device=next(self.network.parameters()).device)
+        return torch.tensor(0.0, device=hardware.device)
 
     def _mini_batch_loop(self, adv: torch.Tensor, rtn: torch.Tensor):
         old_data = self.buffer.data

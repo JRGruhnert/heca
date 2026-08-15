@@ -1,22 +1,23 @@
 import abc
 from dataclasses import dataclass
 from functools import cached_property
+from pathlib import Path
 
 import numpy as np
 import torch
-from heca.agents.agent import Agent
 from heca.conditions.pair import ConPair
 from heca.data.data import DCEntity, DCScene, TDImage
 from heca.data.entity import Entity
+from heca.misc.base import Persistable
 from heca.scenes.scene import Scene, SceneFeedback
 from heca.image_encoders.dino_encoder import DinoEncoder
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.image_encoders.molmo_encoder import MolmoEncoder
 
 
-class ExpertAgent(Agent, abc.ABC):
+class ExpertModel(Persistable, abc.ABC):
     @dataclass(kw_only=True)
-    class Config(Agent.Config):
+    class Config(Persistable.Config):
         scene: Scene.Config
         kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
         state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
@@ -30,9 +31,9 @@ class ExpertAgent(Agent, abc.ABC):
         self.act_virtual = False
         if not self.cfg.use_gt:
             self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
-            self.state_extractor = ImageEncoder.get(self.cfg.state_extraction)
+            self.ste_extractor = ImageEncoder.get(self.cfg.state_extraction)
             self.kp_extractor.prepare_for_scene(self.cfg.scene)
-            self.state_extractor.prepare_for_scene(self.cfg.scene)
+            self.ste_extractor.prepare_for_scene(self.cfg.scene)
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
@@ -42,7 +43,7 @@ class ExpertAgent(Agent, abc.ABC):
             if label in self.tps()
         }
 
-    def virtual(self) -> "ExpertAgent":
+    def virtual(self) -> "ExpertModel":
         self.act_virtual = True
         return self
 
@@ -50,21 +51,22 @@ class ExpertAgent(Agent, abc.ABC):
         raise NotImplementedError
 
     def from_image(self, image: TDImage) -> dict[str, DCEntity]:
-        kps3d, kps2d, kp_scores = self.kp_extractor.extract_poses(image)
-        states, state_scores = self.state_extractor.extract_states(image)
-
+        kps3d, _, kp_scores = self.kp_extractor.extract_poses(image)
+        states, state_scores = self.ste_extractor.extract_states(image)
+        # extras = self.extras_extractor.extract_extra(image)
+        extras = np.zeros(
+            0
+        )  # TODO: implement extra calculation for prismatic and revoulte
         # Sanity check on dimensions
         assert kps3d.shape[1] == len(self.scene.entities)
 
         dc_entities: dict[str, DCEntity] = {}
         for idx, (key, entity) in enumerate(self.scene.entities.items()):
-            pos, rot, ste = self.get_entity_pose_and_state(
-                kps3d[:, idx + 1],
-                kp_scores[:, idx + 1],
-                states[:, idx + 1],
-                state_scores[:, idx + 1],
+            pose, ste = self.get_entity_pose_and_state(
+                kps3d[:, idx], kp_scores[:, idx], states[:, idx], state_scores[:, idx]
             )
-            dc_entities[key] = entity.value_from_gt(pos, rot, ste)
+            extra = extras[:, idx]
+            dc_entities[key] = entity.dc_from_parsed(pose, extra, ste)
         return dc_entities
 
     def get_entity_pose_and_state(
@@ -73,7 +75,7 @@ class ExpertAgent(Agent, abc.ABC):
         poses_scores: torch.Tensor,
         states: torch.Tensor,
         state_scores: torch.Tensor,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         present = poses_scores > self.cfg.score_threshold
         if present.sum() == 0:
             # Not present
@@ -84,7 +86,7 @@ class ExpertAgent(Agent, abc.ABC):
             idxx = present.nonzero(as_tuple=True)[0][0]
             pose = poses[idxx]
             state = states[idxx]
-        return pose[:3].numpy(), pose[3:7].numpy(), state.numpy()
+        return pose.numpy(), state.numpy()
 
     @cached_property
     def conditions(self) -> ConPair:
@@ -117,3 +119,25 @@ class ExpertAgent(Agent, abc.ABC):
                 )
         else:
             return self._act(x, s)
+
+    @classmethod
+    def load_dir(cls, cfg: "ExpertModel.Config") -> Path:
+        """
+        cls.root / cfg.scene.folder / cfg.scene.label / cfg.scene.tag
+        """
+        scene = cfg.scene
+        tag = scene.load_tag or scene.tag
+        path = cls.instance_dir(scene, scene.folder) / tag
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    @classmethod
+    def save_dir(cls, cfg: "ExpertModel.Config") -> Path:
+        """
+        cls.root / cfg.scene.folder / cfg.scene.label / cfg.scene.tag
+        """
+
+        scene = cfg.scene
+        path = cls.instance_dir(scene, scene.folder) / scene.tag
+        path.mkdir(parents=True, exist_ok=True)
+        return path

@@ -4,14 +4,13 @@ import torch
 from pathlib import Path
 from torch_geometric.data import HeteroData
 
-from collections import defaultdict, deque
+from collections import deque
 from heca.misc.base import Configurable
 from heca.misc import logger
 
 
 @dataclass(slots=True)
 class BufferData:
-    tag: str
     data: HeteroData
     action: torch.Tensor
     logprob: torch.Tensor
@@ -32,36 +31,13 @@ class Buffer(Configurable):
 
         self.queue: deque[BufferData] = deque(maxlen=cfg.capacity)
         self.step_pointer = 0
-        self.tags: set[str] = set()
         self.tag_capacity = self.cfg.capacity
-        self.additional_capacity = 0
-        self.used_additional = 0
-        self.tag_indices: dict[str, list[int]] = defaultdict(list[int])
-
-    def register(self, tag: str):
-        self.tags.add(tag)
-        self.tag_capacity = self.cfg.capacity // len(self.tags)
-        self.additional_capacity = self.cfg.capacity % len(self.tags)
-
-    def has_free_capacity(self, tag: str):
-        if len(self.tag_indices[tag]) < self.tag_capacity:
-            return True
-        if self.additional_capacity > self.used_additional:
-            return True
-        return False
 
     def reset(self):
         self.step_pointer = 0
-        self.used_additional = 0
-        for tag in self.tag_indices.keys():
-            self.tag_indices[tag] = []
 
     def add(self, data: BufferData) -> bool:
-        if self.has_free_capacity(data.tag):
-            self.queue.append(data)
-            self.tag_indices[data.tag].append(self.step_pointer)
-            self.step_pointer += 1
-
+        self.queue.append(data)
         return self.full
 
     def stats(self) -> dict[str, float]:

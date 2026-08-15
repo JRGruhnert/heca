@@ -1,6 +1,5 @@
 from pathlib import Path
 import h5py
-import tapas_gmm_modified
 import torch
 import numpy as np
 from dataclasses import dataclass, field
@@ -21,21 +20,19 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     DemoSegmentationConfig,
     CascadeConfig,
 )
-from heca.agents.agent import SceneFeedback
-from heca.agents.experts.expert import ExpertAgent
-from heca.conditions.condition import Condition
+from heca.experts.expert import ExpertModel
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
-from heca.data.entity import Mobility
 from heca.misc import logger
 from heca.misc.hardware import device
-from heca.utils.quaternion import Quaternion
+from heca.scenes.scene import SceneFeedback
 
 
-class TapasAgent(ExpertAgent):
+class TapasExpert(ExpertModel):
     @dataclass(kw_only=True)
-    class Config(ExpertAgent.Config):
-        label: str = "tapas"
+    class Config(ExpertModel.Config):
+        folder: str = "tapas"
+        label: str = ""
         policy: GMMPolicyConfig = field(
             default_factory=lambda: GMMPolicyConfig(
                 suffix="release",
@@ -70,108 +67,76 @@ class TapasAgent(ExpertAgent):
                         gt_frames=None,  # Frames per segment
                     ),
                     demos_segmentation=DemoSegmentationConfig(
-                        gripper_based=False,
                         distance_based=False,
                         velocity_based=True,
                         repeat_final_step=0,  # 1
-                        repeat_first_step=0,
                         components_prop_to_len=True,
                         velocity_threshold=0.05,
                     ),
-                    cascade=CascadeConfig(
-                        kl_keep_time_dim=True,
-                        kl_keep_rotation_dim=True,
-                    ),
+                    cascade=CascadeConfig(),
                 ),
                 time_based=True,
                 predict_dx_in_xdx_models=False,
                 binary_gripper_action=False,
                 binary_gripper_closed_threshold=0.0,
-                dbg_prediction=False,
-                force_overwrite_checkpoint_config=True,  # TODO:  otherwise it doesnt work
+                dbg_prediction=True,
+                force_overwrite_checkpoint_config=True,
                 time_scale=1.0,
-                postprocess_prediction=True,  # TODO:  abs quaternions if False else delta quaternions
+                postprocess_prediction=True,
                 invert_prediction_batch=False,
                 return_full_batch=True,
                 batch_predict_in_t_models=True,
             ),
         )
         repeat_actions: int = 0
-        n_samples: int = 1000
-        demo_filename: str = "demos_post.h5"
         gt_frames: list[list[int]] | None = None
-        rel_score_threshold: float = 0.0
         demo_selections: list[int] | None = None
 
         def __post_init__(self):
             self.policy.model.frame_selection.gt_frames = self.gt_frames
-            self.policy.model.frame_selection.rel_score_threshold = (
-                self.rel_score_threshold
-            )
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.start_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
-        self.goal_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
 
-    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-
-        (
-            seg_local_marginals,
-            seg_trans_marginals,
-            seg_trans_marg_container,
-            seg_joint_models,
-            cascaded_hmms,
-            (reconstructions, original_trajectories, extras),
-        ) = atpgmm.reconstruct(
-            strategy=tapas_gmm_modified.policy.models.tpgmm.ReconstructionStrategy.GMR,
-            use_ss=False,
-        )
-
-        self.model.plot_reconstructions()
-        self.model.plot_model()
+    def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.policy.reset_episode()
         xt = self.tapas_td(x, y)
         if self.cfg.policy.return_full_batch:
             predictions = self.make_batch_prediction(xt)
             if predictions is None:
                 return x, SceneFeedback(
-                    reward=0,
-                    terminal=False,
-                    truncated=True,
+                    reward=0.0,
+                    terminal=True,
+                    truncated=False,
                 )  # Error
 
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
                 # print(action.shape)
-                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
+                tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
             while not (pred := self.make_prediction(xt))[1]:
                 action, _ = pred
                 if action is None:
                     return x, SceneFeedback(
-                        reward=0,
-                        terminal=False,
-                        truncated=True,
+                        reward=0.0,
+                        terminal=True,
+                        truncated=False,
                     )  # Error
-                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
+                tdscene, tdimage, fb = self.scene.step(action)
                 z = self.make_scene(tdscene, tdimage)
                 xt = self.tapas_td(z, y)
 
-        return z, SceneFeedback(
-            reward=reward,
-            terminal=terminal,
-            truncated=truncated,
-        )
+        return z, fb
 
     def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
         if self.cfg.use_gt:
             return scene
         else:
-            return self.from_image(image)
+            return DCScene(self.from_image(image), scene.extras)
 
     def make_batch_prediction(
         self, x: SceneObservation  # type: ignore
@@ -199,7 +164,7 @@ class TapasAgent(ExpertAgent):
             file_name = "policy_gt.pt"
         else:
             file_name = "policy_img.pt"
-        filepath = path / file_name
+        filepath = path / "experts" / self.cfg.tag / file_name
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         if filepath.exists():
@@ -217,7 +182,7 @@ class TapasAgent(ExpertAgent):
             file_name = "policy_gt.pt"
         else:
             file_name = "policy_img.pt"
-        filepath = path / file_name
+        filepath = path / "experts" / self.cfg.tag / file_name
         logger.info(f"Saving tapas policy to: {filepath}")
         self.model.to_disk(str(filepath))
 
@@ -234,60 +199,45 @@ class TapasAgent(ExpertAgent):
         return temp
 
     def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
-        poses = {
-            entity.cfg.label: dc_obs[entity.cfg.label].tpose
-            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
-        }
+        poses = {l: dc_obs[l].tpose for l in self.scene.entities.keys()}
 
-        states = {
-            entity.cfg.label: dc_obs[entity.cfg.label].tste
-            for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label)
-        }
-
-        # Target parameters
-        for entity in sorted(self.scene.entities, key=lambda e: e.cfg.label):
-            if entity.cfg.mobility == Mobility.FREE:
-                poses[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tpose
-                states[f"{entity.cfg.label}_target"] = dc_goal[entity.cfg.label].tste
-
-        poses[f"ee_target"] = dc_goal.ee.tpose
-        states[f"ee_target"] = dc_goal.ee.tste
-
+        for l in self.scene.entities.keys():
+            poses[f"{l}_target"] = dc_goal[l].tpose
+        poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)
-        object_states = dict_to_tensordict(states)
 
         action = torch.Tensor(dc_obs.extras["action"])
         reward = torch.Tensor(dc_obs.extras["reward"])
         joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
         joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
+        ee_pose = torch.tensor(dc_obs.extras["ee_pose"])
 
         return SceneObservation(
             feedback=reward,
             action=action,
             cameras=None,  # multicam_obs,
-            ee_pose=dc_obs.ee.tpose,
-            gripper_state=dc_obs.ee.tste,
+            ee_pose=ee_pose,
+            # gripper_state=dc_obs.ee.tste,
             object_poses=object_poses,
-            object_states=object_states,
+            # object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
             batch_size=torch.Size([]),
         )
 
-    @cached_property
-    def elabels(self) -> set[str]:
+    def tps(self) -> set[str]:
         labels = set()
-        elabels = [e.cfg.label for e in self.scene.entities]
         for idx, key in enumerate(self.demos.idx_key_list):
-            if idx in self.model._used_frames and key in elabels:
+            if idx in self.model._used_frames:
+                assert key in self.scene.entities.keys()
                 labels.add(key)
         logger.info(f"{self.cfg.tag} entities: {labels}")
         return labels
 
     @cached_property
-    def conditions(self) -> list[ConPair]:
-        path = TapasAgent.load_dir(self.cfg)
-        demos_file = h5py.File(path / self.cfg.demo_filename, "r")
+    def conditions(self) -> ConPair:
+        path = self.load_dir(self.cfg) / "demos"
+        demos_file = h5py.File(path / f"{self.cfg.tag}.h5", "r")
         demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
             self.cfg.demo_selections,
@@ -303,37 +253,49 @@ class TapasAgent(ExpertAgent):
             start_scenes = [self.from_image(demo[0]) for demo in demos_images]
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
-        for key in self.elabels:
+        for key in self.entities:
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        start_ee = np.stack([s.ee.value for s in start_scenes])  # (N, 8)
-        self.start_ee = np.zeros(8, dtype=np.float32)
-        self.start_ee[:3] = start_ee[:, :3].mean(axis=0)  # mean position
-        quats = start_ee[:, 3:7]
-        mean_quat = quats.mean(axis=0)
-        self.start_ee[3:7] = Quaternion.normalize(mean_quat)
-        states = start_ee[:, -1]
-        self.start_ee[-1] = np.bincount(states.astype(int)).argmax()
-
-        goal_ee = np.stack([s.ee.value for s in end_scenes])
-        self.goal_ee = np.zeros(8, dtype=np.float32)
-        self.goal_ee[:3] = goal_ee[:, :3].mean(axis=0)  # mean position
-        quats = goal_ee[:, 3:7]
-        mean_quat = quats.mean(axis=0)
-        self.goal_ee[3:7] = Quaternion.normalize(mean_quat)
-        states = goal_ee[:, -1]
-        self.goal_ee[-1] = np.bincount(states.astype(int)).argmax()
-
-        pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
-        post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
-        pair = ConPair(f"{self.cfg.tag}", pre, post, self.cfg.threshold)
+        pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities, 1)
         pair.plot(path)
-        return [pair]
+        return pair
 
-    def load_demos(self, selections: list[int]) -> list[TensorDict]:
-        path = TapasAgent.load_dir(self.cfg)
-        demos_file = h5py.File(path / self.cfg.demo_filename, "r")
+    def fit_stage1(self, demos: Demos):
+        self.model.fit_trajectories(
+            demos,
+            fix_frames=True,
+            init_strategy=InitStrategy.TIME_BASED,
+            fitting_actions=(FittingStage.INIT,),
+        )
+
+    def fit_stage2(self, demos: Demos):
+        self.model.fit_trajectories(
+            demos,
+            fix_frames=True,
+            fitting_actions=(FittingStage.EM_HMM,),
+        )
+
+    def plot_stage1(self):
+        self.model.plot_model(
+            scatter=True,
+            annotate_gaussians=True,
+            annotate_trajs=True,
+            mean_as_base=False,
+        )
+
+    def plot_stage2(self):
+        self.model.plot_model(
+            scatter=True,
+            annotate_gaussians=True,
+            annotate_trajs=True,
+            mean_as_base=False,
+            time_based=True,
+        )
+
+    def load_demos(self, selections: list[int]) -> Demos:
+        path = self.load_dir(self.cfg) / "demos"
+        demos_file = h5py.File(path / f"{self.cfg.tag}.h5", "r")
 
         observations: list[SceneObservation] = []  # type: ignore
 
@@ -345,12 +307,27 @@ class TapasAgent(ExpertAgent):
                 stacked = self.dcscenes_to_tdtapas(demo_scenes)
             else:
                 demo_extracted: list[DCScene] = []
-                for td_img in demo_images:
+                for idx, td_img in enumerate(demo_images):
                     extracted = self.from_image(td_img)
-                    demo_extracted.append(extracted)
+                    extr_scene = DCScene(extracted, demo_scenes[idx].extras)
+                    demo_extracted.append(extr_scene)
                 stacked = self.dcscenes_to_tdtapas(demo_extracted)
             observations.append(stacked)
-        return observations
+
+        demos = Demos(
+            observations,
+            add_init_ee_pose_as_frame=True,
+            add_world_frame=False,
+            frames_from_keypoints=False,
+            kp_indeces=None,
+            enforce_z_up=False,
+            modulo_object_z_rotation=False,
+            make_quats_continuous=True,
+        )  # type: ignore
+        print("n_trajs", demos.n_trajs)
+        print("n_frames", demos.n_frames)
+        demos.frame_names
+        return demos
 
     def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> TensorDict:
         obs: list[TensorDict] = []

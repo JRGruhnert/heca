@@ -13,7 +13,7 @@ from heca.scenes.scene import Scene
 from heca.misc import logger
 
 
-class SceneSampleSelector(Configurable):
+class SceneRefSelector(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         scene: Scene.Config
