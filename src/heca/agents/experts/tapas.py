@@ -22,11 +22,11 @@ from tapas_gmm_modified.policy.models.tpgmm import (
 )
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
-from heca.conditions.evaluator import AgentFeedback
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
 from heca.misc import logger
 from heca.misc.hardware import device
+from heca.scenes.scene import SceneFeedback
 from heca.utils.quaternion import Quaternion
 
 
@@ -106,13 +106,13 @@ class TapasAgent(ExpertAgent):
         super().__init__(cfg)
         self.cfg = cfg
 
-    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
+    def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.policy.reset_episode()
         xt = self.tapas_td(x, y)
         if self.cfg.policy.return_full_batch:
             predictions = self.make_batch_prediction(xt)
             if predictions is None:
-                return x, AgentFeedback(
+                return x, SceneFeedback(
                     reward=0.0,
                     terminal=True,
                     truncated=False,
@@ -122,26 +122,22 @@ class TapasAgent(ExpertAgent):
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
                 # print(action.shape)
-                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
+                tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
             while not (pred := self.make_prediction(xt))[1]:
                 action, _ = pred
                 if action is None:
-                    return x, AgentFeedback(
+                    return x, SceneFeedback(
                         reward=0.0,
                         terminal=True,
                         truncated=False,
                     )  # Error
-                tdscene, tdimage, reward, terminal, truncated = self.scene.step(action)
+                tdscene, tdimage, fb = self.scene.step(action)
                 z = self.make_scene(tdscene, tdimage)
                 xt = self.tapas_td(z, y)
 
-        return z, AgentFeedback(
-            reward=reward,
-            terminal=terminal,
-            truncated=truncated,
-        )
+        return z, fb
 
     def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
         if self.cfg.use_gt:
@@ -236,8 +232,7 @@ class TapasAgent(ExpertAgent):
             batch_size=torch.Size([]),
         )
 
-    @cached_property
-    def elabels(self) -> set[str]:
+    def tps(self) -> set[str]:
         labels = set()
         for idx, key in enumerate(self.demos.idx_key_list):
             if idx in self.model._used_frames:
@@ -247,7 +242,7 @@ class TapasAgent(ExpertAgent):
         return labels
 
     @cached_property
-    def conditions(self) -> list[ConPair]:
+    def conditions(self) -> ConPair:
         path = TapasAgent.load_dir(self.cfg)
         demos_file = h5py.File(path / self.cfg.demo_filename, "r")
         demos_scenes, demos_images = self.scene.load_dataset(
@@ -265,15 +260,13 @@ class TapasAgent(ExpertAgent):
             start_scenes = [self.from_image(demo[0]) for demo in demos_images]
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
-        for key in self.elabels:
+        for key in self.entities:
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        pre = Condition("pre", pre_data, 1, self.cfg.n_samples, self.cfg.threshold)
-        post = Condition("post", post_data, 1, self.cfg.n_samples, self.cfg.threshold)
-        pair = ConPair(f"{self.cfg.tag}", pre, post, self.cfg.threshold)
+        pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities, 1)
         pair.plot(path)
-        return [pair]
+        return pair
 
     def load_demos(self, selections: list[int]) -> list[TensorDict]:
         path = TapasAgent.load_dir(self.cfg)

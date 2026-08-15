@@ -9,7 +9,7 @@ import torch
 from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 
 from heca.data.data import DCEntity, DCScene, TDImage
-from heca.scenes.scene import Scene
+from heca.scenes.scene import Scene, SceneFeedback
 
 
 class OGScene(Scene):
@@ -307,3 +307,14 @@ class OGScene(Scene):
             for agent_key, count in discarded.items():
                 if agent_key not in agent_data:
                     print(f"  {agent_key}: kept=0, discarded={count}")
+
+    def entity_eval(self, x: DCScene, y: DCScene, label: str) -> bool:
+        if any(part in label for part in ("box", "cube")):
+            return bool(np.linalg.norm(x.get(label).pos - y.get(label).pos) <= 0.04)
+        return True
+
+    def virtual_evaluation(self, x: DCScene, y: DCScene) -> SceneFeedback:
+        for e in self.entities:
+            if not self.entity_eval(x, y, e):
+                return SceneFeedback(terminal=True, reward=0.0, truncated=False)
+        return SceneFeedback(terminal=True, reward=1.0, truncated=False)

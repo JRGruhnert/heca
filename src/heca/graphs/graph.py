@@ -9,7 +9,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
-from heca.agents.agent import Agent
+from heca.agents.experts.expert import ExpertAgent
 from heca.graphs.node import *
 from heca.graphs.node_set import NodeSet
 from heca.graphs.edge_set import EdgeSet
@@ -33,7 +33,7 @@ class Graph:
     es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
         ("entity", "tapas", "entity")
     )
-    packages: dict[str, tuple[Agent.Config, DCScene, DCScene]] = field(
+    packages: dict[str, tuple[ExpertAgent.Config, DCScene, DCScene]] = field(
         default_factory=dict
     )
     start_keys: set[str] = field(default_factory=set)
@@ -133,16 +133,16 @@ class Graph:
         con: Condition,
     ) -> dict[str, set[tuple[str, str]]]:
         keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
-        for entity, comps in con.comp_features().items():
+        for elabel, comps in con.comp_features().items():
             for idx, feat in enumerate(comps):
-                key = con.label + entity + tag + f"{idx}"
-                keys[entity].add((self.es_stepmix.type[1], key))
+                key = con.label + elabel + tag + f"{idx}"
+                keys[elabel].add((self.es_stepmix.type[1], key))
                 self.ns_entity.add(
                     key,
                     EntityNode(
-                        entity=entity,
-                        type_id=type(self.entities[entity]).TYPE_ID,
-                        n_states=self.entities[entity].cfg.n_states,
+                        entity=elabel,
+                        type_id=type(self.entities[elabel]).TYPE_ID,
+                        n_states=self.entities[elabel].cfg.n_states,
                         data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
                         sources=set(),
@@ -227,48 +227,50 @@ class Graph:
         return {src for src in temp_sources.values()}
 
     @classmethod
-    def generate(cls, cfgs: list[Agent.Config], entities: dict[str, Entity]) -> "Graph":
+    def generate(
+        cls, cfgs: list[ExpertAgent.Config], entities: dict[str, Entity]
+    ) -> "Graph":
         graph = cls(entities=entities)
-        agents = [Agent.get(cfg) for cfg in cfgs]
+        agents = [ExpertAgent.get(cfg) for cfg in cfgs]
         for a in agents:
-            for ac in a.conditions:
-                pre_comp_sources = graph.set_comps(ac.label, ac.pre)
-                post_comp_sources = graph.set_comps(ac.label, ac.post)
-                pre_sources = graph.set_precon(ac.label, ac.pre, pre_comp_sources)
-                post_sources = graph.set_postcon(
-                    ac.label,
-                    ac.post,
-                    post_comp_sources,
-                    pre_sources,
-                )
-                for b in agents:
-                    for bc in b.conditions:
-                        if ac.label == bc.label:  # pre == post
-                            sources = {src for src in post_sources.values()}
-                            graph.ns_option.add(
-                                ac.label,
-                                OptionNode(
-                                    agent=a.cfg,
-                                    sources=sources,
-                                ),
-                            )
-                        else:  # pre != post
-                            subgoal = bc.pre.make_subgoal(ac.post)
-                            if subgoal is not None:
-                                sources = graph.set_subgoal(
-                                    ac.label + bc.label,
-                                    post_comp_sources,
-                                    pre_sources,
-                                    post_sources,
-                                    subgoal,
-                                )
-                                graph.ns_option.add(
-                                    ac.label + bc.label,
-                                    OptionNode(
-                                        agent=a.cfg,
-                                        sources=sources,
-                                    ),
-                                )
+            ac = a.conditions
+            pre_comp_sources = graph.set_comps(ac.label, ac.pre)
+            post_comp_sources = graph.set_comps(ac.label, ac.post)
+            pre_sources = graph.set_precon(ac.label, ac.pre, pre_comp_sources)
+            post_sources = graph.set_postcon(
+                ac.label,
+                ac.post,
+                post_comp_sources,
+                pre_sources,
+            )
+            for b in agents:
+                bc = b.conditions
+                if ac.label == bc.label:  # pre == post
+                    sources = {src for src in post_sources.values()}
+                    graph.ns_option.add(
+                        ac.label,
+                        OptionNode(
+                            agent=a.cfg,
+                            sources=sources,
+                        ),
+                    )
+                else:  # pre != post
+                    subgoal = bc.pre.make_subgoal(ac.post)
+                    if subgoal is not None:
+                        sources = graph.set_subgoal(
+                            ac.label + bc.label,
+                            post_comp_sources,
+                            pre_sources,
+                            post_sources,
+                            subgoal,
+                        )
+                        graph.ns_option.add(
+                            ac.label + bc.label,
+                            OptionNode(
+                                agent=a.cfg,
+                                sources=sources,
+                            ),
+                        )
 
         graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
         graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)

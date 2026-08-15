@@ -15,15 +15,13 @@ class Condition:
         data: dict[str, np.ndarray],
         entities: dict[str, Entity],
         max_components: int,
-        n_samples: int,
     ):
         self._data_raw = data
         self._max_components = max_components
         self._entities = entities
-        self._n_samples = n_samples
         self.label = label
 
-        self._model, self._samples, self._bics = self._fit_model()
+        self._model, self._bics = self._fit_model()
 
     def comp_features(self) -> dict[str, np.ndarray]:
         result: dict[str, np.ndarray] = {}
@@ -36,13 +34,13 @@ class Condition:
     def data_raw(self) -> dict[str, np.ndarray]:
         return self._data_raw
 
-    @property
-    def samples(self) -> dict[str, np.ndarray]:
-        return self._samples
+    # @property
+    # def samples(self) -> dict[str, np.ndarray]:
+    #     return self._samples
 
-    @property
-    def sample_self_scores(self) -> dict[str, float]:
-        return {k: float(self.models[k].score(v)) for k, v in self.samples.items()}
+    # @property
+    # def sample_self_scores(self) -> dict[str, float]:
+    #     return {k: float(self.models[k].score(v)) for k, v in self.samples.items()}
 
     @property
     def raw_self_scores(self) -> dict[str, float]:
@@ -58,12 +56,12 @@ class Condition:
 
     def _fit_model(self) -> tuple[
         dict[str, StepMix],
-        dict[str, np.ndarray],
+        # dict[str, np.ndarray],
         dict[str, list[float]],
     ]:
 
         models: dict[str, StepMix] = {}
-        samples: dict[str, np.ndarray] = {}
+        # samples: dict[str, np.ndarray] = {}
         bics: dict[str, list[float]] = {}
 
         for key, values in self.data_raw.items():
@@ -87,19 +85,19 @@ class Condition:
 
             assert best_model is not None
             models[key] = best_model
-            samples[key] = best_model.sample(self._n_samples)[0]
+            # samples[key] = best_model.sample(self._n_samples)[0]
             bics[key] = bic_values
 
-        return models, samples, bics
+        return models, bics
 
-    def score(self, x: dict[str, np.ndarray]) -> dict[str, float]:
-        scores: dict[str, float] = {}
-        for key, model in self.models.items():
-            raw = model.score(x)
-            delta = raw - self.sample_self_scores[key]
-            clipped = np.minimum(delta, 0)  # we just care for negative deltas
-            scores[key] = np.exp(clipped)
-        return scores
+    # def score(self, x: dict[str, np.ndarray]) -> dict[str, float]:
+    #     scores: dict[str, float] = {}
+    #     for key, model in self.models.items():
+    #         raw = model.score(x)
+    #         delta = raw - self.sample_self_scores[key]
+    #         clipped = np.minimum(delta, 0)  # we just care for negative deltas
+    #         scores[key] = np.exp(clipped)
+    #     return scores
 
     def plot(self, path: Path, label: str):
         ks = range(1, self._max_components + 1)

@@ -4,20 +4,14 @@ from matplotlib import pyplot as plt
 import numpy as np
 
 from heca.conditions.condition import Condition
+from heca.data.entity import Entity
 
 
 class ConPair:
-    def __init__(
-        self,
-        label: str,
-        pre: Condition,
-        post: Condition,
-        threshold: float,
-    ):
+    def __init__(self, label: str, pre: Condition, post: Condition):
         self.label = label
         self.pre = pre
         self.post = post
-        self.threshold = threshold
 
     # @classmethod
     # def merge(
@@ -45,6 +39,19 @@ class ConPair:
     #         threshold,
     #     )
     #     return cls(label, pre, post, threshold)
+
+    @classmethod
+    def make(
+        cls,
+        tag,
+        pre_data: dict[str, np.ndarray],
+        post_data: dict[str, np.ndarray],
+        entities: dict[str, Entity],
+        max_components: int,
+    ) -> "ConPair":
+        pre = Condition("pre", pre_data, entities, max_components)
+        post = Condition("post", post_data, entities, max_components)
+        return cls(f"{tag}", pre, post)
 
     @classmethod
     def make_max_components(cls, a: "ConPair", b: "ConPair") -> tuple[int, int]:
@@ -149,30 +156,34 @@ class ConPair:
         plt.savefig(path / "plots" / f"sim_{other.label}_{self.label}.png", dpi=300)
         plt.close(fig)
 
-    def can_merge(self, other: "ConPair", path: Path | None = None) -> bool:
-        sim_rating = self.compute_sim(other)
-        if path is not None:
-            self.plot_similarity(sim_rating, other, path)
-        return self.evaluate_sim(sim_rating)
+    # def can_merge(self, other: "ConPair", path: Path | None = None) -> bool:
+    #     sim_rating = self.compute_sim(other)
+    #     if path is not None:
+    #         self.plot_similarity(sim_rating, other, path)
+    #     return self.evaluate_sim(sim_rating)
 
-    def mcheck(self, mat: np.ndarray):
-        return np.all(mat >= self.threshold)
+    # def mcheck(self, mat: np.ndarray):
+    #     return np.all(mat >= self.threshold)
 
-    def evaluate_sim(self, sim_rating: dict[str, np.ndarray]) -> bool:
-        mat = np.stack(list(sim_rating.values()), axis=0)
-        mat = np.nan_to_num(mat, nan=1.0)  # nan values should be ignored
-        if self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 1, 0]):
-            return True  # pre0 ↔ post1 (bidirectional equivalence)
-        elif self.mcheck(mat[:, 0, 1, 0]) and self.mcheck(mat[:, 1, 1, 0]):
-            return True  # post0 ⊆ pre1 AND post1 ⊆ pre0 (sequential)
-        elif self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 0, 1]):
-            return True  # pre0 in post1 and pre1 in post0
-        elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 1, 1]):
-            return True  # pre0 in pre1 and post0 in post1
-        elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 1, 1]):
-            return True  # pre1 in pre0 and post1 in post0
-        elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 0, 1]):
-            return True  # pre0 in pre1 and pre0 in post1
-        elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 0, 1]):
-            return True  # pre1 in pre0 and pre1 in post0
-        return False
+    # def evaluate_sim(self, sim_rating: dict[str, np.ndarray]) -> bool:
+    #     mat = np.stack(list(sim_rating.values()), axis=0)
+    #     mat = np.nan_to_num(mat, nan=1.0)  # nan values should be ignored
+    #     if self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 1, 0]):
+    #         return True  # pre0 ↔ post1 (bidirectional equivalence)
+    #     elif self.mcheck(mat[:, 0, 1, 0]) and self.mcheck(mat[:, 1, 1, 0]):
+    #         return True  # post0 ⊆ pre1 AND post1 ⊆ pre0 (sequential)
+    #     elif self.mcheck(mat[:, 0, 0, 1]) and self.mcheck(mat[:, 1, 0, 1]):
+    #         return True  # pre0 in post1 and pre1 in post0
+    #     elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 1, 1]):
+    #         return True  # pre0 in pre1 and post0 in post1
+    #     elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 1, 1]):
+    #         return True  # pre1 in pre0 and post1 in post0
+    #     elif self.mcheck(mat[:, 0, 0, 0]) and self.mcheck(mat[:, 0, 0, 1]):
+    #         return True  # pre0 in pre1 and pre0 in post1
+    #     elif self.mcheck(mat[:, 1, 0, 0]) and self.mcheck(mat[:, 1, 0, 1]):
+    #         return True  # pre1 in pre0 and pre1 in post0
+    #     return False
+
+    @property
+    def entities(self) -> dict[str, Entity]:
+        return self.pre.entities

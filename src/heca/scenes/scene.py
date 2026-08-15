@@ -14,6 +14,13 @@ from heca.data.entity import Entity
 from heca.misc.base import Persistable
 
 
+@dataclass(kw_only=True, slots=True)
+class SceneFeedback:
+    terminal: bool
+    reward: float
+    truncated: bool
+
+
 class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
@@ -33,17 +40,17 @@ class Scene(Persistable):
         npimage = self.to_np_image(data)
         return tdscene, tdimage, npimage
 
-    def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, float, bool, bool]:
-        obs, reward, terminal, truncated = self._step(action)
+    def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
+        obs, fb = self._step(action)
         tdscene, tdimage, _ = self.from_internal(obs)
-        return tdscene, tdimage, reward, terminal, truncated
+        return tdscene, tdimage, fb
 
     def step_vis(self, action: np.ndarray) -> tuple[DCScene, TDImage, np.ndarray]:
-        obs, _, _, _ = self._step(action)
+        obs, _ = self._step(action)
         return self.from_internal(obs)
 
     @abc.abstractmethod
-    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
+    def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 
     @abc.abstractmethod
@@ -136,4 +143,7 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     def demo_auto_extract(self):
+        raise NotImplementedError
+
+    def virtual_evaluation(self, x: DCScene, y: DCScene) -> SceneFeedback:
         raise NotImplementedError

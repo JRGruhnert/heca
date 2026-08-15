@@ -21,7 +21,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     DemoSegmentationConfig,
     CascadeConfig,
 )
-from heca.agents.agent import AgentFeedback
+from heca.agents.agent import SceneFeedback
 from heca.agents.experts.expert import ExpertAgent
 from heca.conditions.condition import Condition
 from heca.conditions.pair import ConPair
@@ -115,7 +115,7 @@ class TapasAgent(ExpertAgent):
         self.start_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
         self.goal_ee = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0])
 
-    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
+    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
 
         (
             seg_local_marginals,
@@ -136,7 +136,7 @@ class TapasAgent(ExpertAgent):
         if self.cfg.policy.return_full_batch:
             predictions = self.make_batch_prediction(xt)
             if predictions is None:
-                return x, AgentFeedback(
+                return x, SceneFeedback(
                     reward=0,
                     terminal=False,
                     truncated=True,
@@ -152,7 +152,7 @@ class TapasAgent(ExpertAgent):
             while not (pred := self.make_prediction(xt))[1]:
                 action, _ = pred
                 if action is None:
-                    return x, AgentFeedback(
+                    return x, SceneFeedback(
                         reward=0,
                         terminal=False,
                         truncated=True,
@@ -161,7 +161,7 @@ class TapasAgent(ExpertAgent):
                 z = self.make_scene(tdscene, tdimage)
                 xt = self.tapas_td(z, y)
 
-        return z, AgentFeedback(
+        return z, SceneFeedback(
             reward=reward,
             terminal=terminal,
             truncated=truncated,

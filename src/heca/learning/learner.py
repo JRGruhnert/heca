@@ -17,6 +17,7 @@ from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
 from heca.heca_gnn.network1 import Network1
 from heca.learning.buffers.buffer import Buffer, BufferData
+from heca.scenes.scene import SceneFeedback
 
 
 @dataclass(kw_only=True, slots=True)
@@ -194,20 +195,18 @@ class Learner(Persistable):
         if self.cfg.wandb.enabled:
             wandb.log(self.metrics, step=self.current_update)
 
-    def complete_pocket(
-        self, reward: float, terminal: bool, truncated: bool, tag: str
-    ) -> BufferData:
+    def complete_pocket(self, fb: SceneFeedback, tag: str) -> BufferData:
         data = self.pocket[tag]
-        data.reward = reward
-        data.terminal = terminal
-        data.truncated = truncated
+        data.reward = fb.reward
+        data.terminal = fb.terminal
+        data.truncated = fb.truncated
         return data
 
-    def update(self, reward: float, terminal: bool, truncated: bool, tag: str) -> bool:
+    def update(self, fb: SceneFeedback, tag: str) -> bool:
         if self.cfg.normalize_rewards:
-            reward = self.normalizers[tag].update(reward)
+            fb.reward = self.normalizers[tag].update(fb.reward)
         if self.train_mode:
-            data = self.complete_pocket(reward, terminal, truncated, tag)
+            data = self.complete_pocket(fb, tag)
             if self.buffer.add(data):
                 self.learn()
                 self.current_update += 1
