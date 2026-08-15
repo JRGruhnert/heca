@@ -30,7 +30,6 @@ class Heca(Agent):
         super().__init__(cfg)
         self.cfg = cfg
         self.learner = Learner.get(self.cfg.learner).register(self.cfg.tag)
-        self.end_flag = False
         if self.cfg.inference:
             self.learner.eval()
 
@@ -40,11 +39,11 @@ class Heca(Agent):
         self.graph.log()
 
     def step(
-        self, x: DCScene, new_episode: bool = False
-    ) -> tuple[DCScene, AgentFeedback]:
+        self, x: DCScene, new_ep: bool = False
+    ) -> tuple[DCScene, AgentFeedback, bool]:
         self.graph.set_start(x)
         data = self.graph.export()
-        option = self.learner.predict(data, self.cfg.tag, new_episode)
+        option = self.learner.predict(data, self.cfg.tag, new_ep)
         a, y = self.graph.select(option)
         if logger.DEBUG:
             logger.debug(f"Start:\n{str(x)}")
@@ -66,17 +65,16 @@ class Heca(Agent):
             lfb = AgentFeedback(terminal=True, reward=0.0, truncated=False)
 
         fb = self.evaluator.step(z, lfb)
-        self.end_flag = self.learner.update(
-            fb.reward, fb.terminal, fb.truncated, self.cfg.tag
-        )
-        return z, fb
+        lock = self.learner.update(fb.reward, fb.terminal, fb.truncated, self.cfg.tag)
+        self.learner.sync_inference()
+        return z, fb, lock
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, AgentFeedback]:
         self.graph.set_goal(y)
         self.evaluator.reset(y)
-        z, fb = self.step(x, True)
+        z, fb, lock = self.step(x, True)
         while not (fb.truncated or fb.terminal):
-            z, fb = self.step(z)
+            z, fb, lock = self.step(z)
         return z, fb
 
     def sample(self) -> tuple[DCScene, DCScene]:

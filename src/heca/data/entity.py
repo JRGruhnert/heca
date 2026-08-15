@@ -9,7 +9,7 @@ from heca.utils.quaternion import Quaternion
 
 
 class Entity(Configurable):
-    FEATURE_DIM: int = 35  # 16 (logits) + 13 (pose) + 6 (max extra: prismatic)
+    FEATURE_DIM: int = 32  # 16 (logits) + 12 (pose) + 4 (max extra)
     MAX_STATE_DIM: int = 16
     BASE_LOGSTD = -10.0
     LOGIT_CONFIDENCE = 10.0
@@ -35,8 +35,11 @@ class Entity(Configurable):
     def common_pose_part(self, label: str, obs: dict) -> np.ndarray:
         pos = obs[f"heca_{label}_pos"]
         rot = obs[f"heca_{label}_rot"]
+        pos = self.normalize_position(pos, obs)
         rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
-        return np.concatenate((pos, rot))
+        quat = Quaternion.normalize(rot)
+        aa = Quaternion.log_map(quat)
+        return np.concatenate((pos, aa))
 
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
         raise NotImplementedError
@@ -53,32 +56,24 @@ class Entity(Configurable):
         raise NotImplementedError
 
     def gnn_format(self, value: np.ndarray) -> np.ndarray:
-        """Encode a ground-truth value into the GNN feature vector.
-
-        value layout: [pos(3), quat(4), extra(D), state_id(1)]
-        D = len(value) - 8  (extra continuous dims beyond the 7 pose dims)
-        """
         M = Entity.MAX_STATE_DIM
-        D = len(value) - 8  # extra dims
+        D = len(value) - 7  # pos(3) + aa(3) + ste(1) = 7 base, extra is rest
 
         feat = np.zeros(Entity.FEATURE_DIM, dtype=np.float32)
 
-        # State logits (GT: one-hot with confidence markers)
-        state_id = value[7 + D].astype(int)
+        state_id = value[6 + D].astype(int)
         feat[: self.cfg.n_states] = -self.LOGIT_CONFIDENCE
         feat[state_id] = self.LOGIT_CONFIDENCE
 
-        # Pose: position mean + assumed std
         feat[M : M + 3] = value[0:3]
         feat[M + 3 : M + 6] = self.BASE_LOGSTD
 
-        # Pose: quaternion + assumed rotation std
-        feat[M + 6 : M + 10] = Quaternion.normalize(value[3:7])
+        quat = Quaternion.exp(value[3:6])
+        feat[M + 6 : M + 10] = Quaternion.normalize(quat)
         feat[M + 10 : M + 13] = self.BASE_LOGSTD
 
-        # Extra continuous dims: mean + assumed std
         if D > 0:
-            feat[M + 13 : M + 13 + D] = value[7 : 7 + D]
+            feat[M + 13 : M + 13 + D] = value[6 : 6 + D]
             feat[M + 13 + D : M + 13 + 2 * D] = self.BASE_LOGSTD
 
         return feat
@@ -100,7 +95,7 @@ class Entity(Configurable):
     ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
         p = self.secure_mix_parameters(up)
-        pose = sample[:7]
+        pose = sample[:6]
         state = int(sample[-1])
         best_logprob = -np.inf
         for k in range(len(p["weights"])):
@@ -205,7 +200,7 @@ class Entity(Configurable):
                 - [M+10:M+13]                   = log(σ_rot, tangent space)
                 - [M+13:M+13+D]                 = μ_extra
                 - [M+13+D:M+13+2D]              = log(σ_extra)
-            where M = MAX_STATE_DIM, D = n_columns - 7
+            where M = MAX_STATE_DIM, D = n_columns - 6
         """
 
         p = self.secure_mix_parameters(up)
@@ -214,7 +209,7 @@ class Entity(Configurable):
         pis = p["measurement"]["state"]["pis"]  # (N, K)
         N = len(p["weights"])
         M = Entity.MAX_STATE_DIM
-        D = means.shape[1] - 7  # extra continuous dims beyond base 7 pose
+        D = means.shape[1] - 6  # extra continuous dims beyond base 6 pose (pos+aa)
 
         feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
 
@@ -225,15 +220,16 @@ class Entity(Configurable):
         feat[:, M : M + 3] = means[:, 0:3]
         feat[:, M + 3 : M + 6] = 0.5 * np.log(covariances[:, 0:3] + eps)
 
-        # Pose: quaternion + rotation logstd (3 dof in tangent space)
-        feat[:, M + 6 : M + 10] = Quaternion.normalize(means[:, 3:7])
+        # Pose: axis-angle -> quaternion + rotation logstd (3 dof in tangent space)
+        quat = Quaternion.exp(means[:, 3:6])
+        feat[:, M + 6 : M + 10] = Quaternion.normalize(quat)
         feat[:, M + 10 : M + 13] = 0.5 * np.log(covariances[:, 3:6] + eps)
 
         # Extra continuous dims: mean + logstd
         if D > 0:
-            feat[:, M + 13 : M + 13 + D] = means[:, 7:]
+            feat[:, M + 13 : M + 13 + D] = means[:, 6:]
             feat[:, M + 13 + D : M + 13 + 2 * D] = 0.5 * np.log(
-                covariances[:, 7:] + eps
+                covariances[:, 6:] + eps
             )
 
         return feat

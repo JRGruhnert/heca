@@ -3,18 +3,21 @@ from collections import OrderedDict
 import torch
 
 from heca.heca_gnn.network import Network
+from heca.heca_gnn.network2 import Network2
 from heca.misc.base import Registerable
 
 
 class FLServer(Registerable):
-
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
-        network: Network.Config
+        network: Network.Config = Network2.Config()
         fedavgm_beta: float = 0.9
+        max_update: int = 1000
+        fedprox_mu: float = 0.01
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
+        self.cfg = cfg
         self.global_network = Network.get(cfg.network)
         for p in self.global_network.parameters():
             p.requires_grad = False
@@ -109,3 +112,6 @@ class FLServer(Registerable):
             result[key] = avg[key].to(dtype=first[key].dtype, device=first[key].device)
 
         return result
+
+    def has_update(self) -> bool:
+        raise NotImplementedError

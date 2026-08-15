@@ -24,7 +24,6 @@ class PPO(Learner):
         max_grad_norm: float = 0.5
         target_kl: float | None = 0.02
         clip_value_loss: bool = True
-        max_update: int = 1000
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -35,10 +34,10 @@ class PPO(Learner):
 
         self._mini_batch_loop(adv, rtn)
 
-        if self.cfg.lr_annealing:
-            lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
-            for pg in self.optim.param_groups:
-                pg["lr"] = lr
+        # if self.cfg.lr_annealing:
+        #     lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
+        #     for pg in self.optim.param_groups:
+        #         pg["lr"] = lr
 
     def _fedprox_term(self) -> torch.Tensor:
         return torch.tensor(0.0, device=next(self.network.parameters()).device)

@@ -24,7 +24,7 @@ class FreeEntity(Entity):
         return {
             "pose": {
                 "model": "gaussian_diag",
-                "n_columns": 7,
+                "n_columns": 6,
             },
             "state": {
                 "model": "categorical",
@@ -33,7 +33,7 @@ class FreeEntity(Entity):
         }
 
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
-        raise NotImplementedError
+        return np.zeros(0)
 
     def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
         start_val = _clean(obs[f"heca_{label}_loc"][start])

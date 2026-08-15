@@ -119,21 +119,23 @@ class OGSceneOG(OGScene):
                 e_pos = obs[f"privileged_{label}_pos"]
             wxyz = obs[f"privileged_{label}_quat"]
             e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
+            e_rot = Quaternion.normalize(e_rot)
+            e_rot_aa = Quaternion.log_map(e_rot)
             e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])
-            value = np.concatenate((e_pos, e_rot, e_ste))
+            value = np.concatenate((e_pos, e_rot_aa, e_ste))
             feature = self.gnn_format(value, entity.cfg.n_states)
             dc_entities[label] = DCEntity(value=value, feature=feature)
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
 
     def gnn_format(self, value: np.ndarray, n_states):
-        # Initialize with zeros
         feat = np.zeros((56), dtype=np.float32)
         feat[0:3] = value[0:3]
         feat[3:6] = -10.0
-        feat[6:10] = Quaternion.normalize(value[3:7])
+        quat = Quaternion.exp(value[3:6])
+        feat[6:10] = Quaternion.normalize(quat)
         feat[10:13] = -10.0
-        state_ids = value[7].astype(int)  # [N]
+        state_ids = value[6].astype(int)
         feat[13 : 13 + n_states] = -10.0
         feat[13 + state_ids] = 10.0
         return feat

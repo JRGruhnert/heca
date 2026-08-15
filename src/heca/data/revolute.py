@@ -18,7 +18,7 @@ class RevoluteEntity(Entity):
         return {
             "pose": {
                 "model": "gaussian_diag",
-                "n_columns": 9,
+                "n_columns": 8,
             },
             "state": {
                 "model": "categorical",
@@ -27,7 +27,8 @@ class RevoluteEntity(Entity):
         }
 
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
-        raise NotImplementedError
+        ang = obs[f"heca_{label}_ang"]
+        return np.array([np.sin(ang), np.cos(ang)])
 
         relative = (current - min_angle) / (max_angle - min_angle)  # Already [0,1]
         range_size = max_angle - min_angle  # Scale info

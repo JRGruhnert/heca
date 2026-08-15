@@ -62,7 +62,6 @@ class Learner(Persistable):
         max_grad_norm: float
         entropy_coef: float
         critic_coef: float
-        max_update: int
         eps_clip: float
         normalize_rewards: bool
         wandb: WandBConfig = WandBConfig()
@@ -157,7 +156,6 @@ class Learner(Persistable):
             "max_grad_norm": self.cfg.max_grad_norm,
             "entropy_coef": self.cfg.entropy_coef,
             "critic_coef": self.cfg.critic_coef,
-            "max_update": self.cfg.max_update,
             "eps_clip": self.cfg.eps_clip,
             "normalize_rewards": self.cfg.normalize_rewards,
             # Buffer config
@@ -196,26 +194,31 @@ class Learner(Persistable):
         if self.cfg.wandb.enabled:
             wandb.log(self.metrics, step=self.current_update)
 
+    def complete_pocket(
+        self, reward: float, terminal: bool, truncated: bool, tag: str
+    ) -> BufferData:
+        data = self.pocket[tag]
+        data.reward = reward
+        data.terminal = terminal
+        data.truncated = truncated
+        return data
+
     def update(self, reward: float, terminal: bool, truncated: bool, tag: str) -> bool:
         if self.cfg.normalize_rewards:
             reward = self.normalizers[tag].update(reward)
         if self.train_mode:
-            data = self.pocket[tag]
-            data.reward = reward
-            data.terminal = terminal
-            data.truncated = truncated
+            data = self.complete_pocket(reward, terminal, truncated, tag)
             if self.buffer.add(data):
                 self.learn()
-                self.current_update = min(self.current_update + 1, self.cfg.max_update)
-                self.sync_inference()
+                self.current_update += 1
                 self.metrics.update(self.buffer.stats())
                 self.training_log()
                 self.buffer.reset()
 
-                if self.current_update % 100 == 0:
+                if self.current_update % 50 == 0:
                     self.save()
-
-        return self.current_update >= self.cfg.max_update
+                return True
+        return False
 
     def _save(self, path: Path):
         filepath = path / f"checkpoint_{self.current_update}.pt"

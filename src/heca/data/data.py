@@ -5,6 +5,8 @@ import numpy as np
 from typing import Iterator, cast
 from tensordict import TensorDict
 
+from heca.utils.quaternion import Quaternion
+
 
 @dataclass(slots=True)
 class DCEntity:
@@ -35,11 +37,12 @@ class DCEntity:
 
     @property
     def rot(self) -> np.ndarray:
-        return self.value[3:7]
+        aa = self.value[3:6]
+        return Quaternion.exp(aa)
 
     @property
     def ext(self) -> np.ndarray:
-        return self.value[7:-1]
+        return self.value[6:-1]
 
     @property
     def ste(self) -> np.ndarray:
@@ -51,7 +54,8 @@ class DCEntity:
 
     @property
     def trot(self) -> torch.Tensor:
-        return torch.Tensor(self.value[3:7])
+        aa = self.value[3:6]
+        return torch.Tensor(Quaternion.exp(aa))
 
     @property
     def tste(self) -> torch.Tensor:
@@ -59,11 +63,13 @@ class DCEntity:
 
     @property
     def text(self) -> torch.Tensor:
-        return torch.Tensor(self.value[7:-1])
+        return torch.Tensor(self.value[6:-1])
 
     @property
     def tpose(self) -> torch.Tensor:
-        return torch.Tensor(self.value[:7])
+        aa = self.value[3:6]
+        quat = Quaternion.exp(aa)
+        return torch.Tensor(np.concatenate([self.value[:3], quat]))
 
 
 class DCScene:
