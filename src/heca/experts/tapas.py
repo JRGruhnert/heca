@@ -25,7 +25,7 @@ from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
 from heca.misc import logger
 from heca.misc.hardware import device
-from heca.scenes.scene import SceneFeedback
+from heca.scenes.scene import Scene, SceneFeedback
 
 
 class TapasExpert(ExpertModel):
@@ -89,10 +89,29 @@ class TapasExpert(ExpertModel):
             ),
         )
         repeat_actions: int = 0
-        gt_frames: list[list[int]] | None = None
+        gt_frames: list[list[int | str]] | None = None
         demo_selections: list[int] | None = None
 
         def __post_init__(self):
+            # Convert entity-name-based gt_frames to the frame indices the
+            # underlying TPGMM expects. frame_names = ["ee_init"] + entity
+            # labels + f"{label}_target" labels + ["ee_target"], matching the
+            # object_poses keys built by tapas_td.
+            if self.gt_frames is not None:
+                flat = [n for seg in self.gt_frames for n in seg]
+                if flat and all(isinstance(n, str) for n in flat):
+                    scene = Scene.get(self.scene, auto_load=False)
+                    labels = list(scene.entities.keys())
+                    frame_names = (
+                        ["ee_init"]
+                        + labels
+                        + [f"{l}_target" for l in labels]
+                        + ["ee_target"]
+                    )
+                    name_to_idx = {name: i for i, name in enumerate(frame_names)}
+                    self.gt_frames = [
+                        [name_to_idx[n] for n in seg] for seg in self.gt_frames
+                    ]
             self.policy.model.frame_selection.gt_frames = self.gt_frames
 
     def __init__(self, cfg: Config):
@@ -199,9 +218,9 @@ class TapasExpert(ExpertModel):
         return temp
 
     def tapas_td(self, dc_obs: DCScene, dc_goal: DCScene) -> TensorDict:
-        poses = {l: dc_obs[l].tpose for l in self.scene.entities.keys()}
+        poses = {l: dc_obs[l].tpose for l in self.scene.entities}
 
-        for l in self.scene.entities.keys():
+        for l in self.scene.entities:
             poses[f"{l}_target"] = dc_goal[l].tpose
         poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)

@@ -1,94 +1,48 @@
 from heca.experts.tapas import TapasExpert
-from heca.scenes.ogbench.scene1 import OGScene1
+from heca.scenes.ogbench.scene4 import OGScene4
 
-close_drawer = TapasExpert.Config(
-    tag="close_drawer",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 4], [4, 2], [4, 7]],
+peg0_base_base = TapasExpert.Config(
+    tag="peg0_base_base",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
-open_drawer = TapasExpert.Config(
-    tag="open_drawer",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 4], [4, 2], [4, 7]],
+lid0_base_base = TapasExpert.Config(
+    tag="lid0_base_base",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
-close_window = TapasExpert.Config(
-    tag="close_window",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 5], [5, 3], [5, 7]],
+cube0_base_base = TapasExpert.Config(
+    tag="cube0_base_base",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
-open_window = TapasExpert.Config(
-    tag="open_window",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 5], [5, 3], [5, 7]],
+cube0_base_shelf0 = TapasExpert.Config(
+    tag="cube0_base_shelf0",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
-lock_left = TapasExpert.Config(
-    tag="lock_left_button",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 2], [2, 7]],
+cube0_base_box0 = TapasExpert.Config(
+    tag="cube0_base_box0",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
-unlock_left = TapasExpert.Config(
-    tag="unlock_left_button",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 2], [2, 7]],
-)
-
-lock_right = TapasExpert.Config(
-    tag="lock_right_button",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 3], [3, 7]],
-)
-
-unlock_right = TapasExpert.Config(
-    tag="unlock_right_button",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 3], [3, 7]],
-)
-
-
-move_block_drawer = TapasExpert.Config(
-    tag="move_block_drawer",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 1], [4, 1], [4, 7]],
-)
-
-move_block = TapasExpert.Config(
-    tag="move_block",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 1], [1, 6], [6, 7]],
-)
-
-move_ee = TapasExpert.Config(
-    tag="move_ee",
-    scene=OGScene1.Config(),
-    use_gt=True,
-    gt_frames=[[0, 7]],
+lid0_base_box0 = TapasExpert.Config(
+    tag="lid0_base_box0",
+    scene=OGScene4.Config(),
+    gt_frames=[[]],
 )
 
 
 agents = [
-    close_drawer,
-    close_window,
-    open_drawer,
-    open_window,
-    lock_left,
-    lock_right,
-    unlock_left,
-    unlock_right,
-    move_block,
-    move_block_drawer,
+    peg0_base_base,
+    lid0_base_base,
+    cube0_base_base,
+    cube0_base_shelf0,
+    cube0_base_box0,
+    lid0_base_box0,
 ]
