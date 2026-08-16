@@ -309,8 +309,17 @@ class OGScene(Scene):
                     print(f"  {agent_key}: kept=0, discarded={count}")
 
     def entity_eval(self, x: DCScene, y: DCScene, label: str) -> bool:
-        if any(part in label for part in ("box", "cube")):
-            return bool(np.linalg.norm(x.get(label).pos - y.get(label).pos) <= 0.04)
+        vx = x.get(label)
+        vy = y.get(label)
+        if any(part in label for part in ("cube", "lid", "peg")):
+            return bool(np.linalg.norm(vx.pos - vy.pos) <= 0.04)  # pos tol
+        if any(part in label for part in ("button", "box")):
+            return bool(vx.ste == vy.ste)  # state eq
+        if any(part in label for part in ("faucet")):
+            return bool(np.abs(vx.ang == vy.ang) <= 0.15)  # angle tol
+        if any(part in label for part in ("drawer", "window", "slider")):
+            return bool(np.abs(vx.ext == vy.ext) <= 0.05)  # percent
+
         return True
 
     def virtual_evaluation(self, x: DCScene, y: DCScene) -> SceneFeedback:

@@ -41,6 +41,10 @@ class DCEntity:
         return Quaternion.exp(aa)
 
     @property
+    def ang(self) -> np.ndarray:
+        return np.arctan2(self.ext[0], self.ext[1])
+
+    @property
     def ext(self) -> np.ndarray:
         return self.value[6:-1]
 
