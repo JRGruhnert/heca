@@ -22,7 +22,7 @@ class ExpertModel(Persistable, abc.ABC):
         kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
         state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
         score_threshold: float = 0.5
-        use_gt: bool = False
+        use_gt: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)

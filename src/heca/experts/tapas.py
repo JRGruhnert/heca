@@ -89,7 +89,7 @@ class TapasExpert(ExpertModel):
             ),
         )
         repeat_actions: int = 0
-        gt_frames: list[list[int | str]] | None = None
+        gt_frames: list[list[str]] | None = None
         demo_selections: list[int] | None = None
 
         def __post_init__(self):
@@ -109,10 +109,10 @@ class TapasExpert(ExpertModel):
                         + ["ee_target"]
                     )
                     name_to_idx = {name: i for i, name in enumerate(frame_names)}
-                    self.gt_frames = [
+                    gt_frames = [
                         [name_to_idx[n] for n in seg] for seg in self.gt_frames
                     ]
-            self.policy.model.frame_selection.gt_frames = self.gt_frames
+                    self.policy.model.frame_selection.gt_frames = gt_frames
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
