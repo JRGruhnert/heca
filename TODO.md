@@ -2,19 +2,17 @@
 
 ## Short Horizon:
 
-- finalize federated scenes
-- fix oracles
-- fix entities in ogbench
-- fix entities in heca
-- update network (entity types)
-- update graph (entity types)
+- fix goa-con bug
+- fix segmentation bug
+- record tapas models
+- copy paste virtual goal-check
 
 ## Long Horizon:
 
-- record tapas models
 - update image encoder (uncertainty)
 - record image samples
 - record image encoder tapas model
+- add mise
 
 ## Testing:
 
