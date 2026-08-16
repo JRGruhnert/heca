@@ -45,8 +45,8 @@ class TapasExpert(ExpertModel):
                         add_action_component=False,
                         position_only=False,
                         add_gripper_action=True,
-                        reg_shrink=1e-2,
-                        reg_diag=2e-4,
+                        reg_shrink=1e-3,#1e-2
+                        reg_diag=1e-3,#2e-4
                         reg_diag_gripper=2e-2,
                         reg_em_finish_shrink=1e-2,
                         reg_em_finish_diag=2e-4,
