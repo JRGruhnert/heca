@@ -91,6 +91,7 @@ class TapasExpert(ExpertModel):
         repeat_actions: int = 0
         gt_frames: list[list[str]] | None = None
         demo_selections: list[int] | None = None
+        segment_ids: list[int] | None = None
 
         def __post_init__(self):
             # Convert entity-name-based gt_frames to the frame indices the
@@ -312,7 +313,9 @@ class TapasExpert(ExpertModel):
             time_based=True,
         )
 
-    def load_demos(self, selections: list[int]) -> Demos:
+    def load_demos(self, selections: list[int] | None = None) -> Demos:
+        if selections is None:
+            selections = self.cfg.segment_ids or []
         path = self.load_dir(self.cfg) / "demos"
         demos_file = h5py.File(path / f"{self.cfg.tag}.h5", "r")
 

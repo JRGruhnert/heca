@@ -9,6 +9,7 @@ peg0_base_base = TapasExpert.Config(
         ["peg0", "peg0_target"],
         ["peg0_target", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 lid0_base_base = TapasExpert.Config(
@@ -19,6 +20,7 @@ lid0_base_base = TapasExpert.Config(
         ["lid0", "lid0_target"],
         ["lid0_target", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 cube0_base_base = TapasExpert.Config(
@@ -29,6 +31,7 @@ cube0_base_base = TapasExpert.Config(
         ["cube0", "cube0_target"],
         ["cube0_target", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 cube0_base_shelf0 = TapasExpert.Config(
@@ -39,6 +42,7 @@ cube0_base_shelf0 = TapasExpert.Config(
         ["cube0", "shelf0"],
         ["shelf0", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 cube0_base_box0 = TapasExpert.Config(
@@ -49,6 +53,7 @@ cube0_base_box0 = TapasExpert.Config(
         ["cube0", "box0"],
         ["box0", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 lid0_base_box0 = TapasExpert.Config(
@@ -59,6 +64,7 @@ lid0_base_box0 = TapasExpert.Config(
         ["lid0", "box0"],
         ["box0", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 

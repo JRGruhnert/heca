@@ -10,6 +10,7 @@ close_drawer = TapasExpert.Config(
         ["drawer_handle", "button_0"],
         ["drawer_handle", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 open_drawer = TapasExpert.Config(
@@ -21,6 +22,7 @@ open_drawer = TapasExpert.Config(
         ["drawer_handle", "button_0"],
         ["drawer_handle", "ee_target"],
     ],
+    segment_ids=[0, 1, 4, 6, 7],
 )
 
 close_window = TapasExpert.Config(
@@ -32,6 +34,7 @@ close_window = TapasExpert.Config(
         ["window_handle", "button_1"],
         ["window_handle", "ee_target"],
     ],
+    segment_ids=[0, 4, 5, 6, 7],
 )
 
 open_window = TapasExpert.Config(
@@ -43,6 +46,7 @@ open_window = TapasExpert.Config(
         ["window_handle", "button_1"],
         ["window_handle", "ee_target"],
     ],
+    segment_ids=[3, 4, 5, 10, 13],
 )
 
 lock_left = TapasExpert.Config(
@@ -50,6 +54,7 @@ lock_left = TapasExpert.Config(
     scene=OGSceneOG.Config(),
     use_gt=True,
     gt_frames=[["ee_init", "button_0"], ["button_0", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 unlock_left = TapasExpert.Config(
@@ -57,6 +62,7 @@ unlock_left = TapasExpert.Config(
     scene=OGSceneOG.Config(),
     use_gt=True,
     gt_frames=[["ee_init", "button_0"], ["button_0", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 lock_right = TapasExpert.Config(
@@ -64,6 +70,7 @@ lock_right = TapasExpert.Config(
     scene=OGSceneOG.Config(),
     use_gt=True,
     gt_frames=[["ee_init", "button_1"], ["button_1", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 unlock_right = TapasExpert.Config(
@@ -71,6 +78,7 @@ unlock_right = TapasExpert.Config(
     scene=OGSceneOG.Config(),
     use_gt=True,
     gt_frames=[["ee_init", "button_1"], ["button_1", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 
@@ -83,6 +91,7 @@ move_block_drawer = TapasExpert.Config(
         ["drawer_handle", "block_0"],
         ["drawer_handle", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 move_block = TapasExpert.Config(
@@ -94,6 +103,7 @@ move_block = TapasExpert.Config(
         ["block_0", "block_0_target"],
         ["block_0_target", "ee_target"],
     ],
+    segment_ids=[0, 1, 3, 4, 5],
 )
 
 
