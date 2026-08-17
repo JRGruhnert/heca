@@ -1,10 +1,16 @@
 from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene3 import OGScene3
 
-button2_s1_s0 = TapasExpert.Config(
-    tag="button2_s1_s0",
+button0_s1_s0 = TapasExpert.Config(
+    tag="button0_s1_s0",
     scene=OGScene3.Config(),
-    gt_frames=[["ee_init", "button2", "button0"], ["button2", "button0", "ee_target"]],
+    gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
+)
+button0_s0_s1 = TapasExpert.Config(
+    tag="button0_s0_s1",
+    scene=OGScene3.Config(),
+    gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
     segment_ids=[0, 1, 3, 4, 5],
 )
 
@@ -12,6 +18,21 @@ button1_s0_s1 = TapasExpert.Config(
     tag="button1_s0_s1",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button1"], ["button1", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
+)
+
+button1_s1_s0 = TapasExpert.Config(
+    tag="button1_s1_s0",
+    scene=OGScene3.Config(),
+    gt_frames=[["ee_init", "button1"], ["button1", "ee_target"]],
+    segment_ids=[0, 1, 3, 4, 5],
+)
+
+
+button2_s1_s0 = TapasExpert.Config(
+    tag="button2_s1_s0",
+    scene=OGScene3.Config(),
+    gt_frames=[["ee_init", "button2", "button0"], ["button2", "button0", "ee_target"]],
     segment_ids=[0, 1, 3, 4, 5],
 )
 
@@ -44,13 +65,6 @@ cube0_base_shelf0 = TapasExpert.Config(
     segment_ids=[0, 1, 3, 4, 5],
 )
 
-button1_s1_s0 = TapasExpert.Config(
-    tag="button1_s1_s0",
-    scene=OGScene3.Config(),
-    gt_frames=[["ee_init", "button1"], ["button1", "ee_target"]],
-    segment_ids=[0, 1, 3, 4, 5],
-)
-
 drawer0_b_a = TapasExpert.Config(
     tag="drawer0_b_a",
     scene=OGScene3.Config(),
@@ -59,19 +73,6 @@ drawer0_b_a = TapasExpert.Config(
         ["drawer0", "button0"],
         ["drawer0", "ee_target"],
     ],
-    segment_ids=[0, 1, 3, 4, 5],
-)
-
-button0_s1_s0 = TapasExpert.Config(
-    tag="button0_s1_s0",
-    scene=OGScene3.Config(),
-    gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
-    segment_ids=[0, 1, 3, 4, 5],
-)
-button0_s0_s1 = TapasExpert.Config(
-    tag="button0_s0_s1",
-    scene=OGScene3.Config(),
-    gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
     segment_ids=[0, 1, 3, 4, 5],
 )
 
