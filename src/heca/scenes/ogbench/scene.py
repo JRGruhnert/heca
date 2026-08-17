@@ -76,6 +76,7 @@ class OGScene(Scene):
             "action": action,
             "reward": reward,
             "ee_pose": ee_pose,
+            "gripper_state": np.atleast_1d(obs["proprio_gripper_state"]),
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
         }
@@ -157,12 +158,15 @@ class OGScene(Scene):
         file: h5py.File,
         selections: list[int] | None = None,
         only_conditions: bool = False,
+        with_images: bool = True,
     ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         demo_indices: np.ndarray = file["demo"][:]  # type: ignore
 
         change_points = np.where(np.diff(demo_indices) != 0)[0] + 1
         starts = np.concatenate([[0], change_points])
         ends = np.concatenate([change_points, [len(demo_indices)]])
+
+        image_keys = {"rgb", "depth", "mask", "extrinsics", "intrinsics"}
 
         segments_scene: list[list[DCScene]] = []
         segments_image: list[list[TDImage]] = []
@@ -180,32 +184,26 @@ class OGScene(Scene):
             else:
                 indices = range(start, end)
             for i in indices:
-                image = dict(
-                    rgb=file["rgb"][i],  # type: ignore
-                    depth=file["depth"][i],  # type: ignore
-                    mask=file["mask"][i],  # type: ignore
-                    extrinsics=file["extrinsics"][i],  # type: ignore
-                    intrinsics=file["intrinsics"][i],  # type: ignore
-                )
-
                 ob = {
                     key: file[key][i]  # type: ignore
                     for key in file.keys()
-                    if key
-                    not in {
-                        "rgb",
-                        "depth",
-                        "mask",
-                        "extrinsics",
-                        "intrinsics",
-                        "demo",
-                    }
+                    if key not in image_keys | {"demo"}
                 }
 
-                obs, _ = self.to_internal(image, ob)
-                dc_scene, td_image, _ = self.from_internal(obs)
+                if with_images:
+                    image = dict(
+                        rgb=file["rgb"][i],  # type: ignore
+                        depth=file["depth"][i],  # type: ignore
+                        mask=file["mask"][i],  # type: ignore
+                        extrinsics=file["extrinsics"][i],  # type: ignore
+                        intrinsics=file["intrinsics"][i],  # type: ignore
+                    )
+                    obs, _ = self.to_internal(image, ob)
+                    dc_scene, td_image, _ = self.from_internal(obs)
+                    segment_image.append(td_image)
+                else:
+                    dc_scene = self.to_dc_scene(ob)
                 segment_scene.append(dc_scene)
-                segment_image.append(td_image)
             segments_scene.append(segment_scene)
             segments_image.append(segment_image)
 
@@ -219,7 +217,7 @@ class OGScene(Scene):
         return DCScene(dc_entities, extras=extras)
 
     def demo_auto_extract(self):
-        scene_path = Scene.load_dir(self.cfg) / "demos"
+        scene_path = Scene.load_dir(self.cfg)
         with h5py.File(scene_path / f"{self.env_id}.h5", "r") as f:
             done_ds = f["oracle_done"]
             assert isinstance(done_ds, h5py.Dataset)
@@ -259,7 +257,7 @@ class OGScene(Scene):
 
             all_keys = list(f.keys())
             for agent_key, segments in agent_data.items():
-                out_path = scene_path / f"{agent_key}.h5"
+                out_path = scene_path / agent_key / f"demos.h5"
                 with h5py.File(out_path, "w") as out:
                     demo_id = 0
                     for s, e in segments:

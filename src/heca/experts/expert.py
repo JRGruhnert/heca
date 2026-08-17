@@ -127,7 +127,7 @@ class ExpertModel(Persistable, abc.ABC):
         """
         scene = cfg.scene
         tag = scene.load_tag or scene.tag
-        path = cls.instance_dir(scene, scene.folder) / tag
+        path = cls.instance_dir(scene, scene.folder) / tag / cfg.tag
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -138,6 +138,6 @@ class ExpertModel(Persistable, abc.ABC):
         """
 
         scene = cfg.scene
-        path = cls.instance_dir(scene, scene.folder) / scene.tag
+        path = cls.instance_dir(scene, scene.folder) / scene.tag / cfg.tag
         path.mkdir(parents=True, exist_ok=True)
         return path

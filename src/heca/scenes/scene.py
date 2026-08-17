@@ -87,6 +87,7 @@ class Scene(Persistable):
         file: h5py.File,
         selections: list[int] | None = None,
         only_conditions: bool = False,
+        with_images: bool = True,
     ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 

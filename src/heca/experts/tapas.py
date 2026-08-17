@@ -45,8 +45,8 @@ class TapasExpert(ExpertModel):
                         add_action_component=False,
                         position_only=False,
                         add_gripper_action=True,
-                        reg_shrink=1e-3,#1e-2
-                        reg_diag=1e-3,#2e-4
+                        reg_shrink=1e-3,  # 1e-2
+                        reg_diag=1e-3,  # 2e-4
                         reg_diag_gripper=2e-2,
                         reg_em_finish_shrink=1e-2,
                         reg_em_finish_diag=2e-4,
@@ -71,7 +71,7 @@ class TapasExpert(ExpertModel):
                         velocity_based=True,
                         repeat_final_step=0,  # 1
                         components_prop_to_len=True,
-                        velocity_threshold=0.05,
+                        velocity_threshold=0.1,
                     ),
                     cascade=CascadeConfig(),
                 ),
@@ -179,12 +179,7 @@ class TapasExpert(ExpertModel):
             return None, True
 
     def _load(self, path: Path):
-        # logger.info()
-        if self.cfg.use_gt:
-            file_name = "policy_gt.pt"
-        else:
-            file_name = "policy_img.pt"
-        filepath = path / "experts" / self.cfg.tag / file_name
+        filepath = self.policy_path(path)
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         if filepath.exists():
@@ -197,12 +192,15 @@ class TapasExpert(ExpertModel):
     def eval(self):
         self.policy.eval()
 
-    def _save(self, path: Path):
+    def policy_path(self, path: Path) -> Path:
         if self.cfg.use_gt:
             file_name = "policy_gt.pt"
         else:
             file_name = "policy_img.pt"
-        filepath = path / "experts" / self.cfg.tag / file_name
+        return path / file_name
+
+    def _save(self, path: Path):
+        filepath = self.policy_path(path)
         logger.info(f"Saving tapas policy to: {filepath}")
         self.model.to_disk(str(filepath))
 
@@ -226,20 +224,28 @@ class TapasExpert(ExpertModel):
         poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)
 
+        states = {l: dc_obs[l].tste for l in self.scene.entities}
+
+        for l in self.scene.entities:
+            states[f"{l}_target"] = dc_goal[l].tste
+        states["ee_target"] = torch.tensor(dc_goal.extras["gripper_state"])
+        object_states = dict_to_tensordict(states)
+
         action = torch.Tensor(dc_obs.extras["action"])
         reward = torch.Tensor(dc_obs.extras["reward"])
         joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
         joint_vel = torch.Tensor(dc_obs.extras["joint_vel"])
         ee_pose = torch.tensor(dc_obs.extras["ee_pose"])
+        gripper_state = torch.Tensor(dc_obs.extras["gripper_state"])
 
         return SceneObservation(
             feedback=reward,
             action=action,
             cameras=None,  # multicam_obs,
             ee_pose=ee_pose,
-            # gripper_state=dc_obs.ee.tste,
+            gripper_state=gripper_state,
             object_poses=object_poses,
-            # object_states=object_states,
+            object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
             batch_size=torch.Size([]),
@@ -256,12 +262,13 @@ class TapasExpert(ExpertModel):
 
     @cached_property
     def conditions(self) -> ConPair:
-        path = self.load_dir(self.cfg) / "demos"
-        demos_file = h5py.File(path / f"{self.cfg.tag}.h5", "r")
+        path = self.load_dir(self.cfg)
+        demos_file = h5py.File(path / f"demos.h5", "r")
         demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
             self.cfg.demo_selections,
             only_conditions=True,
+            with_images=not self.cfg.use_gt,
         )
 
         pre_data: dict[str, np.ndarray] = {}
@@ -316,20 +323,20 @@ class TapasExpert(ExpertModel):
     def load_demos(self, selections: list[int] | None = None) -> Demos:
         if selections is None:
             selections = self.cfg.segment_ids or []
-        path = self.load_dir(self.cfg) / "demos"
-        demos_file = h5py.File(path / f"{self.cfg.tag}.h5", "r")
+        path = self.load_dir(self.cfg)
+        demos_file = h5py.File(path / f"demos.h5", "r")
 
         observations: list[SceneObservation] = []  # type: ignore
 
         demos_scenes, demos_images = self.scene.load_dataset(
-            demos_file, selections=selections
+            demos_file, selections=selections, with_images=not self.cfg.use_gt
         )
-        for i, (demo_scenes, demo_images) in enumerate(zip(demos_scenes, demos_images)):
+        for i, demo_scenes in enumerate(demos_scenes):
             if self.cfg.use_gt:
                 stacked = self.dcscenes_to_tdtapas(demo_scenes)
             else:
                 demo_extracted: list[DCScene] = []
-                for idx, td_img in enumerate(demo_images):
+                for idx, td_img in enumerate(demos_images[i]):
                     extracted = self.from_image(td_img)
                     extr_scene = DCScene(extracted, demo_scenes[idx].extras)
                     demo_extracted.append(extr_scene)
@@ -346,8 +353,6 @@ class TapasExpert(ExpertModel):
             modulo_object_z_rotation=False,
             make_quats_continuous=True,
         )  # type: ignore
-        print("n_trajs", demos.n_trajs)
-        print("n_frames", demos.n_frames)
         demos.frame_names
         return demos
 

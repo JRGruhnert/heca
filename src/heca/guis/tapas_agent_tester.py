@@ -10,7 +10,7 @@ from heca.scenes.scene import Scene
 from heca.misc.base import Configurable
 
 
-class AgentTester(Configurable):
+class TapasManualExecuter(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         agents: list[ExpertModel.Config]
