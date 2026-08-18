@@ -80,6 +80,7 @@ class Graph:
         if isinstance(value, torch.Tensor):
             value = value.detach().cpu().numpy()
         value = value.squeeze()
+        value = self.entities[node.entity].model_to_value(value)
         feat = self.entities[node.entity].gnn_format(value)
         return DCEntity(value=value, feature=feat)
 

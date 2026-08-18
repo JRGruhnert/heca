@@ -18,7 +18,7 @@ class RevoluteEntity(Entity):
         return {
             "pose": {
                 "model": "gaussian_diag",
-                "n_columns": 8,
+                "n_columns": 3 + self.rot_dim + 2,
             },
             "state": {
                 "model": "categorical",

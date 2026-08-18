@@ -24,7 +24,7 @@ class FreeEntity(Entity):
         return {
             "pose": {
                 "model": "gaussian_diag",
-                "n_columns": 6,
+                "n_columns": 3 + self.rot_dim,
             },
             "state": {
                 "model": "categorical",

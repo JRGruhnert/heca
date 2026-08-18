@@ -96,12 +96,12 @@ async def train(clients: list[Heca.Config], n_batch: int = 1000):
     async def run(agent: Heca, n_batch: int):
         n = 0
         while n < n_batch:
-            if agent.tick():
+            # ``tick`` is CPU-bound (inference + env step + PPO update), so run
+            # it in a worker thread to avoid blocking the event loop. The async
+            # ``sync`` stays on the loop (FPPO's server uses asyncio primitives).
+            if await asyncio.to_thread(agent.tick):
                 n += 1
                 await agent.learner.sync()
-            # Yield to the event loop so the clients interleave step-by-step
-            # instead of one client hogging the CPU for a whole batch.
-            await asyncio.sleep(0)
 
     await asyncio.gather(*[run(a, n_batch) for a in agents])
 

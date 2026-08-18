@@ -13,17 +13,54 @@ class Entity(Configurable):
     MAX_STATE_DIM: int = 16
     BASE_LOGSTD = -10.0
     LOGIT_CONFIDENCE = 10.0
+    POS_DIM: int = 3
+    ROT_DIM: int = 3
     TYPE_ID: int = -1  # overridden by subclasses
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         threshold: float
+        fit_rotation: bool = True
+        directional_containment: bool = False
         n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+
+    @property
+    def rot_dim(self) -> int:
+        return Entity.ROT_DIM if self.cfg.fit_rotation else 0
+
+    def model_value(self, value: np.ndarray) -> np.ndarray:
+        """Map a full value [pos | aa | extra | ste] to the model input.
+
+        When ``fit_rotation`` is False the axis-angle columns are dropped, so
+        the StepMix model only ever sees [pos | extra | ste].
+        """
+        value = np.asarray(value)
+        if self.cfg.fit_rotation:
+            return value
+        return np.concatenate(
+            [value[..., : self.POS_DIM], value[..., self.POS_DIM + self.ROT_DIM :]],
+            axis=-1,
+        )
+
+    def model_to_value(self, value: np.ndarray) -> np.ndarray:
+        """Map model output [pos | extra | ste] back to a full value.
+
+        Reinserts a zero (identity) axis-angle rotation so the result always has
+        the canonical [pos | aa | extra | ste] layout expected downstream.
+        """
+        value = np.asarray(value)
+        if self.cfg.fit_rotation:
+            return value
+        zeros = np.zeros(value.shape[:-1] + (self.ROT_DIM,), dtype=value.dtype)
+        return np.concatenate(
+            [value[..., : self.POS_DIM], zeros, value[..., self.POS_DIM :]],
+            axis=-1,
+        )
 
     @property
     def measurement(self) -> dict:
@@ -105,6 +142,7 @@ class Entity(Configurable):
         self, sample: np.ndarray, up: dict, eps: float = 1e-15
     ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
+        sample = self.model_value(sample)
         p = self.secure_mix_parameters(up)
         # The value layout is [pose | extra | state]; the StepMix pose
         # measurement covers everything except the final state column, so use
@@ -133,6 +171,29 @@ class Entity(Configurable):
         valid = score >= self.cfg.threshold
         return score, valid
 
+    @staticmethod
+    def _gaussian_overlap(
+        mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray,
+        directional: bool = False, eps: float = 1e-15,
+    ) -> np.ndarray:
+        """Per-dim Gaussian overlap in (0, 1].
+
+        Symmetric (Bhattacharyya coefficient) by default; when ``directional`` is
+        set the width term instead penalizes a source (``2``) that is wider than
+        the target (``1``), i.e. "does the source fit inside the target". The
+        distance term always uses ``var1 + var2``.
+        """
+        v1 = np.maximum(var1, eps)
+        v2 = np.maximum(var2, eps)
+        var_sum = v1 + v2
+        if directional:
+            # source (2) must fit inside target (1); ==1 when v1 >= v2
+            width = np.minimum(1.0, np.sqrt(2.0 * v1 / var_sum))
+        else:
+            width = np.sqrt(2.0 * np.sqrt(v1 * v2) / var_sum)  # =1 when v1 == v2
+        distance = np.exp(-0.25 * (mu1 - mu2) ** 2 / var_sum)  # =1 when means equal
+        return width * distance
+
     def containment_score(self, up1: dict, up2: dict):
         """How much of others mass falls inside selfs distribution."""
         p1 = self.secure_mix_parameters(up1)
@@ -149,13 +210,12 @@ class Entity(Configurable):
                 var2 = p2["measurement"]["pose"]["covariances"][j]
                 cat1 = p1["measurement"]["state"]["pis"][i]
                 cat2 = p2["measurement"]["state"]["pis"][j]
-                diff = mu1 - mu2
-                pos_score = np.exp(-0.5 * np.sum(diff**2 / var1))
-                sigma_target = np.sqrt(var1)
-                sigma_source = np.sqrt(var2)
-                per_dim_penalty = np.minimum(1.0, sigma_target / sigma_source)
-                width_penalty = np.prod(per_dim_penalty)
-                gauss_rel = width_penalty * pos_score
+                gauss_rel = np.prod(
+                    self._gaussian_overlap(
+                        mu1, var1, mu2, var2,
+                        directional=self.cfg.directional_containment,
+                    )
+                )
                 overlap_cat = np.sum(cat1 * cat2)
                 peak_target = np.max(cat1)
                 cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
@@ -200,7 +260,7 @@ class Entity(Configurable):
         pose = results[0]["pose"]
         state = results[0]["state"]
         assert isinstance(pose, np.ndarray)
-        return np.concatenate([pose, [state]])
+        return self.model_to_value(np.concatenate([pose, [state]]))
 
     def comp_feature(self, up: dict, eps: float = 1e-8) -> np.ndarray:
         """
@@ -223,7 +283,8 @@ class Entity(Configurable):
         pis = p["measurement"]["state"]["pis"]  # (N, K)
         N = len(p["weights"])
         M = Entity.MAX_STATE_DIM
-        D = means.shape[1] - 6  # extra continuous dims beyond base 6 pose (pos+aa)
+        base = Entity.POS_DIM + (Entity.ROT_DIM if self.cfg.fit_rotation else 0)
+        D = means.shape[1] - base  # extra continuous dims beyond pos (+rot)
 
         feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
 
@@ -235,15 +296,19 @@ class Entity(Configurable):
         feat[:, M + 3 : M + 6] = 0.5 * np.log(covariances[:, 0:3] + eps)
 
         # Pose: axis-angle -> quaternion + rotation logstd (3 dof in tangent space)
-        quat = Quaternion.exp(means[:, 3:6])
-        feat[:, M + 6 : M + 10] = Quaternion.normalize(quat)
-        feat[:, M + 10 : M + 13] = 0.5 * np.log(covariances[:, 3:6] + eps)
+        if self.cfg.fit_rotation:
+            quat = Quaternion.exp(means[:, 3:6])
+            feat[:, M + 6 : M + 10] = Quaternion.normalize(quat)
+            feat[:, M + 10 : M + 13] = 0.5 * np.log(covariances[:, 3:6] + eps)
+        else:
+            feat[:, M + 6 : M + 10] = Quaternion.identity()
+            feat[:, M + 10 : M + 13] = self.BASE_LOGSTD
 
         # Extra continuous dims: mean + logstd
         if D > 0:
-            feat[:, M + 13 : M + 13 + D] = means[:, 6:]
+            feat[:, M + 13 : M + 13 + D] = means[:, base:]
             feat[:, M + 13 + D : M + 13 + 2 * D] = 0.5 * np.log(
-                covariances[:, 6:] + eps
+                covariances[:, base:] + eps
             )
 
         return feat

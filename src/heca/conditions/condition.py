@@ -44,7 +44,10 @@ class Condition:
 
     @property
     def raw_self_scores(self) -> dict[str, float]:
-        return {k: float(self.models[k].score(v)) for k, v in self.data_raw.items()}
+        return {
+            k: float(self.models[k].score(self.entities[k].model_value(v)))
+            for k, v in self.data_raw.items()
+        }
 
     @property
     def models(self) -> dict[str, StepMix]:
@@ -75,7 +78,7 @@ class Condition:
                     measurement=self.entities[key].measurement,
                 )
 
-                model.fit(values)
+                model.fit(self.entities[key].model_value(values))
                 bic = model.bic(values)
                 bic_values.append(bic)
 
