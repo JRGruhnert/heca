@@ -29,6 +29,7 @@ class ExpertModel(Persistable, abc.ABC):
         self.cfg = cfg
         self.scene = Scene.get(self.cfg.scene, auto_load=not cfg.use_gt)
         self.act_virtual = False
+        self._force_recompute = False
         if not self.cfg.use_gt:
             self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
             self.ste_extractor = ImageEncoder.get(self.cfg.state_extraction)
@@ -45,6 +46,10 @@ class ExpertModel(Persistable, abc.ABC):
 
     def virtual(self) -> "ExpertModel":
         self.act_virtual = True
+        return self
+
+    def force_recompute(self) -> "ExpertModel":
+        self._force_recompute = True
         return self
 
     def tps(self) -> set[str]:

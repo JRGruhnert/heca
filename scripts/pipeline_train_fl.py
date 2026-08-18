@@ -51,6 +51,7 @@ def generate_clients(
     learner: str,
     virtual: bool = False,
     wandb_enabled: bool = False,
+    force_recompute: bool = False,
 ):
     """Create one Heca client per agent list."""
     wandb = WandBConfig(enabled=wandb_enabled)
@@ -66,6 +67,7 @@ def generate_clients(
                     server=server,
                     virtual=virtual,
                     wandb=wandb,
+                    force_recompute=force_recompute,
                 ),
             )
             hecas.append(heca)
@@ -81,6 +83,7 @@ def generate_clients(
                 network=network,
                 virtual=virtual,
                 wandb=wandb,
+                force_recompute=force_recompute,
             ),
         )
         hecas.append(heca)
@@ -137,6 +140,11 @@ def main():
         help="Initialize agents in virtual mode.",
     )
     parser.add_argument(
+        "--force-recompute",
+        action="store_true",
+        help="Recompute expert conditions instead of loading conditions.joblib.",
+    )
+    parser.add_argument(
         "--wandb",
         action="store_true",
         help="Enable wandb logging. Disabled by default for multi-client runs.",
@@ -156,7 +164,13 @@ def main():
         clients.append(agents)
 
     exp = generate_clients(
-        args.tag, network, clients, args.learner, args.virtual, args.wandb
+        args.tag,
+        network,
+        clients,
+        args.learner,
+        virtual=args.virtual,
+        wandb_enabled=args.wandb,
+        force_recompute=args.force_recompute,
     )
     asyncio.run(train(exp, args.batch))
 

@@ -88,6 +88,7 @@ class Learner(Persistable):
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
         virtual: bool = False
+        force_recompute: bool = False
         step_multiplier: int = 2
         success_reward: float = 1.0
         step_reward: float = -0.01

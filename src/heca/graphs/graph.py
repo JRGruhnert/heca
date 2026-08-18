@@ -22,24 +22,34 @@ from heca.conditions.condition import Condition
 @dataclass
 class Graph:
     entities: dict[str, Entity]
-    ns_entity: NodeSet[EntityNode] = NodeSet[EntityNode]("entity")
-    ns_option: NodeSet[OptionNode] = NodeSet[OptionNode]("option")
-    es_summary: EdgeSet[EntityNode, OptionNode] = EdgeSet[EntityNode, OptionNode](
-        ("entity", "summary", "option")
+    ns_entity: NodeSet[EntityNode] = field(
+        default_factory=lambda: NodeSet[EntityNode]("entity")
     )
-    es_stepmix: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
-        ("entity", "stepmix", "entity")
+    ns_option: NodeSet[OptionNode] = field(
+        default_factory=lambda: NodeSet[OptionNode]("option")
     )
-    es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[EntityNode, EntityNode](
-        ("entity", "tapas", "entity")
+    es_summary: EdgeSet[EntityNode, OptionNode] = field(
+        default_factory=lambda: EdgeSet[EntityNode, OptionNode](
+            ("entity", "summary", "option")
+        )
+    )
+    es_stepmix: EdgeSet[EntityNode, EntityNode] = field(
+        default_factory=lambda: EdgeSet[EntityNode, EntityNode](
+            ("entity", "stepmix", "entity")
+        )
+    )
+    es_tapas: EdgeSet[EntityNode, EntityNode] = field(
+        default_factory=lambda: EdgeSet[EntityNode, EntityNode](
+            ("entity", "tapas", "entity")
+        )
     )
     packages: dict[str, tuple[ExpertModel.Config, DCScene, DCScene]] = field(
         default_factory=dict
     )
     start_keys: set[str] = field(default_factory=set)
     goal_keys: set[str] = field(default_factory=set)
-    start: DCScene = DCScene.empty()
-    goal: DCScene = DCScene.empty()
+    start: DCScene = field(default_factory=DCScene.empty)
+    goal: DCScene = field(default_factory=DCScene.empty)
 
     def export(self) -> HeteroData:
         data = HeteroData()
@@ -235,11 +245,8 @@ class Graph:
         graph = cls(entities=entities)
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
         # Track expert-condition connections for visualization.
-        graph._agent_tags = [a.cfg.tag for a in agents]
-        graph._connections: dict[tuple[str, str], dict[str, float]] = {}
-        graph._pair_scores: dict[
-            tuple[str, str], dict[str, tuple[float, float]]
-        ] = {}
+        _connections: dict[tuple[str, str], dict[str, float]] = {}
+        _pair_scores: dict[tuple[str, str], dict[str, tuple[float, float]]] = {}
         for a in agents:
             ac = a.conditions
             pre_comp_sources = graph.set_comps(ac.label, ac.pre)
@@ -263,12 +270,10 @@ class Graph:
                         ),
                     )
                 else:  # pre != post
-                    graph._pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(
-                        ac.post
-                    )
+                    _pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(ac.post)
                     subgoal = bc.pre.make_subgoal(ac.post)
                     if subgoal is not None:
-                        graph._connections[(a.cfg.tag, b.cfg.tag)] = {
+                        _connections[(a.cfg.tag, b.cfg.tag)] = {
                             key: float(score) for key, (score, _) in subgoal.items()
                         }
                         sources = graph.set_subgoal(
@@ -289,6 +294,11 @@ class Graph:
         graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
         graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)
         graph.es_tapas.edges_from_sets(graph.ns_entity, graph.ns_entity)
+
+        # Persist the connection metadata so plot_connections can render it.
+        graph._agent_tags = [a.cfg.tag for a in agents]
+        graph._connections = _connections
+        graph._pair_scores = _pair_scores
         return graph
 
     def select(self, index: int) -> tuple[ExpertModel.Config, DCScene]:
@@ -306,8 +316,8 @@ class Graph:
         G = nx.MultiDiGraph()  # directed, allows multiple edges
 
         # Build key lookup: index → key (insertion order matches edge indices)
-        entity_keys = list(self.ns_entity.index.keys())
-        option_keys = list(self.ns_option.index.keys())
+        entity_keys = self.ns_entity.keys
+        option_keys = self.ns_option.keys
 
         # Add nodes with their type and a label
         for key in entity_keys:
@@ -457,7 +467,13 @@ class Graph:
             for j in range(n):
                 if i == j:
                     ax.text(
-                        j, i, "self", ha="center", va="center", fontsize=7, color="black"
+                        j,
+                        i,
+                        "self",
+                        ha="center",
+                        va="center",
+                        fontsize=7,
+                        color="black",
                     )
                 elif not np.isnan(mat[i, j]):
                     val = float(mat[i, j])
@@ -495,14 +511,17 @@ class Graph:
             fig, ax = plt.subplots(figsize=(max(4.0, len(labels) * 1.3), 3.2))
             x = np.arange(len(labels))
             colors = [
-                "tab:green" if v >= t else "tab:red"
-                for v, t in zip(values, thresholds)
+                "tab:green" if v >= t else "tab:red" for v, t in zip(values, thresholds)
             ]
             ax.bar(x, values, color=colors, alpha=0.85)
             for i, (v, t) in enumerate(zip(values, thresholds)):
                 ax.hlines(
-                    t, x[i] - 0.4, x[i] + 0.4, color="gray",
-                    linestyle="--", linewidth=1.0,
+                    t,
+                    x[i] - 0.4,
+                    x[i] + 0.4,
+                    color="gray",
+                    linestyle="--",
+                    linewidth=1.0,
                 )
                 ax.text(i, max(v, t) + 0.02, f"{v:.2f}", ha="center", fontsize=8)
             ax.set_xticks(x)

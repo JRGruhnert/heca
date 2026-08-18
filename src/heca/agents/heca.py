@@ -30,6 +30,11 @@ class Heca(Configurable):
         self._x: DCScene | None = None
         self._y: DCScene | None = None
         self.scene = Scene.get(self.cfg.agents[0].scene)
+
+        if self.cfg.learner.force_recompute:  # nees to be before Graph.generate
+            for a in self.cfg.agents:
+                ExpertModel.get(a).force_recompute()
+
         self.graph = Graph.generate(list(self.cfg.agents))
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))

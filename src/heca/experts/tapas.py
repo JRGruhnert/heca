@@ -263,7 +263,7 @@ class TapasExpert(ExpertModel):
     def conditions(self) -> ConPair:
         path = self.load_dir(self.cfg)
         cache_path = path / "conditions.joblib"
-        if cache_path.exists():
+        if cache_path.exists() and not self._force_recompute:
             logger.info(f"Loading cached conditions from {cache_path}")
             return joblib.load(cache_path)
 
