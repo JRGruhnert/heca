@@ -1,9 +1,3 @@
-"""Plot per-demo velocity + segmentation for every configured agent.
-
-For each agent, loads its demos and writes one velocity/segmentation plot per
-demo id into ``<agent>/plots/demo_v/``.
-"""
-
 import argparse
 
 import matplotlib
