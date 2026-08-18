@@ -88,7 +88,7 @@ class Learner(Persistable):
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
         virtual: bool = False
-        force_recompute: bool = False
+        reload: bool = False
         step_multiplier: int = 2
         success_reward: float = 1.0
         step_reward: float = -0.01
@@ -132,7 +132,7 @@ class Learner(Persistable):
         """Push training weights into the shared inference copy."""
         self.inference_net.load_state_dict(self.network.state_dict())
 
-    async def sync(self):
+    def sync(self):
         """Post-update synchronization hook. Overridden by FPPO."""
         self._sync_inference()
         if self.current_update % 50 == 0:

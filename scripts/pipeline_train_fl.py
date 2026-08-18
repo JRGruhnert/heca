@@ -1,16 +1,14 @@
-"""Train Heca clients on the configured Tapas experts.
-
-Each scene module (``conf.experts.sceneX``) becomes one client whose agents are
-the TapasExpert configs defined in that module. Can run federated (FPPO) or
-plain (PPO) training.
-"""
-
 import argparse
-import asyncio
+import signal
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Iterator
 
 import matplotlib
 
-matplotlib.use("Agg")  # headless plotting (graph plot in Heca.__init__)
+from heca.heca_gnn.network import Network
+
+matplotlib.use("Agg")
 
 from heca.agents.heca import Heca
 from heca.experts.expert import ExpertModel
@@ -37,76 +35,86 @@ SCENE_MODULES = (
 NETWORK_NAMES = [name for name in vars(conf.networks) if not name.startswith("_")]
 
 
-def collect_clients():
-    """Yield ``(scene_name, agents)`` pairs, one client per scene module."""
+def collect_clients() -> Iterator[list[ExpertModel.Config]]:
     for mod in SCENE_MODULES:
-        scene_name = mod.__name__.split(".")[-1]
-        yield scene_name, list(mod.agents)
+        yield list(mod.agents)
 
 
 def generate_clients(
     tag: str,
-    network,
+    network: Network.Config,
     clients: list[list[ExpertModel.Config]],
-    learner: str,
     virtual: bool = False,
+    federated: bool = True,
     wandb_enabled: bool = False,
-    force_recompute: bool = False,
+    reload: bool = False,
 ):
-    """Create one Heca client per agent list."""
     wandb = WandBConfig(enabled=wandb_enabled)
-    if learner == "fppo":
-        server = FLServer.Config(tag=tag, network=network)
-        hecas = []
+    hecas = []
+    server = None
+    if federated:
+        server_cfg = FLServer.Config(tag=tag, network=network)
+        server = FLServer.get(server_cfg)
         for idx, agents in enumerate(clients):
             heca = Heca.Config(
                 agents=agents,
                 learner=FPPO.Config(
                     tag=f"{tag}_heca{idx}",
                     network=network,
-                    server=server,
+                    server=server_cfg,
                     virtual=virtual,
                     wandb=wandb,
-                    force_recompute=force_recompute,
+                    reload=reload,
                 ),
             )
             hecas.append(heca)
-        return hecas
-
-    # Plain PPO, no server.
-    hecas = []
-    for idx, agents in enumerate(clients):
-        heca = Heca.Config(
-            agents=agents,
-            learner=PPO.Config(
-                tag=f"{tag}_heca{idx}",
-                network=network,
-                virtual=virtual,
-                wandb=wandb,
-                force_recompute=force_recompute,
-            ),
-        )
-        hecas.append(heca)
-    return hecas
+    else:
+        for idx, agents in enumerate(clients):
+            heca = Heca.Config(
+                agents=agents,
+                learner=PPO.Config(
+                    tag=f"{tag}_heca{idx}",
+                    network=network,
+                    virtual=virtual,
+                    wandb=wandb,
+                    reload=reload,
+                ),
+            )
+            hecas.append(heca)
+    return hecas, server
 
 
-async def train(clients: list[Heca.Config], n_batch: int = 1000):
-    # Instantiate all clients up front so every scene builds its graph and
-    # writes its plots immediately, rather than only when the first client
-    # yields control back to the event loop.
-    agents = [Heca.get(client) for client in clients]
+def train(
+    client_cfgs: list[Heca.Config],
+    server: FLServer | None,
+    n_batch: int = 1000,
+):
+    clients = [Heca.get(client) for client in client_cfgs]
+    stop = threading.Event()
 
-    async def run(agent: Heca, n_batch: int):
+    def run(agent: Heca):
         n = 0
-        while n < n_batch:
-            # ``tick`` is CPU-bound (inference + env step + PPO update), so run
-            # it in a worker thread to avoid blocking the event loop. The async
-            # ``sync`` stays on the loop (FPPO's server uses asyncio primitives).
-            if await asyncio.to_thread(agent.tick):
+        while n < n_batch and not stop.is_set():
+            if agent.tick():
                 n += 1
-                await agent.learner.sync()
+                agent.learner.sync()
 
-    await asyncio.gather(*[run(a, n_batch) for a in agents])
+    def shutdown():
+        stop.set()
+        if server is not None:
+            server.stop()
+
+    try:
+        with ThreadPoolExecutor(max_workers=len(clients)) as pool:
+            futures = [pool.submit(run, a) for a in clients]
+            for future in as_completed(futures):
+                future.result()
+    except KeyboardInterrupt:
+        shutdown()
+        raise
+    except Exception:
+        shutdown()
+        raise
 
 
 def main():
@@ -123,9 +131,8 @@ def main():
         help="Network config name from conf.networks.",
     )
     parser.add_argument(
-        "--learner",
-        choices=["fppo", "ppo"],
-        default="fppo",
+        "--federated",
+        action="store_true",
         help="Federated (FPPO) or plain (PPO) training.",
     )
     parser.add_argument(
@@ -140,9 +147,9 @@ def main():
         help="Initialize agents in virtual mode.",
     )
     parser.add_argument(
-        "--force-recompute",
+        "--reload",
         action="store_true",
-        help="Recompute expert conditions instead of loading conditions.joblib.",
+        help="Reload expert conditions instead of loading conditions.joblib.",
     )
     parser.add_argument(
         "--wandb",
@@ -155,24 +162,29 @@ def main():
     )
     args = parser.parse_args()
 
+    def _handle_stop(signum, frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _handle_stop)
+
     network = getattr(conf.networks, args.network)
 
     clients = []
-    for scene_name, agents in collect_clients():
-        if args.scene and scene_name != args.scene:
+    for models in collect_clients():
+        if args.scene and models[0].scene != args.scene:
             continue
-        clients.append(agents)
+        clients.append(models)
 
-    exp = generate_clients(
+    exp, server = generate_clients(
         args.tag,
         network,
         clients,
-        args.learner,
+        federated=args.federated,
         virtual=args.virtual,
         wandb_enabled=args.wandb,
-        force_recompute=args.force_recompute,
+        reload=args.reload,
     )
-    asyncio.run(train(exp, args.batch))
+    train(exp, server, args.batch)
 
 
 if __name__ == "__main__":

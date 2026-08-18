@@ -1,4 +1,4 @@
-import asyncio
+import threading
 from dataclasses import dataclass
 from collections import OrderedDict
 from pathlib import Path
@@ -31,7 +31,8 @@ class FLServer(Persistable):
         self._version = 0
         self._clients: set[str] = set()
         self._pending: dict[str, dict[str, torch.Tensor]] = {}
-        self._cond = asyncio.Condition()
+        self._cond = threading.Condition()
+        self._stop = threading.Event()
 
     def aggregate(self, state_dicts: list[dict[str, torch.Tensor]]):
         avg = self.fedavg(state_dicts)
@@ -78,8 +79,19 @@ class FLServer(Persistable):
         """Register a client before training starts. Must be called for every
         client before the first ``submit``."""
         self._clients.add(tag)
+        logger.info(f"FLServer: registered client '{tag}' ({len(self._clients)} total)")
 
-    async def submit(
+    @property
+    def stopped(self) -> bool:
+        return self._stop.is_set()
+
+    def stop(self):
+        """Signal a shutdown and release any clients blocked at the barrier."""
+        with self._cond:
+            self._stop.set()
+            self._cond.notify_all()
+
+    def submit(
         self,
         tag: str,
         state_dict: dict[str, torch.Tensor],
@@ -91,7 +103,7 @@ class FLServer(Persistable):
         wakes everyone. Returns the fresh global state_dict.
         """
         assert tag in self._clients, f"Unregistered client {tag}"
-        async with self._cond:
+        with self._cond:
             self._pending[tag] = state_dict
             if len(self._pending) >= len(self._clients):
                 self._aggregate_round()
@@ -99,9 +111,17 @@ class FLServer(Persistable):
                 if self._version % self.cfg.save_interval == 0:
                     self.save()
                 self._cond.notify_all()
+                logger.info(
+                    f"FLServer: round {self._version} aggregated "
+                    f"({len(self._clients)} clients)"
+                )
             else:
-                while self._version <= last_version:
-                    await self._cond.wait()
+                logger.info(
+                    f"FLServer: '{tag}' submitted "
+                    f"({len(self._pending)}/{len(self._clients)})"
+                )
+                while self._version <= last_version and not self._stop.is_set():
+                    self._cond.wait()
             return self.global_network.state_dict()
 
     def _aggregate_round(self):

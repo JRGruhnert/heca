@@ -19,9 +19,10 @@ class FPPO(PPO):
         self._last_version = self.server.version
         self.network.load_state_dict(self.server.global_network.state_dict())
         # Detached snapshot of the global weights used by the fedprox term. It
-        # is only swapped in ``sync`` (on the event loop) and read by
-        # ``_fedprox_term`` (in a worker thread), so it never races with the
-        # server's live ``global_network``.
+        # is swapped only in ``sync`` (this client's own thread) and read by
+        # ``_fedprox_term`` during ``tick``, so it never races with the shared
+        # server's live ``global_network``, which other clients mutate in their
+        # own ``submit`` calls.
         self._global_params = [p.detach().clone() for p in self.network.parameters()]
 
     def _fedprox_term(self) -> torch.Tensor:
@@ -30,8 +31,8 @@ class FPPO(PPO):
             loss += torch.sum((local_p - global_p) ** 2)  # euklidische distanz squared
         return (self.server.cfg.fedprox_mu / 2) * loss  # type: ignore
 
-    async def sync(self):
-        state_dict = await self.server.submit(
+    def sync(self):
+        state_dict = self.server.submit(
             self.cfg.tag,
             cast(dict[str, torch.Tensor], self.network.state_dict()),
             self._last_version,
