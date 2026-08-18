@@ -2,12 +2,14 @@ from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene3 import OGScene3
 
 button0_s1_s0 = TapasExpert.Config(
+    label="scene3",
     tag="button0_s1_s0",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
     segment_ids=[0, 1, 3, 4, 5],
 )
 button0_s0_s1 = TapasExpert.Config(
+    label="scene3",
     tag="button0_s0_s1",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button1", "button0"], ["button1", "button0", "ee_target"]],
@@ -15,6 +17,7 @@ button0_s0_s1 = TapasExpert.Config(
 )
 
 button1_s0_s1 = TapasExpert.Config(
+    label="scene3",
     tag="button1_s0_s1",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button1"], ["button1", "ee_target"]],
@@ -22,6 +25,7 @@ button1_s0_s1 = TapasExpert.Config(
 )
 
 button1_s1_s0 = TapasExpert.Config(
+    label="scene3",
     tag="button1_s1_s0",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button1"], ["button1", "ee_target"]],
@@ -30,6 +34,7 @@ button1_s1_s0 = TapasExpert.Config(
 
 
 button2_s1_s0 = TapasExpert.Config(
+    label="scene3",
     tag="button2_s1_s0",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button2", "button0"], ["button2", "button0", "ee_target"]],
@@ -37,6 +42,7 @@ button2_s1_s0 = TapasExpert.Config(
 )
 
 button2_s0_s1 = TapasExpert.Config(
+    label="scene3",
     tag="button2_s0_s1",
     scene=OGScene3.Config(),
     gt_frames=[["ee_init", "button2", "button0"], ["button2", "button0", "ee_target"]],
@@ -44,6 +50,7 @@ button2_s0_s1 = TapasExpert.Config(
 )
 
 cube0_base_base = TapasExpert.Config(
+    label="scene3",
     tag="cube0_base_base",
     scene=OGScene3.Config(),
     gt_frames=[
@@ -55,6 +62,7 @@ cube0_base_base = TapasExpert.Config(
 )
 
 cube0_base_shelf0 = TapasExpert.Config(
+    label="scene3",
     tag="cube0_base_shelf0",
     scene=OGScene3.Config(),
     gt_frames=[
@@ -66,6 +74,7 @@ cube0_base_shelf0 = TapasExpert.Config(
 )
 
 drawer0_b_a = TapasExpert.Config(
+    label="scene3",
     tag="drawer0_b_a",
     scene=OGScene3.Config(),
     gt_frames=[
@@ -77,6 +86,7 @@ drawer0_b_a = TapasExpert.Config(
 )
 
 drawer0_a_b = TapasExpert.Config(
+    label="scene3",
     tag="drawer0_a_b",
     scene=OGScene3.Config(),
     gt_frames=[
@@ -88,6 +98,7 @@ drawer0_a_b = TapasExpert.Config(
 )
 
 cube0_base_drawer0 = TapasExpert.Config(
+    label="scene3",
     tag="cube0_base_drawer0",
     scene=OGScene3.Config(),
     gt_frames=[

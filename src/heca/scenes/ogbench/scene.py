@@ -23,10 +23,15 @@ class OGScene(Scene):
         super().__init__(cfg)
         self.cfg = cfg
         self.env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
-        self.env = cast(
+        self.env = self._make_env(self.env_id)
+        self._last_ee_pose = None
+        self._last_ee_yaw = None
+
+    def _make_env(self, env_id: str) -> ManipSpaceEnv:
+        return cast(
             ManipSpaceEnv,
             ogbench.make_env_and_datasets(
-                dataset_name=self.env_id,
+                dataset_name=env_id,
                 env_only=True,
                 mode="randomized",
                 dataset_only=False,
@@ -39,6 +44,19 @@ class OGScene(Scene):
 
     def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
+        if not isinstance(image_dict, dict):
+            # Ground-truth scenes use state observations and have no image.
+            # The image is discarded on the training path, so return an empty
+            # placeholder instead of crashing.
+            empty = torch.empty(0)
+            return TDImage(
+                rgb=empty.clone(),
+                d=empty.clone(),
+                mask=torch.empty(0, dtype=torch.uint8),
+                extr=empty.clone(),
+                intr=empty.clone(),
+            )
+
         rgb = image_dict["rgb"].transpose((2, 0, 1)) / 255
         depth = image_dict["depth"]
         mask = image_dict["mask"]
@@ -54,7 +72,10 @@ class OGScene(Scene):
         )
 
     def to_np_image(self, obs: dict) -> np.ndarray:
-        return obs["image"]["rgb"]
+        image_dict = obs["image"]
+        if not isinstance(image_dict, dict):
+            return np.zeros((0,), dtype=np.uint8)
+        return image_dict["rgb"]
 
     def get_extras(self, obs: dict) -> dict[str, Any]:
         pos = obs["proprio_effector_pos"]
@@ -63,10 +84,20 @@ class OGScene(Scene):
         rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
         ee_pose = np.concatenate((pos, rot))
         if "actions" in obs.keys():  # is demo
-            action_raw = obs["actions"]
-            yaw = action_raw[3]
-            axis_angle = np.array([0, 0, yaw])
-            action = np.concatenate([action_raw[:3], axis_angle, ste])
+            # Reconstruct the achieved action from the EE pose delta instead of
+            # using the raw (normalized, possibly saturated) command. The raw
+            # command stays non-zero when the EE is blocked, hiding pauses.
+            yaw = obs["proprio_effector_yaw"].item()
+            if self._last_ee_pose is not None:
+                pos_delta = pos - self._last_ee_pose
+                yaw_delta = self._wrap_angle(yaw - self._last_ee_yaw)
+            else:
+                pos_delta = np.zeros_like(pos)
+                yaw_delta = 0.0
+            self._last_ee_pose = pos
+            self._last_ee_yaw = yaw
+            axis_angle = np.array([0, 0, yaw_delta], dtype=np.float32)
+            action = np.concatenate([pos_delta, axis_angle, ste])
             reward = obs["success"]
         else:
             yaw = obs["proprio_effector_yaw"].item()
@@ -138,6 +169,10 @@ class OGScene(Scene):
         yaw = np.arctan2(siny_cosp, cosy_cosp)
         return yaw
 
+    @staticmethod
+    def _wrap_angle(angle: float) -> float:
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+
     def to_internal_action(self, action: np.ndarray) -> np.ndarray:
         pos = action[:3]
         quat = action[3:7]
@@ -176,6 +211,8 @@ class OGScene(Scene):
         for episode_idx in selections:
             start = starts[episode_idx]
             end = ends[episode_idx]
+            self._last_ee_pose = None
+            self._last_ee_yaw = None
 
             segment_scene: list[DCScene] = []
             segment_image: list[TDImage] = []
@@ -257,7 +294,8 @@ class OGScene(Scene):
 
             all_keys = list(f.keys())
             for agent_key, segments in agent_data.items():
-                out_path = scene_path / agent_key / f"demos.h5"
+                out_path = scene_path / "experts" / agent_key / f"demos.h5"
+                out_path.parent.mkdir(parents=True, exist_ok=True)
                 with h5py.File(out_path, "w") as out:
                     demo_id = 0
                     for s, e in segments:
@@ -267,8 +305,8 @@ class OGScene(Scene):
                             if not isinstance(ds, h5py.Dataset):
                                 continue
                             data = np.asarray(ds[s : e + 1])
-                            if "demo" not in out and key == "demo":
-                                continue  # skip if demo dataset doesn't exist yet
+                            if key == "demo":
+                                continue  # demo ids are written below
                             if key not in out:
                                 maxshape = (None,) + data.shape[1:]
                                 out.create_dataset(
@@ -286,7 +324,7 @@ class OGScene(Scene):
                         # Add demo_id dataset
                         if "demo" not in out:
                             out.create_dataset(
-                                "demo", data=demo_ids[:1], maxshape=(None,), chunks=(1,)
+                                "demo", data=demo_ids, maxshape=(None,), chunks=(1,)
                             )
                         else:
                             ds = out["demo"]
@@ -313,7 +351,7 @@ class OGScene(Scene):
             return bool(np.linalg.norm(vx.pos - vy.pos) <= 0.04)  # pos tol
         if any(part in label for part in ("button", "box")):
             return bool(vx.ste == vy.ste)  # state eq
-        if any(part in label for part in ("faucet")):
+        if any(part in label for part in ("faucet",)):
             return bool(np.abs(vx.ang == vy.ang) <= 0.15)  # angle tol
         if any(part in label for part in ("drawer", "window", "slider")):
             return bool(np.abs(vx.ext == vy.ext) <= 0.05)  # percent

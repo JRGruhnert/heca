@@ -2,6 +2,7 @@ from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene1 import OGScene1
 
 button0_s2_s0 = TapasExpert.Config(
+    label="scene1",
     tag="button0_s2_s0",
     scene=OGScene1.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
@@ -9,6 +10,7 @@ button0_s2_s0 = TapasExpert.Config(
 )
 
 button0_s0_s1 = TapasExpert.Config(
+    label="scene1",
     tag="button0_s0_s1",
     scene=OGScene1.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
@@ -16,6 +18,7 @@ button0_s0_s1 = TapasExpert.Config(
 )
 
 button0_s1_s2 = TapasExpert.Config(
+    label="scene1",
     tag="button0_s1_s2",
     scene=OGScene1.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
@@ -23,6 +26,7 @@ button0_s1_s2 = TapasExpert.Config(
 )
 
 faucet0_a_b = TapasExpert.Config(
+    label="scene1",
     tag="faucet0_a_b",
     scene=OGScene1.Config(),
     gt_frames=[
@@ -33,6 +37,7 @@ faucet0_a_b = TapasExpert.Config(
     segment_ids=[0, 1, 3, 4, 5],
 )
 faucet0_b_a = TapasExpert.Config(
+    label="scene1",
     tag="faucet0_b_a",
     scene=OGScene1.Config(),
     gt_frames=[
@@ -45,6 +50,7 @@ faucet0_b_a = TapasExpert.Config(
 
 
 faucet1_b_a = TapasExpert.Config(
+    label="scene1",
     tag="faucet1_b_a",
     scene=OGScene1.Config(),
     gt_frames=[
@@ -56,6 +62,7 @@ faucet1_b_a = TapasExpert.Config(
 )
 
 faucet1_a_b = TapasExpert.Config(
+    label="scene1",
     tag="faucet1_a_b",
     scene=OGScene1.Config(),
     gt_frames=[
@@ -68,6 +75,7 @@ faucet1_a_b = TapasExpert.Config(
 
 
 cube0_base_base = TapasExpert.Config(
+    label="scene1",
     tag="cube0_base_base",
     scene=OGScene1.Config(),
     gt_frames=[
@@ -79,6 +87,7 @@ cube0_base_base = TapasExpert.Config(
 )
 
 cube0_base_shelf0 = TapasExpert.Config(
+    label="scene1",
     tag="cube0_base_shelf0",
     scene=OGScene1.Config(),
     gt_frames=[

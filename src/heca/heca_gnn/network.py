@@ -61,7 +61,7 @@ class SummaryBlock(nn.Module):
 class Network(Configurable, nn.Module):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        input_feat_dim: int = 35
+        input_feat_dim: int = 33
         feature_dim: int = 128
         num_stepmix_layers: int = 1
         num_tapas_layers: int = 1

@@ -9,7 +9,7 @@ from heca.utils.quaternion import Quaternion
 
 
 class Entity(Configurable):
-    FEATURE_DIM: int = 32  # 16 (logits) + 12 (pose) + 4 (max extra)
+    FEATURE_DIM: int = 33  # 16 (logits) + 13 (pose) + 2*2 (max extra for revolute)
     MAX_STATE_DIM: int = 16
     BASE_LOGSTD = -10.0
     LOGIT_CONFIDENCE = 10.0
@@ -106,7 +106,10 @@ class Entity(Configurable):
     ) -> tuple[float, bool]:
         """Score a single sample under a StepMix model. Returns [0,1]."""
         p = self.secure_mix_parameters(up)
-        pose = sample[:6]
+        # The value layout is [pose | extra | state]; the StepMix pose
+        # measurement covers everything except the final state column, so use
+        # sample[:-1] instead of a hard-coded 6 dims.
+        pose = sample[:-1]
         state = int(sample[-1])
         best_logprob = -np.inf
         for k in range(len(p["weights"])):

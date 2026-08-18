@@ -21,7 +21,7 @@ class OGScene1(OGScene):
     @property
     def entities(self) -> dict[str, Entity]:
         ents = {
-            "button0": StaticEntity.Config(n_states=2),
+            "button0": StaticEntity.Config(n_states=3),
             "shelf0": StaticEntity.Config(),
             "faucet0": RevoluteEntity.Config(),
             "faucet1": RevoluteEntity.Config(),

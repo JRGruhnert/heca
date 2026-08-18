@@ -38,6 +38,7 @@ class Buffer(Configurable):
 
     def add(self, data: BufferData) -> bool:
         self.queue.append(data)
+        self.step_pointer += 1
         return self.full
 
     def stats(self) -> dict[str, float]:

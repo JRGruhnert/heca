@@ -27,7 +27,12 @@ class OptionMemory(nn.Module):
         return x + hidden
 
     def reset_memory(self) -> None:
-        self.memory.zero_()
+        if self._memory_initialized:
+            # The memory buffer is created during an inference-mode forward
+            # pass, so it is an inference tensor; in-place updates to it are
+            # only allowed inside inference mode.
+            with torch.inference_mode():
+                self.memory.zero_()
 
 
 class OptionInteraction(nn.Module):
@@ -78,8 +83,8 @@ class Network2(Network):
         feature_dim: int = 256
         encoder_depth: int = 3
         gnn_mlp_depth: int = 3
-        use_option_interaction: bool = True
-        use_option_memory: bool = True
+        use_option_interaction: bool = False
+        use_option_memory: bool = False
         attn_heads: int = 4
         readout_hidden_ratio: float = 0.5
 
@@ -158,9 +163,14 @@ class Network2(Network):
 
         summary_idx = data[("entity", "summary", "option")].edge_index
         summary_attr = data[("entity", "summary", "option")].edge_attr
-        option_x = self.summary_layer(
-            entity_x, data["option"].x, summary_idx, summary_attr
-        )
+        # Option node features are placeholder zeros built by the graph; make
+        # sure their width matches this network's feature_dim before the
+        # bipartite GINE conv (the summary layer adds a residual of the target
+        # node features, so both sides must have the same dimension).
+        option_x = data["option"].x
+        if option_x.shape[-1] != self.cfg.feature_dim:
+            option_x = option_x.new_zeros(option_x.shape[0], self.cfg.feature_dim)
+        option_x = self.summary_layer(entity_x, option_x, summary_idx, summary_attr)
 
         if self.interaction_layer is not None:
             option_x = self.interaction_layer(option_x)

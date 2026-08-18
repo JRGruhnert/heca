@@ -1,5 +1,6 @@
 from pathlib import Path
 import h5py
+import joblib
 import torch
 import numpy as np
 from dataclasses import dataclass, field
@@ -32,7 +33,6 @@ class TapasExpert(ExpertModel):
     @dataclass(kw_only=True)
     class Config(ExpertModel.Config):
         folder: str = "tapas"
-        label: str = ""
         policy: GMMPolicyConfig = field(
             default_factory=lambda: GMMPolicyConfig(
                 suffix="release",
@@ -71,7 +71,7 @@ class TapasExpert(ExpertModel):
                         velocity_based=True,
                         repeat_final_step=0,  # 1
                         components_prop_to_len=True,
-                        velocity_threshold=0.1,
+                        velocity_threshold=0.002,
                     ),
                     cascade=CascadeConfig(),
                 ),
@@ -253,9 +253,8 @@ class TapasExpert(ExpertModel):
 
     def tps(self) -> set[str]:
         labels = set()
-        for idx, key in enumerate(self.demos.idx_key_list):
-            if idx in self.model._used_frames:
-                assert key in self.scene.entities.keys()
+        for idx, key in enumerate(self.demos.frame_names):
+            if idx in self.model._used_frames and key in self.scene.entities:
                 labels.add(key)
         logger.info(f"{self.cfg.tag} entities: {labels}")
         return labels
@@ -263,6 +262,11 @@ class TapasExpert(ExpertModel):
     @cached_property
     def conditions(self) -> ConPair:
         path = self.load_dir(self.cfg)
+        cache_path = path / "conditions.joblib"
+        if cache_path.exists():
+            logger.info(f"Loading cached conditions from {cache_path}")
+            return joblib.load(cache_path)
+
         demos_file = h5py.File(path / f"demos.h5", "r")
         demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
@@ -286,22 +290,28 @@ class TapasExpert(ExpertModel):
 
         pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities, 1)
         pair.plot(path)
+        joblib.dump(pair, cache_path)
+        logger.info(f"Saved conditions to {cache_path}")
         return pair
 
     def fit_stage1(self, demos: Demos):
-        self.model.fit_trajectories(
+        liks, avg_logliks = self.model.fit_trajectories(
             demos,
             fix_frames=True,
             init_strategy=InitStrategy.TIME_BASED,
             fitting_actions=(FittingStage.INIT,),
         )
+        logger.info(f"stage1 avg_logliks={avg_logliks}")
+        return liks, avg_logliks
 
     def fit_stage2(self, demos: Demos):
-        self.model.fit_trajectories(
+        liks, avg_logliks = self.model.fit_trajectories(
             demos,
             fix_frames=True,
             fitting_actions=(FittingStage.EM_HMM,),
         )
+        logger.info(f"stage2 avg_logliks={avg_logliks}")
+        return liks, avg_logliks
 
     def plot_stage1(self):
         self.model.plot_model(
@@ -319,6 +329,78 @@ class TapasExpert(ExpertModel):
             mean_as_base=False,
             time_based=True,
         )
+
+    def plot_demo_velocities(
+        self, selections: list[int] | None = None, max_demos: int | None = None
+    ):
+        """Plot velocity + segmentation for each demo into ``plots/vel/``.
+
+        By default plots every demo id present in this agent's ``demos.h5``.
+        Pass ``selections`` to restrict to specific demo ids, or ``max_demos``
+        to only plot the first ``max_demos`` ids.
+        """
+        import matplotlib.pyplot as plt
+
+        if selections is None:
+            selections = self._all_demo_ids()
+        if max_demos is not None:
+            selections = selections[:max_demos]
+
+        demos = self.load_demos(selections)
+        trajs = demos.get_action_magnitude(subsampled=False, position_only=False)
+        if isinstance(trajs, torch.Tensor):
+            trajs = (trajs,)
+
+        seg_cfg = self.cfg.policy.model.demos_segmentation
+        out_dir = self.save_dir(self.cfg) / "plots" / "vel"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        for demo_id, traj in zip(selections, trajs):
+            vel = np.asarray(traj[..., 0].detach().cpu())
+            boundaries = self._velocity_segments(vel, seg_cfg)
+
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(np.arange(len(vel)), vel, linewidth=0.5, c="gray")
+            ax.axhline(y=seg_cfg.velocity_threshold, color="r", label="threshold")
+            for m in boundaries:
+                ax.axvline(x=m, color="g", linestyle="--", label="segment")
+            ax.set_title(f"{self.cfg.tag} — demo {demo_id}")
+            ax.set_xlabel("timestep")
+            ax.set_ylabel("velocity (position magnitude)")
+
+            path = out_dir / f"demo_{demo_id}.png"
+            fig.savefig(path, dpi=150, bbox_inches="tight")
+            plt.close(fig)
+            logger.info(f"Saved demo velocity plot to {path}")
+
+    def _all_demo_ids(self) -> list[int]:
+        path = self.load_dir(self.cfg) / "demos.h5"
+        with h5py.File(path, "r") as f:
+            demo = np.asarray(f["demo"][:])  # type: ignore
+        if len(demo) == 0:
+            return []
+        return list(range(int(np.max(demo)) + 1))
+
+    @staticmethod
+    def _velocity_segments(
+        vel: np.ndarray, seg_cfg: DemoSegmentationConfig
+    ) -> list[int]:
+        stop_indeces = np.argwhere(np.abs(vel) < seg_cfg.velocity_threshold).flatten()
+        if len(stop_indeces) == 0:
+            return []
+        idx_diff = np.diff(stop_indeces)
+        split_idx = np.argwhere(idx_diff > seg_cfg.max_idx_distance).flatten() + 1
+        if len(split_idx) == 0:
+            stop_segmented = [stop_indeces]
+        else:
+            stop_segmented = np.split(stop_indeces, split_idx)
+        filtered = [c for c in stop_segmented if len(c) >= seg_cfg.min_len]
+        segment_mean = [int(c.mean()) for c in filtered]
+        return [
+            m
+            for m in segment_mean
+            if m > seg_cfg.min_end_distance and m < len(vel) - seg_cfg.min_end_distance
+        ]
 
     def load_demos(self, selections: list[int] | None = None) -> Demos:
         if selections is None:
@@ -345,6 +427,7 @@ class TapasExpert(ExpertModel):
 
         demos = Demos(
             observations,
+            meta_data={"tag": self.cfg.tag + self.cfg.label},
             add_init_ee_pose_as_frame=True,
             add_world_frame=False,
             frames_from_keypoints=False,

@@ -2,6 +2,7 @@ from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene4 import OGScene4
 
 peg0_base_base = TapasExpert.Config(
+    label="scene4",
     tag="peg0_base_base",
     scene=OGScene4.Config(),
     gt_frames=[
@@ -13,6 +14,7 @@ peg0_base_base = TapasExpert.Config(
 )
 
 lid0_base_base = TapasExpert.Config(
+    label="scene4",
     tag="lid0_base_base",
     scene=OGScene4.Config(),
     gt_frames=[
@@ -24,6 +26,7 @@ lid0_base_base = TapasExpert.Config(
 )
 
 cube0_base_base = TapasExpert.Config(
+    label="scene4",
     tag="cube0_base_base",
     scene=OGScene4.Config(),
     gt_frames=[
@@ -35,6 +38,7 @@ cube0_base_base = TapasExpert.Config(
 )
 
 cube0_base_shelf0 = TapasExpert.Config(
+    label="scene4",
     tag="cube0_base_shelf0",
     scene=OGScene4.Config(),
     gt_frames=[
@@ -46,6 +50,7 @@ cube0_base_shelf0 = TapasExpert.Config(
 )
 
 cube0_base_box0 = TapasExpert.Config(
+    label="scene4",
     tag="cube0_base_box0",
     scene=OGScene4.Config(),
     gt_frames=[
@@ -57,6 +62,7 @@ cube0_base_box0 = TapasExpert.Config(
 )
 
 lid0_base_box0 = TapasExpert.Config(
+    label="scene4",
     tag="lid0_base_box0",
     scene=OGScene4.Config(),
     gt_frames=[

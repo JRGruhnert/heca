@@ -100,6 +100,7 @@ class Learner(Persistable):
             self.network.parameters(), lr=self.cfg.lr
         )
         self.metrics: dict[str, float] = {}
+        self.current_update: int = 0
         self.normalizer: RewardNormalizer = RewardNormalizer()
         self.buffer = Buffer.get(cfg.buffer)
         self.pocket: TempStore | None = None
@@ -176,6 +177,12 @@ class Learner(Persistable):
     def _init_wandb(self):
         if not self.cfg.wandb.enabled:
             return
+
+        if wandb.run is not None:
+            # Reuse an already-active run (e.g. multiple clients in one process).
+            self._wandb_run = wandb.run
+            return
+
         config_dict = {
             "lr": self.cfg.lr,
             "max_grad_norm": self.cfg.max_grad_norm,
@@ -217,7 +224,10 @@ class Learner(Persistable):
         logger.info(f"Update {self.current_update:4d} | {metrics_str}")
 
         if self.cfg.wandb.enabled:
-            wandb.log(self.metrics, step=self.current_update)
+            wandb.log(
+                {f"{self.cfg.tag}/{k}": v for k, v in self.metrics.items()},
+                step=self.current_update,
+            )
 
     def update(self, fb: SceneFeedback) -> bool:
         if self.cfg.normalize_rewards:

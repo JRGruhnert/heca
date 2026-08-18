@@ -1,7 +1,7 @@
 from abc import ABC
 from dataclasses import dataclass
 
-from heca.agents.agent import Agent
+from heca.experts.expert import ExpertModel
 from heca.conditions.condition import Condition
 from heca.data.data import DCEntity, DCScene
 
@@ -49,7 +49,7 @@ class EntityNode(GraphNode):
 
 @dataclass(slots=True, kw_only=True)
 class OptionNode(GraphNode):
-    agent: Agent.Config
+    model: ExpertModel.Config
     changed: bool = False
     data: DCScene = DCScene.empty()
 
@@ -60,7 +60,7 @@ class OptionNode(GraphNode):
         )
         return (
             f"OptionNode"
-            f"  agent:      {self.agent.tag}"
+            f"  model:      {self.model.tag}"
             f"  sources:    [{src_str}]"
             f"  changed:    {self.changed}"
         )

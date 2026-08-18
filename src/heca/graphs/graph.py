@@ -233,6 +233,12 @@ class Graph:
             entities.update(ExpertModel.get(cfg).entities)
         graph = cls(entities=entities)
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
+        # Track expert-condition connections for visualization.
+        graph._agent_tags = [a.cfg.tag for a in agents]
+        graph._connections: dict[tuple[str, str], dict[str, float]] = {}
+        graph._pair_scores: dict[
+            tuple[str, str], dict[str, tuple[float, float]]
+        ] = {}
         for a in agents:
             ac = a.conditions
             pre_comp_sources = graph.set_comps(ac.label, ac.pre)
@@ -251,13 +257,19 @@ class Graph:
                     graph.ns_option.add(
                         ac.label,
                         OptionNode(
-                            agent=a.cfg,
+                            model=a.cfg,
                             sources=sources,
                         ),
                     )
                 else:  # pre != post
+                    graph._pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(
+                        ac.post
+                    )
                     subgoal = bc.pre.make_subgoal(ac.post)
                     if subgoal is not None:
+                        graph._connections[(a.cfg.tag, b.cfg.tag)] = {
+                            key: float(score) for key, (score, _) in subgoal.items()
+                        }
                         sources = graph.set_subgoal(
                             ac.label + bc.label,
                             post_comp_sources,
@@ -268,7 +280,7 @@ class Graph:
                         graph.ns_option.add(
                             ac.label + bc.label,
                             OptionNode(
-                                agent=a.cfg,
+                                model=a.cfg,
                                 sources=sources,
                             ),
                         )
@@ -278,12 +290,12 @@ class Graph:
         graph.es_tapas.edges_from_sets(graph.ns_entity, graph.ns_entity)
         return graph
 
-    def select(self, index: int) -> tuple[Agent.Config, DCScene]:
+    def select(self, index: int) -> tuple[ExpertModel.Config, DCScene]:
         node = self.ns_option.idx_get(index)
         assert isinstance(node, OptionNode)
         subgoal = self.assemble_subgoal(node)
         logger.debug(f"Selected Option: {self.ns_option.key_at(index)}")
-        return node.agent, subgoal
+        return node.model, subgoal
 
     def plot(self, path: Path, figsize=(12, 8), show_labels=True):
         """Visualize the heterogeneous graph."""
@@ -385,7 +397,7 @@ class Graph:
         option_lines = []
         for key, idx in self.ns_option.index.items():
             node = self.ns_option.items[idx]
-            option_lines.append(f"{idx}:\tagent={node.agent.tag}\t\t{key}")
+            option_lines.append(f"{idx}:\tagent={node.model.tag}\t\t{key}")
         logger.debug(f"Option Nodes:\n" + "\n".join(option_lines))
 
         stepmix_lines = []
@@ -402,3 +414,107 @@ class Graph:
         for src, dst in list(self.es_summary.edges):
             summary_lines.append(f"({src}->{dst})")
         logger.info("Summary edges:\n" + ", ".join(summary_lines))
+
+    def plot_connections(self, path: Path, figsize=(10, 8)):
+        """Plot expert-condition connections computed during generation.
+
+        Cell ``(i, j)`` is the minimum containment score over shared entities
+        for the pair ``post(model i) -> pre(model j)``, regardless of whether
+        it passed the thresholds. Empty cells mean the two models share no
+        entity. Diagonal entries are self-connections (direct options).
+        """
+        tags = getattr(self, "_agent_tags", [])
+        connections = getattr(self, "_connections", {})
+        pair_scores = getattr(self, "_pair_scores", {})
+        if not tags:
+            return
+
+        n = len(tags)
+        mat = np.full((n, n), np.nan)
+        for (src, dst), entity_scores in pair_scores.items():
+            i = tags.index(src)
+            j = tags.index(dst)
+            values = [v for v, _ in entity_scores.values()]
+            mat[i, j] = min(values) if values else np.nan
+
+        plot_path = path / "plots"
+        plot_path.mkdir(parents=True, exist_ok=True)
+
+        fig, ax = plt.subplots(figsize=figsize)
+        cmap = plt.get_cmap("viridis").copy()
+        cmap.set_bad("lightgray")
+        im = ax.imshow(mat, cmap=cmap, vmin=0.0, vmax=1.0)
+
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(tags, rotation=45, ha="right", fontsize=8)
+        ax.set_yticklabels(tags, fontsize=8)
+        ax.set_xlabel("pre-condition (target model)")
+        ax.set_ylabel("post-condition (source model)")
+
+        for i in range(n):
+            for j in range(n):
+                if i == j:
+                    ax.text(
+                        j, i, "self", ha="center", va="center", fontsize=7, color="black"
+                    )
+                elif not np.isnan(mat[i, j]):
+                    val = float(mat[i, j])
+                    ax.text(
+                        j,
+                        i,
+                        f"{val:.2f}",
+                        ha="center",
+                        va="center",
+                        fontsize=7,
+                        color="white" if val < 0.5 else "black",
+                    )
+                else:
+                    ax.text(
+                        j, i, "—", ha="center", va="center", fontsize=7, color="black"
+                    )
+
+        fig.colorbar(im, ax=ax, label="min containment score")
+        ax.set_title("Condition connections (min entity containment score)")
+        fig.tight_layout()
+        fig.savefig(plot_path / "connections.png", dpi=300, bbox_inches="tight")
+        plt.close(fig)
+
+        # Per-pair per-entity detail plots (including failed pairs, so the
+        # matrix's low-score cells can be understood).
+        detail_dir = plot_path / "connections"
+        detail_dir.mkdir(parents=True, exist_ok=True)
+        for (src, dst), entity_scores in sorted(pair_scores.items()):
+            labels = list(entity_scores.keys())
+            if not labels:
+                continue
+            values = [entity_scores[k][0] for k in labels]
+            thresholds = [entity_scores[k][1] for k in labels]
+
+            fig, ax = plt.subplots(figsize=(max(4.0, len(labels) * 1.3), 3.2))
+            x = np.arange(len(labels))
+            colors = [
+                "tab:green" if v >= t else "tab:red"
+                for v, t in zip(values, thresholds)
+            ]
+            ax.bar(x, values, color=colors, alpha=0.85)
+            for i, (v, t) in enumerate(zip(values, thresholds)):
+                ax.hlines(
+                    t, x[i] - 0.4, x[i] + 0.4, color="gray",
+                    linestyle="--", linewidth=1.0,
+                )
+                ax.text(i, max(v, t) + 0.02, f"{v:.2f}", ha="center", fontsize=8)
+            ax.set_xticks(x)
+            ax.set_xticklabels(labels, fontsize=8)
+            ax.set_ylim(0.0, 1.1)
+            ax.set_ylabel("containment score")
+            ax.set_xlabel("entity")
+            ax.set_title(f"{src} -> {dst} (post -> pre)")
+            fig.tight_layout()
+            fig.savefig(detail_dir / f"{src}__{dst}.png", dpi=150, bbox_inches="tight")
+            plt.close(fig)
+
+        # Per-entity text summary.
+        for (src, dst), scores in sorted(connections.items()):
+            parts = ", ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
+            logger.info(f"connection {src} -> {dst}: {parts}")

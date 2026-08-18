@@ -18,13 +18,15 @@ from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
 class OGSceneOG(OGScene):
     @dataclass(kw_only=True)
     class Config(OGScene.Config):
-        tag: str = "scene0"
+        tag: str = "sceneog"
         vis: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.env = cast(
+
+    def _make_env(self, env_id: str) -> ManipSpaceEnv:
+        return cast(
             ManipSpaceEnv,
             ogbench.make_env_and_datasets(
                 dataset_name="visual-scene-play-v0",

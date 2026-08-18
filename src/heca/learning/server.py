@@ -48,7 +48,7 @@ class FLServer(Persistable):
 
         delta = {}
         for k in avg:
-            cur = current[k].to(avg[k].dtype, device=avg[k].device)
+            cur = current[k].to(dtype=avg[k].dtype, device=avg[k].device)
             delta[k] = avg[k] - cur
 
         if not self._momentum:
@@ -62,7 +62,7 @@ class FLServer(Persistable):
 
         new_weights = OrderedDict()
         for k in avg:
-            cur = current[k].to(avg[k].dtype, device=avg[k].device)
+            cur = current[k].to(dtype=avg[k].dtype, device=avg[k].device)
             new_weights[k] = cur + self._momentum[k]
         self.global_network.load_state_dict(new_weights)
 

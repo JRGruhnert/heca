@@ -10,7 +10,7 @@ from wandb import util as wandb_util
 import wandb
 from wandb.wandb_run import Run
 
-DEBUG = True
+DEBUG = False
 logger.remove()
 
 
@@ -20,13 +20,14 @@ def exclude_external(record):
 
 
 if DEBUG:
-    logger.add(lambda msg: print(msg, end=""), level="DEBUG")
+    logger.add(lambda msg: print(msg, end=""), level="DEBUG", filter=exclude_external)
 else:
     logger.add(lambda msg: print(msg, end=""), level="INFO", filter=exclude_external)
 
 
 def debug(message: str):
-    logger.debug(message)
+    if DEBUG:
+        logger.debug(message)
 
 
 def warning(message: str):

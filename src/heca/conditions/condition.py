@@ -72,7 +72,7 @@ class Condition:
             for k in range(1, self._max_components + 1):
                 model = StepMix(
                     n_components=k,
-                    measurement=self.measurement,  # type: ignore
+                    measurement=self.entities[key].measurement,
                 )
 
                 model.fit(values)
@@ -131,3 +131,17 @@ class Condition:
         if len(values) == 0:
             return None  # No matching keys so no option at all
         return values
+
+    def scores(self, other: "Condition") -> dict[str, tuple[float, float]]:
+        """Containment score + threshold for every shared entity.
+
+        Unlike ``make_subgoal``, this does not early-exit, so it can be used to
+        inspect why a connection was (not) formed.
+        """
+        result = {}
+        for key in set(self.entities).intersection(set(other.entities)):
+            up1 = self.models[key].get_parameters().copy()
+            up2 = other.models[key].get_parameters().copy()
+            score = self.entities[key].containment_score(up1, up2)
+            result[key] = (score, self.entities[key].cfg.threshold)
+        return result

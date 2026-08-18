@@ -2,6 +2,7 @@ from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.sceneog import OGSceneOG
 
 close_drawer = TapasExpert.Config(
+    label="sceneog",
     tag="close_drawer",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -14,6 +15,7 @@ close_drawer = TapasExpert.Config(
 )
 
 open_drawer = TapasExpert.Config(
+    label="sceneog",
     tag="open_drawer",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -26,6 +28,7 @@ open_drawer = TapasExpert.Config(
 )
 
 close_window = TapasExpert.Config(
+    label="sceneog",
     tag="close_window",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -38,6 +41,7 @@ close_window = TapasExpert.Config(
 )
 
 open_window = TapasExpert.Config(
+    label="sceneog",
     tag="open_window",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -50,6 +54,7 @@ open_window = TapasExpert.Config(
 )
 
 lock_left = TapasExpert.Config(
+    label="sceneog",
     tag="lock_left_button",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -58,6 +63,7 @@ lock_left = TapasExpert.Config(
 )
 
 unlock_left = TapasExpert.Config(
+    label="sceneog",
     tag="unlock_left_button",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -66,6 +72,7 @@ unlock_left = TapasExpert.Config(
 )
 
 lock_right = TapasExpert.Config(
+    label="sceneog",
     tag="lock_right_button",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -74,6 +81,7 @@ lock_right = TapasExpert.Config(
 )
 
 unlock_right = TapasExpert.Config(
+    label="sceneog",
     tag="unlock_right_button",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -83,6 +91,7 @@ unlock_right = TapasExpert.Config(
 
 
 move_block_drawer = TapasExpert.Config(
+    label="sceneog",
     tag="move_block_drawer",
     scene=OGSceneOG.Config(),
     use_gt=True,
@@ -95,6 +104,7 @@ move_block_drawer = TapasExpert.Config(
 )
 
 move_block = TapasExpert.Config(
+    label="sceneog",
     tag="move_block",
     scene=OGSceneOG.Config(),
     use_gt=True,

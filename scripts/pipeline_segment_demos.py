@@ -1,21 +1,56 @@
-from heca.scenes.ogbench.scene1 import OGScene1
-from heca.scenes.ogbench.scene2 import OGScene2
-from heca.scenes.ogbench.scene3 import OGScene3
-from heca.scenes.ogbench.scene4 import OGScene4
-from heca.scenes.ogbench.scene5 import OGScene5
+"""Segment and extract demos for every configured scene.
+
+Replicates the per-scene demo extraction (``scene.demo_auto_extract``) for all
+scenes referenced by the scene conf modules, in a single run.
+"""
+
+import argparse
+
 from heca.scenes.scene import Scene
 
-scene1 = Scene.get(OGScene1.Config())
-scene1.demo_auto_extract()
+import conf.experts.scene1
+import conf.experts.scene2
+import conf.experts.scene3
+import conf.experts.scene4
+import conf.experts.scene5
+import conf.experts.sceneog
 
-scene2 = Scene.get(OGScene2.Config())
-scene2.demo_auto_extract()
+SCENE_MODULES = (
+    conf.experts.scene1,
+    conf.experts.scene2,
+    conf.experts.scene3,
+    conf.experts.scene4,
+    conf.experts.scene5,
+    # conf.experts.sceneog,
+)
 
-scene3 = Scene.get(OGScene3.Config())
-scene3.demo_auto_extract()
 
-scene4 = Scene.get(OGScene4.Config())
-scene4.demo_auto_extract()
+def all_scenes():
+    seen = set()
+    for mod in SCENE_MODULES:
+        for agent_cfg in mod.agents:
+            scene_cfg = agent_cfg.scene
+            if scene_cfg.tag in seen:
+                continue
+            seen.add(scene_cfg.tag)
+            yield scene_cfg
 
-scene5 = Scene.get(OGScene5.Config())
-scene5.demo_auto_extract()
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--scene",
+        help="Only segment demos for this scene module (e.g. sceneog). "
+        "Defaults to all scenes.",
+    )
+    args = parser.parse_args()
+
+    for scene_cfg in all_scenes():
+        if args.scene and scene_cfg.tag != args.scene:
+            continue
+        scene = Scene.get(scene_cfg)
+        scene.demo_auto_extract()
+
+
+if __name__ == "__main__":
+    main()
