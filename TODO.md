@@ -2,10 +2,11 @@
 
 ## Short Horizon:
 
-- fix goa-con bug
-- fix segmentation bug
-- record tapas models
-- copy paste virtual goal-check
+- ogbench: step normalization
+- ogbench: virtual evaluation
+- make graph object
+- fix tapas models (record tapas models)
+- rerecord ogbenchog models
 
 ## Long Horizon:
 
