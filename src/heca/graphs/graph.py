@@ -19,37 +19,36 @@ from heca.data.entity import Entity
 from heca.conditions.condition import Condition
 
 
-@dataclass
 class Graph:
-    entities: dict[str, Entity]
-    ns_entity: NodeSet[EntityNode] = field(
-        default_factory=lambda: NodeSet[EntityNode]("entity")
-    )
-    ns_option: NodeSet[OptionNode] = field(
-        default_factory=lambda: NodeSet[OptionNode]("option")
-    )
-    es_summary: EdgeSet[EntityNode, OptionNode] = field(
-        default_factory=lambda: EdgeSet[EntityNode, OptionNode](
-            ("entity", "summary", "option")
+
+    def __init__(self, entities: dict[str, Entity]):
+        self.entities: dict[str, Entity]
+        self.ns_entity: NodeSet[EntityNode] = field(
+            default_factory=lambda: NodeSet[EntityNode]("entity")
         )
-    )
-    es_stepmix: EdgeSet[EntityNode, EntityNode] = field(
-        default_factory=lambda: EdgeSet[EntityNode, EntityNode](
-            ("entity", "stepmix", "entity")
+        self.ns_option: NodeSet[OptionNode] = field(
+            default_factory=lambda: NodeSet[OptionNode]("option")
         )
-    )
-    es_tapas: EdgeSet[EntityNode, EntityNode] = field(
-        default_factory=lambda: EdgeSet[EntityNode, EntityNode](
-            ("entity", "tapas", "entity")
+        self.es_summary: EdgeSet[EntityNode, OptionNode] = field(
+            default_factory=lambda: EdgeSet[EntityNode, OptionNode](
+                ("entity", "summary", "option")
+            )
         )
-    )
-    packages: dict[str, tuple[ExpertModel.Config, DCScene, DCScene]] = field(
-        default_factory=dict
-    )
-    start_keys: set[str] = field(default_factory=set)
-    goal_keys: set[str] = field(default_factory=set)
-    start: DCScene = field(default_factory=DCScene.empty)
-    goal: DCScene = field(default_factory=DCScene.empty)
+        self.es_stepmix: EdgeSet[EntityNode, EntityNode] = field(
+            default_factory=lambda: EdgeSet[EntityNode, EntityNode](
+                ("entity", "stepmix", "entity")
+            )
+        )
+        self.es_tapas: EdgeSet[EntityNode, EntityNode] = field(
+            default_factory=lambda: EdgeSet[EntityNode, EntityNode](
+                ("entity", "tapas", "entity")
+            )
+        )
+
+        self.start_keys: set[str] = field(default_factory=set)
+        self.goal_keys: set[str] = field(default_factory=set)
+        self.start: DCScene = field(default_factory=DCScene.empty)
+        self.goal: DCScene = field(default_factory=DCScene.empty)
 
     def export(self) -> HeteroData:
         data = HeteroData()
@@ -238,7 +237,7 @@ class Graph:
         return {src for src in temp_sources.values()}
 
     @classmethod
-    def generate(cls, cfgs: list[ExpertModel.Config]) -> "Graph":
+    def generate(cls, cfgs: list[ExpertModel.Config], add_subgoals: bool) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
@@ -270,26 +269,27 @@ class Graph:
                         ),
                     )
                 else:  # pre != post
-                    _pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(ac.post)
-                    subgoal = bc.pre.make_subgoal(ac.post)
-                    if subgoal is not None:
-                        _connections[(a.cfg.tag, b.cfg.tag)] = {
-                            key: float(score) for key, (score, _) in subgoal.items()
-                        }
-                        sources = graph.set_subgoal(
-                            ac.label + bc.label,
-                            post_comp_sources,
-                            pre_sources,
-                            post_sources,
-                            subgoal,
-                        )
-                        graph.ns_option.add(
-                            ac.label + bc.label,
-                            OptionNode(
-                                model=a.cfg,
-                                sources=sources,
-                            ),
-                        )
+                    if add_subgoals:
+                        _pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(ac.post)
+                        subgoal = bc.pre.make_subgoal(ac.post)
+                        if subgoal is not None:
+                            _connections[(a.cfg.tag, b.cfg.tag)] = {
+                                key: float(score) for key, (score, _) in subgoal.items()
+                            }
+                            sources = graph.set_subgoal(
+                                ac.label + bc.label,
+                                post_comp_sources,
+                                pre_sources,
+                                post_sources,
+                                subgoal,
+                            )
+                            graph.ns_option.add(
+                                ac.label + bc.label,
+                                OptionNode(
+                                    model=a.cfg,
+                                    sources=sources,
+                                ),
+                            )
 
         graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
         graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)

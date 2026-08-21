@@ -18,6 +18,7 @@ class Heca(Configurable):
         learner: Learner.Config
         visualize: bool = False
         inference: bool = False
+        subgoals: bool = False
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -40,7 +41,7 @@ class Heca(Configurable):
             for a in self.cfg.agents:
                 ExpertModel.get(a).force_recompute()
 
-        self.graph = Graph.generate(list(self.cfg.agents))
+        self.graph = Graph.generate(list(self.cfg.agents), add_subgoals=cfg.subgoals)
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
