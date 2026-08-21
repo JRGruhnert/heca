@@ -13,3 +13,5 @@ big = Network2.Config(feature_dim=512, encoder_depth=4, gnn_mlp_depth=4, attn_he
 
 # Plain Network variants.
 base = Network.Config()
+
+NETWORK_NAMES = ["default", "small", "big", "base"]

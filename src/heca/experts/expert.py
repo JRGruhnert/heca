@@ -22,19 +22,14 @@ class ExpertModel(Persistable, abc.ABC):
         kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
         state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
         score_threshold: float = 0.5
-        use_gt: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self.scene = Scene.get(self.cfg.scene, auto_load=not cfg.use_gt)
+        self.scene = Scene.get(self.cfg.scene, auto_load=False)
         self.act_virtual = False
         self._force_recompute = False
-        if not self.cfg.use_gt:
-            self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
-            self.ste_extractor = ImageEncoder.get(self.cfg.state_extraction)
-            self.kp_extractor.prepare_for_scene(self.cfg.scene)
-            self.ste_extractor.prepare_for_scene(self.cfg.scene)
+        self._use_gt = True
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
@@ -50,6 +45,16 @@ class ExpertModel(Persistable, abc.ABC):
 
     def force_recompute(self) -> "ExpertModel":
         self._force_recompute = True
+        return self
+
+    def use_gt(self, flag: bool) -> "ExpertModel":
+        self._use_gt = flag
+        if not flag:
+            self.scene.load()
+            self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
+            self.ste_extractor = ImageEncoder.get(self.cfg.state_extraction)
+            self.kp_extractor.prepare_for_scene(self.cfg.scene)
+            self.ste_extractor.prepare_for_scene(self.cfg.scene)
         return self
 
     def tps(self) -> set[str]:
@@ -73,6 +78,12 @@ class ExpertModel(Persistable, abc.ABC):
             extra = extras[:, idx]
             dc_entities[key] = entity.dc_from_parsed(pose, extra, ste)
         return dc_entities
+
+    def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
+        if self._use_gt:
+            return scene
+        else:
+            return DCScene(self.from_image(image), scene.extras)
 
     def get_entity_pose_and_state(
         self,
@@ -114,16 +125,15 @@ class ExpertModel(Persistable, abc.ABC):
     def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         raise NotImplementedError
 
-    def act(self, x: DCScene, s: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
+    def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
+        raise NotImplementedError
+
+    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         if self.act_virtual:
-            if self.valid_task(x, s):
-                return s.copy(), self.scene.virtual_evaluation(x, y)
-            else:
-                return x.copy(), SceneFeedback(
-                    terminal=True, reward=0.0, truncated=False
-                )
+            return self._act_virt(x, y)
+
         else:
-            return self._act(x, s)
+            return self._act(x, y)
 
     @classmethod
     def load_dir(cls, cfg: "ExpertModel.Config") -> Path:

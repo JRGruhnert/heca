@@ -7,52 +7,42 @@ cfg = TapasManualExecuter.Config(
         TapasExpert.Config(
             tag="open_drawer",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="close_drawer",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="open_window",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="close_window",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="lock_left_button",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="lock_right_button",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="unlock_left_button",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="unlock_right_button",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="move_block",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
         TapasExpert.Config(
             tag="move_ee",
             scene=OGScene.Config(),
-            use_gt=True,
         ),
     ],
     scene=OGScene.Config(),

@@ -79,7 +79,7 @@ class TapasExpert(ExpertModel):
                 predict_dx_in_xdx_models=False,
                 binary_gripper_action=False,
                 binary_gripper_closed_threshold=0.0,
-                dbg_prediction=True,
+                dbg_prediction=False,
                 force_overwrite_checkpoint_config=True,
                 time_scale=1.0,
                 postprocess_prediction=True,
@@ -134,7 +134,7 @@ class TapasExpert(ExpertModel):
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-                # print(action.shape)
+                print(action)
                 tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
@@ -152,11 +152,11 @@ class TapasExpert(ExpertModel):
 
         return z, fb
 
-    def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
-        if self.cfg.use_gt:
-            return scene
-        else:
-            return DCScene(self.from_image(image), scene.extras)
+    def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
+        subgoal: dict[str, np.ndarray] = {}
+        # TODO: convert DCScene to internal scene dict
+        tdscene, tdimage, fb = self.scene.step(subgoal)
+        return self.make_scene(tdscene, tdimage), fb
 
     def make_batch_prediction(
         self, x: SceneObservation  # type: ignore
@@ -193,7 +193,7 @@ class TapasExpert(ExpertModel):
         self.policy.eval()
 
     def policy_path(self, path: Path) -> Path:
-        if self.cfg.use_gt:
+        if self._use_gt:
             file_name = "policy_gt.pt"
         else:
             file_name = "policy_img.pt"
@@ -272,12 +272,12 @@ class TapasExpert(ExpertModel):
             demos_file,
             self.cfg.demo_selections,
             only_conditions=True,
-            with_images=not self.cfg.use_gt,
+            with_images=not self._use_gt,
         )
 
         pre_data: dict[str, np.ndarray] = {}
         post_data: dict[str, np.ndarray] = {}
-        if self.cfg.use_gt:
+        if self._use_gt:
             start_scenes = [demo[0] for demo in demos_scenes]
             end_scenes = [demo[-1] for demo in demos_scenes]
         else:
@@ -411,10 +411,10 @@ class TapasExpert(ExpertModel):
         observations: list[SceneObservation] = []  # type: ignore
 
         demos_scenes, demos_images = self.scene.load_dataset(
-            demos_file, selections=selections, with_images=not self.cfg.use_gt
+            demos_file, selections=selections, with_images=not self._use_gt
         )
         for i, demo_scenes in enumerate(demos_scenes):
-            if self.cfg.use_gt:
+            if self._use_gt:
                 stacked = self.dcscenes_to_tdtapas(demo_scenes)
             else:
                 demo_extracted: list[DCScene] = []

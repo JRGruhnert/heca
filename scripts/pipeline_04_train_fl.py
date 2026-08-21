@@ -2,7 +2,6 @@ import argparse
 import signal
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Iterator
 
 import matplotlib
 
@@ -18,26 +17,10 @@ from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
 
 import conf.networks
-import conf.experts.scene1
-import conf.experts.scene2
-import conf.experts.scene3
-import conf.experts.scene4
-import conf.experts.scene5
+from conf.networks import NETWORK_NAMES
 
-SCENE_MODULES = (
-    conf.experts.scene1,
-    conf.experts.scene2,
-    conf.experts.scene3,
-    conf.experts.scene4,
-    conf.experts.scene5,
-)
-
-NETWORK_NAMES = [name for name in vars(conf.networks) if not name.startswith("_")]
-
-
-def collect_clients() -> Iterator[list[ExpertModel.Config]]:
-    for mod in SCENE_MODULES:
-        yield list(mod.agents)
+from scripts.common.args import add_scene_argument
+from scripts.common.scenes import agents_by_scene
 
 
 def generate_clients(
@@ -48,6 +31,7 @@ def generate_clients(
     federated: bool = True,
     wandb_enabled: bool = False,
     reload: bool = False,
+    use_gt: bool = True,
 ):
     wandb = WandBConfig(enabled=wandb_enabled)
     hecas = []
@@ -65,6 +49,7 @@ def generate_clients(
                     virtual=virtual,
                     wandb=wandb,
                     reload=reload,
+                    use_gt=use_gt,
                 ),
             )
             hecas.append(heca)
@@ -78,6 +63,7 @@ def generate_clients(
                     virtual=virtual,
                     wandb=wandb,
                     reload=reload,
+                    use_gt=use_gt,
                 ),
             )
             hecas.append(heca)
@@ -152,14 +138,17 @@ def main():
         help="Reload expert conditions instead of loading conditions.joblib.",
     )
     parser.add_argument(
+        "--use-gt",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use ground-truth observations (default: true).",
+    )
+    parser.add_argument(
         "--wandb",
         action="store_true",
         help="Enable wandb logging. Disabled by default for multi-client runs.",
     )
-    parser.add_argument(
-        "--scene",
-        help="Only train this scene module (e.g. sceneog). Defaults to all scenes.",
-    )
+    add_scene_argument(parser)
     args = parser.parse_args()
 
     def _handle_stop(signum, frame):
@@ -170,8 +159,8 @@ def main():
     network = getattr(conf.networks, args.network)
 
     clients = []
-    for models in collect_clients():
-        if args.scene and models[0].scene != args.scene:
+    for scene_tag, models in agents_by_scene().items():
+        if args.scene and scene_tag != args.scene:
             continue
         clients.append(models)
 
@@ -183,6 +172,7 @@ def main():
         virtual=args.virtual,
         wandb_enabled=args.wandb,
         reload=args.reload,
+        use_gt=args.use_gt,
     )
     train(exp, server, args.batch)
 

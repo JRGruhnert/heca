@@ -22,12 +22,10 @@ agents = [
     TapasExpert.Config(
         tag="open_window",
         scene=OGScene.Config(),
-        use_gt=True,
     ),
     TapasExpert.Config(
         tag="close_window",
         scene=OGScene.Config(),
-        use_gt=True,
     ),
     # TapasAgent.Config(
     #     tag="lock_left_button",
@@ -37,7 +35,6 @@ agents = [
     TapasExpert.Config(
         tag="lock_right_button",
         scene=OGScene.Config(),
-        use_gt=True,
     ),
     # TapasAgent.Config(
     #     tag="unlock_left_button",
@@ -47,7 +44,6 @@ agents = [
     TapasExpert.Config(
         tag="unlock_right_button",
         scene=OGScene.Config(),
-        use_gt=True,
     ),
     # TapasAgent.Config(
     #     tag="move_block",

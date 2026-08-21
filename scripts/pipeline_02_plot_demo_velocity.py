@@ -7,38 +7,14 @@ matplotlib.use("Agg")  # headless plotting
 from heca.experts.tapas import TapasExpert
 from heca.misc import logger
 
-import conf.experts.scene1
-import conf.experts.scene2
-import conf.experts.scene3
-import conf.experts.scene4
-import conf.experts.scene5
-import conf.experts.sceneog
-
-
-def all_agents():
-    for mod in (
-        # conf.experts.scene1,
-        # conf.experts.scene2,
-        # conf.experts.scene3,
-        # conf.experts.scene4,
-        # conf.experts.scene5,
-        conf.experts.sceneog,
-    ):
-        for cfg in mod.agents:
-            yield cfg
+from scripts.common.args import add_scene_argument, add_tag_argument
+from scripts.common.scenes import iter_agents
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--scene",
-        help="Only plot agents from this scene module (e.g. sceneog). "
-        "Defaults to all scenes.",
-    )
-    parser.add_argument(
-        "--tag",
-        help="Only plot the agent with this tag.",
-    )
+    add_scene_argument(parser)
+    add_tag_argument(parser)
     parser.add_argument(
         "--max-demos",
         type=int,
@@ -47,7 +23,7 @@ def main():
     )
     args = parser.parse_args()
 
-    for cfg in all_agents():
+    for cfg in iter_agents():
         if args.scene and cfg.scene.tag != args.scene:
             continue
         if args.tag and cfg.tag != args.tag:

@@ -89,6 +89,7 @@ class Learner(Persistable):
         normalize_rewards: bool = False
         virtual: bool = False
         reload: bool = False
+        use_gt: bool = True
         step_multiplier: int = 2
         success_reward: float = 1.0
         step_reward: float = -0.01

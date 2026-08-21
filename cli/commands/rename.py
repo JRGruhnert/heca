@@ -54,7 +54,6 @@ configs: list[TapasExpert.Config] = [
     TapasExpert.Config(
         tag="move_block_drawer",
         scene=OGScene.Config(),
-        use_gt=True,
     ),
 ]
 

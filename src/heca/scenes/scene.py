@@ -40,8 +40,20 @@ class Scene(Persistable):
         npimage = self.to_np_image(data)
         return tdscene, tdimage, npimage
 
-    def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
-        obs, fb = self._step(action)
+    def virtual_evaluation(
+        self, x: DCScene, y: DCScene
+    ) -> tuple[DCScene, SceneFeedback]:
+        raise NotImplementedError
+
+    def step(
+        self, action: np.ndarray | dict[str, np.ndarray]
+    ) -> tuple[DCScene, TDImage, SceneFeedback]:
+        if isinstance(action, np.ndarray):
+            obs, fb = self._step(action)
+        else:
+            # obs, fb = self._step_virt(subgoal)
+            # TODO: implement in ogbench
+            raise NotImplementedError
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, fb
 
@@ -144,7 +156,4 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     def demo_auto_extract(self):
-        raise NotImplementedError
-
-    def virtual_evaluation(self, x: DCScene, y: DCScene) -> SceneFeedback:
         raise NotImplementedError

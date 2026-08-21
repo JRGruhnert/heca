@@ -181,12 +181,14 @@ class OGScene(Scene):
         result = np.concatenate([pos, [yaw], [state]], axis=0)
         return result
 
-    def _step(self, action: np.ndarray) -> tuple[Any, float, bool, bool]:
+    def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
         action = self.to_internal_action(action)
         ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         assert isinstance(reward, float)
-        return obs, reward, terminated, truncated
+        return obs, SceneFeedback(
+            terminal=terminated, reward=reward, truncated=truncated
+        )
 
     def load_dataset(
         self,

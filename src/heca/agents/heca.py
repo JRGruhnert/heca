@@ -31,6 +31,11 @@ class Heca(Configurable):
         self._y: DCScene | None = None
         self.scene = Scene.get(self.cfg.agents[0].scene)
 
+        for a in self.cfg.agents:
+            expert = ExpertModel.get(a, auto_load=False)
+            expert.use_gt(self.cfg.learner.use_gt)
+            expert.load()
+
         if self.cfg.learner.reload:  # nees to be before Graph.generate
             for a in self.cfg.agents:
                 ExpertModel.get(a).force_recompute()
