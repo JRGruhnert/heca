@@ -51,19 +51,13 @@ class Heca(Configurable):
                 ExpertModel.get(a).virtual()
 
     def step(
-        self, x: DCScene, y: DCScene, new_ep: bool = False
+        self, x: DCScene, new_ep: bool = False
     ) -> tuple[DCScene, SceneFeedback, bool]:
         self.graph.set_start(x)
         data = self.graph.export()
         option = self.learner.predict(data, new_ep)
         a, s = self.graph.select(option)
-        if logger.DEBUG:
-            logger.debug(f"Start:\n{str(x)}")
-            logger.debug(f"Goal:\n{str(y)}")
-            # logger.debug(str(self.graph.ns_entity))
-            input("Press Enter to continue...")
-
-        z, lfb = ExpertModel.get(a).act(x, s, y)
+        z, lfb = ExpertModel.get(a).act(x, s)
 
         fb = self.apply_truncation(lfb)
         lock = self.learner.update(fb)
@@ -72,9 +66,9 @@ class Heca(Configurable):
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.graph.set_goal(y)
         self.current_step = 0
-        z, fb, lock = self.step(x, y, True)
+        z, fb, lock = self.step(x, True)
         while not (fb.truncated or fb.terminal or lock):
-            z, fb, lock = self.step(z, y)
+            z, fb, lock = self.step(z)
         return z, fb
 
     def sample(self) -> tuple[DCScene, DCScene]:
@@ -91,7 +85,7 @@ class Heca(Configurable):
         else:
             new_ep = False
 
-        z, fb, lock = self.step(self._x, self._y, new_ep)
+        z, fb, lock = self.step(self._x, new_ep)
         self._x = z
 
         if fb.truncated or fb.terminal or lock:
