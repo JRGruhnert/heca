@@ -17,6 +17,8 @@ def main():
     add_tag_argument(parser)
     parser.add_argument(
         "--max-demos",
+        "--max_demos",
+        dest="max_demos",
         type=int,
         default=None,
         help="Only plot the first N demos of each agent.",

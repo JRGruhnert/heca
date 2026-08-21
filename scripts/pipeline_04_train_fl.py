@@ -16,11 +16,11 @@ from heca.learning.learner import WandBConfig
 from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
 
-import conf.networks
-from conf.networks import NETWORK_NAMES
-
 from scripts.common.args import add_scene_argument
 from scripts.common.scenes import agents_by_scene
+
+import conf.networks
+from conf.networks import NETWORK_NAMES
 
 
 def generate_clients(

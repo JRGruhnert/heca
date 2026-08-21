@@ -118,6 +118,9 @@ class TapasExpert(ExpertModel):
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
+        temp = GMMPolicy(self.cfg.policy)
+        assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
+        self.policy = temp.to(device)
 
     def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.policy.reset_episode()
@@ -125,16 +128,11 @@ class TapasExpert(ExpertModel):
         if self.cfg.policy.return_full_batch:
             predictions = self.make_batch_prediction(xt)
             if predictions is None:
-                return x, SceneFeedback(
-                    reward=0.0,
-                    terminal=True,
-                    truncated=False,
-                )  # Error
-
+                return x, SceneFeedback(reward=0.0, terminal=True, truncated=False)
             while not predictions.is_finished:
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
-                print(action)
+                # print(action)
                 tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
         else:
@@ -180,14 +178,12 @@ class TapasExpert(ExpertModel):
 
     def _load(self, path: Path):
         filepath = self.policy_path(path)
-        temp = GMMPolicy(self.cfg.policy)
-        assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         if filepath.exists():
-            temp.from_disk(str(filepath))
+            self.policy.from_disk(str(filepath))
+            self.policy = self.policy.to(device)
             logger.info(f"Loading tapas policy from: {filepath}")
         else:
             logger.warning(f"No tapas policy found at given path: {filepath}")
-        self.policy = temp.to(device)
 
     def eval(self):
         self.policy.eval()

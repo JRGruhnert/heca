@@ -34,7 +34,7 @@ def fit_agent(cfg: TapasExpert.Config):
     logger.info(
         f"[{cfg.scene.tag}] Fitting agent {cfg.tag} (segment_ids={cfg.segment_ids})"
     )
-    agent = TapasExpert.get(cfg)
+    agent = TapasExpert.get(cfg, auto_load=False)
     demos = agent.load_demos()
 
     _, avg_loglik_1 = agent.fit_stage1(demos)
