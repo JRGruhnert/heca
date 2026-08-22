@@ -120,7 +120,8 @@ class OGSceneOG(OGScene):
             else:
                 e_pos = obs[f"privileged_{label}_pos"]
             wxyz = obs[f"privileged_{label}_quat"]
-            e_rot = np.array([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=np.float32)
+            # privileged_*_quat is already (w, x, y, z); keep it.
+            e_rot = np.array(wxyz, dtype=np.float32)
             e_rot = Quaternion.normalize(e_rot)
             e_rot_aa = Quaternion.log_map(e_rot)
             e_ste = np.atleast_1d(obs[f"privileged_{label}_state"])

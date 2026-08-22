@@ -81,7 +81,8 @@ class OGScene(Scene):
         pos = obs["proprio_effector_pos"]
         rot = obs["proprio_effector_quat"]
         ste = obs["proprio_gripper_opening"]
-        rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
+        # ogbench provides effector quaternions in (w, x, y, z) order; keep it.
+        rot = np.array(rot, dtype=np.float32)
         ee_pose = np.concatenate((pos, rot))
         if "actions" in obs.keys():  # is demo
             # Reconstruct the achieved action from the EE pose delta instead of
@@ -110,6 +111,10 @@ class OGScene(Scene):
             "gripper_state": np.atleast_1d(obs["proprio_gripper_state"]),
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
+            "center_pose": np.concatenate(
+                [obs["meta_xyz_center"], np.array([1, 0, 0, 0])]
+            ),
+            "center_yaw_pose": np.concatenate([obs["meta_xyz_center"], rot]),
         }
 
     def to_internal(self, obs: Any, info: dict[str, Any]) -> Any:
@@ -148,24 +153,19 @@ class OGScene(Scene):
 
     def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pos = obs["proprio_effector_pos"]
-        # wxyz = obs["proprio/effector_quat"]
         yaw = obs["proprio_effector_yaw"].item()
         rot = self.yaw_to_quat(yaw)
-        # rot = torch.tensor([wxyz[1], wxyz[2], wxyz[3], wxyz[0]], dtype=torch.float32)
         ste_idx = np.atleast_1d(obs["proprio_gripper_state"])
-        # print(
-        #    f"ee {np.concatenate((self.last_pos, self.yaw_to_quat(yaw), self.last_state))}"
-        # )
         return pos, rot, ste_idx
 
     def yaw_to_quat(self, yaw: float) -> np.ndarray:
         half_yaw = yaw / 2
-        return np.array([0, 0, np.sin(half_yaw), np.cos(half_yaw)], dtype=np.float32)
+        return np.array([np.cos(half_yaw), 0, 0, np.sin(half_yaw)], dtype=np.float32)
 
     def quat_to_yaw(self, quat: np.ndarray) -> float:
-        # Assuming quat is in (x, y, z, w) format
-        siny_cosp = 2 * (quat[3] * quat[2] + quat[0] * quat[1])
-        cosy_cosp = 1 - 2 * (quat[1] ** 2 + quat[2] ** 2)
+        # quat is in (w, x, y, z) format.
+        siny_cosp = 2 * (quat[0] * quat[3] + quat[1] * quat[2])
+        cosy_cosp = 1 - 2 * (quat[2] ** 2 + quat[3] ** 2)
         yaw = np.arctan2(siny_cosp, cosy_cosp)
         return yaw
 

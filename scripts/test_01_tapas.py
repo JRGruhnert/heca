@@ -22,11 +22,6 @@ def main():
         default=True,
         help="Use ground-truth observations (default: true).",
     )
-    parser.add_argument(
-        "--passive-viewer",
-        action="store_true",
-        help="Use the MuJoCo passive viewer instead of matplotlib images.",
-    )
     args = parser.parse_args()
 
     scene_cfg = find_scene_config(args.scene)
@@ -45,7 +40,6 @@ def main():
     tester_cfg = TapasManualExecuter.Config(
         agents=agents,
         scene=scene_cfg,
-        use_passive_viewer=args.passive_viewer,
         use_gt=args.use_gt,
     )
 

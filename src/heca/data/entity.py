@@ -73,7 +73,8 @@ class Entity(Configurable):
         pos = obs[f"heca_{label}_pos"]
         rot = obs[f"heca_{label}_rot"]
         pos = self.normalize_position(pos, obs)
-        rot = np.array([rot[1], rot[2], rot[3], rot[0]], dtype=np.float32)
+        # heca_*_rot is already (w, x, y, z); keep it before log-mapping.
+        rot = np.array(rot, dtype=np.float32)
         quat = Quaternion.normalize(rot)
         aa = Quaternion.log_map(quat)
         return np.concatenate((pos, aa))

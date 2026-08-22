@@ -29,6 +29,38 @@ from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
 
 
+# --- riepybdlib quaternion-log singularity patch ---------------------------------
+# The S³ quaternion manifold's log map divides by the norm of the quaternion's
+# vector part, so it is singular at the antipode [-1, 0, 0, 0] (a full 360°
+# rotation). ogbench's end-effector points down via a ~180° roll about the x-axis
+# (w ≈ 0), and TAPAS's per-frame projection can wrap the relative orientation
+# through 360°, producing w ≈ -1 and NaN covariances during fitting. Projecting
+# each quaternion onto the positive-real (w ≥ 0) hemisphere before the log makes
+# the map single-valued and avoids the singularity without changing the data
+# convention. This lives here (rather than in the pinned riepybdlib dependency)
+# because we can only change this code base.
+import riepybdlib.mappings as _rbd_mappings
+
+_orig_quat_log_e = _rbd_mappings.quat_log_e
+
+
+def _hemisphere_quat_log_e(g, reg=1e-6, arccos_func=_rbd_mappings.arccos_cont):
+    if isinstance(g, list):
+        g = [(-q if q.q0 < 0 else q) for q in g]
+    elif g.q0 < 0:
+        g = -g
+    return _orig_quat_log_e(g, reg, arccos_func)
+
+
+def _hemisphere_quat_log_e_star(g, reg=1e-6):
+    return _hemisphere_quat_log_e(g, reg, _rbd_mappings.arccos_star)
+
+
+_rbd_mappings.quat_log_e = _hemisphere_quat_log_e
+_rbd_mappings.quat_log_e_star = _hemisphere_quat_log_e_star
+# --------------------------------------------------------------------------------
+
+
 class TapasExpert(ExpertModel):
     @dataclass(kw_only=True)
     class Config(ExpertModel.Config):
@@ -38,7 +70,7 @@ class TapasExpert(ExpertModel):
                 suffix="release",
                 model=AutoTPGMMConfig(
                     tpgmm=TPGMMConfig(
-                        n_components=20,
+                        n_components=10,
                         model_type=ModelType.HMM,
                         use_riemann=True,
                         add_time_component=True,
@@ -53,8 +85,6 @@ class TapasExpert(ExpertModel):
                         reg_em_finish_diag_gripper=2e-2,
                         trans_cov_mask_t_pos_corr=False,
                         em_steps=50,
-                        fix_first_component=False,  # True maybe
-                        fix_last_component=False,  # True maybe
                         reg_init_diag=5e-4,  # 5
                         heal_time_variance=False,
                     ),
@@ -69,14 +99,13 @@ class TapasExpert(ExpertModel):
                     demos_segmentation=DemoSegmentationConfig(
                         distance_based=False,
                         velocity_based=True,
-                        repeat_final_step=0,  # 1
-                        components_prop_to_len=True,
+                        components_prop_to_len=True,  # True,
                         velocity_threshold=0.002,
                     ),
                     cascade=CascadeConfig(),
                 ),
                 time_based=True,
-                predict_dx_in_xdx_models=False,
+                predict_dx_in_xdx_models=True,
                 binary_gripper_action=False,
                 binary_gripper_closed_threshold=0.0,
                 dbg_prediction=False,
@@ -217,7 +246,7 @@ class TapasExpert(ExpertModel):
 
         for l in self.scene.entities:
             poses[f"{l}_target"] = dc_goal[l].tpose
-        poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
+        poses["ee_target"] = torch.tensor(dc_goal.extras["center_yaw_pose"])
         object_poses = dict_to_tensordict(poses)
 
         states = {l: dc_obs[l].tste for l in self.scene.entities}
@@ -293,7 +322,6 @@ class TapasExpert(ExpertModel):
     def fit_stage1(self, demos: Demos):
         liks, avg_logliks = self.model.fit_trajectories(
             demos,
-            fix_frames=True,
             init_strategy=InitStrategy.TIME_BASED,
             fitting_actions=(FittingStage.INIT,),
         )
@@ -303,7 +331,6 @@ class TapasExpert(ExpertModel):
     def fit_stage2(self, demos: Demos):
         liks, avg_logliks = self.model.fit_trajectories(
             demos,
-            fix_frames=True,
             fitting_actions=(FittingStage.EM_HMM,),
         )
         logger.info(f"stage2 avg_logliks={avg_logliks}")

@@ -219,21 +219,17 @@ class TDSceneReferences(TensorDict):
 
 
 def relative_quaternion(q: torch.Tensor, q_ref: torch.Tensor) -> torch.Tensor:
-    # q, q_ref: (..., 4) in (w, x, y, z) or (x, y, z, w) format
-    # Assume (x, y, z, w) format as is common in PyTorch/robotics
-    # Convert to (w, x, y, z) for computation if needed
-    # Here, we assume (x, y, z, w)
+    """Relative rotation ``q * conj(q_ref)`` for quaternions in (w, x, y, z)."""
     def quat_conj(q):
-        return torch.tensor([-q[0], -q[1], -q[2], q[3]], device=q.device, dtype=q.dtype)
+        return torch.stack([q[..., 0], -q[..., 1], -q[..., 2], -q[..., 3]], dim=-1)
 
     def quat_mult(q1, q2):
-        x1, y1, z1, w1 = q1
-        x2, y2, z2, w2 = q2
+        w1, x1, y1, z1 = torch.unbind(q1, -1)
+        w2, x2, y2, z2 = torch.unbind(q2, -1)
         w = w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2
         x = w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2
         y = w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2
         z = w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2
-        return torch.stack([x, y, z, w])
+        return torch.stack([w, x, y, z], dim=-1)
 
-    q_ref_conj = quat_conj(q_ref)
-    return quat_mult(q, q_ref_conj)
+    return quat_mult(q, quat_conj(q_ref))
