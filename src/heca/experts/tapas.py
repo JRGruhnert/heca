@@ -28,7 +28,6 @@ from heca.misc import logger
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
 
-
 # --- riepybdlib quaternion-log singularity patch ---------------------------------
 # The S³ quaternion manifold's log map divides by the norm of the quaternion's
 # vector part, so it is singular at the antipode [-1, 0, 0, 0] (a full 360°
@@ -448,7 +447,7 @@ class TapasExpert(ExpertModel):
                 stacked = self.dcscenes_to_tdtapas(demo_extracted)
             observations.append(stacked)
 
-        demos = Demos(
+        return Demos(
             observations,
             meta_data={"tag": self.cfg.tag + self.cfg.label},
             add_init_ee_pose_as_frame=True,
@@ -459,8 +458,6 @@ class TapasExpert(ExpertModel):
             modulo_object_z_rotation=False,
             make_quats_continuous=True,
         )  # type: ignore
-        demos.frame_names
-        return demos
 
     def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> TensorDict:
         obs: list[TensorDict] = []

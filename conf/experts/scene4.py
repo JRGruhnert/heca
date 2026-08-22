@@ -10,7 +10,7 @@ peg0_base_base = TapasExpert.Config(
         ["peg0", "peg0_target"],
         ["peg0_target", "ee_target"],
     ],
-    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    segment_ids=[0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 )
 
 lid0_base_base = TapasExpert.Config(
