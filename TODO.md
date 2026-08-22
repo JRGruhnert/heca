@@ -2,11 +2,13 @@
 
 ## Short Horizon:
 
-- ogbench: step normalization
-- ogbench: virtual evaluation
-- make graph object
-- fix tapas models (record tapas models)
-- rerecord ogbenchog models
+- tapas: n_components less
+- tapas: more demos
+- tapas: remove ee_init and ee_target
+- ogbench: decide for sim_step size
+- ogbench: test virtual
+- ogbench: sample for agent -> eval agents (1,2,3 try plot)
+- record ogbenchog models
 
 ## Long Horizon:
 

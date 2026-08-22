@@ -6,7 +6,7 @@ button0_s2_s0 = TapasExpert.Config(
     tag="button0_s2_s0",
     scene=OGScene1.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
-    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
 )
 
 button0_s0_s1 = TapasExpert.Config(
@@ -14,7 +14,7 @@ button0_s0_s1 = TapasExpert.Config(
     tag="button0_s0_s1",
     scene=OGScene1.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
-    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    segment_ids=[0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 )
 
 button0_s1_s2 = TapasExpert.Config(
