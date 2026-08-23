@@ -211,9 +211,6 @@ class Learner(Persistable):
         }
 
         group, job_type = _wandb_group_and_job_type(self.cfg.tag)
-        # reinit="create_new" gives every client its own run instead of reusing
-        # the process-global wandb.run, so parallel clients each have an
-        # independent step axis and no longer collide in one shared run.
         self._wandb_run = wandb.init(
             project=self.cfg.wandb.project,
             entity=self.cfg.wandb.entity,
@@ -227,13 +224,6 @@ class Learner(Persistable):
             reinit="create_new",
         )
 
-        # wandb 0.25.1: with reinit="create_new" wandb.init() skips setting the
-        # process-global wandb.run (see _set_global_run guard in wandb_init.py),
-        # but run.watch()'s torch-hook machinery reads the global run at
-        # registration time (`wandb.run._torch._hook_handles`) and crashes with
-        # `AttributeError: 'NoneType' object has no attribute '_torch'` when it
-        # is None. Point the global at this run so the hooks can register; every
-        # client still logs through its own run object.
         wandb.run = self._wandb_run
 
         if self.cfg.wandb.watch_model:
@@ -250,13 +240,8 @@ class Learner(Persistable):
         logger.info(f"Update {self.current_update:4d} | {metrics_str}")
 
         if self.cfg.wandb.enabled:
-            # No explicit step: wandb.watch() logs gradients/histograms with the
-            # run's auto-incremented step counter, so an explicit `step=` here
-            # would fall behind and spam "Tried to log to step N that is less
-            # than the current step M" warnings. Auto-increment keeps each run's
-            # step axis monotonic (x-axis = log calls, i.e. updates + watch).
             self._wandb_run.log(
-                {f"{self.cfg.tag}/{k}": v for k, v in self.metrics.items()},
+                {f"{k}/{self.cfg.tag}": v for k, v in self.metrics.items()},
             )
 
     def update(self, fb: SceneFeedback) -> bool:

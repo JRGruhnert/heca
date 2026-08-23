@@ -1,11 +1,14 @@
 import argparse
 import os
+import random
 import signal
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import matplotlib
+import numpy as np
+import torch
 
 from heca.heca_gnn.network import Network
 
@@ -184,9 +187,23 @@ def main():
         action="store_true",
         help="Enable wandb logging. Disabled by default for multi-client runs.",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Optional RNG seed. If given, the process RNGs are seeded with it "
+        "(reproducible run); otherwise each launch is unseeded and therefore "
+        "draws fresh randomness automatically. Not stored in any config.",
+    )
     add_scene_argument(parser)
     add_ee_argument(parser)
     args = parser.parse_args()
+
+    if args.seed is not None:
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        logger.info(f"Seeded process RNGs with {args.seed}")
 
     def _handle_stop(signum, frame):
         raise KeyboardInterrupt
