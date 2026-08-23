@@ -8,10 +8,32 @@ from heca.data.entity import Entity
 
 
 class ConPair:
+    # Floor for the pooled std so constant dimensions (e.g. a state column that
+    # never varies in one condition) do not produce division by zero.
+    _CHANGE_EPS = 1e-6
+
     def __init__(self, label: str, pre: Condition, post: Condition):
         self.label = label
         self.pre = pre
         self.post = post
+        self._change_scores = self._compute_change_scores()
+
+    def _compute_change_scores(self) -> dict[str, float]:
+        scores: dict[str, float] = {}
+        for key in set(self.pre.data_raw).intersection(set(self.post.data_raw)):
+            pre = np.asarray(self.pre.data_raw[key], dtype=np.float64)
+            post = np.asarray(self.post.data_raw[key], dtype=np.float64)
+            pooled_std = np.sqrt((pre.var(axis=0) + post.var(axis=0)) / 2.0)
+            pooled_std = np.maximum(pooled_std, self._CHANGE_EPS)
+            z = np.abs(post.mean(axis=0) - pre.mean(axis=0)) / pooled_std
+            scores[key] = float(z.mean())
+        return scores
+
+    @property
+    def change_scores(self) -> dict[str, float]:
+        if not hasattr(self, "_change_scores"):
+            self._change_scores = self._compute_change_scores()
+        return self._change_scores
 
     # @classmethod
     # def merge(
@@ -47,17 +69,10 @@ class ConPair:
         pre_data: dict[str, np.ndarray],
         post_data: dict[str, np.ndarray],
         entities: dict[str, Entity],
-        max_components: int,
     ) -> "ConPair":
-        pre = Condition("pre", pre_data, entities, max_components)
-        post = Condition("post", post_data, entities, max_components)
+        pre = Condition("pre", pre_data, entities)
+        post = Condition("post", post_data, entities)
         return cls(f"{tag}", pre, post)
-
-    @classmethod
-    def make_max_components(cls, a: "ConPair", b: "ConPair") -> tuple[int, int]:
-        pre_max = a.pre._max_components + b.pre._max_components
-        post_max = a.post._max_components + b.post._max_components
-        return pre_max, post_max
 
     @classmethod
     def _merge_data(

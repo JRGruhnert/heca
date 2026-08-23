@@ -17,6 +17,8 @@ from heca.data.data import DCScene
 from heca.data.entity import Entity
 from heca.conditions.condition import Condition
 
+ANCHOR_CHANGE_THRESHOLD: float = 1.0
+
 
 class Graph:
     def __init__(self, entities: dict[str, Entity]):
@@ -89,7 +91,13 @@ class Graph:
             node = self.ns_entity.get_by_key(key)
             logger.debug(f"Update Subgoal {node.entity} {key}")
             assert isinstance(node, EntityNode)
-            if self.test_value(node, self.goal):
+            if (
+                node.change_score is not None
+                and node.change_score < ANCHOR_CHANGE_THRESHOLD
+            ):
+                x = self.start.get(node.entity)
+                logger.debug(f"From Start (anchor): {x}")
+            elif self.test_value(node, self.goal):
                 x = self.goal.get(node.entity)
                 logger.debug(f"From Goal:   {x}")
             elif self.test_value(node, self.start):
@@ -178,6 +186,7 @@ class Graph:
         con: Condition,
         comp_sources: dict[str, set[tuple[str, str]]],
         pre_sources: dict[str, tuple[str, str]],
+        change_scores: dict[str, float] | None = None,
     ) -> dict[str, tuple[str, str]]:
         post_sources: dict[str, tuple[str, str]] = {}
         for entity, sources in pre_sources.items():
@@ -194,6 +203,7 @@ class Graph:
                     data=DCEntity.empty(),
                     sources=sources,
                     con=con,
+                    change_score=(change_scores.get(entity) if change_scores else None),
                 ),
             )
             post_sources[entity] = (self.es_summary.type[1], key)
@@ -247,6 +257,7 @@ class Graph:
                 ac.post,
                 post_comp_sources,
                 pre_sources,
+                change_scores=ac.change_scores,
             )
             for b in agents:
                 bc = b.conditions

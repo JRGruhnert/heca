@@ -121,6 +121,7 @@ class TapasExpert(ExpertModel):
         gt_frames: list[list[str]] | None = None
         demo_selections: list[int] | None = None
         segment_ids: list[int] | None = None
+        max_con_comps: int = 10
 
         def __post_init__(self):
             # Convert entity-name-based gt_frames to the frame indices the
@@ -319,7 +320,7 @@ class TapasExpert(ExpertModel):
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities, 1)
+        pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities)
         pair.plot(path)
         joblib.dump(pair, cache_path)
         logger.info(f"Saved conditions to {cache_path}")

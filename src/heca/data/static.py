@@ -3,7 +3,7 @@ from typing import Any
 
 import numpy as np
 
-from heca.data.data import DCEntity, DCScene
+from heca.data.data import DCScene
 from heca.data.entity import Entity
 
 
@@ -12,7 +12,7 @@ class StaticEntity(Entity):
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        threshold: float = 0.8
+        threshold: float = 0.9
 
     @property
     def measurement(self) -> dict:

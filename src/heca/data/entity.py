@@ -1,3 +1,5 @@
+import math
+import warnings
 from typing import Any
 
 import numpy as np
@@ -25,6 +27,12 @@ class Entity(Configurable):
         n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
+        max_fit_components: int = 10
+        # Pose gate: max allowed sigma (Mahalanobis) deviation of a value from
+        # the best mixture component. ``None`` derives it from ``threshold``
+        # via ``sqrt(-2*ln(threshold))``, which reproduces the legacy single
+        # threshold on the pose part exactly (0.9 -> 0.46 sigma, 0.4 -> 1.35).
+        z_threshold: float | None = None
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -71,10 +79,9 @@ class Entity(Configurable):
 
     def unnormalize_position(self, pos, center, scaler) -> np.ndarray:
         """Inverse of ``normalize_position`` (raw = norm / scaler + center)."""
-        return (
-            np.asarray(pos, dtype=np.float32) / np.asarray(scaler, dtype=np.float32)
-            + np.asarray(center, dtype=np.float32)
-        )
+        return np.asarray(pos, dtype=np.float32) / np.asarray(
+            scaler, dtype=np.float32
+        ) + np.asarray(center, dtype=np.float32)
 
     def common_pose_part(self, label: str, obs: dict) -> np.ndarray:
         pos = obs[f"heca_{label}_pos"]
@@ -122,7 +129,8 @@ class Entity(Configurable):
 
         state_id = value[6 + D].astype(int)
         feat[: self.cfg.n_states] = -self.LOGIT_CONFIDENCE
-        feat[state_id] = self.LOGIT_CONFIDENCE
+        if state_id < self.cfg.n_states:
+            feat[state_id] = self.LOGIT_CONFIDENCE
 
         feat[M : M + 3] = value[0:3]
         feat[M + 3 : M + 6] = self.BASE_LOGSTD
@@ -142,45 +150,125 @@ class Entity(Configurable):
 
     def secure_mix_parameters(self, p: dict, eps: float = 1e-15) -> dict:
         pis = p["measurement"]["state"]["pis"]
-        padded = np.full((pis.shape[0], self.cfg.n_states), eps, dtype=np.float32)
+        # Pad to at least cfg.n_states; if the fitted categorical has *more*
+        # outcomes than configured, keep them all (instead of crashing) and warn,
+        # because the GNN feature encoders can only represent cfg.n_states.
+        n_outcomes = max(self.cfg.n_states, pis.shape[1])
+        padded = np.full((pis.shape[0], n_outcomes), eps, dtype=np.float32)
         padded[:, : pis.shape[1]] = pis
         # Renormalize so probabilities sum to 1
         padded /= padded.sum(axis=1, keepdims=True)
         p["measurement"]["state"]["pis"] = padded
+        if pis.shape[1] > self.cfg.n_states:
+            warnings.warn(
+                f"Fitted categorical has {pis.shape[1]} outcomes but "
+                f"cfg.n_states={self.cfg.n_states}. Increase n_states in the "
+                "entity config so the GNN features do not silently drop states.",
+                stacklevel=2,
+            )
         return p
 
     def score_single(
         self, sample: np.ndarray, up: dict, eps: float = 1e-15
     ) -> tuple[float, bool]:
-        """Score a single sample under a StepMix model. Returns [0,1]."""
+        """Score a single sample under a StepMix model. Returns ``(score, valid)``.
+
+        ``score`` (in ``[0, 1]``) is the sample's likelihood relative to the
+        model's peak (1.0 = exactly at the most probable point); it is kept as
+        a diagnostic/ranking value.
+
+        ``valid`` is the conjunction of two gates:
+
+        * pose gate: the Mahalanobis distance ``z`` (in sigma units) of the
+          sample to the best (highest-posterior) component must be
+          ``<= z_threshold``. If ``z_threshold`` is ``None`` it defaults to
+          ``sqrt(-2*ln(threshold))``, reproducing the legacy single-threshold
+          behavior on the pose part exactly (0.9 -> 0.46 sigma, 0.4 -> 1.35).
+        * state gate: a plain equality check — the observed state must equal
+          the best component's most likely state. No tuning knob: if the
+          state does not match, the value is not in the condition.
+
+        Because the pose gate is scale-free (sigma deviation) and the state
+        gate is a plain categorical match, they are comparable across entity
+        types (e.g. static vs free-moving).
+        """
         sample = self.model_value(sample)
         p = self.secure_mix_parameters(up)
-        # The value layout is [pose | extra | state]; the StepMix pose
-        # measurement covers everything except the final state column, so use
-        # sample[:-1] instead of a hard-coded 6 dims.
         pose = sample[:-1]
         state = int(sample[-1])
-        best_logprob = -np.inf
-        for k in range(len(p["weights"])):
-            mu = p["measurement"]["pose"]["means"][k]
-            var = p["measurement"]["pose"]["covariances"][k]
-            pis = p["measurement"]["state"]["pis"][k]
+        weights = p["weights"]
+        means = p["measurement"]["pose"]["means"]
+        vars_ = p["measurement"]["pose"]["covariances"]
+        pis = p["measurement"]["state"]["pis"]
 
-            # Gaussian
-            log_gauss = -0.5 * np.sum(np.log(2 * np.pi * var) + (pose - mu) ** 2 / var)
+        def loglik(pose_x: np.ndarray, state_x: int) -> float:
+            best = -np.inf
+            for k in range(len(weights)):
+                var = np.maximum(vars_[k], eps)
+                log_gauss = -0.5 * np.sum(
+                    np.log(2 * np.pi * var) + (pose_x - means[k]) ** 2 / var
+                )
+                state_prob = pis[k][state_x] if state_x < len(pis[k]) else eps
+                log_cat = np.log(np.clip(state_prob, eps, 1.0))
+                s = np.log(weights[k]) + log_gauss + log_cat
+                if s > best:
+                    best = s
+            return best
 
-            # Categorical
-            state_prob = pis[state] if state < len(pis) else eps
+        loglik_x = loglik(pose, state)
+        loglik_max = max(
+            loglik(means[k], int(np.argmax(pis[k]))) for k in range(len(weights))
+        )
+        score = float(np.clip(np.exp(loglik_x - loglik_max), 0.0, 1.0))
 
-            log_cat = np.log(np.clip(state_prob, eps, 1))
-            score = np.log(p["weights"][k]) + log_gauss + log_cat
+        # --- pose gate: sigma deviation to the best component ---
+        best_k, z = self._best_component(pose, p, eps=eps)
+        valid_pose = z <= self._effective_z_threshold()
 
-            if score > best_logprob:
-                best_logprob = score
+        # --- state gate: hard equality with the best component's most likely
+        # state. Not tunable: a mismatching state means "not in the condition".
+        mode_state = int(np.argmax(pis[best_k]))
+        valid_state = state == mode_state
 
-        score = np.exp(best_logprob)
-        valid = score >= self.cfg.threshold
-        return score, valid
+        return score, bool(valid_pose and valid_state)
+
+    def _effective_z_threshold(self) -> float:
+        if self.cfg.z_threshold is not None:
+            return float(self.cfg.z_threshold)
+        if self.cfg.threshold <= 0.0:
+            return float("inf")
+        return float(math.sqrt(-2.0 * math.log(self.cfg.threshold)))
+
+    def _best_component(
+        self, pose: np.ndarray, p: dict, eps: float = 1e-15
+    ) -> tuple[int, float]:
+        """Index of the highest-posterior component for ``pose`` (weight *
+        Gaussian density, ignoring the state) and the pose's Mahalanobis
+        distance (sigma deviation) to that component."""
+        weights = p["weights"]
+        means = p["measurement"]["pose"]["means"]
+        vars_ = p["measurement"]["pose"]["covariances"]
+        best_k, best_post = -1, -np.inf
+        for k in range(len(weights)):
+            var = np.maximum(vars_[k], eps)
+            post = np.log(weights[k]) - 0.5 * np.sum(
+                np.log(2 * np.pi * var) + (pose - means[k]) ** 2 / var
+            )
+            if post > best_post:
+                best_k, best_post = k, post
+        z = float(
+            np.sqrt(np.sum((pose - means[best_k]) ** 2 / np.maximum(vars_[best_k], eps)))
+        )
+        return best_k, z
+
+    def sigma_deviation(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> float:
+        """Mahalanobis distance (in sigma units) from ``sample`` to the best
+        (highest-posterior) component of the model. Useful for tuning
+        ``z_threshold``."""
+        sample = self.model_value(sample)
+        p = self.secure_mix_parameters(up)
+        _, z = self._best_component(sample[:-1], p, eps=eps)
+        return z
 
     @staticmethod
     def _gaussian_overlap(
@@ -210,10 +298,25 @@ class Entity(Configurable):
         return width * distance
 
     def containment_score(self, up1: dict, up2: dict):
-        """How much of others mass falls inside selfs distribution."""
+        """How much of ``up2``'s mass falls inside ``up1``'s distribution. [0, 1].
+
+        Normalized by the self-overlap of ``up1``, so a distribution always
+        contains itself with score 1.0 and the value does not depend on the
+        number of mixture components or the weight split. (Previously a
+        multi-component model scored only ~sum(w_i^2) against itself — 0.5 for
+        two equal one-hot components — which could never reach the 0.9 static
+        threshold.)
+        """
         p1 = self.secure_mix_parameters(up1)
         p2 = self.secure_mix_parameters(up2)
+        overlap = self._pair_overlap(p1, p2)
+        self_overlap = self._pair_overlap(p1, p1)
+        if self_overlap <= 0.0:
+            return 0.0
+        return float(np.clip(overlap / self_overlap, 0.0, 1.0))
 
+    def _pair_overlap(self, p1: dict, p2: dict) -> float:
+        """Expected overlap between two mixtures (un-normalized, in [0, 1])."""
         score = 0.0
         for i in range(len(p1["weights"])):
             w_i = p1["weights"][i]
@@ -234,11 +337,17 @@ class Entity(Configurable):
                         directional=self.cfg.directional_containment,
                     )
                 )
+                # Align categorical distributions to the union of observed states.
+                n = max(len(cat1), len(cat2))
+                if len(cat1) < n:
+                    cat1 = np.pad(cat1, (0, n - len(cat1)))
+                if len(cat2) < n:
+                    cat2 = np.pad(cat2, (0, n - len(cat2)))
                 overlap_cat = np.sum(cat1 * cat2)
                 peak_target = np.max(cat1)
                 cat_score = overlap_cat / peak_target if peak_target > 0 else 0.0
                 score += w_i * w_j * gauss_rel * cat_score
-        return score  # [0, 1]
+        return float(score)
 
     def best_sample(self, up1: dict, up2: dict, eps: float = 1e-15):
         p1 = self.secure_mix_parameters(up1)
@@ -267,9 +376,16 @@ class Entity(Configurable):
                     np.sum(np.log(2 * np.pi * (vars1[i] + vars2[j])))
                     + np.sum(diff**2 / (vars1[i] + vars2[j]))
                 )
-                # Categorical part — padded to same target space
-                cat_prod = state1[i] * state2[j]  # element-wise over aligned states
+                # Categorical part — padded to the union of observed states
+                n = max(len(state1[i]), len(state2[j]))
+                c1 = np.pad(state1[i], (0, n - len(state1[i]))) if len(state1[i]) < n else state1[i]
+                c2 = np.pad(state2[j], (0, n - len(state2[j]))) if len(state2[j]) < n else state2[j]
+                cat_prod = c1 * c2  # element-wise over aligned states
                 state = int(np.argmax(cat_prod))
+                if cat_prod[state] <= 0.0:
+                    # Disjoint categorical supports: pick the state with the
+                    # highest combined mass instead of an arbitrary argmax(0).
+                    state = int(np.argmax(c1 + c2))
                 log_cat = np.log(np.clip(cat_prod[state], eps, None))
                 score = np.log(weights1[i]) + np.log(weights2[j]) + log_norm + log_cat
                 results.append({"score": score, "pose": mean, "state": state})
@@ -285,7 +401,9 @@ class Entity(Configurable):
         NOTE: ASSUMES MODELS USE DIAG MODE
         Returns:
             np.ndarray of shape (N, FEATURE_DIM) with layout:
-                - [0:MAX_STATE_DIM]             = logits (state logits, unnormalized)
+                - [0:MAX_STATE_DIM]             = state scores on the same
+                  [-LOGIT_CONFIDENCE, +LOGIT_CONFIDENCE] scale as gnn_format
+                  (2*p - 1) * LOGIT_CONFIDENCE; impossible states stay at -10
                 - [M:M+3]                       = μ_pos
                 - [M+3:M+6]                     = log(σ_pos)
                 - [M+6:M+10]                    = quaternion [w, x, y, z]
@@ -306,8 +424,10 @@ class Entity(Configurable):
 
         feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
 
-        # State logits
-        feat[:, : self.cfg.n_states] = np.log(pis)
+        # State scores — same convention and scale as gnn_format.
+        feat[:, : self.cfg.n_states] = -self.LOGIT_CONFIDENCE
+        n_logit = min(pis.shape[1], self.cfg.n_states)
+        feat[:, :n_logit] = self.LOGIT_CONFIDENCE * (2.0 * pis[:, :n_logit] - 1.0)
 
         # Pose: position mean + logstd
         feat[:, M : M + 3] = means[:, 0:3]

@@ -10,14 +10,9 @@ from heca.data.entity import Entity
 
 class Condition:
     def __init__(
-        self,
-        label: str,
-        data: dict[str, np.ndarray],
-        entities: dict[str, Entity],
-        max_components: int,
+        self, label: str, data: dict[str, np.ndarray], entities: dict[str, Entity]
     ):
         self._data_raw = data
-        self._max_components = max_components
         self._entities = entities
         self.label = label
 
@@ -72,14 +67,28 @@ class Condition:
             best_bic = np.inf
             bic_values: list[float] = []
 
-            for k in range(1, self._max_components + 1):
+            for k in range(1, self.entities[key].cfg.max_fit_components + 1):
                 model = StepMix(
                     n_components=k,
-                    measurement=self.entities[key].measurement,
+                    measurement=self.entities[key].measurement,  # type: ignore
+                    verbose=False,
+                    progress_bar=0,
                 )
 
                 model.fit(self.entities[key].model_value(values))
-                bic = model.bic(values)
+                n_outcomes = model.get_parameters()["measurement"]["state"][
+                    "pis"
+                ].shape[1]
+                if n_outcomes > self.entities[key].cfg.n_states:
+                    raise ValueError(
+                        f"Entity '{key}': fitted categorical has {n_outcomes} "
+                        f"outcomes but cfg.n_states="
+                        f"{self.entities[key].cfg.n_states}. Increase n_states "
+                        "in the entity config to match the distinct states in "
+                        "the data, otherwise the GNN features silently drop "
+                        "states."
+                    )
+                bic = model.bic(self.entities[key].model_value(values))
                 bic_values.append(bic)
 
                 if bic < best_bic:
@@ -103,7 +112,7 @@ class Condition:
     #     return scores
 
     def plot(self, path: Path, label: str):
-        ks = range(1, self._max_components + 1)
+        ks = range(1, 10 + 1)
         plt.figure(figsize=(8, 5))
         for name, bic in self._bics.items():
             plt.plot(ks, bic, marker="o", label=f"{name}")

@@ -29,6 +29,7 @@ class EntityNode(GraphNode):
     static: bool = False
     weight: float = 1.0
     con: Condition | None = None
+    change_score: float | None = None
 
     # EntityNode __str__:
     def __str__(self) -> str:
