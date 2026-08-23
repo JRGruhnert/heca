@@ -18,8 +18,8 @@ import matplotlib.pyplot as plt
 from heca.experts.tapas import TapasExpert
 from heca.misc import logger
 
-from scripts.common.args import add_scene_argument, add_tag_argument
-from scripts.common.scenes import iter_agents
+from scripts.common.args import add_ee_argument, add_scene_argument, add_tag_argument
+from scripts.common.scenes import iter_agents, to_ee
 
 
 def _safe_avg(values):
@@ -87,6 +87,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
     add_tag_argument(parser)
+    add_ee_argument(parser)
     args = parser.parse_args()
 
     for cfg in iter_agents():
@@ -94,6 +95,8 @@ def main():
             continue
         if args.tag and cfg.tag != args.tag:
             continue
+        if args.ee:
+            cfg = to_ee(cfg)
         fit_agent(cfg)
 
 

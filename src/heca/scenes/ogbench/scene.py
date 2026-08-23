@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import ogbench
 import torch
-from ogbench.manipspace.envs.scene_env import ManipSpaceEnv
+from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 
 from heca.data.data import DCEntity, DCScene, TDImage
 from heca.scenes.scene import Scene, SceneFeedback
@@ -27,15 +27,15 @@ class OGScene(Scene):
         self._last_ee_pose = None
         self._last_ee_yaw = None
 
-    def _make_env(self, env_id: str) -> ManipSpaceEnv:
+    def _make_env(self, env_id: str) -> SceneEnvBase:
         return cast(
-            ManipSpaceEnv,
+            SceneEnvBase,
             ogbench.make_env_and_datasets(
                 dataset_name=env_id,
                 env_only=True,
                 mode="randomized",
                 dataset_only=False,
-                control_timestep=0.5,
+                # control_timestep=0.5,
             ),
         )
 
@@ -83,19 +83,28 @@ class OGScene(Scene):
         ste = obs["proprio_gripper_opening"]
         # ogbench provides effector quaternions in (w, x, y, z) order; keep it.
         rot = np.array(rot, dtype=np.float32)
-        ee_pose = np.concatenate((pos, rot))
+        # Normalize the ee position into the same frame as the entity poses
+        # (see Entity.normalize_position / meta_xyz_center & meta_xyz_scaler),
+        # so TAPAS's ee and object frames share one coordinate system.
+        ee_pos = (np.asarray(pos, dtype=np.float32) - obs["meta_xyz_center"]) * obs[
+            "meta_xyz_scaler"
+        ]
+        ee_pose = np.concatenate((ee_pos, rot))
         if "actions" in obs.keys():  # is demo
             # Reconstruct the achieved action from the EE pose delta instead of
             # using the raw (normalized, possibly saturated) command. The raw
             # command stays non-zero when the EE is blocked, hiding pauses.
+            # The delta is computed in the normalized ee frame (center cancels,
+            # only the scaler applies), matching ee_pose and the entity poses;
+            # to_internal_action rescales it before stepping the env.
             yaw = obs["proprio_effector_yaw"].item()
             if self._last_ee_pose is not None:
-                pos_delta = pos - self._last_ee_pose
+                pos_delta = ee_pos - self._last_ee_pose
                 yaw_delta = self._wrap_angle(yaw - self._last_ee_yaw)
             else:
-                pos_delta = np.zeros_like(pos)
+                pos_delta = np.zeros_like(ee_pos)
                 yaw_delta = 0.0
-            self._last_ee_pose = pos
+            self._last_ee_pose = ee_pos
             self._last_ee_yaw = yaw
             axis_angle = np.array([0, 0, yaw_delta], dtype=np.float32)
             action = np.concatenate([pos_delta, axis_angle, ste])
@@ -111,10 +120,8 @@ class OGScene(Scene):
             "gripper_state": np.atleast_1d(obs["proprio_gripper_state"]),
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
-            "center_pose": np.concatenate(
-                [obs["meta_xyz_center"], np.array([1, 0, 0, 0])]
-            ),
-            "center_yaw_pose": np.concatenate([obs["meta_xyz_center"], rot]),
+            "meta_xyz_center": obs["meta_xyz_center"],
+            "meta_xyz_scaler": obs["meta_xyz_scaler"],
         }
 
     def to_internal(self, obs: Any, info: dict[str, Any]) -> Any:
@@ -174,7 +181,11 @@ class OGScene(Scene):
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
     def to_internal_action(self, action: np.ndarray) -> np.ndarray:
-        pos = action[:3]
+        # pred.ee is the absolute ee pose in the normalized frame (same space
+        # as ee_pose / entity poses); map it back to the raw world frame.
+        # env.step(..., absolute=True) then converts this target into the delta
+        # it applies.
+        pos = action[:3] / 10.0 + np.array([0.425, 0.0, 0.0])  # ogbench meta_xyz_scaler/center
         quat = action[3:7]
         yaw = self.quat_to_yaw(quat)
         state = action[7]
@@ -184,6 +195,21 @@ class OGScene(Scene):
     def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
         action = self.to_internal_action(action)
         ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
+        obs, _ = self.to_internal(ob, info)
+        assert isinstance(reward, float)
+        return obs, SceneFeedback(
+            terminal=terminated, reward=reward, truncated=truncated
+        )
+
+    def _step_virt(
+        self, x: DCScene, y: DCScene, elabels: list[str]
+    ) -> tuple[Any, SceneFeedback]:
+        subgoal: dict[str, Any] = {}
+        for label, entity in self.entities.items():
+            if label not in elabels:
+                continue
+            subgoal.update(entity.env_state_value(label, y))
+        ob, reward, terminated, truncated, info = self.env.unwrapped.step_scene(subgoal)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         assert isinstance(reward, float)
         return obs, SceneFeedback(

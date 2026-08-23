@@ -3,6 +3,7 @@ from typing import Any
 
 import numpy as np
 
+from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
 
 
@@ -39,6 +40,19 @@ class RevoluteEntity(Entity):
         midpoint_norm = (midpoint - midpoint_mean) / midpoint_std
 
         network_input = [relative, range_norm, midpoint_norm]
+
+    def env_state_value(self, label: str, x: DCScene) -> dict[str, Any]:
+        dc = x.get(label)
+        pos = self.unnormalize_position(
+            dc.pos, x.extras["meta_xyz_center"], x.extras["meta_xyz_scaler"]
+        )
+        return {
+            f"heca_{label}_pos": pos,
+            f"heca_{label}_rot": dc.rot,
+            f"heca_{label}_ste": dc.ste,
+            # Inverse of extra_part: extra = [sin(ang), cos(ang)].
+            f"heca_{label}_ang": float(np.arctan2(dc.ext[0], dc.ext[1])),
+        }
 
     def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
         start_val = obs[f"heca_{label}_ang"][start][0]

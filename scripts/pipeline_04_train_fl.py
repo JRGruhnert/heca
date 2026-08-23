@@ -16,8 +16,8 @@ from heca.learning.learner import WandBConfig
 from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
 
-from scripts.common.args import add_scene_argument
-from scripts.common.scenes import agents_by_scene
+from scripts.common.args import add_ee_argument, add_scene_argument
+from scripts.common.scenes import agents_by_scene, to_ee
 
 import conf.networks
 from conf.networks import NETWORK_NAMES
@@ -149,6 +149,7 @@ def main():
         help="Enable wandb logging. Disabled by default for multi-client runs.",
     )
     add_scene_argument(parser)
+    add_ee_argument(parser)
     args = parser.parse_args()
 
     def _handle_stop(signum, frame):
@@ -162,6 +163,8 @@ def main():
     for scene_tag, models in agents_by_scene().items():
         if args.scene and scene_tag != args.scene:
             continue
+        if args.ee:
+            models = [to_ee(m) for m in models]
         clients.append(models)
 
     exp, server = generate_clients(

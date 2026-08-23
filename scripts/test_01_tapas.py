@@ -8,14 +8,15 @@ import argparse
 
 from heca.guis.tapas_agent_tester import TapasManualExecuter
 
-from scripts.common.args import add_scene_argument, add_tag_argument
-from scripts.common.scenes import agents_by_scene, find_scene_config
+from scripts.common.args import add_ee_argument, add_scene_argument, add_tag_argument
+from scripts.common.scenes import agents_by_scene, find_scene_config, to_ee
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser, default="scene1")
     add_tag_argument(parser)
+    add_ee_argument(parser)
     parser.add_argument(
         "--use-gt",
         action=argparse.BooleanOptionalAction,
@@ -36,6 +37,9 @@ def main():
         agents = [cfg for cfg in agents if cfg.tag == args.tag]
         if not agents:
             parser.error(f"No agent found for scene={args.scene!r} tag={args.tag!r}")
+
+    if args.ee:
+        agents = [to_ee(cfg) for cfg in agents]
 
     tester_cfg = TapasManualExecuter.Config(
         agents=agents,

@@ -2,8 +2,6 @@
 
 ## Short Horizon:
 
-- tapas: n_components less
-- tapas: more demos
 - tapas: remove ee_init and ee_target
 - ogbench: decide for sim_step size
 - ogbench: test virtual

@@ -1,5 +1,8 @@
 """Shared scene / agent config loading helpers for the pipeline scripts."""
 
+import copy
+import dataclasses
+
 from conf.scenes import SCENE_MODULES
 
 
@@ -38,6 +41,28 @@ def find_agent(scene_tag=None, tag=None):
             continue
         return cfg
     return None
+
+
+def to_ee(agent_cfg):
+    """Return an ``ee_`` variant of an agent config, computed on the fly.
+
+    The variant is a copy of ``agent_cfg`` with the tag prefixed ``ee_`` and
+    the ``ee_init`` / ``ee_target`` entries removed from ``gt_frames``. The
+    policy (and scene) are copied so the original config is left untouched.
+    """
+    gt_frames = None
+    if agent_cfg.gt_frames is not None:
+        gt_frames = [
+            [name for name in frame if name not in ("ee_init", "ee_target")]
+            for frame in agent_cfg.gt_frames
+        ]
+    return dataclasses.replace(
+        agent_cfg,
+        tag=f"ee_{agent_cfg.tag}",
+        scene=copy.deepcopy(agent_cfg.scene),
+        gt_frames=gt_frames,
+        policy=copy.deepcopy(agent_cfg.policy),
+    )
 
 
 def find_scene_config(scene_tag):

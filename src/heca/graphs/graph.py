@@ -20,35 +20,27 @@ from heca.conditions.condition import Condition
 
 
 class Graph:
-
     def __init__(self, entities: dict[str, Entity]):
-        self.entities: dict[str, Entity]
-        self.ns_entity: NodeSet[EntityNode] = field(
-            default_factory=lambda: NodeSet[EntityNode]("entity")
-        )
-        self.ns_option: NodeSet[OptionNode] = field(
-            default_factory=lambda: NodeSet[OptionNode]("option")
-        )
-        self.es_summary: EdgeSet[EntityNode, OptionNode] = field(
-            default_factory=lambda: EdgeSet[EntityNode, OptionNode](
-                ("entity", "summary", "option")
-            )
-        )
-        self.es_stepmix: EdgeSet[EntityNode, EntityNode] = field(
-            default_factory=lambda: EdgeSet[EntityNode, EntityNode](
-                ("entity", "stepmix", "entity")
-            )
-        )
-        self.es_tapas: EdgeSet[EntityNode, EntityNode] = field(
-            default_factory=lambda: EdgeSet[EntityNode, EntityNode](
-                ("entity", "tapas", "entity")
-            )
-        )
+        self.entities: dict[str, Entity] = entities
+        self.ns_entity: NodeSet[EntityNode] = NodeSet[EntityNode]("entity")
 
-        self.start_keys: set[str] = field(default_factory=set)
-        self.goal_keys: set[str] = field(default_factory=set)
-        self.start: DCScene = field(default_factory=DCScene.empty)
-        self.goal: DCScene = field(default_factory=DCScene.empty)
+        self.ns_option: NodeSet[OptionNode] = NodeSet[OptionNode]("option")
+
+        self.es_summary: EdgeSet[EntityNode, OptionNode] = EdgeSet[
+            EntityNode, OptionNode
+        ](("entity", "summary", "option"))
+        self.es_stepmix: EdgeSet[EntityNode, EntityNode] = EdgeSet[
+            EntityNode, EntityNode
+        ](("entity", "stepmix", "entity"))
+
+        self.es_tapas: EdgeSet[EntityNode, EntityNode] = EdgeSet[
+            EntityNode, EntityNode
+        ](("entity", "tapas", "entity"))
+
+        self.start_keys: set[str] = set()
+        self.goal_keys: set[str] = set()
+        self.start: DCScene = DCScene.empty()
+        self.goal: DCScene = DCScene.empty()
 
     def export(self) -> HeteroData:
         data = HeteroData()

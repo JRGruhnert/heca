@@ -8,19 +8,23 @@ import argparse
 
 from heca.guis.demo_selector import TapasDemoSelector
 
-from scripts.common.args import add_scene_argument, add_tag_argument
-from scripts.common.scenes import find_agent
+from scripts.common.args import add_ee_argument, add_scene_argument, add_tag_argument
+from scripts.common.scenes import find_agent, to_ee
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser, default="sceneog")
     add_tag_argument(parser, default="close_drawer")
+    add_ee_argument(parser)
     args = parser.parse_args()
 
     agent_cfg = find_agent(scene_tag=args.scene, tag=args.tag)
     if agent_cfg is None:
         parser.error(f"No agent found for scene={args.scene!r} tag={args.tag!r}")
+
+    if args.ee:
+        agent_cfg = to_ee(agent_cfg)
 
     selector = TapasDemoSelector.get(TapasDemoSelector.Config(agent=agent_cfg))
     selector.run()

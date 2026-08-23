@@ -10,7 +10,8 @@ import conf.experts.scene2
 import conf.experts.scene3
 import conf.experts.scene4
 import conf.experts.scene5
-import conf.experts.sceneog
+
+# import conf.experts.sceneog
 
 SCENE_MODULES = (
     conf.experts.scene1,
@@ -18,5 +19,5 @@ SCENE_MODULES = (
     conf.experts.scene3,
     conf.experts.scene4,
     conf.experts.scene5,
-    conf.experts.sceneog,
+    # conf.experts.sceneog,
 )

@@ -99,7 +99,7 @@ class TapasExpert(ExpertModel):
                         distance_based=False,
                         velocity_based=True,
                         components_prop_to_len=True,  # True,
-                        velocity_threshold=0.002,
+                        velocity_threshold=0.006,
                     ),
                     cascade=CascadeConfig(),
                 ),
@@ -179,9 +179,7 @@ class TapasExpert(ExpertModel):
         return z, fb
 
     def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        subgoal: dict[str, np.ndarray] = {}
-        # TODO: convert DCScene to internal scene dict
-        tdscene, tdimage, fb = self.scene.step(subgoal)
+        tdscene, tdimage, fb = self.scene.step_virt(x, y, list(self.entities.keys()))
         return self.make_scene(tdscene, tdimage), fb
 
     def make_batch_prediction(
@@ -245,7 +243,9 @@ class TapasExpert(ExpertModel):
 
         for l in self.scene.entities:
             poses[f"{l}_target"] = dc_goal[l].tpose
-        poses["ee_target"] = torch.tensor(dc_goal.extras["center_yaw_pose"])
+        # Goal ee pose, in the same normalized frame as the object targets
+        # (previously center_yaw_pose, a constant workspace-center position).
+        poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)
 
         states = {l: dc_obs[l].tste for l in self.scene.entities}

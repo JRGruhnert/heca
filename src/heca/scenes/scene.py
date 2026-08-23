@@ -45,15 +45,15 @@ class Scene(Persistable):
     ) -> tuple[DCScene, SceneFeedback]:
         raise NotImplementedError
 
-    def step(
-        self, action: np.ndarray | dict[str, np.ndarray]
+    def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
+        obs, fb = self._step(action)
+        tdscene, tdimage, _ = self.from_internal(obs)
+        return tdscene, tdimage, fb
+
+    def step_virt(
+        self, x: DCScene, y: DCScene, elabels: list[str]
     ) -> tuple[DCScene, TDImage, SceneFeedback]:
-        if isinstance(action, np.ndarray):
-            obs, fb = self._step(action)
-        else:
-            # obs, fb = self._step_virt(subgoal)
-            # TODO: implement in ogbench
-            raise NotImplementedError
+        obs, fb = self._step_virt(x, y, elabels)
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, fb
 
@@ -63,6 +63,12 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _step_virt(
+        self, x: DCScene, y: DCScene, elabels: list[str]
+    ) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 
     @abc.abstractmethod

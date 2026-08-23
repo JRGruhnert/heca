@@ -4,7 +4,7 @@ import numpy as np
 from dataclasses import dataclass, field
 
 from heca.misc.base import Configurable
-from heca.data.data import DCEntity
+from heca.data.data import DCEntity, DCScene
 from heca.utils.quaternion import Quaternion
 
 
@@ -69,6 +69,13 @@ class Entity(Configurable):
     def normalize_position(self, pos, obs) -> np.ndarray:
         return (pos - obs["meta_xyz_center"]) * obs["meta_xyz_scaler"]
 
+    def unnormalize_position(self, pos, center, scaler) -> np.ndarray:
+        """Inverse of ``normalize_position`` (raw = norm / scaler + center)."""
+        return (
+            np.asarray(pos, dtype=np.float32) / np.asarray(scaler, dtype=np.float32)
+            + np.asarray(center, dtype=np.float32)
+        )
+
     def common_pose_part(self, label: str, obs: dict) -> np.ndarray:
         pos = obs[f"heca_{label}_pos"]
         rot = obs[f"heca_{label}_rot"]
@@ -100,6 +107,9 @@ class Entity(Configurable):
         )
         feature = self.gnn_format(value)
         return DCEntity(value=value, feature=feature)
+
+    def env_state_value(self, label: str, x: DCScene) -> dict[str, Any]:
+        raise NotImplementedError
 
     def value_from_image(self, obs: dict) -> DCEntity:
         raise NotImplementedError
@@ -174,8 +184,12 @@ class Entity(Configurable):
 
     @staticmethod
     def _gaussian_overlap(
-        mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray,
-        directional: bool = False, eps: float = 1e-15,
+        mu1: np.ndarray,
+        var1: np.ndarray,
+        mu2: np.ndarray,
+        var2: np.ndarray,
+        directional: bool = False,
+        eps: float = 1e-15,
     ) -> np.ndarray:
         """Per-dim Gaussian overlap in (0, 1].
 
@@ -213,7 +227,10 @@ class Entity(Configurable):
                 cat2 = p2["measurement"]["state"]["pis"][j]
                 gauss_rel = np.prod(
                     self._gaussian_overlap(
-                        mu1, var1, mu2, var2,
+                        mu1,
+                        var1,
+                        mu2,
+                        var2,
                         directional=self.cfg.directional_containment,
                     )
                 )
