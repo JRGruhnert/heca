@@ -25,6 +25,7 @@ from heca.experts.expert import ExpertModel
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
 from heca.misc import logger
+from heca.misc.interrupt import stop_requested
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
 
@@ -158,6 +159,10 @@ class TapasExpert(ExpertModel):
             if predictions is None:
                 return x, SceneFeedback(reward=0.0, terminal=True, truncated=False)
             while not predictions.is_finished:
+                if stop_requested():
+                    # Abort mid-rollout so the worker thread returns promptly
+                    # during shutdown instead of finishing the whole trajectory.
+                    return x, SceneFeedback(reward=0.0, terminal=True, truncated=True)
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
                 # print(action)
@@ -165,6 +170,8 @@ class TapasExpert(ExpertModel):
             z = self.make_scene(tdscene, tdimage)
         else:
             while not (pred := self.make_prediction(xt))[1]:
+                if stop_requested():
+                    return x, SceneFeedback(reward=0.0, terminal=True, truncated=True)
                 action, _ = pred
                 if action is None:
                     return x, SceneFeedback(

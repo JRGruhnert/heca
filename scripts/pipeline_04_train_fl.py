@@ -1,6 +1,8 @@
 import argparse
+import os
 import signal
-import threading
+import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import matplotlib
@@ -15,12 +17,16 @@ from heca.learning.fppo import FPPO
 from heca.learning.learner import WandBConfig
 from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
+from heca.misc import logger
+from heca.misc.interrupt import request_stop, stop_requested
 
 from scripts.common.args import add_ee_argument, add_scene_argument
 from scripts.common.scenes import agents_by_scene, to_ee
 
 import conf.networks
 from conf.networks import NETWORK_NAMES
+
+GRACE_SECONDS = 10.0
 
 
 def generate_clients(
@@ -74,33 +80,63 @@ def train(
     client_cfgs: list[Heca.Config],
     server: FLServer | None,
     n_batch: int = 1000,
+    grace: float = GRACE_SECONDS,
 ):
     clients = [Heca.get(client) for client in client_cfgs]
-    stop = threading.Event()
 
     def run(agent: Heca):
         n = 0
-        while n < n_batch and not stop.is_set():
+        while n < n_batch and not stop_requested():
             if agent.tick():
                 n += 1
                 agent.learner.sync()
+        return n
 
-    def shutdown():
-        stop.set()
+    def request_shutdown():
+        request_stop()
         if server is not None:
             server.stop()
 
+    def wait_for_workers(futures: list, timeout: float) -> bool:
+        """Wait for every worker future to finish.
+
+        Returns False on timeout or on a second interrupt (which the caller
+        treats as "force exit now").
+        """
+        deadline = time.monotonic() + timeout
+        try:
+            while time.monotonic() < deadline:
+                if all(f.done() for f in futures):
+                    return True
+                time.sleep(0.05)
+        except KeyboardInterrupt:
+            pass
+        return False
+
+    pool = ThreadPoolExecutor(max_workers=len(clients))
+    futures = [pool.submit(run, a) for a in clients]
     try:
-        with ThreadPoolExecutor(max_workers=len(clients)) as pool:
-            futures = [pool.submit(run, a) for a in clients]
-            for future in as_completed(futures):
-                future.result()
+        for future in as_completed(futures):
+            future.result()
     except KeyboardInterrupt:
-        shutdown()
-        raise
+        request_shutdown()
+        pool.shutdown(wait=False, cancel_futures=True)
+        if not wait_for_workers(futures, grace):
+            logger.warning(f"Workers still busy after {grace:.0f}s; forcing exit.")
+            os._exit(130)
+        if server is not None and server.version > 0:
+            server.save()
+        raise SystemExit(130)
     except Exception:
-        shutdown()
+        request_shutdown()
+        pool.shutdown(wait=False, cancel_futures=True)
+        if not wait_for_workers(futures, grace):
+            traceback.print_exc()
+            logger.error("Workers did not stop in time; forcing exit.")
+            os._exit(1)
         raise
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
 
 
 def main():

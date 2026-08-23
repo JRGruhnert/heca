@@ -2,10 +2,13 @@ from dataclasses import dataclass
 import pathlib
 from typing import Sequence
 
+import torch
+
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph
 from heca.learning.learner import Learner
 from heca.misc import logger
+from heca.misc.interrupt import stop_requested
 from heca.data.data import DCScene
 from heca.misc.base import Configurable
 from heca.scenes.scene import Scene, SceneFeedback
@@ -28,6 +31,7 @@ class Heca(Configurable):
             self.learner.eval()
         self.current_step = 0
         self.max_steps = len(self.cfg.agents) * self.cfg.learner.step_multiplier
+        self._episode = 0
         self._x: DCScene | None = None
         self._y: DCScene | None = None
         self.scene = Scene.get(self.cfg.agents[0].scene)
@@ -53,6 +57,8 @@ class Heca(Configurable):
     def step(
         self, x: DCScene, new_ep: bool = False
     ) -> tuple[DCScene, SceneFeedback, bool]:
+        if new_ep:
+            self._episode += 1
         self.graph.set_start(x)
         data = self.graph.export()
         option = self.learner.predict(data, new_ep)
@@ -60,8 +66,83 @@ class Heca(Configurable):
         z, lfb = ExpertModel.get(a).act(x, s)
 
         fb = self.apply_truncation(lfb)
+        if logger.TRACE:
+            self._trace_step(x, data, option, a, s, z, lfb, fb)
+        if stop_requested():
+            # Shutting down: do not push a half-finished transition into the
+            # buffer or trigger a PPO update / federated sync.
+            return z, fb, False
         lock = self.learner.update(fb)
         return z, fb, lock
+
+    def _trace_step(
+        self,
+        x: DCScene,
+        data,
+        option: int,
+        a: ExpertModel.Config,
+        s: DCScene,
+        z: DCScene,
+        lfb: SceneFeedback,
+        fb: SceneFeedback,
+    ):
+        """Dump one full step for debugging (enabled via logger.TRACE).
+
+        Shows the observations the graph was built from, the raw network
+        logits/probs per option, which option was selected (with its expert and
+        assembled subgoal), the expert's resulting scene, and the feedback that
+        will be sent to the learner.
+        """
+
+        def _indent(text: str, prefix: str = "    ") -> str:
+            return "\n".join(prefix + line for line in text.splitlines())
+
+        lines = [
+            "===== step trace "
+            f"client={self.learner.cfg.tag} "
+            f"ep={self._episode} step={self.current_step}/{self.max_steps} =====",
+            "start:",
+            _indent(str(x)),
+            "goal:",
+            _indent(str(self.graph.goal)),
+        ]
+
+        # Recompute logits with the same network predict() used:
+        # inference_net during training (sampling), network during eval (argmax).
+        net = (
+            self.learner.inference_net
+            if self.learner.train_mode
+            else self.learner.network
+        )
+        with torch.inference_mode():
+            logits = net.actor(data).detach().cpu().squeeze(0)
+        probs = torch.softmax(logits, dim=-1)
+
+        lines.append("options (logits/probs):")
+        for i, key in enumerate(self.graph.ns_option.keys):
+            agent = self.graph.ns_option.items[i].model.tag
+            lines.append(
+                f"    [{i}] key={key:<45} agent={agent:<28} "
+                f"logit={logits[i]:+.3f} prob={probs[i]:.3f}"
+            )
+        lines.append(
+            f"    selected: idx={option} key={self.graph.ns_option.key_at(option)} "
+            f"agent={a.tag}"
+        )
+
+        lines.append("subgoal (given to expert):")
+        lines.append(_indent(str(s)))
+        lines.append("result (expert outcome):")
+        lines.append(_indent(str(z)))
+        lines.append(
+            f"raw feedback : terminal={lfb.terminal} reward={lfb.reward:.4f} "
+            f"truncated={lfb.truncated}"
+        )
+        lines.append(
+            f"final feedback: terminal={fb.terminal} reward={fb.reward:.4f} "
+            f"truncated={fb.truncated}"
+        )
+        logger.trace("\n".join(lines))
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.graph.set_goal(y)
@@ -95,10 +176,11 @@ class Heca(Configurable):
         return lock
 
     def apply_truncation(self, lfb: SceneFeedback) -> SceneFeedback:
-        if lfb.terminal and lfb.reward < 0:
-            success = lfb.terminal
+        if lfb.terminal and lfb.reward == 1.0:
+            success = lfb.terminal  # success
         else:
-            success = False
+            # assert False, "Should not happen. (for now)"
+            success = False  # out of time
         reward = self.cfg.learner.step_reward + self.cfg.learner.success_reward * int(
             success
         )

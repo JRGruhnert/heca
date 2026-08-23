@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+import re
 from typing import Literal
 import torch
 import copy
@@ -18,6 +19,18 @@ from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
+
+
+def _wandb_group_and_job_type(tag: str) -> tuple[str | None, str | None]:
+    """Derive a W&B group/job type from a per-client tag like `exp_heca3`.
+
+    All clients of one federated run share the same group so they can be
+    compared side-by-side in the W&B UI.
+    """
+    m = re.fullmatch(r"(?P<group>.+)_heca(?P<idx>\d+)", tag)
+    if m is None:
+        return None, None
+    return m.group("group"), f"client{m.group('idx')}"
 
 
 @dataclass(kw_only=True, slots=True)
@@ -180,11 +193,6 @@ class Learner(Persistable):
         if not self.cfg.wandb.enabled:
             return
 
-        if wandb.run is not None:
-            # Reuse an already-active run (e.g. multiple clients in one process).
-            self._wandb_run = wandb.run
-            return
-
         config_dict = {
             "lr": self.cfg.lr,
             "max_grad_norm": self.cfg.max_grad_norm,
@@ -202,6 +210,10 @@ class Learner(Persistable):
             "network/num_tapas_layers": self.cfg.network.num_tapas_layers,
         }
 
+        group, job_type = _wandb_group_and_job_type(self.cfg.tag)
+        # reinit="create_new" gives every client its own run instead of reusing
+        # the process-global wandb.run, so parallel clients each have an
+        # independent step axis and no longer collide in one shared run.
         self._wandb_run = wandb.init(
             project=self.cfg.wandb.project,
             entity=self.cfg.wandb.entity,
@@ -209,11 +221,23 @@ class Learner(Persistable):
             config=config_dict,
             mode=self.cfg.wandb.mode,
             save_code=self.cfg.wandb.save_code,
-            tags=[self.cfg.label, self.cfg.label],
+            tags=[self.cfg.label],
+            group=group,
+            job_type=job_type,
+            reinit="create_new",
         )
 
+        # wandb 0.25.1: with reinit="create_new" wandb.init() skips setting the
+        # process-global wandb.run (see _set_global_run guard in wandb_init.py),
+        # but run.watch()'s torch-hook machinery reads the global run at
+        # registration time (`wandb.run._torch._hook_handles`) and crashes with
+        # `AttributeError: 'NoneType' object has no attribute '_torch'` when it
+        # is None. Point the global at this run so the hooks can register; every
+        # client still logs through its own run object.
+        wandb.run = self._wandb_run
+
         if self.cfg.wandb.watch_model:
-            wandb.watch(
+            self._wandb_run.watch(
                 self.network,
                 log="gradients",
                 log_freq=self.cfg.wandb.watch_freq,
@@ -226,9 +250,13 @@ class Learner(Persistable):
         logger.info(f"Update {self.current_update:4d} | {metrics_str}")
 
         if self.cfg.wandb.enabled:
-            wandb.log(
+            # No explicit step: wandb.watch() logs gradients/histograms with the
+            # run's auto-incremented step counter, so an explicit `step=` here
+            # would fall behind and spam "Tried to log to step N that is less
+            # than the current step M" warnings. Auto-increment keeps each run's
+            # step axis monotonic (x-axis = log calls, i.e. updates + watch).
+            self._wandb_run.log(
                 {f"{self.cfg.tag}/{k}": v for k, v in self.metrics.items()},
-                step=self.current_update,
             )
 
     def update(self, fb: SceneFeedback) -> bool:

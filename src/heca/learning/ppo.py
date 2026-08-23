@@ -4,6 +4,7 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 
 from heca.learning.learner import Learner
 from heca.misc import hardware
+from heca.misc.interrupt import stop_requested
 
 
 class PPO(Learner):
@@ -56,6 +57,10 @@ class PPO(Learner):
 
         kl_stop = False
         for _ in range(self.cfg.n_epoch):
+            if stop_requested():
+                # Abort between epochs so a Ctrl-C is not delayed by the whole
+                # PPO update (capacity/batch_size * n_epoch minibatches).
+                break
             indices = torch.randperm(self.buffer.cfg.capacity)
             for start in range(0, self.buffer.cfg.capacity, self.cfg.batch_size):
                 end = start + self.cfg.batch_size
@@ -147,6 +152,11 @@ class PPO(Learner):
             explained_var = (1 - (rtn - all_values).var() / var_returns).item()
         else:
             explained_var = 0.0
+
+        if num_minibatches == 0:
+            # Aborted by stop_requested() before any minibatch ran; nothing to
+            # report (avoid a ZeroDivisionError in the metrics below).
+            return
 
         self.metrics.update(
             {

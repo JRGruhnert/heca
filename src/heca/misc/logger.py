@@ -11,6 +11,7 @@ import wandb
 from wandb.wandb_run import Run
 
 DEBUG = False
+TRACE = False
 logger.remove()
 
 
@@ -28,6 +29,11 @@ else:
 def debug(message: str):
     if DEBUG:
         logger.debug(message)
+
+
+def trace(message: str):
+    if TRACE:
+        logger.info(message)
 
 
 def warning(message: str):

@@ -3,7 +3,6 @@
 ## Short Horizon:
 
 - tapas: remove ee_init and ee_target
-- ogbench: decide for sim_step size
 - ogbench: test virtual
 - ogbench: sample for agent -> eval agents (1,2,3 try plot)
 - record ogbenchog models
