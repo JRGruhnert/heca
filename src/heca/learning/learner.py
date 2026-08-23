@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-import re
 from typing import Literal
 import torch
 import copy
@@ -22,15 +21,10 @@ from heca.scenes.scene import SceneFeedback
 
 
 def _wandb_group_and_job_type(tag: str) -> tuple[str | None, str | None]:
-    """Derive a W&B group/job type from a per-client tag like `exp_heca3`.
-
-    All clients of one federated run share the same group so they can be
-    compared side-by-side in the W&B UI.
-    """
-    m = re.fullmatch(r"(?P<group>.+)_heca(?P<idx>\d+)", tag)
-    if m is None:
-        return None, None
-    return m.group("group"), f"client{m.group('idx')}"
+    if "_" not in tag:
+        raise ValueError
+    group, scene = tag.rsplit("_", 1)
+    return group, scene
 
 
 @dataclass(kw_only=True, slots=True)

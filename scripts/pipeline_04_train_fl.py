@@ -35,7 +35,7 @@ GRACE_SECONDS = 10.0
 def generate_clients(
     tag: str,
     network: Network.Config,
-    clients: list[list[ExpertModel.Config]],
+    clients: dict[str, list[ExpertModel.Config]],
     virtual: bool = False,
     federated: bool = True,
     wandb_enabled: bool = False,
@@ -48,11 +48,11 @@ def generate_clients(
     if federated:
         server_cfg = FLServer.Config(tag=tag, network=network)
         server = FLServer.get(server_cfg)
-        for idx, agents in enumerate(clients):
+        for scene, agents in clients.items():
             heca = Heca.Config(
                 agents=agents,
                 learner=FPPO.Config(
-                    tag=f"{tag}_heca{idx}",
+                    tag=f"{tag}_{scene}",
                     network=network,
                     server=server_cfg,
                     virtual=virtual,
@@ -63,11 +63,11 @@ def generate_clients(
             )
             hecas.append(heca)
     else:
-        for idx, agents in enumerate(clients):
+        for scene, agents in clients.items():
             heca = Heca.Config(
                 agents=agents,
                 learner=PPO.Config(
-                    tag=f"{tag}_heca{idx}",
+                    tag=f"{tag}_{scene}",
                     network=network,
                     virtual=virtual,
                     wandb=wandb,
@@ -212,13 +212,13 @@ def main():
 
     network = getattr(conf.networks, args.network)
 
-    clients = []
+    clients: dict[str, list] = {}
     for scene_tag, models in agents_by_scene().items():
         if args.scene and scene_tag != args.scene:
             continue
         if args.ee:
             models = [to_ee(m) for m in models]
-        clients.append(models)
+        clients.update({scene_tag: models})
 
     exp, server = generate_clients(
         args.tag,

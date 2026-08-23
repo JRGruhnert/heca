@@ -12,7 +12,7 @@ Always starts in *dry-run* mode: it only prints what would be deleted. Pass
 Run from the repo root (in an env with wandb installed and logged in)::
 
     python scripts/delete_wandb_runs.py --group exp
-    python scripts/delete_wandb_runs.py --group exp --name-prefix exp_heca0
+    python scripts/delete_wandb_runs.py --group exp --name-prefix exp_scene1
     python scripts/delete_wandb_runs.py --group exp --delete
     python scripts/delete_wandb_runs.py --group exp --wandb-dir /path/to/wandb --delete
 """

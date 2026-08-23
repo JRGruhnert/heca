@@ -27,10 +27,10 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-def client_id(run_name: str) -> int | None:
-    """Client index from a run name like ``exp_heca3_s1`` -> 3."""
-    m = re.search(r"_heca(\d+)", run_name)
-    return int(m.group(1)) if m else None
+def scene_of(run_name: str) -> str | None:
+    """Scene client tag from a run name like ``exp_scene1`` -> ``scene1``."""
+    m = re.search(r"_([^_]+)$", run_name)
+    return m.group(1) if m else None
 
 
 def load_run_series(run, metric: str, samples: int):
@@ -87,18 +87,37 @@ def mean_ci(series_list: list[tuple[np.ndarray, np.ndarray]], n_points: int = 40
 def plot_metric(
     ax,
     metric: str,
-    by_client: dict[int, list[tuple[np.ndarray, np.ndarray]]],
+    by_scene: dict[str, list[tuple[str, np.ndarray, np.ndarray]]],
+    per_run: bool = False,
 ):
-    """Plot one metric: a mean+CI line per client."""
-    for cid in sorted(by_client):
-        grid, mean, ci = mean_ci(by_client[cid])
-        (line,) = ax.plot(grid, mean, label=f"heca{cid}")
-        ax.fill_between(grid, mean - ci, mean + ci, alpha=0.25, color=line.get_color())
+    """Plot one metric for all scene clients.
+
+    Default: one mean+CI line per scene (aggregated across its runs).
+    With ``per_run=True``: every run is its own line, colored per scene.
+    """
+    scenes = sorted(by_scene)
+    colors = plt.get_cmap("tab10")
+
+    if per_run:
+        for i, scene in enumerate(scenes):
+            color = colors(i % 10)
+            for name, steps, values in by_scene[scene]:
+                ax.plot(steps, values, color=color, alpha=0.7, linewidth=1.0)
+            ax.plot([], [], color=color, linewidth=2.0, label=scene)
+    else:
+        for i, scene in enumerate(scenes):
+            color = colors(i % 10)
+            series = [(s, v) for _, s, v in by_scene[scene]]
+            grid, mean, ci = mean_ci(series)
+            ax.plot(grid, mean, color=color, label=scene)
+            ax.fill_between(grid, mean - ci, mean + ci, alpha=0.25, color=color)
+
     ax.set_xlabel("run step")
     ax.set_ylabel(metric.removeprefix("stats/").removeprefix("train/"))
-    ax.set_title(metric)
+    ax.set_title(metric + (" (per run)" if per_run else " (mean ± 95% CI)"))
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8)
+    if len(scenes) <= 10:
+        ax.legend(fontsize=8)
 
 
 def main():
@@ -116,7 +135,7 @@ def main():
     parser.add_argument(
         "--group",
         required=True,
-        help="wandb group of the runs to aggregate (the part before _hecaN).",
+        help="wandb group of the runs to aggregate (the run tag prefix, e.g. exp).",
     )
     parser.add_argument(
         "--metric",
@@ -128,6 +147,12 @@ def main():
         "--out",
         default="plots",
         help="Output directory for the plot (default: ./plots).",
+    )
+    parser.add_argument(
+        "--per-run",
+        action="store_true",
+        help="Plot every run as its own line instead of aggregating runs per "
+        "client into a mean + CI line.",
     )
     parser.add_argument(
         "--samples",
@@ -145,22 +170,24 @@ def main():
             f"{args.entity}/{args.project}."
         )
 
-    # client id -> metric -> list of (steps, values) per run
-    by_client: dict[int, dict[str, list[tuple[np.ndarray, np.ndarray]]]] = {}
+    # scene -> metric -> list of (run name, steps, values)
+    by_scene: dict[str, dict[str, list[tuple[str, np.ndarray, np.ndarray]]]] = {}
     for run in runs:
-        cid = client_id(run.name)
-        if cid is None:
+        scene = scene_of(run.name)
+        if scene is None:
             continue
         for metric in args.metric:
             series = load_run_series(run, metric, args.samples)
             if series is not None:
-                by_client.setdefault(cid, {}).setdefault(metric, []).append(series)
+                by_scene.setdefault(scene, {}).setdefault(metric, []).append(
+                    (run.name, series[0], series[1])
+                )
                 print(
-                    f"  {run.name:<24} client=heca{cid} "
+                    f"  {run.name:<24} scene={scene} "
                     f"steps={len(series[0])} metric={metric}"
                 )
 
-    if not by_client:
+    if not by_scene:
         raise SystemExit(
             f"No runs with metric {args.metric} found for group={args.group!r}."
         )
@@ -168,11 +195,12 @@ def main():
     n_fig = len(args.metric)
     fig, axes = plt.subplots(n_fig, 1, figsize=(9, 4.2 * n_fig), squeeze=False)
     for ax, metric in zip(axes[:, 0], args.metric):
-        if metric in {m for c in by_client.values() for m in c}:
+        if metric in {m for c in by_scene.values() for m in c}:
             plot_metric(
                 ax,
                 metric,
-                {c: by_client[c][metric] for c in by_client if metric in by_client[c]},
+                {c: by_scene[c][metric] for c in by_scene if metric in by_scene[c]},
+                per_run=args.per_run,
             )
         else:
             ax.set_title(f"{metric} (no data)")
