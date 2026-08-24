@@ -47,7 +47,8 @@ class Heca(Configurable):
 
         self.graph = Graph.generate(list(self.cfg.agents), add_subgoals=cfg.subgoals)
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
-        self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))
+        if self.cfg.subgoals:
+            self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
 
         if self.cfg.learner.virtual:

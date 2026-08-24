@@ -3,6 +3,8 @@ import json
 import sys
 from pathlib import Path
 
+from heca.data.entity import Entity
+
 # Make ``conf`` and ``scripts.common`` importable when run directly as
 # ``python scripts/report_change_scores.py`` (mirrors scripts/__init__.py).
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
@@ -14,7 +16,6 @@ import matplotlib
 matplotlib.use("Agg")  # headless (conditions fitting imports matplotlib)
 
 from heca.experts.expert import ExpertModel
-from heca.graphs.graph import ANCHOR_CHANGE_THRESHOLD
 from heca.misc import logger
 
 from scripts.common.args import add_model_argument, add_scene_argument, add_tag_argument
@@ -40,7 +41,7 @@ def agent_report(cfg: ExpertModel.Config, reload: bool = False) -> dict:
             pass
         entities[entity] = {
             "change_score": float(score),
-            "anchor": bool(score < ANCHOR_CHANGE_THRESHOLD),
+            "anchor": bool(score < Entity.ANCHOR_THRESHOLD),
             "n_samples": n_samples,
         }
     return {
@@ -52,7 +53,7 @@ def agent_report(cfg: ExpertModel.Config, reload: bool = False) -> dict:
 
 def print_report(records: list[dict]) -> None:
     print("\n" + "=" * 72)
-    print(f"Pre->post change scores (anchor threshold = {ANCHOR_CHANGE_THRESHOLD} std)")
+    print(f"Pre->post change scores (anchor threshold = {Entity.ANCHOR_THRESHOLD} std)")
     print("=" * 72)
 
     total_entities = 0
@@ -133,7 +134,7 @@ def main():
         out_path.write_text(
             json.dumps(
                 {
-                    "anchor_threshold": ANCHOR_CHANGE_THRESHOLD,
+                    "anchor_threshold": Entity.ANCHOR_THRESHOLD,
                     "agents": records,
                     "failures": failures,
                 },

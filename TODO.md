@@ -3,9 +3,8 @@
 ## Short Horizon:
 
 - tapas: remove ee_init and ee_target
-- ogbench: test virtual
-- ogbench: sample for agent -> eval agents (1,2,3 try plot)
-- record ogbenchog models
+- heca: debug graph update nodes (make one sampled and one goal node)
+- heca: record scene0 models
 
 ## Long Horizon:
 

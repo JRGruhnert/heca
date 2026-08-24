@@ -32,27 +32,14 @@ class OGScene(Scene):
         self._last_ee_pose = None
         self._last_ee_yaw = None
         self._viewer_launched = False
-        # Workspace normalization frame (ogbench defaults; overwritten from the
-        # actual obs dict on every reset / scene parse via _update_meta).
         self._meta_xyz_center = np.array([0.425, 0.0, 0.0], dtype=np.float32)
         self._meta_xyz_scaler = np.array([10.0], dtype=np.float32)
-
-    # --- Workspace position normalization -----------------------------------
-    #
-    # The env works in a raw world frame while entity poses / ee poses live in
-    # a normalized frame. The scene owns this mapping (kept in private fields,
-    # refreshed from the env's obs dict on reset) so it no longer has to be
-    # carried around in DCScene extras.
 
     def _update_meta(self, obs: dict):
         """Parse the workspace center/scaler from an env obs dict."""
         if "meta_xyz_center" in obs and "meta_xyz_scaler" in obs:
-            self._meta_xyz_center = np.asarray(
-                obs["meta_xyz_center"], dtype=np.float32
-            )
-            self._meta_xyz_scaler = np.asarray(
-                obs["meta_xyz_scaler"], dtype=np.float32
-            )
+            self._meta_xyz_center = np.asarray(obs["meta_xyz_center"], dtype=np.float32)
+            self._meta_xyz_scaler = np.asarray(obs["meta_xyz_scaler"], dtype=np.float32)
 
     def normalize_position(self, pos) -> np.ndarray:
         """Map a world-frame position into the scene's normalized frame."""
@@ -146,20 +133,10 @@ class OGScene(Scene):
         pos = obs["proprio_effector_pos"]
         rot = obs["proprio_effector_quat"]
         ste = obs["proprio_gripper_opening"]
-        # ogbench provides effector quaternions in (w, x, y, z) order; keep it.
         rot = np.array(rot, dtype=np.float32)
-        # Normalize the ee position into the same frame as the entity poses
-        # (using the scene's workspace frame), so TAPAS's ee and object frames
-        # share one coordinate system.
         ee_pos = self.normalize_position(pos)
         ee_pose = np.concatenate((ee_pos, rot))
         if "actions" in obs.keys():  # is demo
-            # Reconstruct the achieved action from the EE pose delta instead of
-            # using the raw (normalized, possibly saturated) command. The raw
-            # command stays non-zero when the EE is blocked, hiding pauses.
-            # The delta is computed in the normalized ee frame (center cancels,
-            # only the scaler applies), matching ee_pose and the entity poses;
-            # to_internal_action rescales it before stepping the env.
             yaw = obs["proprio_effector_yaw"].item()
             if self._last_ee_pose is not None:
                 pos_delta = ee_pos - self._last_ee_pose
@@ -246,10 +223,6 @@ class OGScene(Scene):
         return (angle + np.pi) % (2 * np.pi) - np.pi
 
     def to_internal_action(self, action: np.ndarray) -> np.ndarray:
-        # pred.ee is the absolute ee pose in the normalized frame (same space
-        # as ee_pose / entity poses); map it back to the raw world frame.
-        # env.step(..., absolute=True) then converts this target into the delta
-        # it applies.
         pos = self.unnormalize_position(action[:3])
         quat = action[3:7]
         yaw = self.quat_to_yaw(quat)
@@ -268,12 +241,18 @@ class OGScene(Scene):
         )
 
     def _step_virt(
-        self, x: DCScene, y: DCScene, elabels: list[str]
+        self,
+        x: DCScene,
+        y: DCScene,
+        elabels: list[str],
+        change_scores: dict[str, float],
     ) -> tuple[Any, SceneFeedback]:
         subgoal: dict[str, Any] = {}
         for label, entity in self.entities.items():
             if label not in elabels:
                 continue
+            if change_scores[label] < entity.ANCHOR_THRESHOLD:
+                continue  # anchor: no change -> do not set it
             subgoal.update(
                 entity.env_state_value(
                     label, y, unnormalize_pos=self.unnormalize_position
@@ -445,23 +424,3 @@ class OGScene(Scene):
             for agent_key, count in discarded.items():
                 if agent_key not in agent_data:
                     print(f"  {agent_key}: kept=0, discarded={count}")
-
-    def entity_eval(self, x: DCScene, y: DCScene, label: str) -> bool:
-        vx = x.get(label)
-        vy = y.get(label)
-        if any(part in label for part in ("cube", "lid", "peg")):
-            return bool(np.linalg.norm(vx.pos - vy.pos) <= 0.04)  # pos tol
-        if any(part in label for part in ("button", "box")):
-            return bool(vx.ste == vy.ste)  # state eq
-        if any(part in label for part in ("faucet",)):
-            return bool(np.abs(vx.ang == vy.ang) <= 0.15)  # angle tol
-        if any(part in label for part in ("drawer", "window", "slider")):
-            return bool(np.abs(vx.ext == vy.ext) <= 0.05)  # percent
-
-        return True
-
-    def virtual_evaluation(self, x: DCScene, y: DCScene) -> SceneFeedback:
-        for e in self.entities:
-            if not self.entity_eval(x, y, e):
-                return SceneFeedback(terminal=True, reward=0.0, truncated=False)
-        return SceneFeedback(terminal=True, reward=1.0, truncated=False)

@@ -1,26 +1,9 @@
-"""Log the condition-scoring values for the real scene models.
-
-For every agent (default: all scenes/models, filter with --scene/--model) this
-prints, per entity:
-
-  - change score + anchor/TARGET classification (ConPair.change_scores vs
-    ANCHOR_CHANGE_THRESHOLD),
-  - score_single validity of the demo pre/post values under their own models
-    (the [0,1] pose+state gate score, averaged over all demos),
-  - pre<->post containment (how much of the post distribution sits inside the
-    pre distribution; ~1 for anchors, low for entities that move),
-  - update_nodes behavior on a goal-conditioned graph built from this agent's
-    conditions: whether each post-node adopts the goal, the start (anchor), or
-    a fresh sample.
-
-Value-logging counterpart of the old assertion suite; see
-a08_view_anchor_entities.py for the same style.
-"""
-
 import argparse
 import json
 import sys
 from pathlib import Path
+
+from heca.data.entity import Entity
 
 # Make ``conf`` and ``scripts.common`` importable when run directly.
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
@@ -35,7 +18,7 @@ import numpy as np
 
 from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
-from heca.graphs.graph import ANCHOR_CHANGE_THRESHOLD, Graph
+from heca.graphs.graph import Graph
 from heca.graphs.node import OptionNode
 from heca.misc import logger
 
@@ -91,7 +74,8 @@ def update_nodes_report(pair, anchors: set[str]) -> dict[str, dict]:
         label, pair.post, post_comp, pre_src, change_scores=pair.change_scores
     )
     graph.ns_option.add(
-        "opt_" + label, OptionNode(model=None, sources={src for src in post_src.values()})
+        "opt_" + label,
+        OptionNode(model=None, sources={src for src in post_src.values()}),
     )
     graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
     graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)
@@ -133,7 +117,7 @@ def agent_report(cfg: ExpertModel.Config, reload: bool = False) -> dict:
 
     pair = agent.conditions
     scores = pair.change_scores
-    anchors = {e for e, s in scores.items() if s < ANCHOR_CHANGE_THRESHOLD}
+    anchors = {e for e, s in scores.items() if s < Entity.ANCHOR_THRESHOLD}
 
     entities: dict[str, dict] = {}
     for entity, score in sorted(scores.items()):
@@ -155,7 +139,7 @@ def print_report(records: list[dict]) -> None:
     print("\n" + "=" * 72)
     print(
         "Condition scoring (anchor threshold = "
-        f"{ANCHOR_CHANGE_THRESHOLD} normalized units)"
+        f"{Entity.ANCHOR_THRESHOLD} normalized units)"
     )
     print("=" * 72)
 
@@ -241,7 +225,7 @@ def main():
         out_path.write_text(
             json.dumps(
                 {
-                    "anchor_threshold": ANCHOR_CHANGE_THRESHOLD,
+                    "anchor_threshold": Entity.ANCHOR_THRESHOLD,
                     "agents": records,
                     "failures": failures,
                 },

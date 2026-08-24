@@ -134,7 +134,10 @@ class Condition:
             up1 = self.models[key].get_parameters().copy()
             up2 = other.models[key].get_parameters().copy()
             score = self.entities[key].containment_score(up1, up2)
-            if score < self.entities[key].cfg.threshold:
+            # Threshold-free: connect when at least some of the goal model's
+            # mass lies inside the pre model's z_quantile ellipsoid (the score
+            # is calibrated by cfg.z_quantile, not a tuned cfg.threshold).
+            if score <= 0.0:
                 return None
             value = self.entities[key].best_sample(up1, up2)
             values[key] = (score, value)

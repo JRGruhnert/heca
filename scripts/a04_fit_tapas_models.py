@@ -1,10 +1,3 @@
-"""Fit a TapasExpert for every configured agent.
-
-Replicates the per-agent notebook workflow (load demos, fit stage 1, fit
-stage 2, save) for all agents across the scene conf modules, in a single run.
-The demos loaded for each agent come from its own ``segment_ids`` config value.
-"""
-
 import argparse
 import json
 import math

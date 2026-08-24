@@ -41,20 +41,19 @@ class Scene(Persistable):
         npimage = self.to_np_image(data)
         return tdscene, tdimage, npimage
 
-    def virtual_evaluation(
-        self, x: DCScene, y: DCScene
-    ) -> tuple[DCScene, SceneFeedback]:
-        raise NotImplementedError
-
     def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
         obs, fb = self._step(action)
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, fb
 
     def step_virt(
-        self, x: DCScene, y: DCScene, elabels: list[str]
+        self,
+        x: DCScene,
+        y: DCScene,
+        elabels: list[str],
+        change_scores: dict[str, float],
     ) -> tuple[DCScene, TDImage, SceneFeedback]:
-        obs, fb = self._step_virt(x, y, elabels)
+        obs, fb = self._step_virt(x, y, elabels, change_scores)
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, fb
 
@@ -68,7 +67,11 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def _step_virt(
-        self, x: DCScene, y: DCScene, elabels: list[str]
+        self,
+        x: DCScene,
+        y: DCScene,
+        elabels: list[str],
+        change_scores: dict[str, float],
     ) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 

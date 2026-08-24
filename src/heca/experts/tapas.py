@@ -21,6 +21,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     DemoSegmentationConfig,
     CascadeConfig,
 )
+from torch import random
 from heca.experts.expert import ExpertModel
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
@@ -28,17 +29,8 @@ from heca.misc import logger
 from heca.misc.interrupt import stop_requested
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
+import random
 
-# --- riepybdlib quaternion-log singularity patch ---------------------------------
-# The S³ quaternion manifold's log map divides by the norm of the quaternion's
-# vector part, so it is singular at the antipode [-1, 0, 0, 0] (a full 360°
-# rotation). ogbench's end-effector points down via a ~180° roll about the x-axis
-# (w ≈ 0), and TAPAS's per-frame projection can wrap the relative orientation
-# through 360°, producing w ≈ -1 and NaN covariances during fitting. Projecting
-# each quaternion onto the positive-real (w ≥ 0) hemisphere before the log makes
-# the map single-valued and avoids the singularity without changing the data
-# convention. This lives here (rather than in the pinned riepybdlib dependency)
-# because we can only change this code base.
 import riepybdlib.mappings as _rbd_mappings
 
 _orig_quat_log_e = _rbd_mappings.quat_log_e
@@ -187,7 +179,17 @@ class TapasExpert(ExpertModel):
         return z, fb
 
     def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        tdscene, tdimage, fb = self.scene.step_virt(x, y, list(self.entities.keys()))
+        for label, entity in self.entities.items():
+            # Check if preconditions are met
+            _, valid = entity.score_single(
+                x.get(label).value,
+                self.conditions.pre.models[label].get_parameters(),
+            )
+            if not valid:
+                return x, SceneFeedback(terminal=True, reward=0.0, truncated=False)
+        tdscene, tdimage, fb = self.scene.step_virt(
+            x, y, list(self.entities.keys()), self.conditions.change_scores
+        )
         return self.make_scene(tdscene, tdimage), fb
 
     def make_batch_prediction(

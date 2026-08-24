@@ -26,7 +26,6 @@ import torch
 from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
-from heca.graphs.graph import ANCHOR_CHANGE_THRESHOLD
 from heca.misc import logger
 
 try:
@@ -71,7 +70,7 @@ def anchor_entities(agent: ExpertModel) -> set[str]:
     return {
         label
         for label, score in agent.conditions.change_scores.items()
-        if score < ANCHOR_CHANGE_THRESHOLD
+        if score < Entity.ANCHOR_THRESHOLD
     }
 
 

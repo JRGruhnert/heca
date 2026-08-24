@@ -1,9 +1,3 @@
-"""Segment and extract demos for every configured scene.
-
-Replicates the per-scene demo extraction (``scene.demo_auto_extract``) for all
-scenes referenced by the scene conf modules, in a single run.
-"""
-
 import argparse
 
 from heca.scenes.scene import Scene
