@@ -35,11 +35,11 @@ class PrismaticEntity(Entity):
         relative = 2 * relative - 1
         return np.array([relative])
 
-    def env_state_value(self, label: str, x: DCScene) -> dict[str, Any]:
+    def env_state_value(
+        self, label: str, x: DCScene, unnormalize_pos=None
+    ) -> dict[str, Any]:
         dc = x.get(label)
-        pos = self.unnormalize_position(
-            dc.pos, x.extras["meta_xyz_center"], x.extras["meta_xyz_scaler"]
-        )
+        pos = unnormalize_pos(dc.pos) if unnormalize_pos is not None else dc.pos
         return {
             f"heca_{label}_pos": pos,
             f"heca_{label}_rot": dc.rot,

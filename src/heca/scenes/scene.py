@@ -27,6 +27,7 @@ class Scene(Persistable):
         folder: str = "scenes"
         width: int = 256
         height: int = 256
+        visualize: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -162,4 +163,13 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     def demo_auto_extract(self):
+        raise NotImplementedError
+
+    def close(self):
+        raise NotImplementedError
+
+    def normalize_position(self, pos) -> np.ndarray:
+        raise NotImplementedError
+
+    def unnormalize_position(self, pos) -> np.ndarray:
         raise NotImplementedError

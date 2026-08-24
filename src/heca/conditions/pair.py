@@ -8,32 +8,33 @@ from heca.data.entity import Entity
 
 
 class ConPair:
-    # Floor for the pooled std so constant dimensions (e.g. a state column that
-    # never varies in one condition) do not produce division by zero.
-    _CHANGE_EPS = 1e-6
-
     def __init__(self, label: str, pre: Condition, post: Condition):
         self.label = label
         self.pre = pre
         self.post = post
-        self._change_scores = self._compute_change_scores()
 
     def _compute_change_scores(self) -> dict[str, float]:
+        """Mean per-demo displacement in value space, per entity.
+
+        Rows of ``pre.data_raw`` and ``post.data_raw`` are aligned per demo, so
+        this measures how far the entity actually moves *within* each demo. It
+        therefore detects entities that genuinely move even when the start and
+        target distributions overlap (e.g. a free object picked up and placed
+        at a random nearby spot, where a |mean shift| / pooled-std score is
+        ~0 despite ~10 cm of movement per demo).
+        """
         scores: dict[str, float] = {}
         for key in set(self.pre.data_raw).intersection(set(self.post.data_raw)):
             pre = np.asarray(self.pre.data_raw[key], dtype=np.float64)
             post = np.asarray(self.post.data_raw[key], dtype=np.float64)
-            pooled_std = np.sqrt((pre.var(axis=0) + post.var(axis=0)) / 2.0)
-            pooled_std = np.maximum(pooled_std, self._CHANGE_EPS)
-            z = np.abs(post.mean(axis=0) - pre.mean(axis=0)) / pooled_std
-            scores[key] = float(z.mean())
+            scores[key] = float(np.linalg.norm(post - pre, axis=1).mean())
         return scores
 
     @property
     def change_scores(self) -> dict[str, float]:
-        if not hasattr(self, "_change_scores"):
-            self._change_scores = self._compute_change_scores()
-        return self._change_scores
+        # Always recompute: pickled ConPairs (conditions.joblib) may carry
+        # change scores computed with an older metric.
+        return self._compute_change_scores()
 
     # @classmethod
     # def merge(

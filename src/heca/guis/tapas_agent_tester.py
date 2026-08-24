@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import atexit
 
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Button
@@ -8,29 +7,32 @@ import numpy as np
 from heca.experts.expert import ExpertModel
 from heca.experts.tapas import TapasExpert
 from heca.scenes.ogbench.scene import OGScene
-from heca.misc import logger
 from heca.misc.base import Configurable
+from heca.scenes.scene import Scene
 
 
 class TapasManualExecuter(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         agents: list[ExpertModel.Config]
-        scene: OGScene.Config
-        frame_time: float = 0.05
+        scene: Scene.Config
         use_gt: bool = True
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.scene = OGScene.get(self.cfg.scene, auto_load=False)
+        self.scene = Scene.get(self.cfg.scene, auto_load=False)
+        assert isinstance(self.scene, OGScene), "Only OgScene supported."
+        # The scene owns the passive viewer (launch / sync / close); the
+        # tester only enables it. The scene is a shared singleton cached by
+        # label+tag, so its cfg may be a different (equal) config instance
+        # than cfg.scene — set the flag on the instance's own cfg.
+        self.scene.cfg.visualize = True
         self.agents: list[ExpertModel] = []
         for agent_cfg in cfg.agents:
             agent = ExpertModel.get(agent_cfg, auto_load=False)
             agent.use_gt(self.cfg.use_gt)
             agent.load()
             self.agents.append(agent)
-        self._viewer_launched = False
-        atexit.register(self._close_viewer)
         assert all(
             agent.cfg.scene == self.cfg.scene for agent in self.agents
         ), "Every agent must use the same scene config as cfg.scene."
@@ -38,7 +40,7 @@ class TapasManualExecuter(Configurable):
     def _build_ui(self):
         self.fig = plt.figure(figsize=(8, 6))
         self.fig.canvas.manager.set_window_title("Expert Agent Tester")  # type: ignore
-        self.fig.canvas.mpl_connect("close_event", lambda event: self._close_viewer())
+        self.fig.canvas.mpl_connect("close_event", lambda event: self.scene.close())
 
         self.buttons = []
 
@@ -92,7 +94,7 @@ class TapasManualExecuter(Configurable):
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
                 tdscene, tdimage, _ = self.scene.step_vis(action)
-                self.gui_step()
+
             self.x = agent.make_scene(tdscene, tdimage)
         else:
             while not (pred := agent.make_prediction(xt))[1]:
@@ -102,32 +104,13 @@ class TapasManualExecuter(Configurable):
                 tdscene, tdimage, _ = self.scene.step_vis(action)
                 self.x = agent.make_scene(tdscene, tdimage)
                 xt = agent.tapas_td(self.x, self.y)
-                self.gui_step()
-
-    def gui_step(self):
-        self.scene.env.unwrapped.sync_passive_viewer()
-        plt.pause(self.cfg.frame_time)
 
     def reset(self):
         (self.x, _, _), (self.y, _, _) = self.scene.sample_task_vis()
-        if not self._viewer_launched:
-            self.scene.env.unwrapped.launch_passive_viewer()
-            self._viewer_launched = True
-        self.scene.env.unwrapped.sync_passive_viewer()
         self.fig.canvas.draw_idle()
 
-    def _close_viewer(self):
-        if not self._viewer_launched:
-            return
-        try:
-            self.scene.env.unwrapped.close_passive_viewer()
-        except Exception as e:
-            logger.warning(f"Failed to close passive viewer: {e}")
-        finally:
-            self._viewer_launched = False
-
     def close(self):
-        self._close_viewer()
+        self.scene.close()
         plt.close(self.fig)
 
     def run(self):
@@ -136,4 +119,4 @@ class TapasManualExecuter(Configurable):
         try:
             plt.show()
         finally:
-            self._close_viewer()
+            self.scene.close()

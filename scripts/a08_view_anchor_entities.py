@@ -17,19 +17,8 @@ from heca.experts.expert import ExpertModel
 from heca.graphs.graph import ANCHOR_CHANGE_THRESHOLD
 from heca.misc import logger
 
-try:
-    from scripts.common.args import (
-        add_ee_argument,
-        add_scene_argument,
-        add_tag_argument,
-    )
-    from scripts.common.scenes import agents_by_scene, to_ee
-except ModuleNotFoundError as exc:
-    raise SystemExit(
-        f"Could not import the scene/agent configs: {exc}\n"
-        "Make sure the scene dependencies (e.g. the ogbench fork pinned in "
-        "pyproject.toml) are installed in the active environment."
-    ) from exc
+from scripts.common.args import add_model_argument, add_scene_argument, add_tag_argument
+from scripts.common.scenes import agents_by_scene
 
 
 def agent_report(cfg: ExpertModel.Config, reload: bool = False) -> dict:
@@ -76,7 +65,7 @@ def print_report(records: list[dict]) -> None:
         n_anchors = 0
         for entity, info in rec["entities"].items():
             total_entities += 1
-            kind = "anchor" if info["anchor"] else "CHANGED"
+            kind = "ANCHOR" if info["anchor"] else "TARGET"
             n_anchors += int(info["anchor"])
             n = info["n_samples"] if info["n_samples"] is not None else "?"
             print(
@@ -84,8 +73,8 @@ def print_report(records: list[dict]) -> None:
                 f"[{kind:<7}] (n={n})"
             )
         total_anchors += n_anchors
-        n_changed = len(rec["entities"]) - n_anchors
-        print(f"    -> {n_anchors} anchor, {n_changed} changed")
+        n_targets = len(rec["entities"]) - n_anchors
+        print(f"    -> {n_anchors} anchors, {n_targets} targets")
 
     print("\n" + "-" * 72)
     print(
@@ -97,8 +86,7 @@ def print_report(records: list[dict]) -> None:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
-    add_tag_argument(parser)
-    add_ee_argument(parser)
+    add_model_argument(parser)
     parser.add_argument(
         "--use-gt",
         action=argparse.BooleanOptionalAction,
@@ -120,22 +108,22 @@ def main():
 
     records = []
     failures = []
-    for scene_tag, models in agents_by_scene().items():
-        if args.scene and scene_tag != args.scene:
+    for scene_cfg, model_cfgs in agents_by_scene():
+        if args.scene and scene_cfg.tag != args.scene:
             continue
-        for cfg in models:
-            if args.tag and cfg.tag != args.tag:
+        for cfg in model_cfgs:
+            if args.model and cfg.tag != args.model:
                 continue
-            if args.ee:
-                cfg = to_ee(cfg)
             try:
                 agent = ExpertModel.get(cfg, auto_load=False)
                 if not args.use_gt:
                     agent.use_gt(False)
                 records.append(agent_report(cfg, reload=args.reload))
             except Exception as exc:  # keep going if one agent fails
-                logger.error(f"[{scene_tag}] agent {cfg.tag} failed: {exc}")
-                failures.append({"scene": scene_tag, "tag": cfg.tag, "error": str(exc)})
+                logger.error(f"[{scene_cfg.tag}] agent {cfg.tag} failed: {exc}")
+                failures.append(
+                    {"scene": scene_cfg.tag, "tag": cfg.tag, "error": str(exc)}
+                )
 
     print_report(records)
 

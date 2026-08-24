@@ -1,5 +1,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
+import atexit
+import time
 from typing import Any, cast
 
 import h5py
@@ -9,6 +11,7 @@ import torch
 from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 
 from heca.data.data import DCEntity, DCScene, TDImage
+from heca.misc import logger
 from heca.scenes.scene import Scene, SceneFeedback
 
 
@@ -18,6 +21,8 @@ class OGScene(Scene):
         label: str = "ogbench"
         vis: bool
         tag: str
+        visualize: bool = False
+        frame_time: float = 0.05
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -26,6 +31,40 @@ class OGScene(Scene):
         self.env = self._make_env(self.env_id)
         self._last_ee_pose = None
         self._last_ee_yaw = None
+        self._viewer_launched = False
+        # Workspace normalization frame (ogbench defaults; overwritten from the
+        # actual obs dict on every reset / scene parse via _update_meta).
+        self._meta_xyz_center = np.array([0.425, 0.0, 0.0], dtype=np.float32)
+        self._meta_xyz_scaler = np.array([10.0], dtype=np.float32)
+
+    # --- Workspace position normalization -----------------------------------
+    #
+    # The env works in a raw world frame while entity poses / ee poses live in
+    # a normalized frame. The scene owns this mapping (kept in private fields,
+    # refreshed from the env's obs dict on reset) so it no longer has to be
+    # carried around in DCScene extras.
+
+    def _update_meta(self, obs: dict):
+        """Parse the workspace center/scaler from an env obs dict."""
+        if "meta_xyz_center" in obs and "meta_xyz_scaler" in obs:
+            self._meta_xyz_center = np.asarray(
+                obs["meta_xyz_center"], dtype=np.float32
+            )
+            self._meta_xyz_scaler = np.asarray(
+                obs["meta_xyz_scaler"], dtype=np.float32
+            )
+
+    def normalize_position(self, pos) -> np.ndarray:
+        """Map a world-frame position into the scene's normalized frame."""
+        return (
+            np.asarray(pos, dtype=np.float32) - self._meta_xyz_center
+        ) * self._meta_xyz_scaler
+
+    def unnormalize_position(self, pos) -> np.ndarray:
+        """Inverse of ``normalize_position`` (raw = norm / scaler + center)."""
+        return (
+            np.asarray(pos, dtype=np.float32) / self._meta_xyz_scaler
+        ) + self._meta_xyz_center
 
     def _make_env(self, env_id: str) -> SceneEnvBase:
         return cast(
@@ -39,7 +78,33 @@ class OGScene(Scene):
             ),
         )
 
+    def _sync_viewer(self):
+        """Launch (once) and sync the passive viewer after a step/reset."""
+        if not self.cfg.visualize:
+            return
+        if not self._viewer_launched:
+            self.env.unwrapped.launch_passive_viewer()  # type: ignore
+            self._viewer_launched = True
+            # Register the close handler at first launch so it works no matter
+            # when visualize was enabled on the config.
+            atexit.register(self.close_viewer)
+        self.env.unwrapped.sync_passive_viewer()  # type: ignore
+        if self.cfg.frame_time > 0:
+            time.sleep(self.cfg.frame_time)
+
+    def close_viewer(self):
+        """Close the passive viewer if it was launched (idempotent)."""
+        if not self._viewer_launched:
+            return
+        try:
+            self.env.unwrapped.close_passive_viewer()  # type: ignore
+        except Exception as e:
+            logger.warning(f"Failed to close passive viewer: {e}")
+        finally:
+            self._viewer_launched = False
+
     def close(self):
+        self.close_viewer()
         self.env.close()
 
     def to_td_image(self, obs: dict) -> TDImage:
@@ -84,11 +149,9 @@ class OGScene(Scene):
         # ogbench provides effector quaternions in (w, x, y, z) order; keep it.
         rot = np.array(rot, dtype=np.float32)
         # Normalize the ee position into the same frame as the entity poses
-        # (see Entity.normalize_position / meta_xyz_center & meta_xyz_scaler),
-        # so TAPAS's ee and object frames share one coordinate system.
-        ee_pos = (np.asarray(pos, dtype=np.float32) - obs["meta_xyz_center"]) * obs[
-            "meta_xyz_scaler"
-        ]
+        # (using the scene's workspace frame), so TAPAS's ee and object frames
+        # share one coordinate system.
+        ee_pos = self.normalize_position(pos)
         ee_pose = np.concatenate((ee_pos, rot))
         if "actions" in obs.keys():  # is demo
             # Reconstruct the achieved action from the EE pose delta instead of
@@ -120,8 +183,6 @@ class OGScene(Scene):
             "gripper_state": np.atleast_1d(obs["proprio_gripper_state"]),
             "joint_pos": obs["proprio_joint_pos"],
             "joint_vel": obs["proprio_joint_vel"],
-            "meta_xyz_center": obs["meta_xyz_center"],
-            "meta_xyz_scaler": obs["meta_xyz_scaler"],
         }
 
     def to_internal(self, obs: Any, info: dict[str, Any]) -> Any:
@@ -140,11 +201,13 @@ class OGScene(Scene):
     ]:
         ob, info = self.env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
+        self._update_meta(obs)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
         self.last_ste = obs["proprio_gripper_opening"]
         s_scene, s_image, _ = self.from_internal(obs)
         g_scene, g_image, _ = self.from_internal(goal)
+        self._sync_viewer()
         return (s_scene, s_image), (g_scene, g_image)
 
     def sample_task_vis(self) -> tuple[
@@ -153,9 +216,11 @@ class OGScene(Scene):
     ]:
         ob, info = self.env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
+        self._update_meta(obs)
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
         self.last_ste = obs["proprio_gripper_opening"]
+        self._sync_viewer()
         return self.from_internal(obs), self.from_internal(goal)
 
     def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -185,7 +250,7 @@ class OGScene(Scene):
         # as ee_pose / entity poses); map it back to the raw world frame.
         # env.step(..., absolute=True) then converts this target into the delta
         # it applies.
-        pos = action[:3] / 10.0 + np.array([0.425, 0.0, 0.0])  # ogbench meta_xyz_scaler/center
+        pos = self.unnormalize_position(action[:3])
         quat = action[3:7]
         yaw = self.quat_to_yaw(quat)
         state = action[7]
@@ -196,6 +261,7 @@ class OGScene(Scene):
         action = self.to_internal_action(action)
         ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
+        self._sync_viewer()
         assert isinstance(reward, float)
         return obs, SceneFeedback(
             terminal=terminated, reward=reward, truncated=truncated
@@ -208,9 +274,14 @@ class OGScene(Scene):
         for label, entity in self.entities.items():
             if label not in elabels:
                 continue
-            subgoal.update(entity.env_state_value(label, y))
+            subgoal.update(
+                entity.env_state_value(
+                    label, y, unnormalize_pos=self.unnormalize_position
+                )
+            )
         ob, reward, terminated, truncated, info = self.env.unwrapped.step_scene(subgoal)  # type: ignore
         obs, _ = self.to_internal(ob, info)
+        self._sync_viewer()
         assert isinstance(reward, float)
         return obs, SceneFeedback(
             terminal=terminated, reward=reward, truncated=truncated
@@ -275,9 +346,12 @@ class OGScene(Scene):
         return segments_scene, segments_image
 
     def to_dc_scene(self, obs: dict) -> DCScene:
+        self._update_meta(obs)
         dc_entities: dict[str, DCEntity] = {}
         for label, entity in self.entities.items():
-            dc_entities[label] = entity.value_from_gt(label, obs)
+            dc_entities[label] = entity.value_from_gt(
+                label, obs, normalize_pos=self.normalize_position
+            )
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)
 

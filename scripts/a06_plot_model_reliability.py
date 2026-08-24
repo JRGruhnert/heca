@@ -3,6 +3,7 @@ import json
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import cast
 
 from heca.conditions.condition import Condition
 from heca.data.entity import Entity
@@ -22,9 +23,10 @@ matplotlib.use("Agg")  # headless plotting
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-
+from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
+from heca.graphs.graph import ANCHOR_CHANGE_THRESHOLD
 from heca.misc import logger
 
 try:
@@ -38,56 +40,86 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 
-def sample_condition_scene(
-    con: Condition, entities: dict[str, Entity], extras: dict
-) -> DCScene:
+def sample_dcscene(con: Condition) -> DCScene:
     """Sample one value per entity from a condition's fitted models."""
     dc: dict[str, DCEntity] = {}
-    for label, entity in entities.items():
+    for label, entity in con.entities.items():
         value = con.models[label].sample(1)[0]
         if isinstance(value, torch.Tensor):
             value = value.detach().cpu().numpy()
         value = np.asarray(value).squeeze()
         value = entity.model_to_value(value)
         dc[label] = DCEntity(value=value, feature=entity.gnn_format(value))
-    return DCScene(dc, extras=extras)
+    return DCScene(dc)
 
 
-def condition_info_dict(
-    con: Condition, entities: dict[str, Entity], extras: dict
-) -> dict:
-    scene = sample_condition_scene(con, entities, extras)
+def condition_info_dict(con: Condition, scene: Scene) -> dict:
+    dcscene = sample_dcscene(con)
     info: dict = {}
-    for label in con.models.keys():
-        info.update(entities[label].env_state_value(label, scene))
+    for label, entity in con.entities.items():
+        info.update(
+            entity.env_state_value(
+                label, dcscene, unnormalize_pos=scene.unnormalize_position
+            )
+        )
     return info
 
 
+def anchor_entities(agent: ExpertModel) -> set[str]:
+    """Entities that do not move in this agent's task (change score below the
+    anchor threshold)."""
+    return {
+        label
+        for label, score in agent.conditions.change_scores.items()
+        if score < ANCHOR_CHANGE_THRESHOLD
+    }
+
+
+def sample_task_conditions(
+    agent: ExpertModel, scene: Scene, anchors: set[str]
+) -> tuple[dict, dict]:
+    """Sample a consistent (pre, post) task pair.
+
+    Anchor entities (e.g. the button in a faucet task — it only determines
+    whether the handle is unlocked) never move in the demos. Sampling pre and
+    post independently would demand a goal state the policy cannot produce, so
+    for anchors the post value is set equal to the sampled pre value; only
+    entities the agent actually changes get their own sampled post value.
+    """
+    pair = agent.conditions
+    pre_info = condition_info_dict(pair.pre, scene)
+    post_info = condition_info_dict(pair.post, scene)
+    for label in anchors:
+        for key in list(post_info):
+            if key.startswith(f"heca_{label}_"):
+                post_info[key] = pre_info[key]
+    return pre_info, post_info
+
+
+def get_env_safely(scene: Scene) -> SceneEnvBase:
+    assert isinstance(scene, OGScene), "Only OgScene Supported."
+    return cast(SceneEnvBase, scene.env.unwrapped)
+
+
 def evaluate_agent(
-    agent: ExpertModel, scene: OGScene, episodes: int, max_tries: int
+    agent: ExpertModel,
+    scene: Scene,
+    episodes: int,
+    max_tries: int,
 ) -> Counter:
-    env = scene.env.unwrapped
-    con = agent.conditions
-    labels = set(con.pre.models) | set(con.post.models)
-    entities = {label: scene.entities[label] for label in labels}
-
+    env = get_env_safely(scene)
     counts: Counter = Counter()
+    anchors = anchor_entities(agent)
     for ep in range(episodes):
-        scene.env.reset(options={"render_goal": True})
-        extras = scene.get_extras(env.compute_ob_info())
-        pre_info = condition_info_dict(con.pre, entities, extras)
-        post_info = condition_info_dict(con.post, entities, extras)
+        env.reset(options={"render_goal": True})
+        pre_info, post_info = sample_task_conditions(agent, scene, anchors)
 
-        # Teleport exactly once per episode; retries continue from the state
-        # the failed attempt ended in.
         env.set_start(pre_info)
         env.set_goal(post_info)
         y = scene.to_dc_scene(env.get_reset_info()["goal"])
 
         succeeded_on = 0
         for attempt in range(1, max_tries + 1):
-            # Current scene: teleported pre state on the 1st try, the end
-            # state of the previous (failed) rollout afterwards.
             x = scene.to_dc_scene(env.compute_ob_info())
             _, fb = agent.act(x, y)
             if fb.reward == 1.0:
@@ -186,65 +218,63 @@ def main():
     parser.add_argument(
         "--max-tries",
         type=int,
-        default=5,
-        help="Max attempts per episode before giving up (default: 5).",
+        default=3,
+        help="Max attempts per episode before giving up (default: 3).",
     )
     parser.add_argument(
-        "--out",
-        default=None,
-        help="Directory for the plots/JSON (default: <scene save dir>/plots).",
+        "--visual",
+        action="store_true",
+        help="Run with the ogbench passive MuJoCo viewer so the robot's "
+        "rollouts are visible (same viewer as test_01a_tapas_manual). "
+        "Requires a display; without this flag the evaluation runs headless.",
     )
-    parser.add_argument("--seed", type=int, default=0, help="RNG seed.")
-    args = parser.parse_args()
-    np.random.seed(args.seed)
 
-    n_failures = 0
-    for scene_tag, models in agents_by_scene().items():
-        if args.scene and scene_tag != args.scene:
+    args = parser.parse_args()
+
+    for scene_cfg, models in agents_by_scene():
+        if args.scene and scene_cfg.tag != args.scene:
             continue
-        logger.info(f"[{scene_tag}] evaluating {len(models)} agents")
+        if args.visual:
+            # The scene handles the passive viewer itself (launch / sync /
+            # close); we only need to enable it. The scene is a shared
+            # singleton cached by label+tag and may already exist with a
+            # different (equal) config instance (created at import time), so
+            # set the flag on the config the shared instance actually holds.
+            Scene.get(scene_cfg, auto_load=False).cfg.visualize = True
+        logger.info(f"[{scene_cfg.tag}] evaluating {len(models)} agents")
 
         results: list[dict] = []
         failures: list[dict] = []
-        scene = None
         for cfg in models:
             if args.tag and cfg.tag != args.tag:
                 continue
-            try:
-                agent = ExpertModel.get(cfg, auto_load=False)
-                agent.load()
-                scene = agent.scene
-                counts = evaluate_agent(agent, scene, args.episodes, args.max_tries)
-                results.append(
-                    {"scene": scene_tag, "tag": cfg.tag, "counts": dict(counts)}
-                )
-                total = sum(counts.values())
-                ok = total - counts.get(0, 0)
-                hist = ", ".join(
-                    f"try{t}={counts.get(t, 0)}" for t in range(1, args.max_tries + 1)
-                )
-                logger.info(
-                    f"[{scene_tag}] {cfg.tag}: {ok}/{total} episodes ok "
-                    f"({hist}, failed={counts.get(0, 0)})"
-                )
-            except Exception as exc:  # keep going if one agent fails
-                logger.error(f"[{scene_tag}] agent {cfg.tag} failed: {exc}")
-                failures.append({"scene": scene_tag, "tag": cfg.tag, "error": str(exc)})
-                n_failures += 1
 
-        if not results:
-            logger.warning(
-                f"[{scene_tag}] no agents evaluated "
-                "(missing demos/policies? run pipeline_03 first)."
+            agent = ExpertModel.get(cfg)
+            counts = evaluate_agent(
+                agent,
+                agent.scene,
+                args.episodes,
+                args.max_tries,
             )
-            continue
+            results.append(
+                {"scene": scene_cfg.tag, "tag": cfg.tag, "counts": dict(counts)}
+            )
+            total = sum(counts.values())
+            ok = total - counts.get(0, 0)
+            hist = ", ".join(
+                f"try{t}={counts.get(t, 0)}" for t in range(1, args.max_tries + 1)
+            )
+            logger.info(
+                f"[{scene_cfg.tag}] {cfg.tag}: {ok}/{total} episodes ok "
+                f"({hist}, failed={counts.get(0, 0)})"
+            )
 
-        out_dir = Path(args.out) if args.out else scene.save_dir(scene.cfg) / "plots"
+        out_dir = Scene.save_dir(scene_cfg) / "plots"
         out_dir.mkdir(parents=True, exist_ok=True)
         plot_path = plot_scene(
-            scene_tag, results, out_dir, args.max_tries, args.episodes
+            scene_cfg.tag, results, out_dir, args.max_tries, args.episodes
         )
-        json_path = out_dir / f"eval_success_{scene_tag}.json"
+        json_path = out_dir / f"eval_success_{scene_cfg.tag}.json"
         json_path.write_text(
             json.dumps(
                 {
@@ -256,12 +286,7 @@ def main():
                 indent=2,
             )
         )
-        logger.info(f"[{scene_tag}] wrote {plot_path}")
-        scene.close()
-
-    if n_failures:
-        logger.warning(f"{n_failures} agent(s) failed; see per-scene JSON reports.")
-        sys.exit(1)
+        logger.info(f"[{scene_cfg.tag}] wrote {plot_path}")
 
 
 if __name__ == "__main__":

@@ -23,8 +23,8 @@ from heca.learning.server import FLServer
 from heca.misc import logger
 from heca.misc.interrupt import request_stop, stop_requested
 
-from scripts.common.args import add_ee_argument, add_scene_argument
-from scripts.common.scenes import agents_by_scene, to_ee
+from scripts.common.args import add_scene_argument
+from scripts.common.scenes import agents_by_scene
 
 import conf.networks
 from conf.networks import NETWORK_NAMES
@@ -196,7 +196,6 @@ def main():
         "draws fresh randomness automatically. Not stored in any config.",
     )
     add_scene_argument(parser)
-    add_ee_argument(parser)
     args = parser.parse_args()
 
     if args.seed is not None:
@@ -213,12 +212,10 @@ def main():
     network = getattr(conf.networks, args.network)
 
     clients: dict[str, list] = {}
-    for scene_tag, models in agents_by_scene().items():
-        if args.scene and scene_tag != args.scene:
+    for scene_cfg, model_cfgs in agents_by_scene():
+        if args.scene and scene_cfg.tag != args.scene:
             continue
-        if args.ee:
-            models = [to_ee(m) for m in models]
-        clients.update({scene_tag: models})
+        clients.update({scene_cfg.tag: model_cfgs})
 
     exp, server = generate_clients(
         args.tag,

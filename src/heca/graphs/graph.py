@@ -17,7 +17,13 @@ from heca.data.data import DCScene
 from heca.data.entity import Entity
 from heca.conditions.condition import Condition
 
-ANCHOR_CHANGE_THRESHOLD: float = 1.0
+# An entity whose mean pre->post displacement (in normalized value space,
+# see ConPair.change_scores) is below this is an "anchor": it does not move
+# in the task (e.g. the button in a faucet task, which only determines whether
+# the handle is unlocked). Anchors keep their start value in goal-conditioned
+# nodes / evaluation sampling. Anchors measure ~0.0 displacement; the smallest
+# genuinely-moving entity (a free object moved a few cm) is ~1.0.
+ANCHOR_CHANGE_THRESHOLD: float = 0.5
 
 
 class Graph:

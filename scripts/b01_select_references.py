@@ -13,7 +13,7 @@ from scripts.common.scenes import find_scene_config
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    add_scene_argument(parser, default="sceneog")
+    add_scene_argument(parser)
     args = parser.parse_args()
 
     scene_cfg = find_scene_config(args.scene)
