@@ -18,8 +18,8 @@ class Condition:
 
         self._model, self._bics = self._fit_model()
 
-    def comp_features(self) -> dict[str, np.ndarray]:
-        result: dict[str, np.ndarray] = {}
+    def comp_features(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+        result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         for key in self.models.keys():
             up = self.models[key].get_parameters().copy()
             result[key] = self.entities[key].comp_feature(up)
@@ -126,9 +126,7 @@ class Condition:
         )
         plt.close()
 
-    def make_subgoal(
-        self, other: "Condition"
-    ) -> dict[str, tuple[float, np.ndarray]] | None:
+    def make_subgoal(self, other: "Condition") -> dict[str, np.ndarray] | None:
         values = {}
         for key in set(self.entities).intersection(set(other.entities)):
             up1 = self.models[key].get_parameters().copy()
@@ -140,7 +138,7 @@ class Condition:
             if score <= 0.0:
                 return None
             value = self.entities[key].best_sample(up1, up2)
-            values[key] = (score, value)
+            values[key] = value
             logger.debug(f"{key}: score={score}, value={value}")
 
         if len(values) == 0:

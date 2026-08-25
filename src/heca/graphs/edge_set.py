@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from heca.graphs.node_set import NodeSet
-from heca.graphs.node import EntityNode, GraphNode, OptionNode
+from heca.graphs.node import CompNode, EntityNode, GraphNode, OptionNode
 from heca.data.entity import Entity
 from heca.utils.quaternion import Quaternion
 
@@ -35,13 +35,12 @@ class EdgeSet(Generic[S, D]):
         for i, edge in enumerate(self.edges):
             src = snset.idx_get(edge[0])
             dst = dnset.idx_get(edge[1])
-            if src.changed or dst.changed:
-                self.update_attr(src, dst, i)
+            self.update_attr(src, dst, i)
         self.edge_attr = torch.from_numpy(np.stack(self.attrs)).float()
 
     def update_attr(self, src: S, dst: D, index: int):
         if self.type == ("entity", "stepmix", "entity"):
-            assert isinstance(src, EntityNode)
+            assert isinstance(src, CompNode)
             assert isinstance(dst, EntityNode)
             assert src.n_states == dst.n_states, "Sanity check"
             self.attrs[index] = self.stepmix_feat(
@@ -132,14 +131,13 @@ class EdgeSet(Generic[S, D]):
 
         return np.concatenate([z_pos, z_rot, np.atleast_1d(z_state)], axis=-1)
 
-    def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
+    def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D], src_key: str):
         """Create edges by matching node source entries to this edge type."""
         for i, node in enumerate(tnset.items):
-            for e, key in node.sources:
-                if e == self.type[1]:
-                    if snset.has_key(key):
-                        j = snset.get_index(key)
-                        self.add(j, i)
+            for key in node.sources[src_key]:
+                if snset.has_key(key):
+                    j = snset.get_index(key)
+                    self.add(j, i)
 
     def __str__(self) -> str:
         return (

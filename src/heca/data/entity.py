@@ -158,9 +158,7 @@ class Entity(Configurable):
             )
         return p
 
-    def score_single(
-        self, sample: np.ndarray, up: dict, eps: float = 1e-15
-    ) -> tuple[float, bool]:
+    def score_single(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> bool:
         sample = self.model_value(sample)
         p = self.secure_mix_parameters(up)
         pose = sample[:-1]
@@ -170,25 +168,25 @@ class Entity(Configurable):
         vars_ = p["measurement"]["pose"]["covariances"]
         pis = p["measurement"]["state"]["pis"]
 
-        def loglik(pose_x: np.ndarray, state_x: int) -> float:
-            best = -np.inf
-            for k in range(len(weights)):
-                var = np.maximum(vars_[k], eps)
-                log_gauss = -0.5 * np.sum(
-                    np.log(2 * np.pi * var) + (pose_x - means[k]) ** 2 / var
-                )
-                state_prob = pis[k][state_x] if state_x < len(pis[k]) else eps
-                log_cat = np.log(np.clip(state_prob, eps, 1.0))
-                s = np.log(weights[k]) + log_gauss + log_cat
-                if s > best:
-                    best = s
-            return best
+        # def loglik(pose_x: np.ndarray, state_x: int) -> float:
+        #     best = -np.inf
+        #     for k in range(len(weights)):
+        #         var = np.maximum(vars_[k], eps)
+        #         log_gauss = -0.5 * np.sum(
+        #             np.log(2 * np.pi * var) + (pose_x - means[k]) ** 2 / var
+        #         )
+        #         state_prob = pis[k][state_x] if state_x < len(pis[k]) else eps
+        #         log_cat = np.log(np.clip(state_prob, eps, 1.0))
+        #         s = np.log(weights[k]) + log_gauss + log_cat
+        #         if s > best:
+        #             best = s
+        #     return best
 
-        loglik_x = loglik(pose, state)
-        loglik_max = max(
-            loglik(means[k], int(np.argmax(pis[k]))) for k in range(len(weights))
-        )
-        score = float(np.clip(np.exp(loglik_x - loglik_max), 0.0, 1.0))
+        # loglik_x = loglik(pose, state)
+        # loglik_max = max(
+        #     loglik(means[k], int(np.argmax(pis[k]))) for k in range(len(weights))
+        # )
+        # score = float(np.clip(np.exp(loglik_x - loglik_max), 0.0, 1.0))
 
         best_k, z, zd = self._best_component(pose, p, eps=eps)
         valid_pose = z <= float(math.sqrt(chi2.ppf(self.cfg.z_quantile, len(pose))))
@@ -198,7 +196,7 @@ class Entity(Configurable):
         mode_state = int(np.argmax(pis[best_k]))
         valid_state = state == mode_state
 
-        return score, bool(valid_pose and valid_state)
+        return bool(valid_pose and valid_state)
 
     def _best_component(
         self, pose: np.ndarray, p: dict, eps: float = 1e-15
@@ -340,7 +338,9 @@ class Entity(Configurable):
         assert isinstance(pose, np.ndarray)
         return self.model_to_value(np.concatenate([pose, [state]]))
 
-    def comp_feature(self, up: dict, eps: float = 1e-8) -> np.ndarray:
+    def comp_feature(
+        self, up: dict, eps: float = 1e-8
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         NOTE: ASSUMES MODELS USE DIAG MODE
         Returns:
@@ -393,7 +393,7 @@ class Entity(Configurable):
                 covariances[:, base:] + eps
             )
 
-        return feat
+        return feat, p["weights"]
 
     # def kl_variational_paper(self, other: "Condition", key: str):
     #     m1, s1 = Condition.mix_with_states(self, key)

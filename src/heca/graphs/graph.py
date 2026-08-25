@@ -1,4 +1,5 @@
 from collections import defaultdict
+from enum import Enum
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,12 @@ from heca.misc import hardware, logger
 from heca.data.data import DCScene
 from heca.data.entity import Entity
 from heca.conditions.condition import Condition
+
+
+class SubgoalMode(Enum):
+    NONE = "None"
+    SIMPLE = "Simple"
+    CHAIN = "Chain"
 
 
 class Graph:
@@ -41,6 +48,10 @@ class Graph:
         self.start: DCScene = DCScene.empty()
         self.goal: DCScene = DCScene.empty()
 
+        # Track expert-condition connections for visualization.
+        self._pair_scores: dict[tuple[str, str], dict[str, float]] = {}
+        self._agent_tags: list[str] = []
+
     def export(self) -> HeteroData:
         data = HeteroData()
         data[self.ns_entity.type].x = self.ns_entity.x
@@ -58,7 +69,7 @@ class Graph:
         self.start = start.copy()
         for key in self.start_keys:
             node = self.ns_entity.get_by_key(key)
-            assert isinstance(node, EntityNode)
+            assert isinstance(node, ValueNode)
             self.ns_entity.key_update(key, start[node.entity])
 
         self.update_nodes()
@@ -69,13 +80,11 @@ class Graph:
         for node in self.ns_option.items:
             node.data = goal.copy()
 
-    def test_value(self, node: EntityNode, x: DCScene) -> bool:
-        assert node.con is not None
+    def test_value(self, node: ValueNode, x: DCScene) -> bool:
         up = node.con.models[node.entity].get_parameters().copy()
-        return node.con.entities[node.entity].score_single(x[node.entity].value, up)[1]
+        return node.con.entities[node.entity].score_single(x[node.entity].value, up)
 
-    def create_value(self, node: EntityNode) -> DCEntity:
-        assert node.con is not None
+    def sample_value(self, node: ValueNode) -> DCEntity:
         value = node.con.models[node.entity].sample(1)[0]
         if isinstance(value, torch.Tensor):
             value = value.detach().cpu().numpy()
@@ -87,23 +96,19 @@ class Graph:
     def update_nodes(self):
         for key in self.goal_keys:
             node = self.ns_entity.get_by_key(key)
-            logger.debug(f"Update Subgoal {node.entity} {key}")
-            assert isinstance(node, EntityNode)
-            if (
-                node.change_score is not None
-                and node.change_score < Entity.ANCHOR_THRESHOLD
-            ):
+            assert isinstance(node, ValueNode)
+            if node.vmode == ValueMode.START:
                 x = self.start.get(node.entity)
-                logger.debug(f"From Start (anchor): {x}")
-            elif self.test_value(node, self.goal):
+            elif node.vmode == ValueMode.GOAL:
                 x = self.goal.get(node.entity)
-                logger.debug(f"From Goal:   {x}")
-            elif self.test_value(node, self.start):
-                x = self.start.get(node.entity)
-                logger.debug(f"From Start:  {x}")
+            elif node.vmode == ValueMode.SAMPLE:
+                x = self.sample_value(node)
             else:
-                x = self.create_value(node)
-                logger.debug(f"From New:    {x}")
+                if self.test_value(node, self.goal):
+                    x = self.goal.get(node.entity)
+                else:
+                    x = self.sample_value(node)
+
             self.ns_entity.key_update(key, x)
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
@@ -134,42 +139,45 @@ class Graph:
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_tapas.build(self.ns_entity, self.ns_entity)
 
-    def set_comps(self, tag: str, con: Condition) -> dict[str, set[tuple[str, str]]]:
-        keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
+    def set_comps(self, tag: str, con: Condition) -> dict[str, set[str]]:
+        keys: dict[str, set[str]] = defaultdict(set[str])
         for entity, comps in con.comp_features().items():
-            for idx, feat in enumerate(comps):
+            for idx, (comp, weight) in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
-                keys[entity].add((self.es_stepmix.type[1], key))
+                keys[entity].add(key)
                 self.ns_entity.add(
                     key,
-                    EntityNode(
+                    CompNode(
                         entity=entity,
                         type_id=self.entities[entity].cfg.type_id,
                         n_states=self.entities[entity].cfg.n_states,
-                        data=DCEntity(value=np.empty(0), feature=feat),
-                        static=True,
-                        sources=set(),
+                        data=DCEntity(value=np.empty(0), feature=comp),
+                        weight=weight,
                     ),
                 )
         return keys
 
-    def set_precon(
-        self, label: str, con: Condition, comp_sources: dict[str, set[tuple[str, str]]]
-    ) -> dict[str, tuple[str, str]]:
-        pre_sources: dict[str, tuple[str, str]] = {}
+    def set_precon(self, label: str, con: Condition) -> dict[str, str]:
+        """Returns dict[str,str]
+        key: entity
+        value: key for node
+        """
+        comp_sources = self.set_comps(label, con)
+        pre_sources: dict[str, str] = {}
         for entity, sources in comp_sources.items():
             key = "pre_" + entity + label
-            pre_sources[entity] = (self.es_tapas.type[1], key)
+            pre_sources[entity] = key
             self.start_keys.add(key)
             self.ns_entity.add(
                 key=key,
-                value=EntityNode(
+                value=ValueNode(
                     entity=entity,
                     type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
-                    sources=set(sources),
+                    sources={"comp": set(sources)},
                     con=con,
+                    vmode=ValueMode.START,
                 ),
             )
         return pre_sources
@@ -178,123 +186,166 @@ class Graph:
         self,
         label: str,
         con: Condition,
-        comp_sources: dict[str, set[tuple[str, str]]],
-        pre_sources: dict[str, tuple[str, str]],
-        change_scores: dict[str, float] | None = None,
-    ) -> dict[str, tuple[str, str]]:
-        post_sources: dict[str, tuple[str, str]] = {}
-        for entity, sources in pre_sources.items():
-            key = "post_" + entity + label
-            sources = set(comp_sources[entity])
-            sources.add(pre_sources[entity])
+        comp_sources: dict[str, set[str]],
+        pre_sources: dict[str, str],
+        entities: list[str],
+        vmode: ValueMode,
+    ) -> dict[str, str]:
+        post_sources: dict[str, str] = {}
+        for entity in entities:
+            key = vmode.value + entity + label
             self.goal_keys.add(key)
             self.ns_entity.add(
                 key,
-                EntityNode(
+                ValueNode(
                     entity=entity,
                     type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
-                    sources=sources,
+                    sources={
+                        "comp": set(comp_sources[entity]),
+                        "entity": set(pre_sources[entity]),
+                    },
                     con=con,
-                    change_score=(change_scores.get(entity) if change_scores else None),
+                    vmode=vmode,
                 ),
             )
-            post_sources[entity] = (self.es_summary.type[1], key)
+            post_sources[entity] = key
         return post_sources
 
     def set_subgoal(
         self,
         label: str,
-        comp_sources: dict[str, set[tuple[str, str]]],
-        pre_sources: dict[str, tuple[str, str]],
-        post_sources: dict[str, tuple[str, str]],
-        subgoal: dict[str, tuple[float, np.ndarray]],
-    ) -> set[tuple[str, str]]:
+        comp_sources: dict[str, set[str]],
+        pre_sources: dict[str, str],
+        post_sources: dict[str, str],
+        subgoal: dict[str, np.ndarray],
+    ) -> set[str]:
         temp_sources = post_sources
-        for entity, (_, value) in subgoal.items():
+        for entity, value in subgoal.items():
             key = "sub_" + entity + label
             sources = set(comp_sources[entity])
             sources.add(pre_sources[entity])
             feat = self.entities[entity].gnn_format(value)
             self.ns_entity.add(
                 key,
-                EntityNode(
+                SubgoalNode(
                     entity=entity,
                     type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity(value=value, feature=feat),
-                    static=True,
-                    sources=sources,
+                    sources={
+                        "comp": set(comp_sources[entity]),
+                        "entity": set(pre_sources[entity]),
+                    },
                 ),
             )
-            temp_sources[entity] = (self.es_summary.type[1], key)
-        return {src for src in temp_sources.values()}
+            temp_sources[entity] = key
+        return set(temp_sources.values())
 
     @classmethod
-    def generate(cls, cfgs: list[ExpertModel.Config], add_subgoals: bool) -> "Graph":
+    def generate(cls, cfgs: list[ExpertModel.Config], smode: SubgoalMode) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
         graph = cls(entities=entities)
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
-        # Track expert-condition connections for visualization.
-        _connections: dict[tuple[str, str], dict[str, float]] = {}
-        _pair_scores: dict[tuple[str, str], dict[str, float]] = {}
+        graph._agent_tags = [a.cfg.tag for a in agents]
+
         for a in agents:
             ac = a.conditions
-            pre_comp_sources = graph.set_comps(ac.label, ac.pre)
+            pre_sources = graph.set_precon(ac.label, ac.pre)
             post_comp_sources = graph.set_comps(ac.label, ac.post)
-            pre_sources = graph.set_precon(ac.label, ac.pre, pre_comp_sources)
-            post_sources = graph.set_postcon(
+            post_start_sources = graph.set_postcon(
                 ac.label,
                 ac.post,
                 post_comp_sources,
                 pre_sources,
-                change_scores=ac.change_scores,
+                entities=ac.anchor_entities,
+                vmode=ValueMode.START,
             )
+            if SubgoalMode.NONE:
+                post_check_sources = graph.set_postcon(
+                    ac.label,
+                    ac.post,
+                    post_comp_sources,
+                    pre_sources,
+                    entities=ac.target_entities,
+                    vmode=ValueMode.CHECK,
+                )
+                post_sources = post_start_sources | post_check_sources
+            if SubgoalMode.SIMPLE:
+                post_goal_sources = graph.set_postcon(
+                    ac.label,
+                    ac.post,
+                    post_comp_sources,
+                    pre_sources,
+                    entities=ac.target_entities,
+                    vmode=ValueMode.GOAL,
+                )
+                post_sample_sources = graph.set_postcon(
+                    ac.label,
+                    ac.post,
+                    post_comp_sources,
+                    pre_sources,
+                    entities=ac.target_entities,
+                    vmode=ValueMode.SAMPLE,
+                )
+                post_sources = post_start_sources | post_goal_sources
+                post_sources_alt = post_start_sources | post_sample_sources
+            if SubgoalMode.CHAIN:
+                post_goal_sources = graph.set_postcon(
+                    ac.label,
+                    ac.post,
+                    post_comp_sources,
+                    pre_sources,
+                    entities=ac.target_entities,
+                    vmode=ValueMode.GOAL,
+                )
+
+                post_sources = post_start_sources | post_goal_sources
+
             for b in agents:
                 bc = b.conditions
-                if ac.label == bc.label:  # pre == post
-                    sources = {src for src in post_sources.values()}
+                if ac.label == bc.label:
                     graph.ns_option.add(
                         ac.label,
                         OptionNode(
                             model=a.cfg,
-                            sources=sources,
+                            sources={"entity": set(post_sources.values())},
                         ),
                     )
-                else:  # pre != post
-                    if add_subgoals:
-                        _pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(ac.post)
-                        subgoal = bc.pre.make_subgoal(ac.post)
-                        if subgoal is not None:
-                            _connections[(a.cfg.tag, b.cfg.tag)] = {
-                                key: float(score) for key, (score, _) in subgoal.items()
-                            }
-                            sources = graph.set_subgoal(
-                                ac.label + bc.label,
-                                post_comp_sources,
-                                pre_sources,
-                                post_sources,
-                                subgoal,
-                            )
-                            graph.ns_option.add(
-                                ac.label + bc.label,
-                                OptionNode(
-                                    model=a.cfg,
-                                    sources=sources,
-                                ),
-                            )
+                    if smode == SubgoalMode.SIMPLE:
+                        graph.ns_option.add(
+                            ac.label + "s",
+                            OptionNode(
+                                model=a.cfg,
+                                sources={"entity": set(post_sources_alt.values())},
+                            ),
+                        )
+                if smode == SubgoalMode.CHAIN:
+                    graph._pair_scores[(a.cfg.tag, b.cfg.tag)] = bc.pre.scores(ac.post)
+                    subgoal = bc.pre.make_subgoal(ac.post)
+                    if subgoal is not None:
+                        sources = graph.set_subgoal(
+                            ac.label + "--" + bc.label,
+                            post_comp_sources,
+                            pre_sources,
+                            post_sources,
+                            subgoal,
+                        )
+                        graph.ns_option.add(
+                            ac.label + "--" + bc.label,
+                            OptionNode(
+                                model=a.cfg,
+                                sources={"entity": sources},
+                            ),
+                        )
 
-        graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity)
-        graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option)
-        graph.es_tapas.edges_from_sets(graph.ns_entity, graph.ns_entity)
+        graph.es_stepmix.edges_from_sets(graph.ns_entity, graph.ns_entity, "comp")
+        graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option, "entity")
+        graph.es_tapas.edges_from_sets(graph.ns_entity, graph.ns_entity, "entity")
 
-        # Persist the connection metadata so plot_connections can render it.
-        graph._agent_tags = [a.cfg.tag for a in agents]
-        graph._connections = _connections
-        graph._pair_scores = _pair_scores
         return graph
 
     def select(self, index: int) -> tuple[ExpertModel.Config, DCScene]:
@@ -396,9 +447,7 @@ class Graph:
         entity_lines = []
         for key, idx in self.ns_entity.index.items():
             node = self.ns_entity.items[idx]
-            entity_lines.append(
-                f"{idx}:\tstatic={int(node.static)}\t{node.entity}\t{key}"
-            )
+            entity_lines.append(f"{idx}:\t\t{node.entity}\t{key}")
         logger.debug(f"Entity Nodes:\n" + "\n".join(entity_lines))
 
         option_lines = []
@@ -430,9 +479,8 @@ class Graph:
         it passed the thresholds. Empty cells mean the two models share no
         entity. Diagonal entries are self-connections (direct options).
         """
-        tags = getattr(self, "_agent_tags", [])
-        connections = getattr(self, "_connections", {})
-        pair_scores = getattr(self, "_pair_scores", {})
+        tags = self._agent_tags
+        pair_scores = self._pair_scores
         if not tags:
             return
 
@@ -492,45 +540,3 @@ class Graph:
         fig.tight_layout()
         fig.savefig(plot_path / "connections.png", dpi=300, bbox_inches="tight")
         plt.close(fig)
-
-        # Per-pair per-entity detail plots (including failed pairs, so the
-        # matrix's low-score cells can be understood).
-        detail_dir = plot_path / "connections"
-        detail_dir.mkdir(parents=True, exist_ok=True)
-        for (src, dst), entity_scores in sorted(pair_scores.items()):
-            labels = list(entity_scores.keys())
-            if not labels:
-                continue
-            values = [entity_scores[k][0] for k in labels]
-            thresholds = [entity_scores[k][1] for k in labels]
-
-            fig, ax = plt.subplots(figsize=(max(4.0, len(labels) * 1.3), 3.2))
-            x = np.arange(len(labels))
-            colors = [
-                "tab:green" if v >= t else "tab:red" for v, t in zip(values, thresholds)
-            ]
-            ax.bar(x, values, color=colors, alpha=0.85)
-            for i, (v, t) in enumerate(zip(values, thresholds)):
-                ax.hlines(
-                    t,
-                    x[i] - 0.4,
-                    x[i] + 0.4,
-                    color="gray",
-                    linestyle="--",
-                    linewidth=1.0,
-                )
-                ax.text(i, max(v, t) + 0.02, f"{v:.2f}", ha="center", fontsize=8)
-            ax.set_xticks(x)
-            ax.set_xticklabels(labels, fontsize=8)
-            ax.set_ylim(0.0, 1.1)
-            ax.set_ylabel("containment score")
-            ax.set_xlabel("entity")
-            ax.set_title(f"{src} -> {dst} (post -> pre)")
-            fig.tight_layout()
-            fig.savefig(detail_dir / f"{src}__{dst}.png", dpi=150, bbox_inches="tight")
-            plt.close(fig)
-
-        # Per-entity text summary.
-        for (src, dst), scores in sorted(connections.items()):
-            parts = ", ".join(f"{k}={v:.3f}" for k, v in sorted(scores.items()))
-            logger.info(f"connection {src} -> {dst}: {parts}")

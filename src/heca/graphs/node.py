@@ -1,22 +1,28 @@
 from abc import ABC
+from collections import defaultdict
 from dataclasses import dataclass
+from enum import Enum
 
 from heca.experts.expert import ExpertModel
 from heca.conditions.condition import Condition
 from heca.data.data import DCEntity, DCScene
 
 
+class ValueMode(Enum):
+    GOAL = "Goal"
+    START = "Start"
+    SAMPLE = "Sample"
+    CHECK = "Best"
+
+
 @dataclass(slots=True, kw_only=True)
 class GraphNode(ABC):
-    changed: bool
     data: DCEntity
-    sources: set[tuple[str, str]]
+    sources: dict[str, set[str]] = defaultdict(set[str])
 
     def __str__(self) -> str:
-        src_str = (
-            ", ".join(f"({e},{k})" for e, k in self.sources) if self.sources else "∅"
-        )
-        return f"changed={self.changed} data={self.data} sources=[{src_str}]"
+        src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
+        return f"data={self.data} sources=[{src_str}]"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -25,43 +31,55 @@ class EntityNode(GraphNode):
     type_id: int
     data: DCEntity
     n_states: int
-    changed: bool = True
-    static: bool = False
-    weight: float = 1.0
-    con: Condition | None = None
-    change_score: float | None = None
 
-    # EntityNode __str__:
     def __str__(self) -> str:
-        src_str = (
-            ", ".join(f"({e},{k})" for e, k in self.sources) if self.sources else "∅"
-        )
+        src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
         return (
             f"EntityNode\n"
             f"  entity:     {self.entity}\n"
             f"  sources:    [{src_str}]\n"
-            f"  changed:    {self.changed}\n"
             f"  data:       {self.data}\n"
             f"  n_states:   {self.n_states}\n"
-            f"  static:     {int(self.static)}\n"
-            f"  weight:     {self.weight:.2f}"
         )
+
+
+@dataclass(slots=True, kw_only=True)
+class SubgoalNode(EntityNode):
+    entity: str
+    type_id: int
+    data: DCEntity
+    n_states: int
+
+
+@dataclass(slots=True, kw_only=True)
+class ValueNode(EntityNode):
+    entity: str
+    type_id: int
+    data: DCEntity
+    n_states: int
+    #
+    con: Condition
+    vmode: ValueMode
+
+
+@dataclass(slots=True, kw_only=True)
+class CompNode(EntityNode):
+    entity: str
+    type_id: int
+    data: DCEntity
+    n_states: int
+    #
+    weight: float
 
 
 @dataclass(slots=True, kw_only=True)
 class OptionNode(GraphNode):
     model: ExpertModel.Config
-    changed: bool = False
     data: DCScene = DCScene.empty()
 
     # OptionNode __str__:
     def __str__(self) -> str:
-        src_str = (
-            ", ".join(f"({e},{k})" for e, k in self.sources) if self.sources else "∅"
-        )
+        src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
         return (
-            f"OptionNode"
-            f"  model:      {self.model.tag}"
-            f"  sources:    [{src_str}]"
-            f"  changed:    {self.changed}"
+            f"OptionNode" f"  model:      {self.model.tag}" f"  sources:    [{src_str}]"
         )

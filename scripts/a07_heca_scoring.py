@@ -71,7 +71,7 @@ def update_nodes_report(pair, anchors: set[str]) -> dict[str, dict]:
     post_comp = graph.set_comps(label, pair.post)
     pre_src = graph.set_precon(label, pair.pre, pre_comp)
     post_src = graph.set_postcon(
-        label, pair.post, post_comp, pre_src, change_scores=pair.change_scores
+        label, pair.post, post_comp, pre_src, anchor_entities=pair.change_scores
     )
     graph.ns_option.add(
         "opt_" + label,

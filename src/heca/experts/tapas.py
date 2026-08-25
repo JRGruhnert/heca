@@ -181,7 +181,7 @@ class TapasExpert(ExpertModel):
 
     def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         for label, entity in self.entities.items():
-            _, valid = entity.score_single(
+            valid = entity.score_single(
                 x.get(label).value,
                 self.conditions.pre.models[label].get_parameters(),
             )

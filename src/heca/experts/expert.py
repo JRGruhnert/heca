@@ -44,6 +44,10 @@ class ExpertModel(Persistable, abc.ABC):
         self.act_virtual = True
         return self
 
+    def real(self) -> "ExpertModel":
+        self.act_virtual = False
+        return self
+
     def force_recompute(self) -> "ExpertModel":
         self._force_recompute = True
         return self
@@ -112,11 +116,11 @@ class ExpertModel(Persistable, abc.ABC):
 
     def valid_task(self, x: DCScene, y: DCScene) -> bool:
         for label, entity in self.entities.items():
-            x_score, x_valid = entity.score_single(
+            x_valid = entity.score_single(
                 x.get(label).value,
                 self.conditions.pre.models[label].get_parameters(),
             )
-            yscore, y_valid = entity.score_single(
+            y_valid = entity.score_single(
                 y.get(label).value,
                 self.conditions.post.models[label].get_parameters(),
             )
