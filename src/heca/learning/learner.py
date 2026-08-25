@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import Literal
 import torch
 import copy
 import wandb
@@ -18,25 +17,6 @@ from heca.misc.base import Persistable
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
-
-
-def _wandb_group_and_job_type(tag: str) -> tuple[str | None, str | None]:
-    if "_" not in tag:
-        raise ValueError
-    group, scene = tag.rsplit("_", 1)
-    return group, scene
-
-
-@dataclass(kw_only=True, slots=True)
-class WandBConfig:
-    project: str = "master-thesis"
-    entity: str = "heca-university-freiburg"
-    mode: Literal["online", "offline", "disabled"] = "online"
-    save_code: bool = False  # Uploads training script
-    watch_model: bool = True  # Log gradients & weight histograms
-    watch_freq: int = 5  # Frequency of gradient logging
-    enabled: bool = True
-
 
 # class _ExplainerWrapper(nn.Module):
 #     def __init__(self, model: nn.Module):
@@ -85,7 +65,7 @@ class Learner(Persistable):
         label: str = "standard"
         buffer: Buffer.Config = FairBuffer.Config()
         network: Network.Config
-        wandb: WandBConfig = WandBConfig()
+        wandb: logger.WandBConfig = logger.WandBConfig()
         # Hyperparameters
         lr: float
         max_grad_norm: float
@@ -201,7 +181,6 @@ class Learner(Persistable):
             "network/num_tapas_layers": self.cfg.network.num_tapas_layers,
         }
 
-        group, job_type = _wandb_group_and_job_type(self.cfg.tag)
         self._wandb_run = wandb.init(
             project=self.cfg.wandb.project,
             entity=self.cfg.wandb.entity,
@@ -210,8 +189,6 @@ class Learner(Persistable):
             mode=self.cfg.wandb.mode,
             save_code=self.cfg.wandb.save_code,
             tags=[self.cfg.label],
-            group=group,
-            job_type=job_type,
             reinit="create_new",
         )
 

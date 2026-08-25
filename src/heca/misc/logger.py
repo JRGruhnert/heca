@@ -4,7 +4,7 @@ from enum import Enum
 import functools
 import logging
 import pprint
-from typing import Callable
+from typing import Callable, Literal
 from loguru import logger
 from wandb import util as wandb_util
 import wandb
@@ -53,6 +53,17 @@ class LogMode(Enum):
     WANDB = "wandb"
     TERMINAL = "terminal"
     NONE = "none"
+
+
+@dataclass(kw_only=True, slots=True)
+class WandBConfig:
+    project: str = "master-thesis"
+    entity: str = "heca-university-freiburg"
+    mode: Literal["online", "offline", "disabled"] = "online"
+    save_code: bool = False  # Uploads training script
+    watch_model: bool = True  # Log gradients & weight histograms
+    watch_freq: int = 5  # Frequency of gradient logging
+    enabled: bool = True
 
 
 @dataclass(kw_only=True)

@@ -15,7 +15,6 @@ matplotlib.use("Agg")
 from heca.agents.heca import Heca
 from heca.experts.expert import ExpertModel
 from heca.learning.fppo import FPPO
-from heca.learning.learner import WandBConfig
 from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
 from heca.misc import logger
@@ -41,7 +40,7 @@ def generate_clients(
     reload: bool,
     use_gt: bool,
 ):
-    wandb = WandBConfig(enabled=use_wandb)
+    wandb = logger.WandBConfig(enabled=use_wandb)
     hecas = []
     server = None
     if federated:
