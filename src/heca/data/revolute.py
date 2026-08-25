@@ -8,11 +8,10 @@ from heca.data.entity import Entity
 
 
 class RevoluteEntity(Entity):
-    TYPE_ID = 3
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        threshold: float = 0.6
+        type_id: int = 3
 
     @property
     def measurement(self) -> dict:

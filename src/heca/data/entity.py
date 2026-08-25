@@ -18,12 +18,11 @@ class Entity(Configurable):
     LOGIT_CONFIDENCE = 10.0
     POS_DIM: int = 3
     ROT_DIM: int = 3
-    TYPE_ID: int = -1  # overridden by subclasses
-    ANCHOR_THRESHOLD: float = 0.5
+    ANCHOR_THRESHOLD: float = 0.1
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        threshold: float
+        type_id: int
         fit_rotation: bool = True
         directional_containment: bool = False
         n_states: int = 1

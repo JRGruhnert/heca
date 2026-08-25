@@ -8,11 +8,10 @@ from heca.data.entity import Entity
 
 
 class StaticEntity(Entity):
-    TYPE_ID = 1
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        threshold: float = 0.9
+        type_id: int = 1
 
     @property
     def measurement(self) -> dict:

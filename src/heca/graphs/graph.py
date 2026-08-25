@@ -134,22 +134,18 @@ class Graph:
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_tapas.build(self.ns_entity, self.ns_entity)
 
-    def set_comps(
-        self,
-        tag: str,
-        con: Condition,
-    ) -> dict[str, set[tuple[str, str]]]:
+    def set_comps(self, tag: str, con: Condition) -> dict[str, set[tuple[str, str]]]:
         keys: dict[str, set[tuple[str, str]]] = defaultdict(set[tuple[str, str]])
-        for elabel, comps in con.comp_features().items():
+        for entity, comps in con.comp_features().items():
             for idx, feat in enumerate(comps):
-                key = con.label + elabel + tag + f"{idx}"
-                keys[elabel].add((self.es_stepmix.type[1], key))
+                key = con.label + entity + tag + f"{idx}"
+                keys[entity].add((self.es_stepmix.type[1], key))
                 self.ns_entity.add(
                     key,
                     EntityNode(
-                        entity=elabel,
-                        type_id=type(self.entities[elabel]).TYPE_ID,
-                        n_states=self.entities[elabel].cfg.n_states,
+                        entity=entity,
+                        type_id=self.entities[entity].cfg.type_id,
+                        n_states=self.entities[entity].cfg.n_states,
                         data=DCEntity(value=np.empty(0), feature=feat),
                         static=True,
                         sources=set(),
@@ -169,7 +165,7 @@ class Graph:
                 key=key,
                 value=EntityNode(
                     entity=entity,
-                    type_id=type(self.entities[entity]).TYPE_ID,
+                    type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
                     sources=set(sources),
@@ -196,7 +192,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
-                    type_id=type(self.entities[entity]).TYPE_ID,
+                    type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity.empty(),
                     sources=sources,
@@ -225,7 +221,7 @@ class Graph:
                 key,
                 EntityNode(
                     entity=entity,
-                    type_id=type(self.entities[entity]).TYPE_ID,
+                    type_id=self.entities[entity].cfg.type_id,
                     n_states=self.entities[entity].cfg.n_states,
                     data=DCEntity(value=value, feature=feat),
                     static=True,
@@ -244,7 +240,7 @@ class Graph:
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
         # Track expert-condition connections for visualization.
         _connections: dict[tuple[str, str], dict[str, float]] = {}
-        _pair_scores: dict[tuple[str, str], dict[str, tuple[float, float]]] = {}
+        _pair_scores: dict[tuple[str, str], dict[str, float]] = {}
         for a in agents:
             ac = a.conditions
             pre_comp_sources = graph.set_comps(ac.label, ac.pre)
@@ -445,7 +441,7 @@ class Graph:
         for (src, dst), entity_scores in pair_scores.items():
             i = tags.index(src)
             j = tags.index(dst)
-            values = [v for v, _ in entity_scores.values()]
+            values = entity_scores.values()
             mat[i, j] = min(values) if values else np.nan
 
         plot_path = path / "plots"

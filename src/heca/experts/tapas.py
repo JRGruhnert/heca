@@ -22,6 +22,7 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     CascadeConfig,
 )
 from torch import random
+from heca.data.entity import Entity
 from heca.experts.expert import ExpertModel
 from heca.conditions.pair import ConPair
 from heca.data.data import DCScene, TDImage
@@ -180,7 +181,6 @@ class TapasExpert(ExpertModel):
 
     def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         for label, entity in self.entities.items():
-            # Check if preconditions are met
             _, valid = entity.score_single(
                 x.get(label).value,
                 self.conditions.pre.models[label].get_parameters(),
@@ -188,7 +188,7 @@ class TapasExpert(ExpertModel):
             if not valid:
                 return x, SceneFeedback(terminal=True, reward=0.0, truncated=False)
         tdscene, tdimage, fb = self.scene.step_virt(
-            x, y, list(self.entities.keys()), self.conditions.change_scores
+            x, y, self.conditions.target_entities
         )
         return self.make_scene(tdscene, tdimage), fb
 

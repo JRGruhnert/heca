@@ -14,11 +14,9 @@ def _clean(value) -> str:
 
 
 class FreeEntity(Entity):
-    TYPE_ID = 0
-
     @dataclass(kw_only=True)
     class Config(Entity.Config):
-        threshold: float = 0.4
+        type_id: int = 0
 
     @property
     def measurement(self) -> dict:

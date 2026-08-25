@@ -1,4 +1,4 @@
-# _HECA_ (Hierarchical Entity-Centric Agents)
+# _HECA_ (Hierarchical Entity-Centric Agent)
 
 Heca is a framework for training, testing and evaluating hierarchical agents that operate on a graph-based world representation. This makes it applicable for federated use.
 
@@ -7,13 +7,13 @@ Heca is a framework for training, testing and evaluating hierarchical agents tha
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/JRGruhnert/master-project.git
-cd master-project
+git clone https://github.com/JRGruhnert/heca.git
+cd heca
 ```
 
 ### 2. Create a Virtual Environment (Recommended)
 
-The project was tested with python version 3.10
+The project was tested and developed with python version 3.10
 
 ```bash
 conda create -n heca_env python=3.10

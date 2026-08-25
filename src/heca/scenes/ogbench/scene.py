@@ -4,6 +4,7 @@ import atexit
 import time
 from typing import Any, cast
 
+from gym import Env
 import h5py
 import numpy as np
 import ogbench
@@ -11,6 +12,7 @@ import torch
 from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 
 from heca.data.data import DCEntity, DCScene, TDImage
+from heca.data.entity import Entity
 from heca.misc import logger
 from heca.scenes.scene import Scene, SceneFeedback
 
@@ -28,7 +30,7 @@ class OGScene(Scene):
         super().__init__(cfg)
         self.cfg = cfg
         self.env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
-        self.env = self._make_env(self.env_id)
+        self._env = self._make_env(self.env_id)
         self._last_ee_pose = None
         self._last_ee_yaw = None
         self._viewer_launched = False
@@ -53,9 +55,9 @@ class OGScene(Scene):
             np.asarray(pos, dtype=np.float32) / self._meta_xyz_scaler
         ) + self._meta_xyz_center
 
-    def _make_env(self, env_id: str) -> SceneEnvBase:
+    def _make_env(self, env_id: str) -> Env:
         return cast(
-            SceneEnvBase,
+            Env,
             ogbench.make_env_and_datasets(
                 dataset_name=env_id,
                 env_only=True,
@@ -65,17 +67,19 @@ class OGScene(Scene):
             ),
         )
 
+    @property
+    def env(self) -> SceneEnvBase:
+        return cast(SceneEnvBase, self._env.unwrapped)
+
     def _sync_viewer(self):
         """Launch (once) and sync the passive viewer after a step/reset."""
         if not self.cfg.visualize:
             return
         if not self._viewer_launched:
-            self.env.unwrapped.launch_passive_viewer()  # type: ignore
+            self.env.launch_passive_viewer()
             self._viewer_launched = True
-            # Register the close handler at first launch so it works no matter
-            # when visualize was enabled on the config.
             atexit.register(self.close_viewer)
-        self.env.unwrapped.sync_passive_viewer()  # type: ignore
+        self.env.sync_passive_viewer()
         if self.cfg.frame_time > 0:
             time.sleep(self.cfg.frame_time)
 
@@ -84,7 +88,7 @@ class OGScene(Scene):
         if not self._viewer_launched:
             return
         try:
-            self.env.unwrapped.close_passive_viewer()  # type: ignore
+            self.env.close_passive_viewer()
         except Exception as e:
             logger.warning(f"Failed to close passive viewer: {e}")
         finally:
@@ -92,14 +96,11 @@ class OGScene(Scene):
 
     def close(self):
         self.close_viewer()
-        self.env.close()
+        self._env.close()
 
     def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
         if not isinstance(image_dict, dict):
-            # Ground-truth scenes use state observations and have no image.
-            # The image is discarded on the training path, so return an empty
-            # placeholder instead of crashing.
             empty = torch.empty(0)
             return TDImage(
                 rgb=empty.clone(),
@@ -176,7 +177,7 @@ class OGScene(Scene):
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
-        ob, info = self.env.reset(options={"render_goal": True})
+        ob, info = self._env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
         self._update_meta(obs)
         self.last_pos = obs["proprio_effector_pos"]
@@ -191,7 +192,7 @@ class OGScene(Scene):
         tuple[DCScene, TDImage, np.ndarray],
         tuple[DCScene, TDImage, np.ndarray],
     ]:
-        ob, info = self.env.reset(options={"render_goal": True})
+        ob, info = self._env.reset(options={"render_goal": True})
         obs, goal = self.to_internal(ob, info)
         self._update_meta(obs)
         self.last_pos = obs["proprio_effector_pos"]
@@ -232,7 +233,7 @@ class OGScene(Scene):
 
     def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
         action = self.to_internal_action(action)
-        ob, reward, terminated, truncated, info = self.env.unwrapped.step(action, False, True)  # type: ignore
+        ob, reward, terminated, truncated, info = self.env.step(action, False, True)  # type: ignore
         obs, _ = self.to_internal(ob, info)
         self._sync_viewer()
         assert isinstance(reward, float)
@@ -241,24 +242,16 @@ class OGScene(Scene):
         )
 
     def _step_virt(
-        self,
-        x: DCScene,
-        y: DCScene,
-        elabels: list[str],
-        change_scores: dict[str, float],
+        self, x: DCScene, y: DCScene, elabels: list[str]
     ) -> tuple[Any, SceneFeedback]:
         subgoal: dict[str, Any] = {}
-        for label, entity in self.entities.items():
-            if label not in elabels:
-                continue
-            if change_scores[label] < entity.ANCHOR_THRESHOLD:
-                continue  # anchor: no change -> do not set it
+        for label in elabels:
             subgoal.update(
-                entity.env_state_value(
+                self.entities[label].env_state_value(
                     label, y, unnormalize_pos=self.unnormalize_position
                 )
             )
-        ob, reward, terminated, truncated, info = self.env.unwrapped.step_scene(subgoal)  # type: ignore
+        ob, reward, terminated, truncated, info = self.env.step_scene(subgoal)
         obs, _ = self.to_internal(ob, info)
         self._sync_viewer()
         assert isinstance(reward, float)

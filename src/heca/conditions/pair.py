@@ -1,3 +1,4 @@
+from functools import cached_property
 from pathlib import Path
 
 from matplotlib import pyplot as plt
@@ -30,11 +31,25 @@ class ConPair:
             scores[key] = float(np.linalg.norm(post - pre, axis=1).mean())
         return scores
 
-    @property
+    @cached_property
     def change_scores(self) -> dict[str, float]:
-        # Always recompute: pickled ConPairs (conditions.joblib) may carry
-        # change scores computed with an older metric.
         return self._compute_change_scores()
+
+    @cached_property
+    def target_entities(self) -> list[str]:
+        values = set()
+        for key, value in self.change_scores.items():
+            if value >= Entity.ANCHOR_THRESHOLD:
+                values.add(key)
+        return list(values)
+
+    @cached_property
+    def anchor_entities(self) -> list[str]:
+        values = set()
+        for key, value in self.change_scores.items():
+            if value < Entity.ANCHOR_THRESHOLD:
+                values.add(key)
+        return list(values)
 
     # @classmethod
     # def merge(

@@ -47,13 +47,9 @@ class Scene(Persistable):
         return tdscene, tdimage, fb
 
     def step_virt(
-        self,
-        x: DCScene,
-        y: DCScene,
-        elabels: list[str],
-        change_scores: dict[str, float],
+        self, x: DCScene, y: DCScene, elabels: list[str]
     ) -> tuple[DCScene, TDImage, SceneFeedback]:
-        obs, fb = self._step_virt(x, y, elabels, change_scores)
+        obs, fb = self._step_virt(x, y, elabels)
         tdscene, tdimage, _ = self.from_internal(obs)
         return tdscene, tdimage, fb
 
@@ -67,11 +63,7 @@ class Scene(Persistable):
 
     @abc.abstractmethod
     def _step_virt(
-        self,
-        x: DCScene,
-        y: DCScene,
-        elabels: list[str],
-        change_scores: dict[str, float],
+        self, x: DCScene, y: DCScene, elabels: list[str]
     ) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 

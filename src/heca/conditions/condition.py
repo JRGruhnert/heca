@@ -147,7 +147,7 @@ class Condition:
             return None  # No matching keys so no option at all
         return values
 
-    def scores(self, other: "Condition") -> dict[str, tuple[float, float]]:
+    def scores(self, other: "Condition") -> dict[str, float]:
         """Containment score + threshold for every shared entity.
 
         Unlike ``make_subgoal``, this does not early-exit, so it can be used to
@@ -158,5 +158,5 @@ class Condition:
             up1 = self.models[key].get_parameters().copy()
             up2 = other.models[key].get_parameters().copy()
             score = self.entities[key].containment_score(up1, up2)
-            result[key] = (score, self.entities[key].cfg.threshold)
+            result[key] = score
         return result

@@ -235,7 +235,7 @@ class Learner(Persistable):
 
         if self.cfg.wandb.enabled:
             self._wandb_run.log(
-                {f"{k}/{self.cfg.tag}": v for k, v in self.metrics.items()},
+                {k: v for k, v in self.metrics.items()},
             )
 
     def update(self, fb: SceneFeedback) -> bool:
