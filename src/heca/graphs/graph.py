@@ -20,9 +20,12 @@ from heca.conditions.condition import Condition
 
 
 class SubgoalMode(Enum):
-    NONE = "None"
-    SIMPLE = "Simple"
-    CHAIN = "Chain"
+    NONE = "none"
+    SIMPLE = "simple"
+    CHAIN = "chain"
+
+    def __str__(self):
+        return self.value
 
 
 class Graph:

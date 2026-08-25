@@ -26,7 +26,7 @@ class TapasManualExecuter(Configurable):
         # tester only enables it. The scene is a shared singleton cached by
         # label+tag, so its cfg may be a different (equal) config instance
         # than cfg.scene — set the flag on the instance's own cfg.
-        self.scene.cfg.visualize = True
+        self.scene.cfg.viewer = True
         self.agents: list[ExpertModel] = []
         for agent_cfg in cfg.agents:
             agent = ExpertModel.get(agent_cfg, auto_load=False)

@@ -1,15 +1,13 @@
 import argparse
 import os
-import random
 import signal
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import matplotlib
-import numpy as np
-import torch
 
+from heca.graphs.graph import SubgoalMode
 from heca.heca_gnn.network import Network
 
 matplotlib.use("Agg")
@@ -23,11 +21,10 @@ from heca.learning.server import FLServer
 from heca.misc import logger
 from heca.misc.interrupt import request_stop, stop_requested
 
-from scripts.common.args import add_scene_argument
+from scripts.common.args import add_heca_arguments, generate_tag
 from scripts.common.scenes import agents_by_scene
 
 import conf.networks
-from conf.networks import NETWORK_NAMES
 
 GRACE_SECONDS = 10.0
 
@@ -36,13 +33,15 @@ def generate_clients(
     tag: str,
     network: Network.Config,
     clients: dict[str, list[ExpertModel.Config]],
-    virtual: bool = False,
-    federated: bool = True,
-    wandb_enabled: bool = False,
-    reload: bool = False,
-    use_gt: bool = True,
+    smode: SubgoalMode,
+    inference: bool,
+    federated: bool,
+    use_wandb: bool,
+    virtual: bool,
+    reload: bool,
+    use_gt: bool,
 ):
-    wandb = WandBConfig(enabled=wandb_enabled)
+    wandb = WandBConfig(enabled=use_wandb)
     hecas = []
     server = None
     if federated:
@@ -55,11 +54,14 @@ def generate_clients(
                     tag=f"{tag}_{scene}",
                     network=network,
                     server=server_cfg,
-                    virtual=virtual,
                     wandb=wandb,
-                    reload=reload,
-                    use_gt=use_gt,
                 ),
+                visualize=False,
+                inference=inference,
+                virtual=virtual,
+                reload=reload,
+                use_gt=use_gt,
+                smode=smode,
             )
             hecas.append(heca)
     else:
@@ -69,11 +71,14 @@ def generate_clients(
                 learner=PPO.Config(
                     tag=f"{tag}_{scene}",
                     network=network,
-                    virtual=virtual,
                     wandb=wandb,
-                    reload=reload,
-                    use_gt=use_gt,
                 ),
+                visualize=False,
+                inference=inference,
+                virtual=virtual,
+                reload=reload,
+                use_gt=use_gt,
+                smode=smode,
             )
             hecas.append(heca)
     return hecas, server
@@ -101,11 +106,6 @@ def train(
             server.stop()
 
     def wait_for_workers(futures: list, timeout: float) -> bool:
-        """Wait for every worker future to finish.
-
-        Returns False on timeout or on a second interrupt (which the caller
-        treats as "force exit now").
-        """
         deadline = time.monotonic() + timeout
         try:
             while time.monotonic() < deadline:
@@ -144,65 +144,8 @@ def train(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--tag",
-        required=True,
-        help="Run tag for the training.",
-    )
-    parser.add_argument(
-        "--network",
-        choices=NETWORK_NAMES,
-        default="default",
-        help="Network config name from conf.networks.",
-    )
-    parser.add_argument(
-        "--federated",
-        action="store_true",
-        help="Federated (FPPO) or plain (PPO) training.",
-    )
-    parser.add_argument(
-        "--batch",
-        type=int,
-        default=1000,
-        help="Number of training batches per client.",
-    )
-    parser.add_argument(
-        "--virtual",
-        action="store_true",
-        help="Initialize agents in virtual mode.",
-    )
-    parser.add_argument(
-        "--reload",
-        action="store_true",
-        help="Reload expert conditions instead of loading conditions.joblib.",
-    )
-    parser.add_argument(
-        "--use-gt",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use ground-truth observations (default: true).",
-    )
-    parser.add_argument(
-        "--wandb",
-        action="store_true",
-        help="Enable wandb logging. Disabled by default for multi-client runs.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=None,
-        help="Optional RNG seed. If given, the process RNGs are seeded with it "
-        "(reproducible run); otherwise each launch is unseeded and therefore "
-        "draws fresh randomness automatically. Not stored in any config.",
-    )
-    add_scene_argument(parser)
+    add_heca_arguments(parser)
     args = parser.parse_args()
-
-    if args.seed is not None:
-        random.seed(args.seed)
-        np.random.seed(args.seed)
-        torch.manual_seed(args.seed)
-        logger.info(f"Seeded process RNGs with {args.seed}")
 
     def _handle_stop(signum, frame):
         raise KeyboardInterrupt
@@ -218,14 +161,16 @@ def main():
         clients.update({scene_cfg.tag: model_cfgs})
 
     exp, server = generate_clients(
-        args.tag,
+        generate_tag(args),
         network,
         clients,
+        inference=args.inference,
         federated=args.federated,
         virtual=args.virtual,
-        wandb_enabled=args.wandb,
+        use_wandb=args.wandb,
         reload=args.reload,
-        use_gt=args.use_gt,
+        use_gt=args.gt,
+        smode=args.smode,
     )
     train(exp, server, args.batch)
 

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from heca.experts.tapas import TapasExpert
 from heca.misc import logger
 
-from scripts.common.args import add_scene_argument, add_tag_argument
+from scripts.common.args import add_model_argument, add_scene_argument, add_tag_argument
 from scripts.common.scenes import iter_agents
 
 
@@ -82,13 +82,13 @@ def save_log(agent: TapasExpert, record: dict):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
-    add_tag_argument(parser)
+    add_model_argument(parser)
     args = parser.parse_args()
 
     for cfg in iter_agents():
         if args.scene and cfg.scene.tag != args.scene:
             continue
-        if args.tag and cfg.tag != args.tag:
+        if args.model and cfg.tag != args.model:
             continue
         fit_agent(cfg)
 

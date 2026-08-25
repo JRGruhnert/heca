@@ -18,7 +18,13 @@ matplotlib.use("Agg")  # headless (conditions fitting imports matplotlib)
 from heca.experts.expert import ExpertModel
 from heca.misc import logger
 
-from scripts.common.args import add_model_argument, add_scene_argument, add_tag_argument
+from scripts.common.args import (
+    add_model_argument,
+    add_reload_argument,
+    add_scene_argument,
+    add_tag_argument,
+    add_use_gt_argument,
+)
 from scripts.common.scenes import agents_by_scene
 
 
@@ -88,64 +94,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
     add_model_argument(parser)
-    parser.add_argument(
-        "--use-gt",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use ground-truth observations for the conditions (default: true). "
-        "Disable to extract values from images (loads the image encoders).",
-    )
-    parser.add_argument(
-        "--reload",
-        action="store_true",
-        help="Refit the conditions from demos instead of loading conditions.joblib.",
-    )
-    parser.add_argument(
-        "--out",
-        default=None,
-        help="Optional path to write the results as JSON.",
-    )
+    add_use_gt_argument(parser)
+    add_reload_argument(parser)
     args = parser.parse_args()
 
     records = []
-    failures = []
     for scene_cfg, model_cfgs in agents_by_scene():
         if args.scene and scene_cfg.tag != args.scene:
             continue
         for cfg in model_cfgs:
             if args.model and cfg.tag != args.model:
                 continue
-            try:
-                agent = ExpertModel.get(cfg, auto_load=False)
-                if not args.use_gt:
-                    agent.use_gt(False)
-                records.append(agent_report(cfg, reload=args.reload))
-            except Exception as exc:  # keep going if one agent fails
-                logger.error(f"[{scene_cfg.tag}] agent {cfg.tag} failed: {exc}")
-                failures.append(
-                    {"scene": scene_cfg.tag, "tag": cfg.tag, "error": str(exc)}
-                )
+            agent = ExpertModel.get(cfg, auto_load=False)
+            agent.use_gt(args.gt)
+            records.append(agent_report(cfg, reload=args.reload))
 
     print_report(records)
-
-    if args.out:
-        out_path = Path(args.out)
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(
-            json.dumps(
-                {
-                    "anchor_threshold": Entity.ANCHOR_THRESHOLD,
-                    "agents": records,
-                    "failures": failures,
-                },
-                indent=2,
-            )
-        )
-        logger.info(f"Wrote JSON report to {out_path}")
-
-    if failures:
-        logger.warning(f"{len(failures)} agent(s) failed; see JSON report.")
-        sys.exit(1)
 
 
 if __name__ == "__main__":

@@ -23,7 +23,11 @@ from heca.misc import logger
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene, SceneFeedback
 
-from scripts.common.args import add_scene_argument
+from scripts.common.args import (
+    add_scene_argument,
+    add_use_gt_argument,
+    add_viewer_argument,
+)
 from scripts.common.scenes import find_scene_config, find_scene_models
 
 
@@ -198,29 +202,20 @@ def print_menu(models: list[ExpertModel], x: DCScene):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser, default="scene1")
-    parser.add_argument(
-        "--use-gt",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use ground-truth observations (default: true).",
-    )
-    parser.add_argument(
-        "--vis",
-        action="store_true",
-        help="Enable the passive viewer.",
-    )
+    add_use_gt_argument(parser)
+    add_viewer_argument(parser)
     args = parser.parse_args()
 
     scene_cfg = find_scene_config(args.scene)
     scene = Scene.get(scene_cfg, auto_load=False)
     assert isinstance(scene, OGScene), "Only OGScene supported."
-    if args.vis:
-        scene.cfg.visualize = True
+    if args.viewer:
+        scene.cfg.viewer = True
 
     agents: list[ExpertModel] = []
     for agent_cfg in find_scene_models(args.scene):
         agent = ExpertModel.get(agent_cfg, auto_load=False)
-        agent.use_gt(args.use_gt)
+        agent.use_gt(args.gt)
         agent.load()
         agents.append(agent)
 

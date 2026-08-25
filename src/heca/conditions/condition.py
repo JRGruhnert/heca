@@ -16,7 +16,7 @@ class Condition:
         self._entities = entities
         self.label = label
 
-        self._model, self._bics = self._fit_model()
+        self._models, self._bics = self._fit_model()
 
     def comp_features(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
@@ -29,37 +29,16 @@ class Condition:
     def data_raw(self) -> dict[str, np.ndarray]:
         return self._data_raw
 
-    # @property
-    # def samples(self) -> dict[str, np.ndarray]:
-    #     return self._samples
-
-    # @property
-    # def sample_self_scores(self) -> dict[str, float]:
-    #     return {k: float(self.models[k].score(v)) for k, v in self.samples.items()}
-
-    @property
-    def raw_self_scores(self) -> dict[str, float]:
-        return {
-            k: float(self.models[k].score(self.entities[k].model_value(v)))
-            for k, v in self.data_raw.items()
-        }
-
     @property
     def models(self) -> dict[str, StepMix]:
-        return self._model
+        return self._models
 
     @property
     def entities(self) -> dict[str, Entity]:
         return self._entities
 
-    def _fit_model(self) -> tuple[
-        dict[str, StepMix],
-        # dict[str, np.ndarray],
-        dict[str, list[float]],
-    ]:
-
+    def _fit_model(self) -> tuple[dict[str, StepMix], dict[str, list[float]]]:
         models: dict[str, StepMix] = {}
-        # samples: dict[str, np.ndarray] = {}
         bics: dict[str, list[float]] = {}
 
         for key, values in self.data_raw.items():
@@ -97,19 +76,9 @@ class Condition:
 
             assert best_model is not None
             models[key] = best_model
-            # samples[key] = best_model.sample(self._n_samples)[0]
             bics[key] = bic_values
 
         return models, bics
-
-    # def score(self, x: dict[str, np.ndarray]) -> dict[str, float]:
-    #     scores: dict[str, float] = {}
-    #     for key, model in self.models.items():
-    #         raw = model.score(x)
-    #         delta = raw - self.sample_self_scores[key]
-    #         clipped = np.minimum(delta, 0)  # we just care for negative deltas
-    #         scores[key] = np.exp(clipped)
-    #     return scores
 
     def plot(self, path: Path, label: str):
         ks = range(1, 10 + 1)
@@ -132,25 +101,14 @@ class Condition:
             up1 = self.models[key].get_parameters().copy()
             up2 = other.models[key].get_parameters().copy()
             score = self.entities[key].containment_score(up1, up2)
-            # Threshold-free: connect when at least some of the goal model's
-            # mass lies inside the pre model's z_quantile ellipsoid (the score
-            # is calibrated by cfg.z_quantile, not a tuned cfg.threshold).
             if score <= 0.0:
                 return None
             value = self.entities[key].best_sample(up1, up2)
             values[key] = value
             logger.debug(f"{key}: score={score}, value={value}")
-
-        if len(values) == 0:
-            return None  # No matching keys so no option at all
         return values
 
     def scores(self, other: "Condition") -> dict[str, float]:
-        """Containment score + threshold for every shared entity.
-
-        Unlike ``make_subgoal``, this does not early-exit, so it can be used to
-        inspect why a connection was (not) formed.
-        """
         result = {}
         for key in set(self.entities).intersection(set(other.entities)):
             up1 = self.models[key].get_parameters().copy()

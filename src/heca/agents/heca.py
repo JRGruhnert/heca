@@ -1,11 +1,10 @@
 from dataclasses import dataclass
-import pathlib
 from typing import Sequence
 
 import torch
 
 from heca.experts.expert import ExpertModel
-from heca.graphs.graph import Graph
+from heca.graphs.graph import Graph, SubgoalMode
 from heca.learning.learner import Learner
 from heca.misc import logger
 from heca.misc.interrupt import stop_requested
@@ -19,9 +18,12 @@ class Heca(Configurable):
     class Config(Configurable.Config):
         agents: Sequence[ExpertModel.Config]
         learner: Learner.Config
-        visualize: bool = False
-        inference: bool = False
-        subgoals: bool = True
+        smode: SubgoalMode
+        visualize: bool
+        inference: bool
+        virtual: bool
+        reload: bool
+        use_gt: bool
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -38,22 +40,21 @@ class Heca(Configurable):
 
         for a in self.cfg.agents:
             expert = ExpertModel.get(a, auto_load=False)
-            expert.use_gt(self.cfg.learner.use_gt)
+            expert.use_gt(self.cfg.use_gt)
             expert.load()
 
-        if self.cfg.learner.reload:  # nees to be before Graph.generate
-            for a in self.cfg.agents:
-                ExpertModel.get(a).force_recompute()
+            if self.cfg.reload:
+                expert.force_recompute()
 
-        self.graph = Graph.generate(list(self.cfg.agents), add_subgoals=cfg.subgoals)
+            if self.cfg.virtual:
+
+                expert.virtual()
+
+        self.graph = Graph.generate(list(self.cfg.agents), smode=cfg.smode)
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
-        if self.cfg.subgoals:
+        if self.cfg.smode == SubgoalMode.CHAIN:
             self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
-
-        if self.cfg.learner.virtual:
-            for a in self.cfg.agents:
-                ExpertModel.get(a).virtual()
 
     def step(
         self, x: DCScene, new_ep: bool = False
@@ -70,8 +71,6 @@ class Heca(Configurable):
         if logger.TRACE:
             self._trace_step(x, data, option, a, s, z, lfb, fb)
         if stop_requested():
-            # Shutting down: do not push a half-finished transition into the
-            # buffer or trigger a PPO update / federated sync.
             return z, fb, False
         lock = self.learner.update(fb)
         return z, fb, lock
@@ -87,14 +86,6 @@ class Heca(Configurable):
         lfb: SceneFeedback,
         fb: SceneFeedback,
     ):
-        """Dump one full step for debugging (enabled via logger.TRACE).
-
-        Shows the observations the graph was built from, the raw network
-        logits/probs per option, which option was selected (with its expert and
-        assembled subgoal), the expert's resulting scene, and the feedback that
-        will be sent to the learner.
-        """
-
         def _indent(text: str, prefix: str = "    ") -> str:
             return "\n".join(prefix + line for line in text.splitlines())
 
@@ -108,8 +99,6 @@ class Heca(Configurable):
             _indent(str(self.graph.goal)),
         ]
 
-        # Recompute logits with the same network predict() used:
-        # inference_net during training (sampling), network during eval (argmax).
         net = (
             self.learner.inference_net
             if self.learner.train_mode

@@ -9,6 +9,7 @@ from heca.conditions.condition import Condition
 from heca.data.entity import Entity
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene
+from scripts.common.args import add_viewer_argument
 
 # Make ``conf`` / ``scripts.common`` importable when run directly as
 # ``python scripts/evaluate_tapas.py`` (mirrors scripts/__init__.py).
@@ -207,25 +208,18 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
     add_tag_argument(parser)
+    add_viewer_argument(parser)
     parser.add_argument(
         "--episodes",
         type=int,
         default=100,
-        help="Evaluation episodes per agent (each runs up to --max-tries "
-        "rollouts); default 100 so the per-attempt statistics are meaningful.",
+        help="Evaluation episodes per agent",
     )
     parser.add_argument(
         "--max-tries",
         type=int,
         default=3,
-        help="Max attempts per episode before giving up (default: 3).",
-    )
-    parser.add_argument(
-        "--visual",
-        action="store_true",
-        help="Run with the ogbench passive MuJoCo viewer so the robot's "
-        "rollouts are visible (same viewer as test_01a_tapas_manual). "
-        "Requires a display; without this flag the evaluation runs headless.",
+        help="Max attempts per episode before giving up.",
     )
 
     args = parser.parse_args()
@@ -233,12 +227,7 @@ def main():
     for scene_cfg, models in agents_by_scene():
         if args.scene and scene_cfg.tag != args.scene:
             continue
-        if args.visual:
-            # The scene handles the passive viewer itself (launch / sync /
-            # close); we only need to enable it. The scene is a shared
-            # singleton cached by label+tag and may already exist with a
-            # different (equal) config instance (created at import time), so
-            # set the flag on the config the shared instance actually holds.
+        if args.viewer:
             Scene.get(scene_cfg, auto_load=False).cfg.visualize = True
         logger.info(f"[{scene_cfg.tag}] evaluating {len(models)} agents")
 

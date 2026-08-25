@@ -23,7 +23,7 @@ class OGScene(Scene):
         label: str = "ogbench"
         vis: bool
         tag: str
-        visualize: bool = False
+        viewer: bool = False
         frame_time: float = 0.05
 
     def __init__(self, cfg: Config):
@@ -73,7 +73,7 @@ class OGScene(Scene):
 
     def _sync_viewer(self):
         """Launch (once) and sync the passive viewer after a step/reset."""
-        if not self.cfg.visualize:
+        if not self.cfg.viewer:
             return
         if not self._viewer_launched:
             self.env.launch_passive_viewer()

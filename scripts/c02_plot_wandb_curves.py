@@ -122,16 +122,7 @@ def plot_metric(
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--entity",
-        default=WandBConfig().entity,
-        help=f"wandb entity (default: {WandBConfig().entity}).",
-    )
-    parser.add_argument(
-        "--project",
-        default=WandBConfig().project,
-        help=f"wandb project (default: {WandBConfig().project}).",
-    )
+
     parser.add_argument(
         "--group",
         required=True,
@@ -163,11 +154,13 @@ def main():
     args = parser.parse_args()
 
     api = wandb.Api()
-    runs = api.runs(f"{args.entity}/{args.project}", filters={"group": args.group})
+    runs = api.runs(
+        f"{WandBConfig().entity}/{WandBConfig().project}", filters={"group": args.group}
+    )
     if not runs:
         raise SystemExit(
             f"No runs found for group={args.group!r} in "
-            f"{args.entity}/{args.project}."
+            f"{WandBConfig().entity}/{WandBConfig().project}."
         )
 
     # scene -> metric -> list of (run name, steps, values)
