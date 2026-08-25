@@ -190,7 +190,6 @@ class Entity(Configurable):
         )
         score = float(np.clip(np.exp(loglik_x - loglik_max), 0.0, 1.0))
 
-        # --- pose gate: joint z_quantile ellipsoid (+ optional per-dim cap) ---
         best_k, z, zd = self._best_component(pose, p, eps=eps)
         valid_pose = z <= float(math.sqrt(chi2.ppf(self.cfg.z_quantile, len(pose))))
         if valid_pose and self.cfg.z_max_sigma is not None:

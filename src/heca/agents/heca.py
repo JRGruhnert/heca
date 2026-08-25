@@ -21,7 +21,7 @@ class Heca(Configurable):
         learner: Learner.Config
         visualize: bool = False
         inference: bool = False
-        subgoals: bool = False
+        subgoals: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)

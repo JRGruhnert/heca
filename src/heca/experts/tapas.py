@@ -285,12 +285,13 @@ class TapasExpert(ExpertModel):
             batch_size=torch.Size([]),
         )
 
+    @cached_property
     def tps(self) -> set[str]:
         labels = set()
         for idx, key in enumerate(self.demos.frame_names):
             if idx in self.model._used_frames and key in self.scene.entities:
                 labels.add(key)
-        logger.info(f"{self.cfg.tag} entities: {labels}")
+        logger.debug(f"{self.cfg.tag} entities: {labels}")
         return labels
 
     @cached_property

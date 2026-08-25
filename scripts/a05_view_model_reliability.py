@@ -1,4 +1,5 @@
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -14,7 +15,7 @@ matplotlib.use("Agg")  # headless (conditions fitting imports matplotlib)
 
 import numpy as np
 
-from heca.data.data import DCScene
+from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
 from heca.experts.expert import ExpertModel
 from heca.experts.tapas import TapasExpert
@@ -26,11 +27,11 @@ from scripts.common.args import add_scene_argument
 from scripts.common.scenes import find_scene_config, find_scene_models
 
 
-def entity_str(label: str, dc) -> str:
+def entity_str(label: str, dc: DCEntity) -> str:
     """Compact per-type value formatting for display."""
     if any(p in label for p in ("cube", "lid", "peg")):
         return f"pos={np.round(np.asarray(dc.pos, dtype=float), 4).tolist()}"
-    if any(p in label for p in ("button", "box")):
+    if any(p in label for p in ("button", "box", "shelf")):
         return f"ste={int(dc.ste)}"
     if any(p in label for p in ("faucet", "lever")):
         return f"ang={float(np.arctan2(dc.ext[0], dc.ext[1])):+.4f}"
@@ -62,6 +63,48 @@ def print_scene(title: str, scene: DCScene, labels: list[str] | None = None):
         if labels is not None and label not in labels:
             continue
         print(f"    {label:<22} {entity_str(label, entity)}")
+
+
+def mode_dc(entity: Entity, model) -> DCEntity:
+    """Most probable value (best-component mean + mode state) of a fitted
+    StepMix model, as a displayable DCEntity."""
+    p = model.get_parameters()
+    k = int(np.argmax(p["weights"]))
+    pose = p["measurement"]["pose"]["means"][k]
+    state = int(np.argmax(p["measurement"]["state"]["pis"][k]))
+    value = np.concatenate([np.asarray(pose, dtype=float), [float(state)]])
+    return DCEntity(value=value, feature=np.zeros(0))
+
+
+def precondition_status(agent: TapasExpert, x: DCScene) -> tuple[bool, list[str]]:
+    """Is the current scene ``x`` a valid start for the agent's pre-condition?
+
+    Per entity: ``score_single`` against the fitted pre-model (pose gate +
+    hard state gate). Returns ``(all_valid, blocked_entities)``.
+    """
+    blocked = []
+    for label, entity in agent.entities.items():
+        _, valid = entity.score_single(
+            x.get(label).value,
+            agent.conditions.pre.models[label].get_parameters(),
+        )
+        if not valid:
+            blocked.append(label)
+    return len(blocked) == 0, blocked
+
+
+def agent_expectation(agent: TapasExpert) -> str:
+    """'a -> b' of the moving (target) entities, from the pre/post condition
+    modes, e.g. ``faucet0: ang=+0.25 -> ang=-1.33`` (matches the model tag)."""
+    pre, post = agent.conditions.pre, agent.conditions.post
+    parts = []
+    for label in sorted(agent.conditions.target_entities):
+        ent = pre.entities[label]
+        parts.append(
+            f"{label}: {entity_str(label, mode_dc(ent, pre.models[label]))}"
+            f" -> {entity_str(label, mode_dc(ent, post.models[label]))}\n"
+        )
+    return "  ".join(parts)
 
 
 def run_virtual_step(
@@ -213,13 +256,21 @@ def sample_task(scene: OGScene) -> tuple[DCScene, DCScene]:
     return s_scene, g_scene
 
 
-def print_menu(agents: list[ExpertModel]):
+def print_menu(agents: list[ExpertModel], x: DCScene):
     print("\n" + "-" * 78)
-    print("Options:")
+    print("Options (pre = precondition fulfilled by the current scene x):")
     for i, agent in enumerate(agents):
-        print(f"  [v{i}]  virtual step (roundtrip) : {agent.cfg.tag}")
-    for i, agent in enumerate(agents):
-        print(f"  [r{i}]  real TAPAS rollout       : {agent.cfg.tag}")
+        row = f"  [v{i}]/[r{i}]  {agent.cfg.tag:<24}"
+        try:
+            ok, blocked = precondition_status(agent, x)
+            flag = "TRUE " if ok else "FALSE"
+            note = "" if ok else f" (blocked by: {', '.join(blocked)})"
+            exp = agent_expectation(agent)
+        except Exception as exc:
+            flag, note, exp = "n/a  ", f" (conditions unavailable: {exc})", ""
+        print(f"{row} pre={flag}{note}")
+        if exp:
+            print(f"          expects: {exp}")
     print("  [0]   reset / sample a new episode")
     print("  [q]   quit")
     print("-" * 78)
@@ -262,6 +313,7 @@ def main():
             logger.warning(f"[{agent.cfg.tag}] conditions unavailable: {exc}")
 
     try:
+        quitting = False
         episode = 0
         x, y = sample_task(scene)
         while True:
@@ -273,10 +325,11 @@ def main():
             print("=" * 78)
             print_scene("current scene x", x)
             print_scene("goal y", y)
-            print_menu(agents)
+            print_menu(agents, x)
 
             choice = input("> ").strip().lower()
             if choice in ("q", "quit", "exit"):
+                quitting = True
                 break
             if choice in ("0", "reset", ""):
                 x, y = sample_task(scene)
@@ -301,9 +354,18 @@ def main():
                 print("\n  (episode ended by feedback; sampling a new task)")
                 x, y = sample_task(scene)
     except (EOFError, KeyboardInterrupt):
+        quitting = True
         print("\nbye.")
     finally:
         scene.close()
+        if quitting:
+            # Intended quit: skip interpreter teardown (torch / mujoco / GLFW /
+            # h5py atexit handlers) — this tool saves nothing, so a hard exit
+            # returns to the shell instantly. Unexpected exceptions are NOT
+            # swallowed: they fall through and print their traceback.
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(0)
 
 
 if __name__ == "__main__":

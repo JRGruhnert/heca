@@ -37,7 +37,7 @@ class ExpertModel(Persistable, abc.ABC):
         return {
             label: entity
             for label, entity in self.scene.entities.items()
-            if label in self.tps()
+            if label in self.tps
         }
 
     def virtual(self) -> "ExpertModel":
@@ -58,6 +58,7 @@ class ExpertModel(Persistable, abc.ABC):
             self.ste_extractor.prepare_for_scene(self.cfg.scene)
         return self
 
+    @cached_property
     def tps(self) -> set[str]:
         raise NotImplementedError
 
