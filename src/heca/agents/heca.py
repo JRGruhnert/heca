@@ -24,6 +24,8 @@ class Heca(Configurable):
         virtual: bool
         reload: bool
         use_gt: bool
+        # Single per-agent choice: either all entities fit rotation or none.
+        fit_rotation: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -41,6 +43,7 @@ class Heca(Configurable):
         for a in self.cfg.agents:
             expert = ExpertModel.get(a, auto_load=False)
             expert.use_gt(self.cfg.use_gt)
+            expert.use_fit_rotation(self.cfg.fit_rotation)
             expert.load()
 
             if self.cfg.reload:

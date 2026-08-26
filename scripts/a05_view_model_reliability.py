@@ -16,10 +16,8 @@ matplotlib.use("Agg")  # headless (conditions fitting imports matplotlib)
 import numpy as np
 
 from heca.data.data import DCEntity, DCScene
-from heca.data.entity import Entity
 from heca.experts.expert import ExpertModel
 from heca.experts.tapas import TapasExpert
-from heca.misc import logger
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene, SceneFeedback
 
@@ -226,7 +224,7 @@ def main():
         x, y = sample_task(scene)
         while True:
             print("\n" + "=" * 78)
-            print(f"Episode {episode} Step {ep_step} (use_gt={args.use_gt})")
+            print(f"Episode {episode} Step {ep_step} (use_gt={args.gt})")
             print("=" * 78)
             print_scene("obs.", x)
             print_scene("goal", y)

@@ -134,7 +134,7 @@ class EdgeSet(Generic[S, D]):
     def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D], src_key: str):
         """Create edges by matching node source entries to this edge type."""
         for i, node in enumerate(tnset.items):
-            for key in node.sources[src_key]:
+            for key in node.sources.get(src_key, set()):
                 if snset.has_key(key):
                     j = snset.get_index(key)
                     self.add(j, i)

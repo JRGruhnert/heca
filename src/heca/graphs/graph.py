@@ -116,8 +116,8 @@ class Graph:
 
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
         subgoal = self.start.copy()
-        for src in option.sources:
-            node = self.ns_entity.get_by_key(src[1])
+        for key in option.sources.get("entity", set()):
+            node = self.ns_entity.get_by_key(key)
             assert isinstance(node, EntityNode)
             subgoal.set(node.entity, node.data)
         return subgoal
@@ -207,7 +207,7 @@ class Graph:
                     data=DCEntity.empty(),
                     sources={
                         "comp": set(comp_sources[entity]),
-                        "entity": set(pre_sources[entity]),
+                        "entity": {pre_sources[entity]},
                     },
                     con=con,
                     vmode=vmode,
@@ -239,7 +239,7 @@ class Graph:
                     data=DCEntity(value=value, feature=feat),
                     sources={
                         "comp": set(comp_sources[entity]),
-                        "entity": set(pre_sources[entity]),
+                        "entity": {pre_sources[entity]},
                     },
                 ),
             )
@@ -267,7 +267,7 @@ class Graph:
                 entities=ac.anchor_entities,
                 vmode=ValueMode.START,
             )
-            if SubgoalMode.NONE:
+            if smode == SubgoalMode.NONE:
                 post_check_sources = graph.set_postcon(
                     ac.label,
                     ac.post,
@@ -277,7 +277,7 @@ class Graph:
                     vmode=ValueMode.CHECK,
                 )
                 post_sources = post_start_sources | post_check_sources
-            if SubgoalMode.SIMPLE:
+            elif smode == SubgoalMode.SIMPLE:
                 post_goal_sources = graph.set_postcon(
                     ac.label,
                     ac.post,
@@ -296,7 +296,7 @@ class Graph:
                 )
                 post_sources = post_start_sources | post_goal_sources
                 post_sources_alt = post_start_sources | post_sample_sources
-            if SubgoalMode.CHAIN:
+            elif smode == SubgoalMode.CHAIN:
                 post_goal_sources = graph.set_postcon(
                     ac.label,
                     ac.post,

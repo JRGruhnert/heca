@@ -3,7 +3,7 @@ from typing import Generic, TypeVar
 import numpy as np
 import torch
 
-from heca.graphs.node import GraphNode
+from heca.graphs.node import EntityNode, GraphNode
 from heca.data.data import DCEntity
 
 T = TypeVar("T", bound=GraphNode)
@@ -49,12 +49,14 @@ class NodeSet(Generic[T]):
         return key in self.index
 
     def build(self):
-        if self.items:
+        if self.items and isinstance(self.items[0], EntityNode):
             x_np = np.stack([node.data.feature for node in self.items], axis=0)
             self.type_ids = torch.tensor(
                 [node.type_id for node in self.items], dtype=torch.long  # type: ignore
             )
         else:
+            # Non-entity nodes (options): placeholder features; real features
+            # are produced by the summary message passing.
             x_np = np.zeros((len(self.items), 128), dtype=np.float32)
         self.x = torch.from_numpy(x_np).float()
 

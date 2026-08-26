@@ -15,15 +15,6 @@ class ConPair:
         self.post = post
 
     def _compute_change_scores(self) -> dict[str, float]:
-        """Mean per-demo displacement in value space, per entity.
-
-        Rows of ``pre.data_raw`` and ``post.data_raw`` are aligned per demo, so
-        this measures how far the entity actually moves *within* each demo. It
-        therefore detects entities that genuinely move even when the start and
-        target distributions overlap (e.g. a free object picked up and placed
-        at a random nearby spot, where a |mean shift| / pooled-std score is
-        ~0 despite ~10 cm of movement per demo).
-        """
         scores: dict[str, float] = {}
         for key in set(self.pre.data_raw).intersection(set(self.post.data_raw)):
             pre = np.asarray(self.pre.data_raw[key], dtype=np.float64)

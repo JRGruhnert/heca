@@ -31,14 +31,19 @@ class ExpertModel(Persistable, abc.ABC):
         self.act_virtual = False
         self._force_recompute = False
         self._use_gt = True
+        self._fit_rotation = True
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
-        return {
+        ents = {
             label: entity
             for label, entity in self.scene.entities.items()
             if label in self.tps
         }
+        if not self._fit_rotation:
+            for entity in ents.values():
+                entity.cfg.fit_rotation = False
+        return ents
 
     def virtual(self) -> "ExpertModel":
         self.act_virtual = True
@@ -50,6 +55,16 @@ class ExpertModel(Persistable, abc.ABC):
 
     def force_recompute(self) -> "ExpertModel":
         self._force_recompute = True
+        return self
+
+    def use_fit_rotation(self, flag: bool) -> "ExpertModel":
+        """Set the rotation mode for this agent's entities.
+
+        A single per-agent choice: either all entities fit rotation or none.
+        The flag is applied when the entities are built, so it can be set
+        before the policy is loaded.
+        """
+        self._fit_rotation = flag
         return self
 
     def use_gt(self, flag: bool) -> "ExpertModel":

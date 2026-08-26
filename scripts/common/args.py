@@ -72,6 +72,14 @@ def add_use_gt_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_fit_rotation_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--rotation",
+        action="store_true",
+        help="Fit the conditions with rotations.",
+    )
+
+
 def add_wandb_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--wandb",
@@ -97,6 +105,14 @@ def add_reload_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_inference_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--inference",
+        action="store_true",
+        help="Sets the network in inference mode.",
+    )
+
+
 def add_network_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--network",
@@ -107,14 +123,18 @@ def add_network_argument(parser: argparse.ArgumentParser):
 
 
 def add_heca_arguments(parser: argparse.ArgumentParser):
+    add_network_argument(parser)
     add_federated_argument(parser)
     add_wandb_argument(parser)
     add_use_gt_argument(parser)
+    add_fit_rotation_argument(parser)
     add_batch_argument(parser)
     add_virtual_argument(parser)
     add_scene_argument(parser)
     add_tag_argument(parser)
     add_smode_argument(parser)
+    add_inference_argument(parser)
+    add_reload_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:
@@ -132,5 +152,6 @@ def generate_tag(args: argparse.Namespace) -> str:
     final_tag += "f" if args.federated else "_"
     final_tag += "g" if args.gt else "_"
     final_tag += "v" if args.virtual else "_"
+    final_tag += "r" if args.rotation else "_"
     final_tag += subgoal_tag(args.smode)
     return final_tag

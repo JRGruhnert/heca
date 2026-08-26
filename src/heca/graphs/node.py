@@ -1,6 +1,6 @@
 from abc import ABC
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 from heca.experts.expert import ExpertModel
@@ -18,7 +18,9 @@ class ValueMode(Enum):
 @dataclass(slots=True, kw_only=True)
 class GraphNode(ABC):
     data: DCEntity
-    sources: dict[str, set[str]] = defaultdict(set[str])
+    sources: dict[str, set[str]] = field(
+        default_factory=lambda: defaultdict(set[str])
+    )
 
     def __str__(self) -> str:
         src_str = ", ".join(f"{self.sources}" if self.sources else "∅")

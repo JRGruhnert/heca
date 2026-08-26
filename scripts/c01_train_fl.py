@@ -33,6 +33,7 @@ def generate_clients(
     network: Network.Config,
     clients: dict[str, list[ExpertModel.Config]],
     smode: SubgoalMode,
+    fit_rotation: bool,
     inference: bool,
     federated: bool,
     use_wandb: bool,
@@ -50,7 +51,7 @@ def generate_clients(
             heca = Heca.Config(
                 agents=agents,
                 learner=FPPO.Config(
-                    tag=f"{tag}_{scene}",
+                    tag=f"{scene}_{tag}",
                     network=network,
                     server=server_cfg,
                     wandb=wandb,
@@ -60,6 +61,7 @@ def generate_clients(
                 virtual=virtual,
                 reload=reload,
                 use_gt=use_gt,
+                fit_rotation=fit_rotation,
                 smode=smode,
             )
             hecas.append(heca)
@@ -68,7 +70,7 @@ def generate_clients(
             heca = Heca.Config(
                 agents=agents,
                 learner=PPO.Config(
-                    tag=f"{tag}_{scene}",
+                    tag=f"{scene}_{tag}",
                     network=network,
                     wandb=wandb,
                 ),
@@ -77,6 +79,7 @@ def generate_clients(
                 virtual=virtual,
                 reload=reload,
                 use_gt=use_gt,
+                fit_rotation=fit_rotation,
                 smode=smode,
             )
             hecas.append(heca)
@@ -169,6 +172,7 @@ def main():
         use_wandb=args.wandb,
         reload=args.reload,
         use_gt=args.gt,
+        fit_rotation=args.rotation,
         smode=args.smode,
     )
     train(exp, server, args.batch)

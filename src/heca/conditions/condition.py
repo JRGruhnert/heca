@@ -1,7 +1,9 @@
 from pathlib import Path
+import warnings
 
 from matplotlib import pyplot as plt
 import numpy as np
+from sklearn.exceptions import ConvergenceWarning
 
 from stepmix import StepMix
 from heca.misc import logger
@@ -18,11 +20,14 @@ class Condition:
 
         self._models, self._bics = self._fit_model()
 
-    def comp_features(self) -> dict[str, tuple[np.ndarray, np.ndarray]]:
-        result: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    def comp_features(
+        self,
+    ) -> dict[str, list[tuple[np.ndarray, float]]]:
+        result: dict[str, list[tuple[np.ndarray, float]]] = {}
         for key in self.models.keys():
             up = self.models[key].get_parameters().copy()
-            result[key] = self.entities[key].comp_feature(up)
+            feats, weights = self.entities[key].comp_feature(up)
+            result[key] = [(feats[i], float(weights[i])) for i in range(len(weights))]
         return result
 
     @property
@@ -54,7 +59,17 @@ class Condition:
                     progress_bar=0,
                 )
 
-                model.fit(self.entities[key].model_value(values))
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter("always")
+                    model.fit(self.entities[key].model_value(values))
+                if any(
+                    issubclass(w.category, ConvergenceWarning) for w in caught
+                ):
+                    logger.warning(
+                        f"StepMix did not converge: condition={self.label} "
+                        f"entity={key} n_components={k} "
+                        "(increase max_iter / n_init or check the data)"
+                    )
                 n_outcomes = model.get_parameters()["measurement"]["state"][
                     "pis"
                 ].shape[1]
