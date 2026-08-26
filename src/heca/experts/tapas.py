@@ -297,14 +297,11 @@ class TapasExpert(ExpertModel):
     @cached_property
     def conditions(self) -> ConPair:
         path = self.load_dir(self.cfg)
-        # Two cache variants so the modes never overwrite each other:
-        # with rotation   -> conditions.joblib
-        # position only   -> conditions_pos.joblib  (fit_rotation=False)
         fit_rotation = self._fit_rotation
         cache_name = "conditions.joblib" if fit_rotation else "conditions_pos.joblib"
         cache_path = path / cache_name
         if cache_path.exists() and not self._force_recompute:
-            logger.info(f"Loading cached conditions from {cache_path}")
+            logger.debug(f"Loading cached conditions from {cache_path}")
             return joblib.load(cache_path)
 
         demos_file = h5py.File(path / f"demos.h5", "r")

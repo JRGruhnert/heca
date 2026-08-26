@@ -91,8 +91,6 @@ def precondition_status(model: ExpertModel, x: DCScene) -> tuple[bool, list[str]
 
 
 def agent_expectation(model: ExpertModel) -> str:
-    """'a -> b' of the moving (target) entities, from the pre/post condition
-    modes, e.g. ``faucet0: ang=+0.25 -> ang=-1.33`` (matches the model tag)."""
     pre, post = model.conditions.pre, model.conditions.post
     parts = []
     for label in sorted(model.conditions.target_entities):
@@ -141,6 +139,10 @@ def run_virtual_step(
         if label in model.conditions.target_entities:
             status = "OK" if dzy < 1e-3 else "MISMATCH"
             note = f"|z-y|={dzy:.5f} (target: should be ~0)"
+        else:
+            dzx = value_diff(z.get(label), x.get(label))
+            status = "OK" if dzx < 1e-3 else "MISMATCH"
+            note = f"|z-x|={dzx:.5f} (anchor: should be ~0)"
         print(f"    {label:<22} [{status:<8}] {note}")
     print_feedback(fb)
     print_result(model, x, z)
@@ -191,7 +193,6 @@ def print_menu(models: list[ExpertModel], x: DCScene):
         print(f"{row} | State={flag}{note}")
         if exp:
             print(f"          Problems: {exp}")
-        print("\n")
     print("  [0]   reset / sample a new episode")
     print("  [q]   quit")
     print("-" * 78)

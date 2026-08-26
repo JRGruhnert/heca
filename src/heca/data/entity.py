@@ -141,6 +141,17 @@ class Entity(Configurable):
     def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
         raise NotImplementedError
 
+    def sanitize_value(
+        self,
+        value: np.ndarray,
+        lo: np.ndarray | None = None,
+        hi: np.ndarray | None = None,
+    ) -> np.ndarray:
+        value = np.asarray(value).copy()
+        if lo is not None or hi is not None:
+            value = np.clip(value, lo, hi)
+        return value
+
     def secure_mix_parameters(self, p: dict, eps: float = 1e-15) -> dict:
         pis = p["measurement"]["state"]["pis"]
         n_outcomes = max(self.cfg.n_states, pis.shape[1])
@@ -163,11 +174,10 @@ class Entity(Configurable):
         p = self.secure_mix_parameters(up)
         pose = sample[:-1]
         state = int(sample[-1])
-        weights = p["weights"]
-        means = p["measurement"]["pose"]["means"]
-        vars_ = p["measurement"]["pose"]["covariances"]
         pis = p["measurement"]["state"]["pis"]
-
+        # weights = p["weights"]
+        # means = p["measurement"]["pose"]["means"]
+        # vars_ = p["measurement"]["pose"]["covariances"]
         # def loglik(pose_x: np.ndarray, state_x: int) -> float:
         #     best = -np.inf
         #     for k in range(len(weights)):

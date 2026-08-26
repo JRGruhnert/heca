@@ -40,6 +40,21 @@ class RevoluteEntity(Entity):
 
         network_input = [relative, range_norm, midpoint_norm]
 
+    def sanitize_value(
+        self,
+        value: np.ndarray,
+        lo: np.ndarray | None = None,
+        hi: np.ndarray | None = None,
+    ) -> np.ndarray:
+        value = np.asarray(value).copy()
+        # The extra columns live right after pos (3) + aa (3): [sin(ang), cos(ang)].
+        base = Entity.POS_DIM + Entity.ROT_DIM
+        ext = value[base : base + 2]
+        norm = float(np.linalg.norm(ext))
+        if norm > 0.0:
+            value[base : base + 2] = ext / norm
+        return super().sanitize_value(value, lo=lo, hi=hi)
+
     def env_state_value(
         self, label: str, x: DCScene, unnormalize_pos=None
     ) -> dict[str, Any]:

@@ -83,19 +83,6 @@ class Graph:
         for node in self.ns_option.items:
             node.data = goal.copy()
 
-    def test_value(self, node: ValueNode, x: DCScene) -> bool:
-        up = node.con.models[node.entity].get_parameters().copy()
-        return node.con.entities[node.entity].score_single(x[node.entity].value, up)
-
-    def sample_value(self, node: ValueNode) -> DCEntity:
-        value = node.con.models[node.entity].sample(1)[0]
-        if isinstance(value, torch.Tensor):
-            value = value.detach().cpu().numpy()
-        value = value.squeeze()
-        value = self.entities[node.entity].model_to_value(value)
-        feat = self.entities[node.entity].gnn_format(value)
-        return DCEntity(value=value, feature=feat)
-
     def update_nodes(self):
         for key in self.goal_keys:
             node = self.ns_entity.get_by_key(key)
@@ -105,12 +92,12 @@ class Graph:
             elif node.vmode == ValueMode.GOAL:
                 x = self.goal.get(node.entity)
             elif node.vmode == ValueMode.SAMPLE:
-                x = self.sample_value(node)
+                x = node.con.sample(node.entity)
             else:
-                if self.test_value(node, self.goal):
+                if node.con.test(node.entity, self.goal):
                     x = self.goal.get(node.entity)
                 else:
-                    x = self.sample_value(node)
+                    x = node.con.sample(node.entity)
 
             self.ns_entity.key_update(key, x)
 
