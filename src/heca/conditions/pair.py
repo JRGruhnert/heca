@@ -95,8 +95,8 @@ class ConPair:
     def plot(self, path: Path):
         plot_path = path / "plots"
         plot_path.mkdir(parents=True, exist_ok=True)
-        self.pre.plot(plot_path, self.label)
-        self.post.plot(plot_path, self.label)
+        self.pre.plot(plot_path)
+        self.post.plot(plot_path)
 
     def calculate_sim_matrix(self, other: "ConPair", key: str) -> np.ndarray:
         mat = np.zeros((2, 2))
@@ -107,7 +107,7 @@ class ConPair:
                 else:
                     up1 = c2.models[key].get_parameters().copy()
                     up2 = c1.models[key].get_parameters().copy()
-                    mat[i, j] = c1.entities[key].containment_score(up1, up2)
+                    mat[i, j] = c1.entities[key].containment(up1, up2)
         return mat
 
     def compute_sim(self, other: "ConPair") -> dict[str, np.ndarray]:

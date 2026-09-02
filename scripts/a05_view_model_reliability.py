@@ -18,11 +18,13 @@ import numpy as np
 from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
 from heca.experts.tapas import TapasExpert
+from heca.graphs.graph import Graph, SubgoalMode
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene, SceneFeedback
 
 from scripts.common.args import (
     add_scene_argument,
+    add_smode_argument,
     add_use_gt_argument,
     add_viewer_argument,
 )
@@ -67,17 +69,6 @@ def print_scene(title: str, scene: DCScene, labels: list[str] | None = None):
         print(f"    {label:<22} {entity_str(label, entity)}")
 
 
-def mode_dc(model) -> DCEntity:
-    """Most probable value (best-component mean + mode state) of a fitted
-    StepMix model, as a displayable DCEntity."""
-    p = model.get_parameters()
-    k = int(np.argmax(p["weights"]))
-    pose = p["measurement"]["pose"]["means"][k]
-    state = int(np.argmax(p["measurement"]["state"]["pis"][k]))
-    value = np.concatenate([np.asarray(pose, dtype=float), [float(state)]])
-    return DCEntity(value=value, feature=np.zeros(0))
-
-
 def precondition_status(model: ExpertModel, x: DCScene) -> tuple[bool, list[str]]:
     blocked = []
     for label, entity in model.entities.items():
@@ -88,17 +79,6 @@ def precondition_status(model: ExpertModel, x: DCScene) -> tuple[bool, list[str]
         if not valid:
             blocked.append(label)
     return len(blocked) == 0, blocked
-
-
-def agent_expectation(model: ExpertModel) -> str:
-    pre, post = model.conditions.pre, model.conditions.post
-    parts = []
-    for label in sorted(model.conditions.target_entities):
-        parts.append(
-            f"{label}: {entity_str(label, mode_dc(pre.models[label]))}"
-            f" -> {entity_str(label, mode_dc(post.models[label]))}"
-        )
-    return "  ".join(parts)
 
 
 def print_model_profile(model: ExpertModel):
@@ -116,29 +96,40 @@ def print_step_headline(headline: str, model: ExpertModel):
 
 
 def run_virtual_step(
-    scene: OGScene, model: ExpertModel, x: DCScene, y: DCScene
+    scene: OGScene,
+    model: ExpertModel,
+    x: DCScene,
+    subgoal: DCScene,
+    key: str,
 ) -> tuple[DCScene, SceneFeedback]:
-    print_step_headline("VIRTUAL STEP", model)
+    """Run the graph option's virtual step and report the roundtrip.
+
+    ``subgoal`` is the graph's assembled subgoal (anchors pinned to the start
+    scene, targets from the option's post-condition nodes). The info_dict is
+    rebuilt from the subgoal the same way ``OGScene._step_virt`` builds it —
+    no ogbench internals are touched.
+    """
+    print_step_headline(f"VIRTUAL STEP [{key}]", model)
     print_model_profile(model)
     model.virtual()
-    z, fb = model.act(x, y)
+    z, fb = model.act(x, subgoal)
 
     sent: dict = {}
     for label in model.conditions.target_entities:
         sent.update(
             scene.entities[label].env_state_value(
-                label, y, unnormalize_pos=scene.unnormalize_position
+                label, subgoal, unnormalize_pos=scene.unnormalize_position
             )
         )
     print("\nInfo_dict sent to env:")
-    for key, value in sent.items():
-        print(f"    {key:<28} = {fmt_value(value)}")
+    for key_, value in sent.items():
+        print(f"    {key_:<28} = {fmt_value(value)}")
     print("\nEnv Validation Check:")
     for label in sorted(model.entities.keys()):
-        dzy = value_diff(z.get(label), y.get(label))
+        dzy = value_diff(z.get(label), subgoal.get(label))
         if label in model.conditions.target_entities:
             status = "OK" if dzy < 1e-3 else "MISMATCH"
-            note = f"|z-y|={dzy:.5f} (target: should be ~0)"
+            note = f"|z-subgoal|={dzy:.5f} (target: should be ~0)"
         else:
             dzx = value_diff(z.get(label), x.get(label))
             status = "OK" if dzx < 1e-3 else "MISMATCH"
@@ -150,14 +141,14 @@ def run_virtual_step(
 
 
 def run_real_rollout(
-    model: ExpertModel, x: DCScene, y: DCScene
+    model: ExpertModel, x: DCScene, subgoal: DCScene, key: str
 ) -> tuple[DCScene, SceneFeedback]:
-    """Execute the real TAPAS policy from x toward y (physics steps)."""
+    """Execute the real TAPAS policy from x toward the option's subgoal."""
     assert isinstance(model, TapasExpert)
-    print_step_headline("REAL ROLLOUT", model)
+    print_step_headline(f"REAL ROLLOUT [{key}]", model)
     print_model_profile(model)
     model.real()
-    z, fb = model.act(x, y)
+    z, fb = model.act(x, subgoal)
     print_feedback(fb)
     print_result(model, x, z)
     return z, fb
@@ -165,7 +156,8 @@ def run_real_rollout(
 
 def print_feedback(fb: SceneFeedback):
     print(
-        f"Feedback: terminal={fb.terminal} truncated={fb.truncated} reward={fb.reward:.4f}"
+        f"Feedback: terminal={fb.terminal} truncated={fb.truncated} "
+        f"reward={fb.reward:.4f}"
     )
 
 
@@ -181,18 +173,31 @@ def sample_task(scene: OGScene) -> tuple[DCScene, DCScene]:
     return s_scene, g_scene
 
 
-def print_menu(models: list[ExpertModel], x: DCScene):
+def subgoal_expectation(graph: Graph, i: int, model: ExpertModel, x: DCScene) -> str:
+    """What the graph option would set: x -> assembled-subgoal per target."""
+    _, subgoal = graph.select(i)
+    parts = []
+    for label in sorted(model.conditions.target_entities):
+        parts.append(
+            f"{label}: {entity_str(label, x.get(label))}"
+            f" -> {entity_str(label, subgoal.get(label))}"
+        )
+    return "  ".join(parts)
+
+
+def print_menu(graph: Graph, x: DCScene):
     print("\n" + "-" * 78)
-    print("Options")
-    for i, model in enumerate(models):
-        row = f"  [v{i}]/[r{i}]  {model.cfg.tag:<24}"
+    print("Options (graph)")
+    for i, key in enumerate(graph.ns_option.keys):
+        option = graph.ns_option.items[i]
+        model = ExpertModel.get(option.model)
         ok, blocked = precondition_status(model, x)
         flag = "VALID " if ok else "BAD"
         note = "" if ok else f" (Entities: [{', '.join(blocked)}])"
-        exp = agent_expectation(model)
-        print(f"{row} | State={flag}{note}")
+        exp = subgoal_expectation(graph, i, model, x)
+        print(f"  [v{i}]/[r{i}]  {key:<44} | State={flag}{note}")
         if exp:
-            print(f"          Problems: {exp}")
+            print(f"          {exp}")
     print("  [0]   reset / sample a new episode")
     print("  [q]   quit")
     print("-" * 78)
@@ -203,6 +208,7 @@ def main():
     add_scene_argument(parser, default="scene1")
     add_use_gt_argument(parser)
     add_viewer_argument(parser)
+    add_smode_argument(parser)
     args = parser.parse_args()
 
     scene_cfg = find_scene_config(args.scene)
@@ -211,25 +217,32 @@ def main():
     if args.viewer:
         scene.cfg.viewer = True
 
-    agents: list[ExpertModel] = []
-    for agent_cfg in find_scene_models(args.scene):
+    # Load the agents (policy + conditions) exactly like Heca does, then build
+    # the actual option graph.
+    agent_cfgs = find_scene_models(args.scene)
+    for agent_cfg in agent_cfgs:
         agent = ExpertModel.get(agent_cfg, auto_load=False)
         agent.use_gt(args.gt)
         agent.load()
-        agents.append(agent)
+    graph = Graph.generate(list(agent_cfgs), smode=args.smode)
 
     try:
         quitting = False
         ep_step = 0
         episode = 1
         x, y = sample_task(scene)
+        graph.set_goal(y)
+        graph.set_start(x)
         while True:
             print("\n" + "=" * 78)
-            print(f"Episode {episode} Step {ep_step} (use_gt={args.gt})")
+            print(
+                f"Episode {episode} Step {ep_step} "
+                f"(use_gt={args.gt}, smode={args.smode.name})"
+            )
             print("=" * 78)
             print_scene("obs.", x)
             print_scene("goal", y)
-            print_menu(agents, x)
+            print_menu(graph, x)
             ep_step += 1
 
             choice = input("> ").strip().lower()
@@ -238,6 +251,8 @@ def main():
                 break
             if choice in ("0", "reset", ""):
                 x, y = sample_task(scene)
+                graph.set_goal(y)
+                graph.set_start(x)
                 ep_step = 0
                 episode += 1
                 continue
@@ -247,18 +262,23 @@ def main():
                 print(f"  unknown command: {choice!r}")
                 continue
             i = int(idx)
-            if i >= len(agents):
-                print(f"  no agent with index {i}")
+            if i >= len(graph.ns_option.keys):
+                print(f"  no option with index {i}")
                 continue
-            agent = agents[i]
+            model_cfg, subgoal = graph.select(i)
+            model = ExpertModel.get(model_cfg)
+            key = graph.ns_option.key_at(i)
             if kind == "v":
-                z, fb = run_virtual_step(scene, agent, x, y)
+                z, fb = run_virtual_step(scene, model, x, subgoal, key)
             else:
-                z, fb = run_real_rollout(agent, x, y)
+                z, fb = run_real_rollout(model, x, subgoal, key)
             x = z  # chain: the env has actually moved
+            graph.set_start(x)
             if fb.terminal or fb.truncated:
                 print("\n  (episode ended by feedback; sampling a new task)")
                 x, y = sample_task(scene)
+                graph.set_goal(y)
+                graph.set_start(x)
                 episode += 1
                 ep_step = 0
     except (EOFError, KeyboardInterrupt):

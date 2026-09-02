@@ -19,6 +19,7 @@ class StaticEntity(Entity):
             "pose": {
                 "model": "gaussian_diag",
                 "n_columns": 3 + self.rot_dim,
+                "reg_covar": Entity.REG_COVAR,
             },
             "state": {
                 "model": "categorical",

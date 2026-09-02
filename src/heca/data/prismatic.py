@@ -19,6 +19,7 @@ class PrismaticEntity(Entity):
             "pose": {
                 "model": "gaussian_diag",
                 "n_columns": 3 + self.rot_dim + 1,
+                "reg_covar": Entity.REG_COVAR,
             },
             "state": {
                 "model": "categorical",

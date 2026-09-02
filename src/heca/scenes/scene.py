@@ -27,7 +27,7 @@ class Scene(Persistable):
         folder: str = "scenes"
         width: int = 256
         height: int = 256
-        visualize: bool = False
+        viewer: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

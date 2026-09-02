@@ -4,11 +4,13 @@ from typing import Any
 
 import numpy as np
 from dataclasses import dataclass, field
-from scipy.stats import chi2
+from scipy.optimize import minimize
+from scipy.stats import chi2, norm
 
 from heca.misc.base import Configurable
 from heca.data.data import DCEntity, DCScene
 from heca.utils.quaternion import Quaternion
+from heca.misc import logger
 
 
 class Entity(Configurable):
@@ -19,19 +21,18 @@ class Entity(Configurable):
     POS_DIM: int = 3
     ROT_DIM: int = 3
     ANCHOR_THRESHOLD: float = 0.1
+    REG_COVAR = 1e-6
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         type_id: int
         fit_rotation: bool = True
-        directional_containment: bool = False
         n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
         max_fit_components: int = 10
-        z_quantile: float = 0.95
-        containment_quantile: float = 0.95
-        z_max_sigma: float | None = None
+        z_quantile_joint: float = 0.99
+        z_quantile_dim: float = 0.999
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -175,38 +176,20 @@ class Entity(Configurable):
         pose = sample[:-1]
         state = int(sample[-1])
         pis = p["measurement"]["state"]["pis"]
-        # weights = p["weights"]
-        # means = p["measurement"]["pose"]["means"]
-        # vars_ = p["measurement"]["pose"]["covariances"]
-        # def loglik(pose_x: np.ndarray, state_x: int) -> float:
-        #     best = -np.inf
-        #     for k in range(len(weights)):
-        #         var = np.maximum(vars_[k], eps)
-        #         log_gauss = -0.5 * np.sum(
-        #             np.log(2 * np.pi * var) + (pose_x - means[k]) ** 2 / var
-        #         )
-        #         state_prob = pis[k][state_x] if state_x < len(pis[k]) else eps
-        #         log_cat = np.log(np.clip(state_prob, eps, 1.0))
-        #         s = np.log(weights[k]) + log_gauss + log_cat
-        #         if s > best:
-        #             best = s
-        #     return best
-
-        # loglik_x = loglik(pose, state)
-        # loglik_max = max(
-        #     loglik(means[k], int(np.argmax(pis[k]))) for k in range(len(weights))
-        # )
-        # score = float(np.clip(np.exp(loglik_x - loglik_max), 0.0, 1.0))
 
         best_k, z, zd = self._best_component(pose, p, eps=eps)
-        valid_pose = z <= float(math.sqrt(chi2.ppf(self.cfg.z_quantile, len(pose))))
-        if valid_pose and self.cfg.z_max_sigma is not None:
-            valid_pose = bool(np.all(zd <= self.cfg.z_max_sigma))
+        chi_sqrt = float(math.sqrt(chi2.ppf(self.cfg.z_quantile_joint, len(pose))))
 
-        mode_state = int(np.argmax(pis[best_k]))
-        valid_state = state == mode_state
+        valid_pose = z <= chi_sqrt and bool(np.all(zd <= self._z_dim_sigma()))
+        valid_state = state == int(np.argmax(pis[best_k]))
 
-        return bool(valid_pose and valid_state)
+        return valid_pose and valid_state
+
+    def _z_dim_sigma(self) -> float:
+        """Per-dimension cap in sigma units, derived from the
+        ``z_quantile_dim`` quantile: c = Phi^{-1}((1 + q) / 2) (two-sided
+        normal quantile, e.g. q=0.999 -> 3.29 sigma)."""
+        return float(norm.ppf(0.5 + self.cfg.z_quantile_dim / 2.0))
 
     def _best_component(
         self, pose: np.ndarray, p: dict, eps: float = 1e-15
@@ -234,13 +217,80 @@ class Entity(Configurable):
     ) -> float:
         """Mahalanobis distance (in sigma units) from ``sample`` to the best
         (highest-posterior) component of the model. Useful for inspecting how
-        close values are to the model / tuning ``z_quantile``."""
+        close values are to the model / tuning ``z_quantile_joint``."""
         sample = self.model_value(sample)
         p = self.secure_mix_parameters(up)
         _, z, _ = self._best_component(sample[:-1], p, eps=eps)
         return z
 
-    def containment_score(self, up1: dict, up2: dict):
+    def _ellipsoids_intersect(
+        self,
+        mu1: np.ndarray,
+        var1: np.ndarray,
+        mu2: np.ndarray,
+        var2: np.ndarray,
+        c: float,
+        z_max: float | None = None,
+        eps: float = 1e-15,
+    ) -> bool:
+        """Exact feasibility test: is the intersection of the two quantile
+        ellipsoids (optionally restricted to the per-dimension cap ``z_max``)
+        non-empty?
+
+        With $Q_k(x) = \\sum_d (x_d - \\mu_{k,d})^2 / \\sigma^2_{k,d}$, the
+        ellipsoids $\\{Q_1 \\le c\\} \\cap \\{Q_2 \\le c\\}$ intersect iff
+
+        $$\\min_x \\max\\big(Q_1(x)/c,\\, Q_2(x)/c\\big) \\le 1,$$
+
+        a convex optimization. Any common point must lie in the axis-aligned
+        box given by the intersection of the per-dimension projections of both
+        ellipsoids (and caps), so the min-max is minimized over that box.
+        Fast paths: a center inside the other ellipsoid (with caps) accepts,
+        an empty per-dimension box rejects.
+        """
+        s1 = np.sqrt(np.maximum(var1, eps))
+        s2 = np.sqrt(np.maximum(var2, eps))
+        r = float(np.sqrt(c))
+        if z_max is not None:
+            r = min(r, z_max)
+
+        # Fast accept: a component center inside the other ellipsoid (and caps)
+        # is itself a common value.
+        if np.sum((mu2 - mu1) ** 2 / np.maximum(var1, eps)) <= c and (
+            z_max is None or bool(np.all(np.abs(mu2 - mu1) <= z_max * s1))
+        ):
+            return True
+        if np.sum((mu1 - mu2) ** 2 / np.maximum(var2, eps)) <= c and (
+            z_max is None or bool(np.all(np.abs(mu1 - mu2) <= z_max * s2))
+        ):
+            return True
+
+        # Fast reject: per-dimension projections (and caps) are disjoint.
+        lo = np.maximum(mu1 - r * s1, mu2 - r * s2)
+        hi = np.minimum(mu1 + r * s1, mu2 + r * s2)
+        if np.any(lo > hi):
+            return False
+
+        # Exact decider: convex min-max over the box.
+        var1c = np.maximum(var1, eps)
+        var2c = np.maximum(var2, eps)
+
+        def g(x: np.ndarray) -> float:
+            q1 = float(np.sum((x - mu1) ** 2 / var1c)) / c
+            q2 = float(np.sum((x - mu2) ** 2 / var2c)) / c
+            return max(q1, q2)
+
+        x0 = np.clip((mu1 / var1c + mu2 / var2c) / (1.0 / var1c + 1.0 / var2c), lo, hi)
+        res = minimize(
+            g,
+            x0,
+            method="Nelder-Mead",
+            bounds=[(float(lo[d]), float(hi[d])) for d in range(len(mu1))],
+            options={"maxiter": 1000, "xatol": 1e-10, "fatol": 1e-12},
+        )
+        return float(res.fun) <= 1.0
+
+    def containment(self, up1: dict, up2: dict):
         p1 = self.secure_mix_parameters(up1)
         p2 = self.secure_mix_parameters(up2)
         w1 = p1["weights"]
@@ -253,27 +303,17 @@ class Entity(Configurable):
         pis2 = p2["measurement"]["state"]["pis"]
 
         d = means1.shape[1]
-        chi = float(chi2.ppf(self.cfg.containment_quantile, d))
+        chi = float(chi2.ppf(self.cfg.z_quantile_joint, d))
         eps = 1e-15
 
         def agrees(i: int, j: int) -> bool:
             var1 = np.maximum(vars1[i], eps)
             var2 = np.maximum(vars2[j], eps)
-            # Agreement value: posterior mean of the two Gaussians
-            # (minimizes the sum of the two quadratic forms).
-            prec = 1.0 / var1 + 1.0 / var2
-            x = (means1[i] / var1 + means2[j] / var2) / prec
-
-            # Must be inside BOTH percentile ellipsoids.
-            q1 = float(np.sum((x - means1[i]) ** 2 / var1))
-            q2 = float(np.sum((x - means2[j]) ** 2 / var2))
-            if not (q1 <= chi and q2 <= chi):
-                return False
-            if self.cfg.z_max_sigma is not None and not (
-                np.all(np.abs(x - means1[i]) / np.sqrt(var1) <= self.cfg.z_max_sigma)
-                and np.all(
-                    np.abs(x - means2[j]) / np.sqrt(var2) <= self.cfg.z_max_sigma
-                )
+            # Exact ellipsoid-intersection test (instead of checking only the
+            # posterior-mean agreement value, which is conservative when the
+            # two variances differ a lot).
+            if not self._ellipsoids_intersect(
+                means1[i], var1, means2[j], var2, chi, self._z_dim_sigma()
             ):
                 return False
             # Hard state gate: most likely states must be equal (aligned to the
@@ -292,6 +332,14 @@ class Entity(Configurable):
             w2[j] for j in range(len(w2)) if any(agrees(i, j) for i in range(len(w1)))
         )
         return float(min(covered1, covered2))
+
+    def containment_score(self, up1: dict, up2: dict) -> bool:
+        """Decision wrapper: does a value exist that can occur under *both*
+        conditions? Returns ``True`` iff ``containment`` is ``> 0`` and logs
+        the actual float value for diagnostics."""
+        value = self.containment(up1, up2)
+        logger.debug(f"containment={value:.4f}")
+        return value > 0.0
 
     def best_sample(self, up1: dict, up2: dict, eps: float = 1e-15):
         p1 = self.secure_mix_parameters(up1)

@@ -9,7 +9,6 @@ from heca.conditions.condition import Condition
 from heca.data.entity import Entity
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene
-from scripts.common.args import add_viewer_argument
 
 # Make ``conf`` / ``scripts.common`` importable when run directly as
 # ``python scripts/evaluate_tapas.py`` (mirrors scripts/__init__.py).
@@ -28,16 +27,14 @@ from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
 from heca.misc import logger
-
-try:
-    from scripts.common.args import add_scene_argument, add_tag_argument
-    from scripts.common.scenes import agents_by_scene
-except ModuleNotFoundError as exc:
-    raise SystemExit(
-        f"Could not import the scene/agent configs: {exc}\n"
-        "Make sure the scene dependencies (e.g. the ogbench fork pinned in "
-        "pyproject.toml) are installed in the active environment."
-    ) from exc
+from scripts.common.args import (
+    add_model_argument,
+    add_scene_argument,
+    add_tag_argument,
+    add_use_gt_argument,
+    add_viewer_argument,
+)
+from scripts.common.scenes import agents_by_scene
 
 
 def sample_dcscene(con: Condition) -> DCScene:
@@ -101,18 +98,18 @@ def get_env_safely(scene: Scene) -> SceneEnvBase:
     return cast(SceneEnvBase, scene.env.unwrapped)
 
 
-def evaluate_agent(
-    agent: ExpertModel,
+def evaluate_model(
+    model: ExpertModel,
     scene: Scene,
     episodes: int,
     max_tries: int,
 ) -> Counter:
     env = get_env_safely(scene)
     counts: Counter = Counter()
-    anchors = anchor_entities(agent)
+    anchors = anchor_entities(model)
     for ep in range(episodes):
         env.reset(options={"render_goal": True})
-        pre_info, post_info = sample_task_conditions(agent, scene, anchors)
+        pre_info, post_info = sample_task_conditions(model, scene, anchors)
 
         env.set_start(pre_info)
         env.set_goal(post_info)
@@ -121,14 +118,14 @@ def evaluate_agent(
         succeeded_on = 0
         for attempt in range(1, max_tries + 1):
             x = scene.to_dc_scene(env.compute_ob_info())
-            _, fb = agent.act(x, y)
+            _, fb = model.act(x, y)
             if fb.reward == 1.0:
                 succeeded_on = attempt
                 break
 
         counts[succeeded_on] += 1
         logger.debug(
-            f"[{scene.cfg.tag}] {agent.cfg.tag} episode {ep + 1}/{episodes}: "
+            f"[{scene.cfg.tag}] {model.cfg.tag} episode {ep + 1}/{episodes}: "
             f"{'success on try ' + str(succeeded_on) if succeeded_on else 'failed'}"
         )
     return counts
@@ -207,8 +204,9 @@ def plot_scene(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
-    add_tag_argument(parser)
+    add_model_argument(parser)
     add_viewer_argument(parser)
+    add_use_gt_argument(parser)
     parser.add_argument(
         "--episodes",
         type=int,
@@ -228,19 +226,19 @@ def main():
         if args.scene and scene_cfg.tag != args.scene:
             continue
         if args.viewer:
-            Scene.get(scene_cfg, auto_load=False).cfg.visualize = True
+            Scene.get(scene_cfg, auto_load=False).cfg.viewer = True
         logger.info(f"[{scene_cfg.tag}] evaluating {len(models)} agents")
 
         results: list[dict] = []
         failures: list[dict] = []
         for cfg in models:
-            if args.tag and cfg.tag != args.tag:
+            if args.model and cfg.tag != args.tag:
                 continue
 
-            agent = ExpertModel.get(cfg)
-            counts = evaluate_agent(
-                agent,
-                agent.scene,
+            model = ExpertModel.get(cfg).use_gt(args.gt)
+            counts = evaluate_model(
+                model,
+                model.scene,
                 args.episodes,
                 args.max_tries,
             )
