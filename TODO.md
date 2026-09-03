@@ -2,16 +2,18 @@
 
 ## Short Horizon:
 
-- tapas: remove ee_init and ee_target
-- heca: debug graph update nodes (make one sampled and one goal node)
-- heca: record scene0 models
+- tapas: test remove ee_init and ee_target
+- tapas: test different ee_targets
+- tapas: test hyperparameter for more precice movements
+- heca: evaluate network
+- heca:
+- thesis: start scaffolding red line
 
 ## Long Horizon:
 
-- update image encoder (uncertainty)
 - record image samples
 - record image encoder tapas model
-- add mise
+- update image encoder (uncertainty)
 
 ## Testing:
 

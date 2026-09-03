@@ -72,6 +72,8 @@ class Learner(Persistable):
         entropy_coef: float
         critic_coef: float
         eps_clip: float
+        lr_annealing: bool
+        max_update: int
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
         step_multiplier: int = 2

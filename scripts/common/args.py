@@ -66,8 +66,7 @@ def add_federated_argument(parser: argparse.ArgumentParser):
 def add_use_gt_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--gt",
-        action=argparse.BooleanOptionalAction,
-        default=True,
+        action="store_true",
         help="Use ground-truth observations (default: true).",
     )
 

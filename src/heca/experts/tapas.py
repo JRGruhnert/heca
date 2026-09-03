@@ -63,7 +63,7 @@ class TapasExpert(ExpertModel):
                 suffix="release",
                 model=AutoTPGMMConfig(
                     tpgmm=TPGMMConfig(
-                        n_components=10,
+                        n_components=20,
                         model_type=ModelType.HMM,
                         use_riemann=True,
                         add_time_component=True,
@@ -100,7 +100,7 @@ class TapasExpert(ExpertModel):
                 time_based=True,
                 predict_dx_in_xdx_models=True,
                 binary_gripper_action=True,
-                binary_gripper_closed_threshold=0.0,
+                binary_gripper_closed_threshold=0.5,
                 dbg_prediction=False,
                 force_overwrite_checkpoint_config=True,
                 time_scale=1.0,

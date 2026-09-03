@@ -5,6 +5,7 @@ by the pipeline scripts. Import it here instead of listing ``conf.experts.*``
 in each script.
 """
 
+import conf.experts.scene0
 import conf.experts.scene1
 import conf.experts.scene2
 import conf.experts.scene3
@@ -14,6 +15,7 @@ import conf.experts.scene5
 # import conf.experts.sceneog
 
 SCENE_MODULES = (
+    conf.experts.scene0,
     conf.experts.scene1,
     conf.experts.scene2,
     conf.experts.scene3,

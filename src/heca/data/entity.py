@@ -33,6 +33,9 @@ class Entity(Configurable):
         max_fit_components: int = 10
         z_quantile_joint: float = 0.99
         z_quantile_dim: float = 0.999
+        pos_sigma: float = 0.01
+        rot_sigma: float = 0.01
+        ext_sigma: float = 0.01
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -153,7 +156,23 @@ class Entity(Configurable):
             value = np.clip(value, lo, hi)
         return value
 
-    def secure_mix_parameters(self, p: dict, eps: float = 1e-15) -> dict:
+    def pose_sigma_variance(self) -> np.ndarray:
+        n = int(self.measurement["pose"]["n_columns"])
+        n_rot = self.rot_dim
+        n_extra = n - Entity.POS_DIM - n_rot
+        sigmas = np.concatenate(
+            [
+                np.full(Entity.POS_DIM, self.cfg.pos_sigma),
+                np.full(n_rot, self.cfg.rot_sigma),
+                np.full(n_extra, self.cfg.ext_sigma),
+            ],
+            dtype=float,
+        )
+        return sigmas**2
+
+    def secure_mix_parameters(
+        self, p: dict, eps: float = 1e-15, add_variance: bool = False
+    ) -> dict:
         pis = p["measurement"]["state"]["pis"]
         n_outcomes = max(self.cfg.n_states, pis.shape[1])
         padded = np.full((pis.shape[0], n_outcomes), eps, dtype=np.float32)
@@ -168,11 +187,14 @@ class Entity(Configurable):
                 "entity config so the GNN features do not silently drop states.",
                 stacklevel=2,
             )
+        if add_variance:
+            cov = p["measurement"]["pose"]["covariances"]
+            p["measurement"]["pose"]["covariances"] = cov + self.pose_sigma_variance()
         return p
 
     def score_single(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> bool:
         sample = self.model_value(sample)
-        p = self.secure_mix_parameters(up)
+        p = self.secure_mix_parameters(up, add_variance=True)
         pose = sample[:-1]
         state = int(sample[-1])
         pis = p["measurement"]["state"]["pis"]
@@ -211,17 +233,6 @@ class Entity(Configurable):
         zd = np.abs(pose - means[best_k]) / np.sqrt(np.maximum(vars_[best_k], eps))
         z = float(np.sqrt(np.sum(zd**2)))
         return best_k, z, zd
-
-    def sigma_deviation(
-        self, sample: np.ndarray, up: dict, eps: float = 1e-15
-    ) -> float:
-        """Mahalanobis distance (in sigma units) from ``sample`` to the best
-        (highest-posterior) component of the model. Useful for inspecting how
-        close values are to the model / tuning ``z_quantile_joint``."""
-        sample = self.model_value(sample)
-        p = self.secure_mix_parameters(up)
-        _, z, _ = self._best_component(sample[:-1], p, eps=eps)
-        return z
 
     def _ellipsoids_intersect(
         self,

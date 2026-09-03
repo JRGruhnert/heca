@@ -12,14 +12,13 @@ class PPO(Learner):
     class Config(Learner.Config):
         # Hyperparameters
         batch_size: int = 64
-        n_epoch: int = 10
-        lr: float = 0.0003
-        lr_annealing: bool = False
+        n_epoch: int = 4
+        lr: float = 3e-4
         eps_clip: float = 0.2
         entropy_coef: float = 0.02
         critic_coef: float = 0.5
         max_grad_norm: float = 0.5
-        target_kl: float | None = 0.02
+        target_kl: float | None = 0.01
         clip_value_loss: bool = True
 
     def __init__(self, cfg: Config):
@@ -31,10 +30,10 @@ class PPO(Learner):
 
         self._mini_batch_loop(adv, rtn)
 
-        # if self.cfg.lr_annealing:
-        #     lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
-        #     for pg in self.optim.param_groups:
-        #         pg["lr"] = lr
+        if self.cfg.lr_annealing:
+            lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
+            for pg in self.optim.param_groups:
+                pg["lr"] = lr
 
     def _fedprox_term(self) -> torch.Tensor:
         return torch.tensor(0.0, device=hardware.device)

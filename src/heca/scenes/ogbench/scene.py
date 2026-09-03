@@ -12,7 +12,6 @@ import torch
 from ogbench.manipspace.envs.scene_env_base import SceneEnvBase
 
 from heca.data.data import DCEntity, DCScene, TDImage
-from heca.data.entity import Entity
 from heca.misc import logger
 from heca.scenes.scene import Scene, SceneFeedback
 

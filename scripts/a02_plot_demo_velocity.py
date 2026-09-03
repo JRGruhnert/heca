@@ -20,7 +20,7 @@ def main():
         "--max_demos",
         dest="max_demos",
         type=int,
-        default=None,
+        default=25,
         help="Only plot the first N demos of each agent.",
     )
     args = parser.parse_args()

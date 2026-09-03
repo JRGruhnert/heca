@@ -6,14 +6,14 @@ button0_s1_s2 = TapasExpert.Config(
     tag="button0_s1_s2",
     scene=OGScene2.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
-    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+    segment_ids=[0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
 )
 button0_s2_s0 = TapasExpert.Config(
     label="scene2",
     tag="button0_s2_s0",
     scene=OGScene2.Config(),
     gt_frames=[["ee_init", "button0"], ["button0", "ee_target"]],
-    segment_ids=[0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
 )
 
 button0_s0_s1 = TapasExpert.Config(
@@ -50,7 +50,7 @@ peg0_base_base = TapasExpert.Config(
         ["peg0", "peg0_target"],
         ["peg0_target", "ee_target"],
     ],
-    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15],
+    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15],
 )
 
 lid0_base_base = TapasExpert.Config(
@@ -62,7 +62,7 @@ lid0_base_base = TapasExpert.Config(
         ["lid0", "lid0_target"],
         ["lid0_target", "ee_target"],
     ],
-    segment_ids=[0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15],
 )
 
 faucet0_a_b = TapasExpert.Config(
@@ -74,7 +74,7 @@ faucet0_a_b = TapasExpert.Config(
         ["faucet0", "button0", "button1"],
         ["faucet0", "ee_target"],
     ],
-    segment_ids=[0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    segment_ids=[0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16],
 )
 
 faucet0_b_a = TapasExpert.Config(

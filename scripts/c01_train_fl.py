@@ -40,6 +40,7 @@ def generate_clients(
     virtual: bool,
     reload: bool,
     use_gt: bool,
+    n_batch: int,
 ):
     wandb = logger.WandBConfig(enabled=use_wandb)
     hecas = []
@@ -55,6 +56,8 @@ def generate_clients(
                     network=network,
                     server=server_cfg,
                     wandb=wandb,
+                    max_update=n_batch,
+                    lr_annealing=True,
                 ),
                 visualize=False,
                 inference=inference,
@@ -73,6 +76,8 @@ def generate_clients(
                     tag=f"{scene}_{tag}",
                     network=network,
                     wandb=wandb,
+                    max_update=n_batch,
+                    lr_annealing=True,
                 ),
                 visualize=False,
                 inference=inference,
@@ -174,6 +179,7 @@ def main():
         use_gt=args.gt,
         fit_rotation=args.rotation,
         smode=args.smode,
+        n_batch=args.batch,
     )
     train(exp, server, args.batch)
 

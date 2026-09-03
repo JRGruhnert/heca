@@ -13,7 +13,12 @@ import matplotlib.pyplot as plt
 from heca.experts.tapas import TapasExpert
 from heca.misc import logger
 
-from scripts.common.args import add_model_argument, add_scene_argument, add_tag_argument
+from scripts.common.args import (
+    add_model_argument,
+    add_scene_argument,
+    add_tag_argument,
+    add_use_gt_argument,
+)
 from scripts.common.scenes import iter_agents
 
 
@@ -25,28 +30,29 @@ def _safe_avg(values):
     return out
 
 
-def fit_agent(cfg: ExpertModel.Config):
+def fit_agent(cfg: ExpertModel.Config, gt: bool):
     assert isinstance(cfg, TapasExpert.Config), "Currently only Tapas is supported."
     logger.info(
         f"[{cfg.scene.tag}] Fitting agent {cfg.tag} (segment_ids={cfg.segment_ids})"
     )
-    agent = TapasExpert.get(cfg, auto_load=False)
-    demos = agent.load_demos()
+    expert = TapasExpert.get(cfg, auto_load=False)
+    expert.use_gt(gt)
+    demos = expert.load_demos()
 
-    _, avg_loglik_1 = agent.fit_stage1(demos)
-    save_plots(agent, "fit_stage1")  # velocity-segmentation debug figures
-    agent.plot_stage1()
-    save_plots(agent, "stage1")
+    _, avg_loglik_1 = expert.fit_stage1(demos)
+    save_plots(expert, "fit_stage1")  # velocity-segmentation debug figures
+    expert.plot_stage1()
+    save_plots(expert, "stage1")
 
-    _, avg_loglik_2 = agent.fit_stage2(demos)
-    save_plots(agent, "fit_stage2")
-    agent.plot_stage2()
-    save_plots(agent, "stage2")
+    _, avg_loglik_2 = expert.fit_stage2(demos)
+    save_plots(expert, "fit_stage2")
+    expert.plot_stage2()
+    save_plots(expert, "stage2")
 
-    agent.save()
+    expert.save()
 
     save_log(
-        agent,
+        expert,
         {
             "scene": cfg.scene.tag,
             "tag": cfg.tag,
@@ -83,6 +89,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
     add_model_argument(parser)
+    add_use_gt_argument(parser)
     args = parser.parse_args()
 
     for cfg in iter_agents():
@@ -90,7 +97,7 @@ def main():
             continue
         if args.model and cfg.tag != args.model:
             continue
-        fit_agent(cfg)
+        fit_agent(cfg, args.gt)
 
 
 if __name__ == "__main__":
