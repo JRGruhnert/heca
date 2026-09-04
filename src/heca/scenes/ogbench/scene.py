@@ -170,7 +170,7 @@ class OGScene(Scene):
             goal["image"] = goal_rendered
         return info, goal
 
-    def sample_task(
+    def _sample_task(
         self,
     ) -> tuple[
         tuple[DCScene, TDImage],
@@ -186,19 +186,6 @@ class OGScene(Scene):
         g_scene, g_image, _ = self.from_internal(goal)
         self._sync_viewer()
         return (s_scene, s_image), (g_scene, g_image)
-
-    def sample_task_vis(self) -> tuple[
-        tuple[DCScene, TDImage, np.ndarray],
-        tuple[DCScene, TDImage, np.ndarray],
-    ]:
-        ob, info = self._env.reset(options={"render_goal": True})
-        obs, goal = self.to_internal(ob, info)
-        self._update_meta(obs)
-        self.last_pos = obs["proprio_effector_pos"]
-        self.last_rot = obs["proprio_effector_yaw"]
-        self.last_ste = obs["proprio_gripper_opening"]
-        self._sync_viewer()
-        return self.from_internal(obs), self.from_internal(goal)
 
     def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pos = obs["proprio_effector_pos"]

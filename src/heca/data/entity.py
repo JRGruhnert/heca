@@ -203,7 +203,7 @@ class Entity(Configurable):
         chi_sqrt = float(math.sqrt(chi2.ppf(self.cfg.z_quantile_joint, len(pose))))
 
         valid_pose = z <= chi_sqrt and bool(np.all(zd <= self._z_dim_sigma()))
-        valid_state = state == int(np.argmax(pis[best_k]))
+        valid_state = bool(pis[best_k][state] > 1e-6)
 
         return valid_pose and valid_state
 

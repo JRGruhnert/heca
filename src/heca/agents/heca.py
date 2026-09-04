@@ -24,7 +24,7 @@ class Heca(Configurable):
         virtual: bool
         reload: bool
         use_gt: bool
-        # Single per-agent choice: either all entities fit rotation or none.
+
         fit_rotation: bool = True
 
     def __init__(self, cfg: Config):
@@ -33,8 +33,7 @@ class Heca(Configurable):
         self.learner = Learner.get(self.cfg.learner)
         if self.cfg.inference:
             self.learner.eval()
-        self.current_step = 0
-        self.max_steps = len(self.cfg.agents) * self.cfg.learner.step_multiplier
+
         self._episode = 0
         self._x: DCScene | None = None
         self._y: DCScene | None = None
@@ -68,11 +67,9 @@ class Heca(Configurable):
         data = self.graph.export()
         option = self.learner.predict(data, new_ep)
         a, s = self.graph.select(option)
-        z, lfb = ExpertModel.get(a).act(x, s)
-
-        fb = self.apply_truncation(lfb)
+        z, fb = ExpertModel.get(a).act(x, s)
         if logger.TRACE:
-            self._trace_step(x, data, option, a, s, z, lfb, fb)
+            self._trace_step(x, data, option, a, s, z, fb)
         if stop_requested():
             return z, fb, False
         lock = self.learner.update(fb)
@@ -86,16 +83,13 @@ class Heca(Configurable):
         a: ExpertModel.Config,
         s: DCScene,
         z: DCScene,
-        lfb: SceneFeedback,
         fb: SceneFeedback,
     ):
         def _indent(text: str, prefix: str = "    ") -> str:
             return "\n".join(prefix + line for line in text.splitlines())
 
         lines = [
-            "===== step trace "
-            f"client={self.learner.cfg.tag} "
-            f"ep={self._episode} step={self.current_step}/{self.max_steps} =====",
+            "===== step trace " f"client={self.learner.cfg.tag} ",
             "start:",
             _indent(str(x)),
             "goal:",
@@ -128,10 +122,6 @@ class Heca(Configurable):
         lines.append("result (expert outcome):")
         lines.append(_indent(str(z)))
         lines.append(
-            f"raw feedback : terminal={lfb.terminal} reward={lfb.reward:.4f} "
-            f"truncated={lfb.truncated}"
-        )
-        lines.append(
             f"final feedback: terminal={fb.terminal} reward={fb.reward:.4f} "
             f"truncated={fb.truncated}"
         )
@@ -139,7 +129,6 @@ class Heca(Configurable):
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         self.graph.set_goal(y)
-        self.current_step = 0
         z, fb, lock = self.step(x, True)
         while not (fb.truncated or fb.terminal or lock):
             z, fb, lock = self.step(z)
@@ -154,7 +143,6 @@ class Heca(Configurable):
         if self._x is None or self._y is None:
             self._x, self._y = self.sample()
             self.graph.set_goal(self._y)
-            self.current_step = 0
             new_ep = True
         else:
             new_ep = False
@@ -167,18 +155,3 @@ class Heca(Configurable):
             self._y = None
 
         return lock
-
-    def apply_truncation(self, lfb: SceneFeedback) -> SceneFeedback:
-        if lfb.terminal and lfb.reward == 1.0:
-            success = lfb.terminal  # success
-        else:
-            # assert False, "Should not happen. (for now)"
-            success = False  # out of time
-        reward = self.cfg.learner.step_reward + self.cfg.learner.success_reward * int(
-            success
-        )
-
-        self.current_step += 1
-        truncated = self.current_step >= self.max_steps
-
-        return SceneFeedback(reward=reward, terminal=success, truncated=truncated)

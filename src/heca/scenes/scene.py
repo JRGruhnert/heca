@@ -1,3 +1,4 @@
+import random
 import re
 import abc
 import h5py
@@ -28,6 +29,10 @@ class Scene(Persistable):
         width: int = 256
         height: int = 256
         viewer: bool = False
+        reject_prob: float = 0.5
+        success_reward: float = 1.0
+        step_reward: float = -0.01
+        max_steps: int = 16
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -41,21 +46,44 @@ class Scene(Persistable):
         npimage = self.to_np_image(data)
         return tdscene, tdimage, npimage
 
+    def apply_truncation(self, lfb: SceneFeedback) -> SceneFeedback:
+        if lfb.terminal and lfb.reward == 1.0:
+            success = lfb.terminal  # success
+        else:
+            success = False  # out of time
+        reward = self.cfg.step_reward + self.cfg.success_reward * int(success)
+
+        self.current_step += 1
+        truncated = self.current_step >= self.cfg.max_steps
+
+        return SceneFeedback(reward=reward, terminal=success, truncated=truncated)
+
     def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
         obs, fb = self._step(action)
-        tdscene, tdimage, _ = self.from_internal(obs)
-        return tdscene, tdimage, fb
+        return self.package_internal(obs, fb)
 
     def step_virt(
-        self, x: DCScene, y: DCScene, elabels: list[str]
+        self,
+        x: DCScene,
+        y: DCScene,
+        elabels: list[str],
+        valid: bool,
     ) -> tuple[DCScene, TDImage, SceneFeedback]:
-        obs, fb = self._step_virt(x, y, elabels)
-        tdscene, tdimage, _ = self.from_internal(obs)
-        return tdscene, tdimage, fb
+        if not valid:
+            r = random.random()
+            obs, fb = self._step_virt(x, x, elabels)
+            if r < self.cfg.reject_prob:
+                fb.terminal = True
+        else:
+            obs, fb = self._step_virt(x, y, elabels)
+        return self.package_internal(obs, fb)
 
-    def step_vis(self, action: np.ndarray) -> tuple[DCScene, TDImage, np.ndarray]:
-        obs, _ = self._step(action)
-        return self.from_internal(obs)
+    def package_internal(
+        self, obs: dict, lfb: SceneFeedback
+    ) -> tuple[DCScene, TDImage, SceneFeedback]:
+        tdscene, tdimage, _ = self.from_internal(obs)
+        fb = self.apply_truncation(lfb)
+        return tdscene, tdimage, fb
 
     @abc.abstractmethod
     def _step(self, action: np.ndarray) -> tuple[Any, SceneFeedback]:
@@ -67,16 +95,16 @@ class Scene(Persistable):
     ) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 
-    @abc.abstractmethod
     def sample_task(self) -> tuple[
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
-        raise NotImplementedError()
+        self.current_step = 0
+        return self._sample_task()
 
-    def sample_task_vis(self) -> tuple[
-        tuple[DCScene, TDImage, np.ndarray],
-        tuple[DCScene, TDImage, np.ndarray],
+    def _sample_task(self) -> tuple[
+        tuple[DCScene, TDImage],
+        tuple[DCScene, TDImage],
     ]:
         raise NotImplementedError()
 

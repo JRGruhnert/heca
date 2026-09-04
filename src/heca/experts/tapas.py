@@ -21,16 +21,14 @@ from tapas_gmm_modified.policy.models.tpgmm import (
     DemoSegmentationConfig,
     CascadeConfig,
 )
-from torch import random
-from heca.data.entity import Entity
+
 from heca.experts.expert import ExpertModel
 from heca.conditions.pair import ConPair
-from heca.data.data import DCScene, TDImage
+from heca.data.data import DCScene
 from heca.misc import logger
 from heca.misc.interrupt import stop_requested
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
-import random
 
 import riepybdlib.mappings as _rbd_mappings
 
@@ -178,19 +176,6 @@ class TapasExpert(ExpertModel):
                 xt = self.tapas_td(z, y)
 
         return z, fb
-
-    def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        for label, entity in self.entities.items():
-            valid = entity.score_single(
-                x.get(label).value,
-                self.conditions.pre.models[label].get_parameters(),
-            )
-            if not valid:
-                return x, SceneFeedback(terminal=True, reward=0.0, truncated=False)
-        tdscene, tdimage, fb = self.scene.step_virt(
-            x, y, self.conditions.target_entities
-        )
-        return self.make_scene(tdscene, tdimage), fb
 
     def make_batch_prediction(
         self, x: SceneObservation  # type: ignore

@@ -1,4 +1,5 @@
 import abc
+import random
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -22,7 +23,6 @@ class ExpertModel(Persistable, abc.ABC):
         kp_extraction: ImageEncoder.Config = DinoEncoder.Config()
         state_extraction: ImageEncoder.Config = MolmoEncoder.Config()
         score_threshold: float = 0.5
-        virtual_term_rand: float = 0.5
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -143,18 +143,41 @@ class ExpertModel(Persistable, abc.ABC):
                 return False
         return True
 
-    def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        raise NotImplementedError
-
-    def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        raise NotImplementedError
-
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
         if self.act_virtual:
             return self._act_virt(x, y)
 
         else:
             return self._act(x, y)
+
+    def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
+        raise NotImplementedError
+
+    def _act_virt(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
+        for label, entity in self.entities.items():
+            if not entity.score_single(
+                x.get(label).value,
+                self.conditions.pre.models[label].get_parameters(),
+            ):
+                return self.virtual_step(x, y, False)
+        for label in self.conditions.target_entities:
+            if not self.entities[label].score_single(
+                y.get(label).value,
+                self.conditions.post.models[label].get_parameters(),
+            ):
+                return self.virtual_step(x, y, False)
+        return self.virtual_step(x, y, True)
+
+    def virtual_step(
+        self, x: DCScene, y: DCScene, valid: bool
+    ) -> tuple[DCScene, SceneFeedback]:
+        tdscene, tdimage, fb = self.scene.step_virt(
+            x,
+            y,
+            self.conditions.target_entities,
+            valid,
+        )
+        return self.make_scene(tdscene, tdimage), fb
 
     @classmethod
     def load_dir(cls, cfg: "ExpertModel.Config") -> Path:

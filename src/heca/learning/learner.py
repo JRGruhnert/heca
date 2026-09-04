@@ -76,9 +76,6 @@ class Learner(Persistable):
         max_update: int
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
-        step_multiplier: int = 2
-        success_reward: float = 1.0
-        step_reward: float = -0.01
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
