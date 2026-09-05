@@ -207,6 +207,15 @@ class Entity(Configurable):
 
         return valid_pose and valid_state
 
+    def score_state(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> bool:
+        sample = self.model_value(sample)
+        p = self.secure_mix_parameters(up, add_variance=True)
+        state = int(sample[-1])
+        pis = p["measurement"]["state"]["pis"]
+
+        best_k, z, zd = self._best_component(sample[:-1], p, eps=eps)
+        return bool(pis[best_k][state] > 1e-6)
+
     def _z_dim_sigma(self) -> float:
         """Per-dimension cap in sigma units, derived from the
         ``z_quantile_dim`` quantile: c = Phi^{-1}((1 + q) / 2) (two-sided

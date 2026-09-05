@@ -161,7 +161,7 @@ class ExpertModel(Persistable, abc.ABC):
             ):
                 return self.virtual_step(x, y, False)
         for label in self.conditions.target_entities:
-            if not self.entities[label].score_single(
+            if not self.entities[label].score_state(
                 y.get(label).value,
                 self.conditions.post.models[label].get_parameters(),
             ):
