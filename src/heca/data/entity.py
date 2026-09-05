@@ -202,7 +202,7 @@ class Entity(Configurable):
         best_k, z, zd = self._best_component(pose, p, eps=eps)
         chi_sqrt = float(math.sqrt(chi2.ppf(self.cfg.z_quantile_joint, len(pose))))
 
-        valid_pose = z <= chi_sqrt and bool(np.all(zd <= self._z_dim_sigma()))
+        valid_pose = z <= chi_sqrt and bool(np.all(zd <= self._z_dim_sigma))
         valid_state = bool(pis[best_k][state] > 1e-6)
 
         return valid_pose and valid_state
@@ -216,6 +216,7 @@ class Entity(Configurable):
         best_k, z, zd = self._best_component(sample[:-1], p, eps=eps)
         return bool(pis[best_k][state] > 1e-6)
 
+    @property
     def _z_dim_sigma(self) -> float:
         """Per-dimension cap in sigma units, derived from the
         ``z_quantile_dim`` quantile: c = Phi^{-1}((1 + q) / 2) (two-sided
@@ -333,7 +334,12 @@ class Entity(Configurable):
             # posterior-mean agreement value, which is conservative when the
             # two variances differ a lot).
             if not self._ellipsoids_intersect(
-                means1[i], var1, means2[j], var2, chi, self._z_dim_sigma()
+                means1[i],
+                var1,
+                means2[j],
+                var2,
+                chi,
+                self._z_dim_sigma,
             ):
                 return False
             # Hard state gate: most likely states must be equal (aligned to the
