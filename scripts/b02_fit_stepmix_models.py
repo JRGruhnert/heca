@@ -26,7 +26,6 @@ def fit_conditions(cfg: TapasExpert.Config, gt: bool, rotation: bool) -> None:
 
     expert = TapasExpert(cfg)
     expert.use_gt(gt)
-    expert.use_fit_rotation(rotation)
     expert.force_recompute()
     expert.load()
 

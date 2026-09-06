@@ -2,11 +2,9 @@
 
 ## Short Horizon:
 
-- tapas: test remove ee_init and ee_target
-- tapas: test different ee_targets
-- tapas: test hyperparameter for more precice movements
-- heca: evaluate network
-- heca:
+- ogbench: fix bad states
+- heca: add information on which entity is at goal position for network
+- heca: finalize virtual pre post check
 - thesis: start scaffolding red line
 
 ## Long Horizon:

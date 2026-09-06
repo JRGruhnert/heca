@@ -92,6 +92,7 @@ lid0_base_box0 = TapasExpert.Config(
     ],
     segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
     fix_bimodal=True,
+    pos_only=False,
 )
 
 lid0_base_base = TapasExpert.Config(
@@ -109,6 +110,7 @@ lid0_base_base = TapasExpert.Config(
     ],
     segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
     fix_bimodal=True,
+    pos_only=False,
 )
 
 slider0_a_b = TapasExpert.Config(

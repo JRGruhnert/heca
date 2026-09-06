@@ -224,7 +224,7 @@ def main():
         results: list[dict] = []
         failures: list[dict] = []
         for cfg in models:
-            if args.model and cfg.tag != args.tag:
+            if args.model and cfg.tag != args.model:
                 continue
 
             model = ExpertModel.get(cfg).use_gt(args.gt)

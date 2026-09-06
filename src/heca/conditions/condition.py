@@ -10,7 +10,9 @@ from stepmix import StepMix
 import torch
 from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
+from heca.data.revolute import RevoluteEntity
 from heca.misc import logger
+from heca.utils.quaternion import Quaternion
 
 
 class Condition:
@@ -64,10 +66,31 @@ class Condition:
         value = value.squeeze()
         entity = self.entities[elabel]
         value = entity.model_to_value(value)
+        if (aa := self._default_aa(elabel, value)) is not None:
+            value[Entity.POS_DIM : Entity.POS_DIM + Entity.ROT_DIM] = aa
         lo, hi = self.data_bounds[elabel]
         value = entity.sanitize_value(value, lo=lo, hi=hi)
         feat = entity.gnn_format(value)
         return DCEntity(value=value, feature=feat)
+
+    def _default_aa(self, key: str, value: np.ndarray) -> np.ndarray | None:
+        entity = self.entities[key]
+        if entity.cfg.add_rotation:
+            return None
+        full = np.asarray(self._data_raw[key], dtype=np.float64)
+        aas = full[:, Entity.POS_DIM : Entity.POS_DIM + Entity.ROT_DIM]
+        if isinstance(entity, RevoluteEntity):
+            extras = full[:, Entity.POS_DIM + Entity.ROT_DIM : -1]
+            target = np.asarray(value, dtype=np.float64)[
+                Entity.POS_DIM + Entity.ROT_DIM : -1
+            ]
+            i = int(np.argmin(np.linalg.norm(extras - target, axis=1)))
+            return aas[i]
+        quats = np.stack([Quaternion.exp(a) for a in aas])
+        q = Quaternion.normalize(quats.mean(axis=0))
+        if np.linalg.norm(q) < 0.5:
+            return None
+        return Quaternion.log_map(q)
 
     def _fit_model(self) -> tuple[dict[str, StepMix], dict[str, list[float]]]:
         models: dict[str, StepMix] = {}
@@ -128,6 +151,8 @@ class Condition:
             if not self.entities[key].containment_score(up1, up2):
                 return None
             value = self.entities[key].best_sample(up1, up2)
+            if (aa := self._default_aa(key, value)) is not None:
+                value[Entity.POS_DIM : Entity.POS_DIM + Entity.ROT_DIM] = aa
             values[key] = value
             logger.debug(f"{key}: value={value}")
         return values

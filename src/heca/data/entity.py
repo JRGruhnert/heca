@@ -26,32 +26,28 @@ class Entity(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         type_id: int
-        fit_rotation: bool = True
+        add_rotation: bool = False
         n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
         max_fit_components: int = 10
-        z_quantile_joint: float = 0.99
+        z_quantile_joint: float = 0.999
         z_quantile_dim: float = 0.999
         pos_sigma: float = 0.01
         rot_sigma: float = 0.01
         ext_sigma: float = 0.01
+        canonicalize_rot: bool = False
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
 
     @property
     def rot_dim(self) -> int:
-        return Entity.ROT_DIM if self.cfg.fit_rotation else 0
+        return Entity.ROT_DIM if self.cfg.add_rotation else 0
 
     def model_value(self, value: np.ndarray) -> np.ndarray:
-        """Map a full value [pos | aa | extra | ste] to the model input.
-
-        When ``fit_rotation`` is False the axis-angle columns are dropped, so
-        the StepMix model only ever sees [pos | extra | ste].
-        """
         value = np.asarray(value)
-        if self.cfg.fit_rotation:
+        if self.cfg.add_rotation:
             return value
         return np.concatenate(
             [value[..., : self.POS_DIM], value[..., self.POS_DIM + self.ROT_DIM :]],
@@ -59,13 +55,8 @@ class Entity(Configurable):
         )
 
     def model_to_value(self, value: np.ndarray) -> np.ndarray:
-        """Map model output [pos | extra | ste] back to a full value.
-
-        Reinserts a zero (identity) axis-angle rotation so the result always has
-        the canonical [pos | aa | extra | ste] layout expected downstream.
-        """
         value = np.asarray(value)
-        if self.cfg.fit_rotation:
+        if self.cfg.add_rotation:
             return value
         zeros = np.zeros(value.shape[:-1] + (self.ROT_DIM,), dtype=value.dtype)
         return np.concatenate(
@@ -218,17 +209,11 @@ class Entity(Configurable):
 
     @property
     def _z_dim_sigma(self) -> float:
-        """Per-dimension cap in sigma units, derived from the
-        ``z_quantile_dim`` quantile: c = Phi^{-1}((1 + q) / 2) (two-sided
-        normal quantile, e.g. q=0.999 -> 3.29 sigma)."""
         return float(norm.ppf(0.5 + self.cfg.z_quantile_dim / 2.0))
 
     def _best_component(
         self, pose: np.ndarray, p: dict, eps: float = 1e-15
     ) -> tuple[int, float, np.ndarray]:
-        """Index of the highest-posterior component for ``pose`` (weight *
-        Gaussian density, ignoring the state), the pose's Mahalanobis distance
-        (sigma deviation) to it, and the per-dimension deviations ``|z_d|``."""
         weights = p["weights"]
         means = p["measurement"]["pose"]["means"]
         vars_ = p["measurement"]["pose"]["covariances"]
@@ -254,21 +239,6 @@ class Entity(Configurable):
         z_max: float | None = None,
         eps: float = 1e-15,
     ) -> bool:
-        """Exact feasibility test: is the intersection of the two quantile
-        ellipsoids (optionally restricted to the per-dimension cap ``z_max``)
-        non-empty?
-
-        With $Q_k(x) = \\sum_d (x_d - \\mu_{k,d})^2 / \\sigma^2_{k,d}$, the
-        ellipsoids $\\{Q_1 \\le c\\} \\cap \\{Q_2 \\le c\\}$ intersect iff
-
-        $$\\min_x \\max\\big(Q_1(x)/c,\\, Q_2(x)/c\\big) \\le 1,$$
-
-        a convex optimization. Any common point must lie in the axis-aligned
-        box given by the intersection of the per-dimension projections of both
-        ellipsoids (and caps), so the min-max is minimized over that box.
-        Fast paths: a center inside the other ellipsoid (with caps) accepts,
-        an empty per-dimension box rejects.
-        """
         s1 = np.sqrt(np.maximum(var1, eps))
         s2 = np.sqrt(np.maximum(var2, eps))
         r = float(np.sqrt(c))
@@ -311,7 +281,7 @@ class Entity(Configurable):
         )
         return float(res.fun) <= 1.0
 
-    def containment(self, up1: dict, up2: dict):
+    def containment(self, up1: dict, up2: dict, eps: float = 1e-15):
         p1 = self.secure_mix_parameters(up1)
         p2 = self.secure_mix_parameters(up2)
         w1 = p1["weights"]
@@ -325,7 +295,6 @@ class Entity(Configurable):
 
         d = means1.shape[1]
         chi = float(chi2.ppf(self.cfg.z_quantile_joint, d))
-        eps = 1e-15
 
         def agrees(i: int, j: int) -> bool:
             var1 = np.maximum(vars1[i], eps)
@@ -447,7 +416,7 @@ class Entity(Configurable):
         pis = p["measurement"]["state"]["pis"]  # (N, K)
         N = len(p["weights"])
         M = Entity.MAX_STATE_DIM
-        base = Entity.POS_DIM + (Entity.ROT_DIM if self.cfg.fit_rotation else 0)
+        base = Entity.POS_DIM + (Entity.ROT_DIM if self.cfg.add_rotation else 0)
         D = means.shape[1] - base  # extra continuous dims beyond pos (+rot)
 
         feat = np.zeros((N, Entity.FEATURE_DIM), dtype=np.float32)
@@ -462,7 +431,7 @@ class Entity(Configurable):
         feat[:, M + 3 : M + 6] = 0.5 * np.log(covariances[:, 0:3] + eps)
 
         # Pose: axis-angle -> quaternion + rotation logstd (3 dof in tangent space)
-        if self.cfg.fit_rotation:
+        if self.cfg.add_rotation:
             quat = Quaternion.exp(means[:, 3:6])
             feat[:, M + 6 : M + 10] = Quaternion.normalize(quat)
             feat[:, M + 10 : M + 13] = 0.5 * np.log(covariances[:, 3:6] + eps)

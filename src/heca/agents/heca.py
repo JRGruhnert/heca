@@ -42,7 +42,6 @@ class Heca(Configurable):
         for a in self.cfg.agents:
             expert = ExpertModel.get(a, auto_load=False)
             expert.use_gt(self.cfg.use_gt)
-            expert.use_fit_rotation(self.cfg.fit_rotation)
             expert.load()
 
             if self.cfg.reload:
