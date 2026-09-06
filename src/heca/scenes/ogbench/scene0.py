@@ -15,7 +15,7 @@ class OGScene0(OGScene):
     @dataclass(kw_only=True)
     class Config(OGScene.Config):
         tag: str = "scene0"
-        vis: bool = False
+        vis: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)

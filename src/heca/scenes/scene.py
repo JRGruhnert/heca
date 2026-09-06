@@ -21,6 +21,10 @@ class SceneFeedback:
     reward: float
     truncated: bool
 
+    @property
+    def success(self) -> bool:
+        return self.terminal and self.reward > 0.5
+
 
 class Scene(Persistable):
     @dataclass(kw_only=True)
@@ -36,6 +40,7 @@ class Scene(Persistable):
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+        self.current_step = 0
 
         self.kp_references: dict[str, tuple[Image.Image, int, int, int, int]] = {}
         self.state_references: dict[str, dict[int, list[Image.Image]]] = {}
@@ -47,16 +52,10 @@ class Scene(Persistable):
         return tdscene, tdimage, npimage
 
     def apply_truncation(self, lfb: SceneFeedback) -> SceneFeedback:
-        if lfb.terminal and lfb.reward == 1.0:
-            success = lfb.terminal  # success
-        else:
-            success = False  # out of time
-        reward = self.cfg.step_reward + self.cfg.success_reward * int(success)
-
+        reward = self.cfg.step_reward + self.cfg.success_reward * int(lfb.success)
         self.current_step += 1
         truncated = self.current_step >= self.cfg.max_steps
-
-        return SceneFeedback(reward=reward, terminal=success, truncated=truncated)
+        return SceneFeedback(reward=reward, terminal=lfb.terminal, truncated=truncated)
 
     def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
         obs, fb = self._step(action)

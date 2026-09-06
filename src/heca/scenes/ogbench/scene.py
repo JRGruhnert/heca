@@ -374,6 +374,8 @@ class OGScene(Scene):
                                     data=data,
                                     maxshape=maxshape,
                                     chunks=(1,) + data.shape[1:],
+                                    compression="gzip",
+                                    compression_opts=4,
                                 )
                             else:
                                 ds = out[key]

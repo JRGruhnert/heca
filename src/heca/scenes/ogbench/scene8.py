@@ -8,7 +8,7 @@ from heca.data.static import StaticEntity
 from heca.scenes.ogbench.scene import OGScene
 
 
-class OGScene7(OGScene):
+class OGScene8(OGScene):
     @dataclass(kw_only=True)
     class Config(OGScene.Config):
         tag: str = "scene8"
@@ -23,7 +23,7 @@ class OGScene7(OGScene):
         ents = {
             "slider0": PrismaticEntity.Config(),
             "slider1": PrismaticEntity.Config(),
-            "drawer0": StaticEntity.Config(),
+            "drawer0": PrismaticEntity.Config(),
             "cube0": FreeEntity.Config(),
             "button0": StaticEntity.Config(n_states=3),
         }

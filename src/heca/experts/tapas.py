@@ -1,6 +1,7 @@
 from pathlib import Path
 import h5py
 import joblib
+from matplotlib import pyplot as plt
 import torch
 import numpy as np
 from dataclasses import dataclass, field
@@ -29,6 +30,7 @@ from heca.misc import logger
 from heca.misc.interrupt import stop_requested
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
+from heca.utils.quaternion import Quaternion
 
 import riepybdlib.mappings as _rbd_mappings
 
@@ -113,12 +115,11 @@ class TapasExpert(ExpertModel):
         demo_selections: list[int] | None = None
         segment_ids: list[int] | None = None
         max_con_comps: int = 10
+        fix_bimodal: bool = False
+        snap_ee_actions: bool = True
+        max_demos: int = 20
 
         def __post_init__(self):
-            # Convert entity-name-based gt_frames to the frame indices the
-            # underlying TPGMM expects. frame_names = ["ee_init"] + entity
-            # labels + f"{label}_target" labels + ["ee_target"], matching the
-            # object_poses keys built by tapas_td.
             if self.gt_frames is not None:
                 flat = [n for seg in self.gt_frames for n in seg]
                 if flat and all(isinstance(n, str) for n in flat):
@@ -352,46 +353,159 @@ class TapasExpert(ExpertModel):
 
     def plot_demo_velocities(
         self, selections: list[int] | None = None, max_demos: int | None = None
-    ):
-        """Plot velocity + segmentation for each demo into ``plots/vel/``.
-
-        By default plots every demo id present in this agent's ``demos.h5``.
-        Pass ``selections`` to restrict to specific demo ids, or ``max_demos``
-        to only plot the first ``max_demos`` ids.
-        """
-        import matplotlib.pyplot as plt
+    ) -> list[int]:
 
         if selections is None:
-            selections = self._all_demo_ids()
+            ids = self._all_demo_ids()
+        else:
+            ids = list(selections)
         if max_demos is not None:
-            selections = selections[:max_demos]
+            ids = ids[:max_demos]
+        _, accepted = self._scan_demos(
+            ids, plot=True, stop_after_accepted=None, filter_accept=True
+        )
+        return accepted
 
-        demos = self.load_demos(selections)
-        trajs = demos.get_action_magnitude(subsampled=False, position_only=False)
-        if isinstance(trajs, torch.Tensor):
-            trajs = (trajs,)
+    def load_demos(self, selections: list[int] | None = None) -> Demos:
+        """Load the demo set used for fitting in one flow.
+
+        With ``selections=None`` the demos whose velocity pause count matches
+        the expected segment structure are auto-selected from all recorded
+        demos (up to ``cfg.max_demos``); explicit ``selections`` are used
+        as-is. Raw stacked observations are loaded once, optionally
+        preprocessed (``_snap_gripper_at_segment_ends``) and returned as a
+        ``Demos``.
+        """
+        auto = selections is None
+        ids = self._all_demo_ids() if auto else list(selections)
+        observations, _ = self._scan_demos(
+            ids,
+            plot=False,
+            stop_after_accepted=self.cfg.max_demos if auto else None,
+            filter_accept=auto,
+        )
+        if auto and len(observations) < self.cfg.max_demos:
+            raise ValueError(
+                f"{self.cfg.tag}: only {len(observations)}/{len(ids)} demos "
+                f"match the expected {self._expected_velocity_pauses()} "
+                f"velocity pause(s); need >= {self.cfg.max_demos}."
+            )
+        return Demos(
+            observations,
+            meta_data={"tag": self.cfg.tag + self.cfg.label},
+            add_init_ee_pose_as_frame=True,
+            add_world_frame=False,
+            frames_from_keypoints=False,
+            kp_indeces=None,
+            enforce_z_up=False,
+            modulo_object_z_rotation=False,
+            make_quats_continuous=True,
+        )  # type: ignore
+
+    def _scan_demos(
+        self,
+        ids: list[int],
+        *,
+        plot: bool,
+        stop_after_accepted: int | None,
+        filter_accept: bool,
+    ) -> tuple[list[SceneObservation], list[int]]:  # type: ignore
 
         seg_cfg = self.cfg.policy.model.demos_segmentation
+        expected = self._expected_velocity_pauses()
         out_dir = self.save_dir(self.cfg) / "plots" / "vel"
-        out_dir.mkdir(parents=True, exist_ok=True)
+        if plot:
+            out_dir.mkdir(parents=True, exist_ok=True)
 
-        for demo_id, traj in zip(selections, trajs):
-            vel = np.asarray(traj[..., 0].detach().cpu())
+        path = self.load_dir(self.cfg)
+        with h5py.File(path / "demos.h5", "r") as demos_file:
+            demos_scenes, demos_images = self.scene.load_dataset(
+                demos_file, selections=ids, with_images=not self._use_gt
+            )
+
+        kept: list[SceneObservation] = []  # type: ignore
+        accepted_ids: list[int] = []
+        for i, (demo_id, demo_scenes) in enumerate(zip(ids, demos_scenes)):
+            if self._use_gt:
+                td = self.dcscenes_to_tdtapas(demo_scenes)
+            else:
+                demo_extracted: list[DCScene] = []
+                for idx, td_img in enumerate(demos_images[i]):
+                    extracted = self.from_image(td_img)
+                    extr_scene = DCScene(extracted, demo_scenes[idx].extras)
+                    demo_extracted.append(extr_scene)
+                td = self.dcscenes_to_tdtapas(demo_extracted)
+
+            vel = np.linalg.norm(td.action[:, :3].numpy().astype(float), axis=1)
             boundaries = self._velocity_segments(vel, seg_cfg)
+            pause_ok = expected is None or len(boundaries) == expected
+            ok = pause_ok or not filter_accept
+            if ok:
+                accepted_ids.append(demo_id)
 
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(np.arange(len(vel)), vel, linewidth=0.5, c="gray")
-            ax.axhline(y=seg_cfg.velocity_threshold, color="r", label="threshold")
-            for m in boundaries:
-                ax.axvline(x=m, color="g", linestyle="--", label="segment")
-            ax.set_title(f"{self.cfg.tag} — demo {demo_id}")
-            ax.set_xlabel("timestep")
-            ax.set_ylabel("velocity (position magnitude)")
+            opening_old = td.action[:, -1].numpy().astype(float).copy()
+            if self.cfg.snap_ee_actions:
+                self._snap_gripper_at_segment_ends(td)
+            opening_new = td.action[:, -1].numpy().astype(float)
 
-            path = out_dir / f"demo_{demo_id}.png"
-            fig.savefig(path, dpi=150, bbox_inches="tight")
-            plt.close(fig)
-            logger.info(f"Saved demo velocity plot to {path}")
+            if plot:
+                prefix = "accepted" if pause_ok else "discarded"
+                fig, ax = plt.subplots(figsize=(10, 4))
+                ax.plot(
+                    np.arange(len(vel)), vel, linewidth=0.8, c="gray", label="velocity"
+                )
+                ax.axhline(
+                    y=seg_cfg.velocity_threshold,
+                    color="r",
+                    label="threshold",
+                    linewidth=0.8,
+                )
+                for idx, m in enumerate(boundaries):
+                    if idx == 0:
+                        ax.axvline(x=m, color="g", linestyle="--", label="segment")
+                    else:
+                        ax.axvline(x=m, color="g", linestyle="--")
+                ax.plot(
+                    np.arange(len(opening_old)),
+                    opening_old,
+                    c="tab:purple",
+                    linewidth=0.8,
+                    linestyle="--",
+                    label="gripper (raw)",
+                )
+                if not np.allclose(opening_new, opening_old):
+                    ax.plot(
+                        np.arange(len(opening_new)),
+                        opening_new,
+                        c="tab:blue",
+                        linewidth=0.8,
+                        label="gripper (snapped)",
+                    )
+                ax.set_title(f"{prefix} — {self.cfg.tag} demo {demo_id}")
+                ax.set_xlabel("timestep")
+                ax.set_ylabel("velocity (position magnitude)")
+                ax.legend(fontsize=7)
+                fig.savefig(
+                    out_dir / f"{prefix}_demo_{demo_id}.png",
+                    dpi=150,
+                    bbox_inches="tight",
+                )
+                plt.close(fig)
+
+            if ok:
+                kept.append(td)
+                if stop_after_accepted is not None and len(kept) >= stop_after_accepted:
+                    break
+
+        if plot:
+            logger.info(
+                f"Saved velocity plots to {out_dir} ({len(accepted_ids)} accepted)"
+            )
+        return kept, accepted_ids
+
+    def _expected_velocity_pauses(self) -> int | None:
+        gt = self.cfg.policy.model.frame_selection.gt_frames
+        return None if gt is None else len(gt) - 1
 
     def _all_demo_ids(self) -> list[int]:
         path = self.load_dir(self.cfg) / "demos.h5"
@@ -422,42 +536,38 @@ class TapasExpert(ExpertModel):
             if m > seg_cfg.min_end_distance and m < len(vel) - seg_cfg.min_end_distance
         ]
 
-    def load_demos(self, selections: list[int] | None = None) -> Demos:
-        if selections is None:
-            selections = self.cfg.segment_ids or []
-        path = self.load_dir(self.cfg)
-        demos_file = h5py.File(path / f"demos.h5", "r")
+    def _snap_gripper_at_segment_ends(self, stacked: SceneObservation):  # type: ignore
+        seg_cfg = self.cfg.policy.model.demos_segmentation
+        opening = stacked.action[:, -1].numpy().astype(float)
 
-        observations: list[SceneObservation] = []  # type: ignore
+        vel = np.linalg.norm(stacked.action[:, :3].numpy().astype(float), axis=1)
+        boundaries = self._velocity_segments(vel, seg_cfg)
+        edges = [0] + boundaries + [len(opening)]
 
-        demos_scenes, demos_images = self.scene.load_dataset(
-            demos_file, selections=selections, with_images=not self._use_gt
-        )
-        for i, demo_scenes in enumerate(demos_scenes):
-            if self._use_gt:
-                stacked = self.dcscenes_to_tdtapas(demo_scenes)
-            else:
-                demo_extracted: list[DCScene] = []
-                for idx, td_img in enumerate(demos_images[i]):
-                    extracted = self.from_image(td_img)
-                    extr_scene = DCScene(extracted, demo_scenes[idx].extras)
-                    demo_extracted.append(extr_scene)
-                stacked = self.dcscenes_to_tdtapas(demo_extracted)
-            observations.append(stacked)
+        closed_mask = opening >= self.cfg.policy.binary_gripper_closed_threshold
+        open_mask = ~closed_mask
+        level_open = float(opening[open_mask].max()) if open_mask.any() else 0.0
+        level_closed = float(opening[closed_mask].max()) if closed_mask.any() else 1.0
 
-        return Demos(
-            observations,
-            meta_data={"tag": self.cfg.tag + self.cfg.label},
-            add_init_ee_pose_as_frame=True,
-            add_world_frame=False,
-            frames_from_keypoints=False,
-            kp_indeces=None,
-            enforce_z_up=False,
-            modulo_object_z_rotation=False,
-            make_quats_continuous=True,
-        )  # type: ignore
+        stepped = opening.copy()
+        for s in range(len(edges) - 1):
+            a0, b0 = edges[s], edges[s + 1] - 1  # segment spans [a0..b0]
+            if b0 <= a0:
+                continue
+            if closed_mask[a0] == closed_mask[b0]:
+                continue  # no open/close crossing within this segment
+            if closed_mask[b0]:  # closes inside segment: open, switch at last index
+                stepped[a0:b0] = level_open
+                stepped[b0] = level_closed
+            else:  # opens inside segment: closed, switch at last index
+                stepped[a0:b0] = level_closed
+                stepped[b0] = level_open
+
+        stacked.action[:, -1] = torch.tensor(stepped)
 
     def dcscenes_to_tdtapas(self, scenes: list[DCScene]) -> TensorDict:
+        if self.cfg.fix_bimodal:
+            self._fold_bimodal_yaw(scenes)
         obs: list[TensorDict] = []
         td_goal = scenes[-1]
         for td_scene in scenes:
@@ -467,3 +577,45 @@ class TapasExpert(ExpertModel):
         stacked_obs = TensorDict.stack(obs, dim=0)
         assert isinstance(stacked_obs, SceneObservation)
         return stacked_obs  # type: ignore
+
+    def _target_label(self) -> str | None:
+        """Entity the gripper manipulates, inferred from the skill tag prefix.
+
+        Tags are ``<entity>_<transition>`` (e.g. ``lid0_base_base``), so the
+        target is the longest scene-entity label that prefixes the tag.
+        """
+        label = None
+        for candidate in self.scene.entities:
+            if self.cfg.tag.startswith(candidate + "_") and (
+                label is None or len(candidate) > len(label)
+            ):
+                label = candidate
+        return label
+
+    @staticmethod
+    def _quat_yaw(q: np.ndarray) -> float:
+        q = Quaternion.normalize(np.asarray(q, dtype=float))
+        return float(
+            np.arctan2(
+                2.0 * (q[0] * q[3] + q[1] * q[2]), 1.0 - 2.0 * (q[2] ** 2 + q[3] ** 2)
+            )
+        )
+
+    def _fold_bimodal_yaw(self, scenes: list[DCScene]) -> None:
+        label = self._target_label()
+        if label is None:
+            return
+
+        q_z180 = np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)  # 180 deg about z
+        rel = np.array(
+            [
+                self._quat_yaw(s.extras["ee_pose"][3:7]) - self._quat_yaw(s[label].rot)
+                for s in scenes
+            ]
+        )
+        rel = (rel + np.pi) % (2.0 * np.pi) - np.pi
+        mean_rel = float(np.arctan2(np.sin(rel).mean(), np.cos(rel).mean()))
+        if np.sin(mean_rel) > 0.0:
+            for s in scenes:
+                q = np.asarray(s.extras["ee_pose"][3:7], dtype=float)
+                s.extras["ee_pose"][3:7] = Quaternion.mul(q_z180, q)

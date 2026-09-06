@@ -75,14 +75,6 @@ def anchor_entities(agent: ExpertModel) -> set[str]:
 def sample_task_conditions(
     agent: ExpertModel, scene: Scene, anchors: set[str]
 ) -> tuple[dict, dict]:
-    """Sample a consistent (pre, post) task pair.
-
-    Anchor entities (e.g. the button in a faucet task — it only determines
-    whether the handle is unlocked) never move in the demos. Sampling pre and
-    post independently would demand a goal state the policy cannot produce, so
-    for anchors the post value is set equal to the sampled pre value; only
-    entities the agent actually changes get their own sampled post value.
-    """
     pair = agent.conditions
     pre_info = condition_info_dict(pair.pre, scene)
     post_info = condition_info_dict(pair.post, scene)
@@ -119,7 +111,7 @@ def evaluate_model(
         for attempt in range(1, max_tries + 1):
             x = scene.to_dc_scene(env.compute_ob_info())
             _, fb = model.act(x, y)
-            if fb.reward == 1.0:
+            if fb.success:
                 succeeded_on = attempt
                 break
 
@@ -152,7 +144,7 @@ def plot_scene(
     fig, ax = plt.subplots(figsize=(max(6.0, 0.9 * n), 6.0))
     xpos = np.arange(n)
     bottom = np.zeros(n)
-    cmap = plt.get_cmap("viridis")
+    cmap = plt.get_cmap("summer")
     colors = [cmap(k / max(1, max_tries - 1)) for k in range(max_tries)]
     for t in range(max_tries):
         ax.bar(
@@ -170,7 +162,7 @@ def plot_scene(
         bottom=bottom,
         width=0.65,
         label="failed",
-        color="0.35",
+        color="1.0",
     )
 
     ax.set_xticks(xpos)

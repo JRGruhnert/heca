@@ -157,7 +157,7 @@ def run_real_rollout(
 def print_feedback(fb: SceneFeedback):
     print(
         f"Feedback: terminal={fb.terminal} truncated={fb.truncated} "
-        f"reward={fb.reward:.4f}"
+        f"success={fb.success:.4f} reward={fb.reward}"
     )
 
 

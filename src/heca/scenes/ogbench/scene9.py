@@ -8,7 +8,7 @@ from heca.data.static import StaticEntity
 from heca.scenes.ogbench.scene import OGScene
 
 
-class OGScene7(OGScene):
+class OGScene9(OGScene):
     @dataclass(kw_only=True)
     class Config(OGScene.Config):
         tag: str = "scene9"
