@@ -153,8 +153,6 @@ class TapasExpert(ExpertModel):
                 return x, SceneFeedback(reward=0.0, terminal=True, truncated=False)
             while not predictions.is_finished:
                 if stop_requested():
-                    # Abort mid-rollout so the worker thread returns promptly
-                    # during shutdown instead of finishing the whole trajectory.
                     return x, SceneFeedback(reward=0.0, terminal=True, truncated=True)
                 pred = predictions.step()
                 action = np.concatenate((pred.ee, pred.gripper))  # type: ignore
@@ -361,30 +359,13 @@ class TapasExpert(ExpertModel):
             ids = list(selections)
         if max_demos is not None:
             ids = ids[:max_demos]
-        _, accepted = self._scan_demos(
-            ids, plot=True, stop_after_accepted=None, filter_accept=True
-        )
+        _, accepted = self._scan_demos(ids, plot=True, auto_filter=True)
         return accepted
 
-    def load_demos(self, selections: list[int] | None = None) -> Demos:
-        """Load the demo set used for fitting in one flow.
-
-        With ``selections=None`` the demos whose velocity pause count matches
-        the expected segment structure are auto-selected from all recorded
-        demos (up to ``cfg.max_demos``); explicit ``selections`` are used
-        as-is. Raw stacked observations are loaded once, optionally
-        preprocessed (``_snap_gripper_at_segment_ends``) and returned as a
-        ``Demos``.
-        """
-        auto = selections is None
-        ids = self._all_demo_ids() if auto else list(selections)
-        observations, _ = self._scan_demos(
-            ids,
-            plot=False,
-            stop_after_accepted=self.cfg.max_demos if auto else None,
-            filter_accept=auto,
-        )
-        if auto and len(observations) < self.cfg.max_demos:
+    def load_demos(self) -> Demos:
+        ids = self._all_demo_ids()
+        observations, _ = self._scan_demos(ids, plot=False, auto_filter=True)
+        if len(observations) < self.cfg.max_demos:
             raise ValueError(
                 f"{self.cfg.tag}: only {len(observations)}/{len(ids)} demos "
                 f"match the expected {self._expected_velocity_pauses()} "
@@ -403,12 +384,7 @@ class TapasExpert(ExpertModel):
         )  # type: ignore
 
     def _scan_demos(
-        self,
-        ids: list[int],
-        *,
-        plot: bool,
-        stop_after_accepted: int | None,
-        filter_accept: bool,
+        self, ids: list[int], *, plot: bool, auto_filter: bool
     ) -> tuple[list[SceneObservation], list[int]]:  # type: ignore
 
         seg_cfg = self.cfg.policy.model.demos_segmentation
@@ -439,13 +415,13 @@ class TapasExpert(ExpertModel):
             vel = np.linalg.norm(td.action[:, :3].numpy().astype(float), axis=1)
             boundaries = self._velocity_segments(vel, seg_cfg)
             pause_ok = expected is None or len(boundaries) == expected
-            ok = pause_ok or not filter_accept
+            ok = pause_ok or not auto_filter
             if ok:
                 accepted_ids.append(demo_id)
 
             opening_old = td.action[:, -1].numpy().astype(float).copy()
             if self.cfg.snap_ee_actions:
-                self._snap_gripper_at_segment_ends(td)
+                self._snap_gripper_per_segment(td)
             opening_new = td.action[:, -1].numpy().astype(float)
 
             if plot:
@@ -494,7 +470,7 @@ class TapasExpert(ExpertModel):
 
             if ok:
                 kept.append(td)
-                if stop_after_accepted is not None and len(kept) >= stop_after_accepted:
+                if len(kept) >= self.cfg.max_demos:
                     break
 
         if plot:
@@ -536,7 +512,14 @@ class TapasExpert(ExpertModel):
             if m > seg_cfg.min_end_distance and m < len(vel) - seg_cfg.min_end_distance
         ]
 
-    def _snap_gripper_at_segment_ends(self, stacked: SceneObservation):  # type: ignore
+    def _snap_gripper_per_segment(self, stacked: SceneObservation):  # type: ignore
+        """Make the gripper command a discrete step function over segments.
+
+        Each velocity boundary acts as a switch: the gripper opening measured
+        at a boundary is held constant over the whole segment that follows it,
+        until the next boundary applies its own opening. The command therefore
+        becomes piecewise-constant in time instead of a continuous trace.
+        """
         seg_cfg = self.cfg.policy.model.demos_segmentation
         opening = stacked.action[:, -1].numpy().astype(float)
 
@@ -544,24 +527,11 @@ class TapasExpert(ExpertModel):
         boundaries = self._velocity_segments(vel, seg_cfg)
         edges = [0] + boundaries + [len(opening)]
 
-        closed_mask = opening >= self.cfg.policy.binary_gripper_closed_threshold
-        open_mask = ~closed_mask
-        level_open = float(opening[open_mask].max()) if open_mask.any() else 0.0
-        level_closed = float(opening[closed_mask].max()) if closed_mask.any() else 1.0
-
-        stepped = opening.copy()
-        for s in range(len(edges) - 1):
-            a0, b0 = edges[s], edges[s + 1] - 1  # segment spans [a0..b0]
-            if b0 <= a0:
-                continue
-            if closed_mask[a0] == closed_mask[b0]:
-                continue  # no open/close crossing within this segment
-            if closed_mask[b0]:  # closes inside segment: open, switch at last index
-                stepped[a0:b0] = level_open
-                stepped[b0] = level_closed
-            else:  # opens inside segment: closed, switch at last index
-                stepped[a0:b0] = level_closed
-                stepped[b0] = level_open
+        # Segment s spans [edges[s], edges[s+1]) and takes the opening that is
+        # measured at its first index (the boundary that starts it).
+        starts = np.asarray(edges[:-1])
+        lengths = np.diff(edges)
+        stepped = np.repeat(opening[starts], lengths)
 
         stacked.action[:, -1] = torch.tensor(stepped)
 
