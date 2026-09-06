@@ -111,13 +111,26 @@ class TapasExpert(ExpertModel):
         max_con_comps: int = 10
         fix_bimodal: bool = False
         snap_ee_actions: bool = True
-        pos_only: bool = True
+        pos_only: bool = False
+        use_ee_frames: bool = False
         max_demos: int = 20
 
         def __post_init__(self):
             if self.gt_frames is not None:
                 flat = [n for seg in self.gt_frames for n in seg]
                 if flat and all(isinstance(n, str) for n in flat):
+                    segs = self.gt_frames
+                    if not self.use_ee_frames:
+                        segs = [
+                            [n for n in seg if n not in ("ee_init", "ee_target")]
+                            for seg in segs
+                        ]
+                        if any(len(seg) == 0 for seg in segs):
+                            raise ValueError(
+                                f"{self.tag}: use_ee_frames=False strips ee_init/"
+                                "ee_target, but a gt_frames segment would end up "
+                                "with no remaining frame anchor."
+                            )
                     scene = Scene.get(self.scene, auto_load=False)
                     labels = list(scene.entities.keys())
                     frame_names = (
@@ -127,9 +140,7 @@ class TapasExpert(ExpertModel):
                         + ["ee_target"]
                     )
                     name_to_idx = {name: i for i, name in enumerate(frame_names)}
-                    gt_frames = [
-                        [name_to_idx[n] for n in seg] for seg in self.gt_frames
-                    ]
+                    gt_frames = [[name_to_idx[n] for n in seg] for seg in segs]
                     self.policy.model.frame_selection.gt_frames = gt_frames
             self.policy.model.tpgmm.position_only = self.pos_only
 
