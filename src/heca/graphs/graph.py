@@ -17,6 +17,7 @@ from heca.graphs.edges.state_edges import StateEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
 from heca.graphs.nodes.canonical_nodes import CanonicalNodes
+from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
 from heca.graphs.nodes.node import *
 from heca.graphs.nodes.option_nodes import OptionNodes
@@ -38,12 +39,20 @@ class SubgoalMode(Enum):
         return self.value
 
 
-
 class Graph:
-    def __init__(self, entities: dict[str, Entity]):
+    def __init__(
+        self,
+        entities: dict[str, Entity],
+        max_steps: int = 32,
+    ):
         self.entities: dict[str, Entity] = entities
+        # Per-episode option budget, counted per export (= one decision).
+        # ``set_goal`` resets it, and every rollout calls that once per episode.
+        self.max_steps = max_steps
+        self._step = 0
 
         self.ns_entity: EntityNodes = EntityNodes()
+        self.ns_comp: CompNodes = CompNodes()
         self.ns_option: OptionNodes = OptionNodes()
         self.ns_canonical: CanonicalNodes = CanonicalNodes()
         self.ns_state: StateNodes = StateNodes()
@@ -79,6 +88,9 @@ class Graph:
         self._option_conditions: dict[str, ConPair] = {}
         self._export_keys: list[str] | None = None
         self._start_set = False
+        # True while node values changed after the last rebuild(), i.e. the
+        # exported tensors (built from node.data in build()) are out of date.
+        self._dirty = False
 
         self._start_vals: dict[str, np.ndarray | None] | None = None
         self._pre_memo: dict[int, bool] = {}
@@ -86,19 +98,37 @@ class Graph:
         self._mix_cache: dict[tuple[int, int], tuple[object, dict]] = {}
         self._subgoal_plan_cache: dict[str, tuple[tuple[str, str | None], ...]] = {}
 
+    def ensure_fresh(self):
+        if not self._dirty:
+            return
+        logger.debug(
+            "graph was out of date (set_goal/update_nodes without rebuild); refreshing"
+        )
+        if self._start_set:
+            self.update_nodes()  # needs a start for the start-pinned rows
+        self.rebuild()
+
     def export(self) -> HeteroData:
+        self.ensure_fresh()
         option_keys = self.feasible_keys()
         self._export_keys = option_keys
         ent_keys = self._entity_closure(option_keys)
 
+        comp_keys = self._comp_closure(ent_keys)
+
         ent_old = [self.ns_entity.get_index(k) for k in ent_keys]
+        comp_old = [self.ns_comp.get_index(k) for k in comp_keys]
         opt_old = [self.ns_option.get_index(k) for k in option_keys]
         e_map = {old: i for i, old in enumerate(ent_old)}
+        c_map = {old: i for i, old in enumerate(comp_old)}
         o_map = {old: i for i, old in enumerate(opt_old)}
 
         data = HeteroData()
         data[self.ns_entity.type].x = self.ns_entity.x[ent_old]
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids[ent_old]
+        data[self.ns_comp.type].x = self.ns_comp.x[comp_old]
+        data[self.ns_comp.type].type_ids = self.ns_comp.type_ids[comp_old]
+        data[self.ns_comp.type].weight = self.ns_comp.weights[comp_old]
         data[self.ns_option.type].x = self.ns_option.x[opt_old]
 
         disabled = [k for k in self.ns_option.keys if k not in option_keys]
@@ -139,7 +169,7 @@ class Graph:
             )
             return idx, attrs
 
-        si, sa = _compact(self.es_condition, e_map, e_map)
+        si, sa = _compact(self.es_condition, c_map, e_map)
         data[self.es_condition.type].edge_index = si
         data[self.es_condition.type].edge_attr = sa
         si, _ = _compact(self.es_summary, e_map, o_map, want_attrs=False)
@@ -148,6 +178,7 @@ class Graph:
         data[self.es_translation.type].edge_index = si
         data = self._export_state_rows(data, ent_keys)
         self._validate_export(data)
+        self._step += 1
         return data.to(device=hardware.device.type)
 
     def _validate_export(self, data: HeteroData) -> None:
@@ -170,12 +201,20 @@ class Graph:
         assert int(agg[1].max()) < slots.type_ids.shape[0]
         assert bool((counts[[ROLE_PRE, ROLE_POST]] > 0).all())
 
+        comp = data[self.ns_comp.type]
+        cond = data[self.es_condition.type].edge_index
+        assert comp.x.shape[0] == comp.type_ids.shape[0] == comp.weight.shape[0] > 0
+        assert cond.shape[1] > 0
+        assert int(cond[0].max()) < comp.x.shape[0]  # src: components
+        assert int(cond[1].max()) < ent.x.shape[0]  # dst: value rows
+        assert data[self.es_condition.type].edge_attr.shape == (cond.shape[1], 8)
+
     def _row_role(self, node: EntityNode) -> int:
         if isinstance(node, SubgoalNode):
             return ROLE_POST  # chain shared value == the target it drives to
         if isinstance(node, ValueNode):
             return ROLE_PRE if node.vmode == ValueMode.START else ROLE_POST
-        return ROLE_OTHER  # e.g. CompNode
+        return ROLE_OTHER  # any other kind of row that lands in this set
 
     def _state_labels(self) -> list[str]:
         if not self._start_set:
@@ -185,14 +224,6 @@ class Graph:
         return sorted(start_keys & goal_keys & set(self.entities))
 
     def _export_state_rows(self, data: HeteroData, ent_keys: list[str]) -> HeteroData:
-        """Export the canonical rows and the aggregation edges.
-
-        One current and one goal row per entity that appears in both the start
-        and the goal, interleaved so that ``cur_idx[i]`` and ``goal_idx[i]`` are
-        the same entity. They are not part of the entity node set: the relational
-        layers are about conditions and translations between entities, and these
-        rows are neither.
-        """
         ent_type = self.ns_entity.type
         can_type = self.ns_canonical.type
         actor_roles = [self._row_role(self.ns_entity.get_by_key(k)) for k in ent_keys]
@@ -233,7 +264,14 @@ class Graph:
         data[self.ns_state.type].type_ids = torch.tensor(
             [node.role for node in self.ns_state.items], dtype=torch.long
         )
+        data[self.ns_state.type].budget = torch.tensor(
+            [self.budget], dtype=torch.float32
+        )
         return data
+
+    @property
+    def budget(self) -> float:
+        return max(self.max_steps - self._step, 0) / self.max_steps
 
     def _prepared_params(self, model, entity: Entity) -> dict:
         hit = self._mix_cache.get((id(model), id(entity)))
@@ -340,6 +378,16 @@ class Graph:
             return list(self.ns_option.keys)
         return list(self._export_keys)
 
+    def _comp_closure(self, ent_keys: list[str]) -> list[str]:
+        """Component rows referenced by the exported value rows, in set order."""
+        keep: set[str] = set()
+        for key in ent_keys:
+            node = self.ns_entity.get_by_key(key)
+            keep.update(
+                k for k in node.sources.get("comp", ()) if self.ns_comp.has_key(k)
+            )
+        return [k for k in self.ns_comp.keys if k in keep]
+
     def _entity_closure(self, option_keys: list[str]) -> list[str]:
         keep: set[str] = set()
         stack: list[str] = []
@@ -369,8 +417,10 @@ class Graph:
 
     def set_goal(self, goal: DCScene):
         self.goal = goal.copy()
+        self._step = 0  # a new goal is a new episode
         for node in self.ns_option.items:
             node.data = goal.copy()
+        self._dirty = True
 
     def update_nodes(self):
         for key, node in zip(self.ns_canonical.keys, self.ns_canonical.items):
@@ -398,6 +448,8 @@ class Graph:
 
             self.ns_entity.key_update(key, x)
 
+        self._dirty = True
+
     def assemble_subgoal(self, option: OptionNode) -> DCScene:
         subgoal = self.start.copy()
         for key in option.sources.get("entity", set()):
@@ -410,6 +462,7 @@ class Graph:
         lines = ["=== Graph ==="]
         lines.append(f"Entities: {len(self.entities)}")
         lines.append(str(self.ns_entity))
+        lines.append(str(self.ns_comp))
         lines.append(str(self.ns_option))
         lines.append(str(self.ns_canonical))
         lines.append(f"StepMix: {self.es_condition}")
@@ -422,12 +475,14 @@ class Graph:
 
     def rebuild(self):
         self.ns_entity.build()
+        self.ns_comp.build()
         self.ns_option.build()
         self.ns_canonical.build()
         self.ns_state.build()
-        self.es_condition.build(self.ns_entity, self.ns_entity)
+        self.es_condition.build(self.ns_comp, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_translation.build(self.ns_entity, self.ns_entity)
+        self._dirty = False
 
     def set_comps(self, tag: str, con: Condition) -> dict[str, set[str]]:
         keys: dict[str, set[str]] = defaultdict(set[str])
@@ -435,7 +490,7 @@ class Graph:
             for idx, (comp, weight) in enumerate(comps):
                 key = con.label + entity + tag + f"{idx}"
                 keys[entity].add(key)
-                self.ns_entity.add(
+                self.ns_comp.add(
                     key,
                     CompNode(
                         entity=entity,
@@ -558,11 +613,16 @@ class Graph:
         return np.mean(np.stack(deltas), axis=0).astype(np.float32)
 
     @classmethod
-    def generate(cls, cfgs: list[ExpertModel.Config], smode: SubgoalMode) -> "Graph":
+    def generate(
+        cls,
+        cfgs: list[ExpertModel.Config],
+        smode: SubgoalMode,
+        max_steps: int = 32,
+    ) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
-        graph = cls(entities=entities)
+        graph = cls(entities=entities, max_steps=max_steps)
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
         graph._agent_tags = [a.cfg.tag for a in agents]
 
@@ -642,7 +702,7 @@ class Graph:
                         )
                         graph._option_conditions[ac.label + "--" + bc.label] = ac
 
-        graph.es_condition.edges_from_sets(graph.ns_entity, graph.ns_entity, "comp")
+        graph.es_condition.edges_from_sets(graph.ns_comp, graph.ns_entity, "comp")
         graph.es_summary.edges_from_sets(graph.ns_entity, graph.ns_option, "entity")
         graph.es_translation.edges_from_sets(graph.ns_entity, graph.ns_entity, "entity")
         graph._validate_structure()
@@ -681,17 +741,20 @@ class Graph:
 
         # Build key lookup: index → key (insertion order matches edge indices)
         entity_keys = self.ns_entity.keys
+        comp_keys = self.ns_comp.keys
         option_keys = self.ns_option.keys
 
         # Add nodes with their type and a label
         for key in entity_keys:
             G.add_node(key, type="entity", label=key)
+        for key in comp_keys:
+            G.add_node(key, type="comp", label=key)
         for key in option_keys:
             G.add_node(key, type="option", label=key)
 
         # Add edges with their type (resolve positional indices → keys)
         for src, dst in self.es_condition.edges:
-            G.add_edge(entity_keys[src], entity_keys[dst], type="stepmix")
+            G.add_edge(comp_keys[src], entity_keys[dst], type="stepmix")
         for src, dst in self.es_summary.edges:
             G.add_edge(entity_keys[src], option_keys[dst], type="summary")
         for src, dst in self.es_translation.edges:
@@ -699,17 +762,20 @@ class Graph:
 
         # Separate nodes by type for color coding
         entity_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "entity"]
+        comp_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "comp"]
         option_nodes = [n for n, d in G.nodes(data=True) if d["type"] == "option"]
 
-        # Position nodes (spring layout)
-        # pos = nx.spring_layout(G, seed=42, k=2.0)
-        shells = [option_nodes, entity_nodes]
+        shells = [option_nodes, comp_nodes, entity_nodes]
         pos = nx.shell_layout(G, nlist=shells, scale=3.0)
 
         plt.figure(figsize=figsize)
         # Draw entity nodes (blue)
         nx.draw_networkx_nodes(
             G, pos, nodelist=entity_nodes, node_color="lightblue", node_size=800
+        )
+        # Draw component nodes (grey, smaller)
+        nx.draw_networkx_nodes(
+            G, pos, nodelist=comp_nodes, node_color="lightgrey", node_size=200
         )
         # Draw option nodes (green)
         nx.draw_networkx_nodes(

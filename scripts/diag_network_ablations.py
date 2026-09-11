@@ -91,14 +91,15 @@ def main():
         ckp["network"].keys()
     ):
         # Pre-aggregation checkpoints saw the mean of the canonical goal rows.
+        # Only the actor pools a goal slot for its logits, so patch it there.
         from heca.graphs.graph import CANONICAL
 
-        network._goal_slot = lambda canonical_x, data: (  # type: ignore[method-assign]
+        network.actor_net.encoder.goal_slot = lambda canonical_x, data: (  # type: ignore[method-assign]
             canonical_x[data[CANONICAL].goal_idx].mean(dim=0, keepdim=True)
         )
     network.eval()
-    block = network.interaction_layer
-    use_mem = network.timeline_layer is not None
+    block = network.actor_net.interaction_layer
+    use_mem = network.actor_net.timeline_layer is not None
     if args.memory == "on":
         use_mem = True
     elif args.memory == "off":
@@ -139,11 +140,11 @@ def main():
             with torch.inference_mode():
                 logits = network.actor(data)
                 before = captured.get("before")
-                after = network._last_option_x
+                after = network.actor_net._last_option_x
                 if block is not None:
-                    network.interaction_layer = nn.Identity()
+                    network.actor_net.interaction_layer = nn.Identity()
                     logits_ablated = network.actor(data)
-                    network.interaction_layer = block
+                    network.actor_net.interaction_layer = block
             steps_total += 1
             if block is not None and before is not None and before.shape[0] > 1:
                 cos_before.append(float(pairwise_cosine(before).mean()))
@@ -162,8 +163,8 @@ def main():
             )
             if use_mem:
                 pending = (
-                    network._last_option_x[action].detach(),
-                    network._last_mem.detach(),
+                    network.actor_net._last_option_x[action].detach(),
+                    network.actor_net._last_mem.detach(),
                 )
             model_cfg, subgoal = graph.select(int(action))
             z, fb = ExpertModel.get(model_cfg).act(x, subgoal)

@@ -45,8 +45,9 @@ def score_chunks(
                 nxt = getattr(data[seg[pos + 1]], "mem_step", None)
                 if nxt is not None:
                     u, _ = nxt
-                    assert net.timeline_layer is not None, "Shouldn't happen."
-                    h = net.timeline_layer(u.clone(), net._last_mem)
+                    timeline = net.actor_net.timeline_layer
+                    assert timeline is not None, "Shouldn't happen."
+                    h = timeline(u.clone(), net.actor_net._last_mem)
                 else:
                     h = None
     return torch.cat(logprobs), torch.cat(values), torch.cat(entropies)
@@ -66,13 +67,10 @@ class PPO(Learner):
         target_kl: float | None = 0.01
         clip_value_loss: bool = True
         seq_len: int = 0  # Truncated-BPTT chunk
-        grad_norm_log_freq: int = 10
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
-        self._grad_norm_window: dict[str, float] = {}
-        self._grad_norm_updates = 0
 
     def learn(self):
         adv, rtn = self.buffer.compute_advantages()
@@ -94,10 +92,8 @@ class PPO(Learner):
         old_values = self.buffer.values.detach().squeeze(-1)
         N = len(old_data)
 
-        use_chunked = self.network.cfg.use_timeline_memory
+        use_chunked = self.network.actor_net.cfg.use_timeline_memory
         if use_chunked:
-            # old_data holds the HeteroData graphs; the terminal flags live on
-            # the BufferData records in the queue.
             terminals = [
                 t or tr for t, tr in zip(self.buffer.terminals, self.buffer.truncates)
             ]
@@ -113,14 +109,16 @@ class PPO(Learner):
         total_fedprox_loss = 0.0
         num_minibatches = 0
 
-        # Gradient-norm accumulators (raw, pre-clip; see the gradient step).
-        grad_acc: dict[str, float] = {}
-        grad_cnt: dict[str, float] = {}
-
         kl_stop = False
+        ev_values: list[torch.Tensor] = []
+        ev_returns: list[torch.Tensor] = []
         for _ in range(self.cfg.n_epoch):
             if stop_requested():
                 break
+            # Explained variance is measured with the updated network, so only
+            # the last epoch's predictions are kept.
+            ev_values.clear()
+            ev_returns.clear()
             if use_chunked:
                 order = torch.randperm(len(chunks)).tolist()
                 minibatches: list[list[int]] = []
@@ -198,22 +196,15 @@ class PPO(Learner):
                 fedprox = self._fedprox_term()
                 loss = loss + fedprox
 
+                ev_values.append(state_values.detach().reshape(-1))
+                ev_returns.append(mb_rtn.detach().reshape(-1))
+
                 # Gradient step
                 self.optim.zero_grad()
                 loss.mean().backward()
 
-                total_norm = clip_grad_norm_(
-                    self.network.parameters(), self.cfg.max_grad_norm
-                )
-                grad_acc["grad_norm/total"] = grad_acc.get(
-                    "grad_norm/total", 0.0
-                ) + float(total_norm)
-                grad_cnt["grad_norm/total"] = grad_cnt.get("grad_norm/total", 0.0) + 1.0
-                for pname, p in self.network.named_parameters():
-                    if p.grad is not None:
-                        key = f"grad_norm/{pname}"
-                        grad_acc[key] = grad_acc.get(key, 0.0) + float(p.grad.norm())
-                        grad_cnt[key] = grad_cnt.get(key, 0.0) + 1.0
+                clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
+
                 self.optim.step()
 
                 # KL early stopping
@@ -242,10 +233,11 @@ class PPO(Learner):
             if kl_stop:
                 break
 
-        all_values = self.buffer.values.detach().squeeze(-1)
-        var_returns = rtn.var()
+        values_now = torch.cat(ev_values) if ev_values else rtn
+        returns_now = torch.cat(ev_returns) if ev_returns else rtn
+        var_returns = returns_now.var()
         if var_returns > 0:
-            explained_var = (1 - (rtn - all_values).var() / var_returns).item()
+            explained_var = (1 - (returns_now - values_now).var() / var_returns).item()
         else:
             explained_var = 0.0
 
@@ -265,19 +257,3 @@ class PPO(Learner):
                 "train/lr": self.optim.param_groups[0]["lr"],
             }
         )
-
-        window = self._grad_norm_window
-        for key in grad_acc:
-            n = grad_cnt.get(key, 0.0)
-            if n > 0:
-                key_short = key.removeprefix("grad_norm/")
-                avg = grad_acc[key] / n
-                w = window.setdefault(key_short, [0.0, 0])
-                w[0] += avg
-                w[1] += 1
-        self._grad_norm_updates += 1
-        if self._grad_norm_updates >= self.cfg.grad_norm_log_freq:
-            for key_short, (total, count) in window.items():
-                self.metrics[f"network/{key_short}"] = total / count
-            self._grad_norm_window = {}
-            self._grad_norm_updates = 0

@@ -18,14 +18,13 @@ class FairBuffer(Buffer):
     def compute_advantages(self) -> tuple[torch.Tensor, torch.Tensor]:
         rewards = [d.reward for d in self.queue]
         terminals = [d.terminal or d.truncated for d in self.queue]
-        values = [d.value for d in self.queue]
+        values = torch.stack([d.value for d in self.queue]).reshape(len(rewards))
         return self._gae_for_bucket(rewards, terminals, values)
 
     def _gae_for_bucket(self, rewards, terminals, values):
         T = len(rewards)  # Use the actual length of this group!
 
         advantages = torch.zeros(T)
-        returns = torch.zeros(T)
 
         gae = 0.0
         next_value = 0.0 if terminals[-1] else values[-1]
@@ -39,5 +38,4 @@ class FairBuffer(Buffer):
             advantages[t] = gae
             next_value = values[t]
 
-        returns = advantages + torch.cat(values)
-        return advantages, returns
+        return advantages, advantages + values

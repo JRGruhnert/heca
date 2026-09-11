@@ -6,13 +6,13 @@ from heca.graphs.nodes.node import CompNode, EntityNode
 from heca.graphs.nodes.node_set import NodeSet
 
 
-class ConditionEdges(EdgeSet[EntityNode, EntityNode]):
+class ConditionEdges(EdgeSet[CompNode, EntityNode]):
 
     @property
     def type(self) -> tuple[str, str, str]:
-        return ("entity", "condition", "entity")
+        return ("comp", "condition", "entity")
 
-    def build(self, snset: NodeSet[EntityNode], dnset: NodeSet[EntityNode]):
+    def build(self, snset: NodeSet[CompNode], dnset: NodeSet[EntityNode]):
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
 

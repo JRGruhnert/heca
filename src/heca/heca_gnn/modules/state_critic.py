@@ -5,9 +5,10 @@ import torch
 class StateCritic(nn.Module):
     SITE = "critic"
 
-    def __init__(self, dim: int, hidden_ratio: float = 0.5):
+    def __init__(self, dim: int, use_budget: bool = True, hidden_ratio: float = 0.5):
         super().__init__()
         hidden = max(int(dim * hidden_ratio), 16)
+        self.use_budget = use_budget
 
         self.row_net = nn.Sequential(
             nn.LayerNorm(dim),
@@ -16,8 +17,7 @@ class StateCritic(nn.Module):
             nn.Linear(dim, dim),
         )
 
-        # cur, goal, |residual|, learned residual -> one embedding per state.
-        self.project = nn.Linear(4 * dim, dim)
+        self.project = nn.Linear(4 * dim + int(use_budget), dim)
         self.norm = nn.LayerNorm(dim)
         self.tail = nn.Sequential(
             nn.ReLU(),
@@ -33,6 +33,7 @@ class StateCritic(nn.Module):
         goal_idx: torch.Tensor,
         films,
         conds: dict,
+        budget: torch.Tensor,
     ) -> torch.Tensor:
         cur = canonical_x[cur_idx]  # (E, D) — same entity order as goal
         goal = canonical_x[goal_idx]  # (E, D)
@@ -47,7 +48,9 @@ class StateCritic(nn.Module):
             ],
             dim=-1,
         )  # (4D,)
+        if self.use_budget:
+            stats = torch.cat([stats, budget.reshape(1)], dim=-1)  # (4D + 1,)
         self.last_stats = stats.detach()
 
         hidden = films(self.norm(self.project(stats)), conds, self.SITE)
-        return self.tail(hidden)  # (1,)
+        return self.tail(hidden).reshape(1)  # (1,)

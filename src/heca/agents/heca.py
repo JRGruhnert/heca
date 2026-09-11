@@ -51,7 +51,9 @@ class Heca(Configurable):
 
                 expert.virtual()
 
-        self.graph = Graph.generate(list(self.cfg.agents), smode=cfg.smode)
+        self.graph = Graph.generate(
+            list(self.cfg.agents), smode=cfg.smode, max_steps=self.scene.cfg.max_steps
+        )
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         if self.cfg.smode in (SubgoalMode.CHAIN, SubgoalMode.BOTH):
             self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))

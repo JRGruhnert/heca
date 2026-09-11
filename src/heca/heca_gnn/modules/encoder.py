@@ -1,11 +1,16 @@
 import torch
 from torch import nn
+from torch_geometric.data import HeteroData
 
 from heca.data.entity import Entity
 from heca.data.free import FreeEntity
 from heca.data.prismatic import PrismaticEntity
 from heca.data.revolute import RevoluteEntity
 from heca.data.static import StaticEntity
+
+from heca.data.entity import Entity
+from heca.graphs.roles import ROLE_GOAL
+from heca.heca_gnn.modules.aggregation import StateAggregation
 
 
 class _Block(nn.Module):
@@ -97,3 +102,51 @@ class OptionEncoder(nn.Module):
 
     def forward(self, x):
         return self.net(x)
+
+
+class EntityRowEncoder(nn.Module):
+    def __init__(self, dim: int):
+        nn.Module.__init__(self)
+        if tuple(self.encoder_map) != Entity.TYPE_NAMES:
+            raise ValueError(
+                f"encoder_map order {tuple(self.encoder_map)} does not match "
+                f"Entity.TYPE_NAMES {Entity.TYPE_NAMES}"
+            )
+        self.dim = dim
+        self.entity_encoders = nn.ModuleDict(
+            {name: cls(dim) for name, cls in self.encoder_map.items()}
+        )
+
+        self.comp_encoders = nn.ModuleDict(
+            {name: cls(dim) for name, cls in self.encoder_map.items()}
+        )
+        self.state_aggregation = StateAggregation(dim)
+
+    @property
+    def encoder_map(self) -> dict[str, type[_EntityEncoder]]:
+        return {
+            "free": FreeEncoder,
+            "static": StaticEncoder,
+            "prismatic": PrismaticEncoder,
+            "revolute": RevoluteEncoder,
+        }
+
+    def encode(self, node_type: str, data: HeteroData) -> torch.Tensor:
+        encoders = self.comp_encoders if node_type == "comp" else self.entity_encoders
+        x = data[node_type].x
+        type_ids = data[node_type].type_ids
+        out = x.new_zeros(x.shape[0], self.dim)
+        for t, name in enumerate(self.encoder_map):
+            rows = type_ids == t
+            if rows.any():
+                out[rows] = encoders[name](x[rows])
+        return out
+
+    def goal_slot(self, canonical_x: torch.Tensor, data: HeteroData) -> torch.Tensor:
+        roles = data["state"].type_ids
+        pooled = self.state_aggregation(
+            canonical_x,
+            data[("canonical", "aggregation", "state")].edge_index,
+            roles.shape[0],
+        )
+        return pooled[roles == ROLE_GOAL]

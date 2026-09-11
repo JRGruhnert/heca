@@ -34,3 +34,10 @@ class FiLMStack(nn.Module):
             gamma, beta = self.generators[name].params(cond)
             x = (1.0 + a * gamma) * x + b * beta
         return x
+
+
+class IdentityStack(nn.Module):
+    def forward(
+        self, x: torch.Tensor, conds: dict[str, torch.Tensor], site: str
+    ) -> torch.Tensor:
+        return x

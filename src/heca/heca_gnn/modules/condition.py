@@ -11,6 +11,10 @@ class ConditionBlock(nn.Module):
         self.conv = GINEConv(nn=_make_gnn_mlp(dim, num_layers), edge_dim=8)
 
     def forward(
-        self, x: torch.Tensor, edge_index: torch.Tensor, edge_attr: torch.Tensor
+        self,
+        x_comp: torch.Tensor,
+        x_entity: torch.Tensor,
+        edge_index: torch.Tensor,
+        edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        return self.conv(x, edge_index, edge_attr) + x
+        return self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity

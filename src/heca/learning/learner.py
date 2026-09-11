@@ -139,7 +139,7 @@ class Learner(Persistable):
         self.train_mode = False
 
     def predict(self, data: HeteroData, new_episode: bool) -> int:
-        use_mem = self.network.cfg.use_timeline_memory
+        use_mem = self.network.actor_net.cfg.use_timeline_memory
         if new_episode:
             self._mem_pending = None
             self._eval_choice = None
@@ -158,16 +158,16 @@ class Learner(Persistable):
                 action=action,
                 logprob=logprob,
                 value=value,
-                opt_emb=net._last_option_x[action].detach(),
-                mem_used=net._last_mem.detach(),
+                opt_emb=net.actor_net._last_option_x[action].detach(),
+                mem_used=net.actor_net._last_mem.detach(),
             )
         else:
             with torch.inference_mode():
                 logits = self.network.actor(data)
             action = logits.argmax(dim=-1)
             if use_mem:
-                emb = self.network._last_option_x[action].detach()
-                self._eval_choice = (emb, self.network._last_mem.detach())
+                emb = self.network.actor_net._last_option_x[action].detach()
+                self._eval_choice = (emb, self.network.actor_net._last_mem.detach())
         return int(action)
 
     def _init_wandb(self):
@@ -186,11 +186,18 @@ class Learner(Persistable):
             "buffer/label": str(type(self.cfg.buffer)),
             # Network config
             "network/input_dim": Entity.FEATURE_DIM,
-            "network/feature_dim": self.cfg.network.feature_dim,
             "network/max_state": Entity.MAX_STATE_DIM,
-            "network/use_option_effects": self.cfg.network.use_option_effects,
-            "network/use_option_interaction": self.cfg.network.use_option_interaction,
-            "network/use_timeline_memory": self.cfg.network.use_timeline_memory,
+            "network/actor/feature_dim": self.cfg.network.actor.feature_dim,
+            "network/actor/use_option_effects": (
+                self.cfg.network.actor.use_option_effects
+            ),
+            "network/actor/use_option_interaction": (
+                self.cfg.network.actor.use_option_interaction
+            ),
+            "network/actor/use_timeline_memory": (
+                self.cfg.network.actor.use_timeline_memory
+            ),
+            "network/critic/feature_dim": self.cfg.network.critic.feature_dim,
         }
 
         self._wandb_run = wandb.init(
@@ -230,7 +237,7 @@ class Learner(Persistable):
     def update(self, fb: SceneFeedback) -> bool:
         if self.cfg.normalize_rewards:
             fb.reward = self.normalizer.update(fb.reward)
-        use_mem = self.network.cfg.use_timeline_memory
+        use_mem = self.network.actor_net.cfg.use_timeline_memory
         if self.train_mode:
             assert isinstance(self.pocket, TempStore)
             if use_mem:
