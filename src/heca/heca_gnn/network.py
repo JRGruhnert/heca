@@ -1,11 +1,11 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
 import torch
 from torch import nn
 from torch.distributions import Categorical
-from torch_geometric.data import HeteroData
 
+from heca.graphs.data import HecaData
 from heca.heca_gnn.actor import ActorNetwork
 from heca.heca_gnn.critic import CriticNetwork
 
@@ -16,8 +16,8 @@ from heca.misc.base import Configurable
 class Network(Configurable, nn.Module):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        actor: ActorNetwork.Config = field(default_factory=ActorNetwork.Config)
-        critic: CriticNetwork.Config = field(default_factory=CriticNetwork.Config)
+        actor: ActorNetwork.Config = ActorNetwork.Config()
+        critic: CriticNetwork.Config = CriticNetwork.Config()
 
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)
@@ -25,17 +25,17 @@ class Network(Configurable, nn.Module):
         self.actor_net = ActorNetwork(cfg.actor)
         self.critic_net = CriticNetwork(cfg.critic)
 
-    def actor(self, data: HeteroData) -> torch.Tensor:
+    def actor(self, data: HecaData) -> torch.Tensor:
         return self.actor_net(data)
 
-    def critic(self, data: HeteroData) -> torch.Tensor:
+    def critic(self, data: HecaData) -> torch.Tensor:
         return self.critic_net(data)
 
     def upgrade(self, checkpoint):
         self.load_state_dict(checkpoint, strict=False)
 
     def evaluate(
-        self, data_list: Sequence[HeteroData], actions: torch.Tensor
+        self, data_list: Sequence[HecaData], actions: torch.Tensor
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         logprobs = []
         state_values = []
@@ -61,9 +61,9 @@ class Network(Configurable, nn.Module):
 
     def forward(
         self,
-        data: HeteroData,
-        memory: torch.Tensor | None = None,
+        data: HecaData,
+        carried_memory: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        logits = self.actor_net(data, memory=memory)
+        logits = self.actor_net(data, carried_memory=carried_memory)
         value = self.critic_net(data)
         return logits, value

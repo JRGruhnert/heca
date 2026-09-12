@@ -2,16 +2,16 @@ from abc import abstractmethod
 from dataclasses import dataclass
 import torch
 from pathlib import Path
-from torch_geometric.data import HeteroData
 
 from collections import deque
+from heca.graphs.data import HecaData
 from heca.misc.base import Configurable
 from heca.misc import logger
 
 
 @dataclass(slots=True)
 class BufferData:
-    data: HeteroData
+    data: HecaData
     action: torch.Tensor
     logprob: torch.Tensor
     value: torch.Tensor
@@ -66,7 +66,7 @@ class Buffer(Configurable):
         return self.cfg.capacity <= self.step_pointer
 
     @property
-    def data(self) -> list[HeteroData]:
+    def data(self) -> list[HecaData]:
         return [d.data for d in self.queue]
 
     @property

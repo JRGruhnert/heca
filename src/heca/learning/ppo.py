@@ -4,6 +4,7 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.distributions import Categorical
 
 from heca.learning.learner import Learner
+from heca.graphs.data import HecaData
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.misc.interrupt import stop_requested
@@ -25,7 +26,7 @@ def build_chunks(n: int, terminals: list[bool], seq_len: int) -> list[list[int]]
 def score_chunks(
     net: Network,
     chunks: list[list[int]],
-    data: list,
+    data: list[HecaData],
     actions: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
@@ -33,23 +34,27 @@ def score_chunks(
     values: list[torch.Tensor] = []
     entropies: list[torch.Tensor] = []
     for seg in chunks:
-        h: torch.Tensor | None = None
+        carried: torch.Tensor | None = None
+        # The first element of a chunk rebuilds its memory from the transition's
+        # own record; every later one is carried over, so the recurrence is
+        # unrolled across the chunk and the GRU gets gradient from later steps.
         for pos, t in enumerate(seg):
-            mem = h if pos > 0 else None
-            logits, value = net.forward(data[t], memory=mem)
+            logits, value = net.forward(
+                data[t], carried_memory=carried if pos > 0 else None
+            )
             dist = Categorical(logits=logits)
             logprobs.append(dist.log_prob(actions[t : t + 1]))
             values.append(value)
             entropies.append(dist.entropy())
             if pos < len(seg) - 1:
-                nxt = getattr(data[seg[pos + 1]], "mem_step", None)
+                nxt = data[seg[pos + 1]].mem_step
                 if nxt is not None:
                     u, _ = nxt
                     timeline = net.actor_net.timeline_layer
                     assert timeline is not None, "Shouldn't happen."
-                    h = timeline(u.clone(), net.actor_net._last_mem)
+                    carried = timeline(u.clone(), net.actor_net._last_mem)
                 else:
-                    h = None
+                    carried = None
     return torch.cat(logprobs), torch.cat(values), torch.cat(entropies)
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch_geometric.data import HeteroData
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
@@ -16,6 +15,7 @@ from heca.graphs.edges.edge_set import EdgeSet
 from heca.graphs.edges.state_edges import StateEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
+from heca.graphs.data import HecaData
 from heca.graphs.nodes.canonical_nodes import CanonicalNodes
 from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
@@ -108,7 +108,7 @@ class Graph:
             self.update_nodes()  # needs a start for the start-pinned rows
         self.rebuild()
 
-    def export(self) -> HeteroData:
+    def export(self) -> HecaData:
         self.ensure_fresh()
         option_keys = self.feasible_keys()
         self._export_keys = option_keys
@@ -123,7 +123,7 @@ class Graph:
         c_map = {old: i for i, old in enumerate(comp_old)}
         o_map = {old: i for i, old in enumerate(opt_old)}
 
-        data = HeteroData()
+        data = HecaData()
         data[self.ns_entity.type].x = self.ns_entity.x[ent_old]
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids[ent_old]
         data[self.ns_comp.type].x = self.ns_comp.x[comp_old]
@@ -181,7 +181,7 @@ class Graph:
         self._step += 1
         return data.to(device=hardware.device.type)
 
-    def _validate_export(self, data: HeteroData) -> None:
+    def _validate_export(self, data: HecaData) -> None:
         ent = data[self.ns_entity.type]
         can = data[self.ns_canonical.type]
         slots = data[self.ns_state.type]
@@ -223,7 +223,7 @@ class Graph:
         goal_keys = {k for k, _ in self.goal.entities()}
         return sorted(start_keys & goal_keys & set(self.entities))
 
-    def _export_state_rows(self, data: HeteroData, ent_keys: list[str]) -> HeteroData:
+    def _export_state_rows(self, data: HecaData, ent_keys: list[str]) -> HecaData:
         ent_type = self.ns_entity.type
         can_type = self.ns_canonical.type
         actor_roles = [self._row_role(self.ns_entity.get_by_key(k)) for k in ent_keys]

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 from torch import nn
-from torch_geometric.data import HeteroData
+from heca.graphs.data import HecaData
 from heca.heca_gnn.modules.condition import ConditionBlock
 from heca.heca_gnn.modules.encoder import EntityRowEncoder, OptionEncoder
 from heca.heca_gnn.modules.film import FiLMStack, IdentityStack
@@ -65,54 +65,60 @@ class ActorNetwork(Configurable, nn.Module):
 
     def _resolve_memory(
         self,
-        data: HeteroData,
+        data: HecaData,
         ref: torch.Tensor,
-        memory: torch.Tensor | None,
+        carried: torch.Tensor | None,
     ) -> torch.Tensor | None:
         if self.timeline_layer is None:
             self._last_mem = ref.new_zeros(1, self.cfg.feature_dim)
             return None
-        if memory is None:
-            step = getattr(data, "mem_step", None)
-            memory = (
+        if carried is None:
+            step = data.mem_step
+            carried = (
                 ref.new_zeros(1, self.cfg.feature_dim)
                 if step is None
                 else self.timeline_layer(*step)
             )
-        self._last_mem = memory
-        return memory
+        self._last_mem = carried
+        return carried
 
     def forward(
         self,
-        data: HeteroData,
-        memory: torch.Tensor | None = None,
+        data: HecaData,
+        carried_memory: torch.Tensor | None = None,
     ) -> torch.Tensor:
         comp_x = self.encoder.encode("comp", data)
         entity_x = self.encoder.encode("entity", data)
-        stepmix = data[("comp", "condition", "entity")]
-        entity_x = self.condition_layer(
-            comp_x, entity_x, stepmix.edge_index, stepmix.edge_attr
-        )
-
-        tapas_idx = data[("entity", "translation", "entity")].edge_index
-        entity_x = self.translation_layer(entity_x, tapas_idx)
-
         canonical_x = self.encoder.encode("canonical", data)
         h_goal = self.encoder.goal_slot(canonical_x, data)
-
-        effects = data["option"].x
+        option_x = data["option"].x
         if not self.cfg.use_option_effects:
-            effects = torch.zeros_like(effects)
-        option_x = self.option_encoder(effects)
+            option_x = torch.zeros_like(option_x)
+        option_x = self.option_encoder(option_x)
+
+        entity_x = self.condition_layer(
+            comp_x,
+            entity_x,
+            data[("comp", "condition", "entity")].edge_index,
+            data[("comp", "condition", "entity")].edge_attr,
+        )
+
+        entity_x = self.translation_layer(
+            entity_x,
+            data[("entity", "translation", "entity")].edge_index,
+        )
+
         option_x = self.summary_layer(
-            entity_x, option_x, data[("entity", "summary", "option")].edge_index
+            entity_x,
+            option_x,
+            data[("entity", "summary", "option")].edge_index,
         )
         if self.interaction_layer is not None:
             option_x = self.interaction_layer(option_x)
 
         self._last_option_x = option_x
 
-        memory = self._resolve_memory(data, option_x, memory)
+        memory = self._resolve_memory(data, option_x, carried_memory)
         conds = {"goal": h_goal}
         if memory is not None:
             conds["memory"] = memory

@@ -1,14 +1,15 @@
 import torch
 from torch import nn
-from torch_geometric.data import HeteroData
 
 from heca.data.entity import Entity
+from heca.graphs.data import HecaData
 from heca.data.free import FreeEntity
 from heca.data.prismatic import PrismaticEntity
 from heca.data.revolute import RevoluteEntity
 from heca.data.static import StaticEntity
 
 from heca.data.entity import Entity
+from heca.graphs.data import HecaData
 from heca.graphs.roles import ROLE_GOAL
 from heca.heca_gnn.modules.aggregation import StateAggregation
 
@@ -131,7 +132,7 @@ class EntityRowEncoder(nn.Module):
             "revolute": RevoluteEncoder,
         }
 
-    def encode(self, node_type: str, data: HeteroData) -> torch.Tensor:
+    def encode(self, node_type: str, data: HecaData) -> torch.Tensor:
         encoders = self.comp_encoders if node_type == "comp" else self.entity_encoders
         x = data[node_type].x
         type_ids = data[node_type].type_ids
@@ -142,7 +143,7 @@ class EntityRowEncoder(nn.Module):
                 out[rows] = encoders[name](x[rows])
         return out
 
-    def goal_slot(self, canonical_x: torch.Tensor, data: HeteroData) -> torch.Tensor:
+    def goal_slot(self, canonical_x: torch.Tensor, data: HecaData) -> torch.Tensor:
         roles = data["state"].type_ids
         pooled = self.state_aggregation(
             canonical_x,

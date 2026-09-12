@@ -8,13 +8,13 @@ from thop import profile
 from torch import nn
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
-from torch_geometric.data import HeteroData
 
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.data.entity import Entity
+from heca.graphs.data import HecaData, MemoryStep
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
@@ -42,7 +42,7 @@ from heca.scenes.scene import SceneFeedback
 
 @dataclass(slots=True)
 class TempStore:
-    data: HeteroData
+    data: HecaData
     action: torch.Tensor
     logprob: torch.Tensor
     value: torch.Tensor
@@ -94,8 +94,8 @@ class Learner(Persistable):
         self.pocket: TempStore | None = None
         self.train_mode = True
 
-        self._mem_pending: tuple[torch.Tensor, torch.Tensor] | None = None
-        self._eval_choice: tuple[torch.Tensor, torch.Tensor] | None = None
+        self._mem_pending: MemoryStep | None = None
+        self._eval_choice: MemoryStep | None = None
 
         self._init_wandb()
         self.explainer = Explainer(
@@ -129,7 +129,7 @@ class Learner(Persistable):
     def learn(self):
         raise NotImplementedError
 
-    def measure_flops(self, data: HeteroData) -> tuple[int, int]:
+    def measure_flops(self, data: HecaData) -> tuple[int, int]:
         assert self.network is not None
         with torch.no_grad():
             result = profile(self.network, inputs=data, verbose=False)
@@ -138,7 +138,7 @@ class Learner(Persistable):
     def eval(self):
         self.train_mode = False
 
-    def predict(self, data: HeteroData, new_episode: bool) -> int:
+    def predict(self, data: HecaData, new_episode: bool) -> int:
         use_mem = self.network.actor_net.cfg.use_timeline_memory
         if new_episode:
             self._mem_pending = None
