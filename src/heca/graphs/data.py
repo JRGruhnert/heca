@@ -30,6 +30,9 @@ class CanonicalRowStore(RowStore, Protocol):
 
 class OptionStore(Protocol):
     x: torch.Tensor
+    # 1.0 for options the gate rejects for the current start, 0.0 otherwise:
+    # the export keeps every option and carries feasibility as data.
+    gated: torch.Tensor
 
 
 class StateStore(Protocol):

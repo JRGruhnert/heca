@@ -110,8 +110,13 @@ class Graph:
 
     def export(self) -> HecaData:
         self.ensure_fresh()
-        option_keys = self.feasible_keys()
+        option_keys = list(self.ns_option.keys)
         self._export_keys = option_keys
+        # The gate no longer prunes the export: every option is a row, and the
+        # feasibility of the current state is carried per option so the network
+        # decides what to do with it (mask, condition on, or ignore).
+        with self._gate_pass():
+            gated = [not self._gated(k) for k in option_keys]
         ent_keys = self._entity_closure(option_keys)
 
         comp_keys = self._comp_closure(ent_keys)
@@ -130,12 +135,13 @@ class Graph:
         data[self.ns_comp.type].type_ids = self.ns_comp.type_ids[comp_old]
         data[self.ns_comp.type].weight = self.ns_comp.weights[comp_old]
         data[self.ns_option.type].x = self.ns_option.x[opt_old]
+        data[self.ns_option.type].gated = torch.tensor(gated, dtype=torch.float32)
 
-        disabled = [k for k in self.ns_option.keys if k not in option_keys]
-        if disabled:
+        n_gated = sum(gated)
+        if n_gated:
             logger.debug(
-                f"gated out options ({len(disabled)}/{len(self.ns_option.keys)}): "
-                f"{disabled}"
+                f"gated options ({n_gated}/{len(option_keys)}): "
+                f"{[k for k, g in zip(option_keys, gated) if g]}"
             )
 
         def _compact(
@@ -200,6 +206,10 @@ class Graph:
         assert int(agg[0].max()) < can.x.shape[0]
         assert int(agg[1].max()) < slots.type_ids.shape[0]
         assert bool((counts[[ROLE_PRE, ROLE_POST]] > 0).all())
+
+        opt = data[self.ns_option.type]
+        assert opt.gated.shape == (opt.x.shape[0],)
+        assert bool(((opt.gated == 0) | (opt.gated == 1)).all())
 
         comp = data[self.ns_comp.type]
         cond = data[self.es_condition.type].edge_index

@@ -149,7 +149,7 @@ class Learner(Persistable):
         if self.train_mode:
             net = self.inference_net
             with torch.inference_mode():
-                logits, value = net.forward(data)
+                logits, value = net(data)
             dist = Categorical(logits=logits)
             action = dist.sample()
             logprob = dist.log_prob(action)

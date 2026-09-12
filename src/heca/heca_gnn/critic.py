@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from heca.graphs.data import HecaData
-from heca.heca_gnn.modules.encoder import EntityRowEncoder
+from heca.heca_gnn.modules.encoders.entity_encoder import EntityRowEncoder
 from heca.heca_gnn.modules.film import FiLMStack, IdentityStack
 
 from heca.heca_gnn.modules.state_critic import StateCritic
@@ -30,7 +30,7 @@ class CriticNetwork(Configurable, nn.Module):
         self.cfg = cfg
         self.encoder = EntityRowEncoder(cfg.feature_dim)
         self.films = (
-            FiLMStack(cfg.feature_dim, self.condenser_names, ("critic",))
+            FiLMStack(cfg.feature_dim, self.condenser_names)
             if cfg.use_film
             else IdentityStack()
         )

@@ -52,5 +52,5 @@ class StateCritic(nn.Module):
             stats = torch.cat([stats, budget.reshape(1)], dim=-1)  # (4D + 1,)
         self.last_stats = stats.detach()
 
-        hidden = films(self.norm(self.project(stats)), conds, self.SITE)
+        hidden = films(self.norm(self.project(stats)), conds)
         return self.tail(hidden).reshape(1)  # (1,)

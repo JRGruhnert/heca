@@ -39,7 +39,7 @@ def score_chunks(
         # own record; every later one is carried over, so the recurrence is
         # unrolled across the chunk and the GRU gets gradient from later steps.
         for pos, t in enumerate(seg):
-            logits, value = net.forward(
+            logits, value = net(
                 data[t], carried_memory=carried if pos > 0 else None
             )
             dist = Categorical(logits=logits)

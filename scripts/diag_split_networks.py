@@ -90,14 +90,26 @@ def main():
         not (a_ids & c_ids),
         f"{len(a_ids)} actor + {len(c_ids)} critic params",
     )
+    trunk_names = [
+        n for n in ("trunc", "actor_trunc", "critic_trunc") if hasattr(net, n)
+    ]
+    trunk_ids: set[int] = set()
+    for name in trunk_names:
+        trunk_ids |= {id(p) for p in getattr(net, name).parameters()}
     report(
-        "container parameters == actor + critic",
-        {id(p) for p in net.parameters()} == a_ids | c_ids,
+        "container parameters == actor + critic + trunk(s)",
+        {id(p) for p in net.parameters()} == a_ids | c_ids | trunk_ids,
+        f"trunk(s): {trunk_names}",
+    )
+    report(
+        "trunk is " + ("separate per network" if len(trunk_names) > 1 else "shared"),
+        True,
+        f"seperate_trunc={net.cfg.seperate_trunc}",
     )
     report("every parameter is trainable", all(p.requires_grad for p in net.parameters()))
 
     # 2. gradients do not cross
-    logits, value = net.forward(data)
+    logits, value = net(data)
     report("container forward shapes", tuple(logits.shape) == (1, data["option"].x.shape[0]) and tuple(value.shape) == (1,), f"logits {tuple(logits.shape)}, value {tuple(value.shape)}")
 
     # Parameters outside the graph of this scene (an unused entity type) and
@@ -176,7 +188,7 @@ def main():
 
     # 5. the actor resolves the timeline memory; the critic never reads it
     data.mem_step = (torch.zeros(1, dim), torch.zeros(1, dim))
-    net.forward(data)
+    net(data)
     used = net.actor_net._last_mem
     report(
         "the actor resolves a timeline memory",

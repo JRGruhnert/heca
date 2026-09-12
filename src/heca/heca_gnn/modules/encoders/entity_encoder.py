@@ -92,19 +92,6 @@ class RevoluteEncoder(_EntityEncoder):
     BLOCKS = RevoluteEntity.BLOCKS
 
 
-class OptionEncoder(nn.Module):
-    def __init__(self, out_dim: int):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.LayerNorm(Entity.FEATURE_DIM),
-            nn.Linear(Entity.FEATURE_DIM, out_dim),
-            nn.ReLU(),
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
 class EntityRowEncoder(nn.Module):
     def __init__(self, dim: int):
         nn.Module.__init__(self)

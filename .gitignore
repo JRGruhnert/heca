@@ -30,3 +30,8 @@ mp.zip
 data.zip
 .vscode/
 .env
+
+# data bundle produced by upload_data.sh (the archive itself is ignored above);
+# the manifest lists ~260k paths, so it must not be committed
+/data.zip.sha256
+/data.zip.manifest.txt

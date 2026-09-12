@@ -20,6 +20,6 @@ class OptionReadout(nn.Module):
         self.actor_head = nn.Linear(hidden_dim, 1)
 
     def forward(self, x: torch.Tensor, films, conds: dict) -> torch.Tensor:
-        shared = films(self.norm(x), conds, self.SITE)
+        shared = films(self.norm(x), conds)
         actor_out = self.actor_head(self.shared(shared))
         return actor_out.view(1, -1)
