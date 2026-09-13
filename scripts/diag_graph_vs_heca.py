@@ -87,7 +87,7 @@ def main():
         term = trunc = False
         last_fb = None
         for _ in range(200):  # hard cap (scene.max_steps governs truncation)
-            data = graph.export()
+            data = graph.build()
             if data["option"].x.shape[0] == 0:
                 term, trunc, last_fb = False, True, None
                 break

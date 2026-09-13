@@ -20,18 +20,11 @@ class StateAggregation(nn.Module):
             nn.Linear(hidden, dim),
         )
 
-    def forward(
-        self,
-        entity_x: torch.Tensor,
-        edge_index: torch.Tensor,
-        n_state: int,
-    ) -> torch.Tensor:
-        src, dst = edge_index
-        rows = self.pre(entity_x[src])
-        pooled = []
-        for slot in range(n_state):
-            slot_rows = rows[dst == slot]
-            pooled.append(
-                self.head(torch.cat([slot_rows.mean(0), slot_rows.amax(0)], dim=-1))
-            )
-        return torch.stack(pooled)
+    def forward(self, rows: torch.Tensor) -> torch.Tensor:
+        """Pool one set of rows into a single vector (mean, then max).
+
+        A set function, so it needs no edges: the caller says which rows belong
+        to the slot.
+        """
+        rows = self.pre(rows)
+        return self.head(torch.cat([rows.mean(0), rows.amax(0)], dim=-1))

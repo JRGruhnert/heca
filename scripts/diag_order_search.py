@@ -104,7 +104,7 @@ def main():
                     continue
                 graph.set_start(x)
                 try:
-                    graph.export()
+                    graph.build()
                     keys = graph.export_keys
                 except RuntimeError:
                     fail = f"dead_end@{ent}"
@@ -128,20 +128,38 @@ def main():
             else:
                 blocked_reasons[fail or "goal_not_reached"] += 1
                 if first_fail is None:
-                    first_fail = {"perm": list(perm), "fail": fail or "goal_not_reached",
-                                  "remaining": differing(x, y0, args.tol)}
-        rec = {"ep": ep, "n_entities": len(need), "entities": need,
-               "orders_tried": n_orders, "orders_solved": solved_orders,
-               "blocked_reasons": dict(blocked_reasons.most_common(6)),
-               "first_failure": first_fail}
+                    first_fail = {
+                        "perm": list(perm),
+                        "fail": fail or "goal_not_reached",
+                        "remaining": differing(x, y0, args.tol),
+                    }
+        rec = {
+            "ep": ep,
+            "n_entities": len(need),
+            "entities": need,
+            "orders_tried": n_orders,
+            "orders_solved": solved_orders,
+            "blocked_reasons": dict(blocked_reasons.most_common(6)),
+            "first_failure": first_fail,
+        }
         results.append(rec)
-        print(f"  [{args.scene}] ep {ep}: orders {solved_orders}/{n_orders} solved "
-              f"({dict(blocked_reasons.most_common(3))})", flush=True)
+        print(
+            f"  [{args.scene}] ep {ep}: orders {solved_orders}/{n_orders} solved "
+            f"({dict(blocked_reasons.most_common(3))})",
+            flush=True,
+        )
 
-    print(f"[{args.scene}] all-orders-solved: "
-          f"{sum(1 for r in results if r['orders_solved'] > 0)}/{len(results)}")
-    res = {"scene": args.scene, "env_seed": args.env_seed, "episodes": eps,
-           "results": results, "elapsed_s": round(time.time() - t0, 1)}
+    print(
+        f"[{args.scene}] all-orders-solved: "
+        f"{sum(1 for r in results if r['orders_solved'] > 0)}/{len(results)}"
+    )
+    res = {
+        "scene": args.scene,
+        "env_seed": args.env_seed,
+        "episodes": eps,
+        "results": results,
+        "elapsed_s": round(time.time() - t0, 1),
+    }
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)

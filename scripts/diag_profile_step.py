@@ -79,7 +79,7 @@ def main():
 
     # Warm up (first call builds caches inside torch / numpy paths).
     for _ in range(3):
-        data = graph.export()
+        data = graph.build()
         with torch.inference_mode():
             network(data)
 
@@ -87,7 +87,7 @@ def main():
 
     def step():
         t0 = time.perf_counter()
-        data = graph.export()
+        data = graph.build()
         t1 = time.perf_counter()
         with torch.inference_mode():
             network.actor(data)

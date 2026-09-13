@@ -8,8 +8,6 @@ MemoryStep = tuple[torch.Tensor, torch.Tensor]
 
 
 class RowStore(Protocol):
-    """Features every entity-ish row carries."""
-
     x: torch.Tensor
     type_ids: torch.Tensor
 
@@ -30,15 +28,13 @@ class CanonicalRowStore(RowStore, Protocol):
 
 class OptionStore(Protocol):
     x: torch.Tensor
-    # 1.0 for options the gate rejects for the current start, 0.0 otherwise:
-    # the export keeps every option and carries feasibility as data.
     gated: torch.Tensor
 
 
-class StateStore(Protocol):
+class OptionStateStore(Protocol):
     x: torch.Tensor
     type_ids: torch.Tensor
-    budget: torch.Tensor
+    gated: torch.Tensor
 
 
 class HecaData(HeteroData):
@@ -51,6 +47,11 @@ class HecaData(HeteroData):
     @mem_step.setter
     def mem_step(self, value: MemoryStep | None) -> None:
         self._global_store["mem_step"] = value
+
+    @property
+    def budget(self) -> torch.Tensor:
+        """Option budget left in the episode: one value per decision."""
+        return cast(torch.Tensor, self._global_store["budget"])
 
     @property
     def entity(self) -> EntityRowStore:
@@ -69,5 +70,5 @@ class HecaData(HeteroData):
         return cast(OptionStore, self["option"])
 
     @property
-    def state(self) -> StateStore:
-        return cast(StateStore, self["state"])
+    def option_state(self) -> OptionStateStore:
+        return cast(OptionStateStore, self["option_state"])

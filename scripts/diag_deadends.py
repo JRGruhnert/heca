@@ -117,8 +117,12 @@ def classify(graph, x, y) -> dict:
             option_fail[key] += 1
             if len(per_option) < 8:
                 per_option.append(
-                    {"key": key, "pre_fail": sorted(set(pf)),
-                     "post_fail": sorted(set(pof)), "key_err": kerr}
+                    {
+                        "key": key,
+                        "pre_fail": sorted(set(pf)),
+                        "post_fail": sorted(set(pof)),
+                        "key_err": kerr,
+                    }
                 )
     return {
         "n_options": len(graph.ns_option.keys),
@@ -177,16 +181,19 @@ def main():
             x = x0
             for step in range(max_opts):
                 try:
-                    graph.export()
+                    graph.build()
                 except RuntimeError:
                     if len(deadends) < args.max_deadends:
                         info = classify(graph, x, y0)
                         info.update(
-                            {"ep": ep, "step": step,
-                             "x": {l: fmt(x.get(l).value)
-                                   for l, _ in x.entities()},
-                             "y": {l: fmt(y0.get(l).value)
-                                   for l, _ in y0.entities()}}
+                            {
+                                "ep": ep,
+                                "step": step,
+                                "x": {l: fmt(x.get(l).value) for l, _ in x.entities()},
+                                "y": {
+                                    l: fmt(y0.get(l).value) for l, _ in y0.entities()
+                                },
+                            }
                         )
                         deadends.append(info)
                         agg_pre.update(info["pre_fail_by_entity"])
@@ -207,9 +214,11 @@ def main():
         if ep_has_deadend:
             n_eps_with_deadend += 1
         if (ep + 1) % 10 == 0:
-            print(f"  [{args.scene}] {ep+1}/{args.episodes} eps, "
-                  f"deadend-eps={n_eps_with_deadend}, recorded={len(deadends)}",
-                  flush=True)
+            print(
+                f"  [{args.scene}] {ep+1}/{args.episodes} eps, "
+                f"deadend-eps={n_eps_with_deadend}, recorded={len(deadends)}",
+                flush=True,
+            )
 
     res = {
         "scene": args.scene,
@@ -226,13 +235,17 @@ def main():
         "deadends": deadends,
         "elapsed_s": round(time.time() - t0, 1),
     }
-    print(f"[{args.scene}] episodes_with_deadend={n_eps_with_deadend} "
-          f"recorded={len(deadends)}")
+    print(
+        f"[{args.scene}] episodes_with_deadend={n_eps_with_deadend} "
+        f"recorded={len(deadends)}"
+    )
     print(f"  pre-fail by entity : {dict(agg_pre.most_common(10))}")
     print(f"  post-fail by entity: {dict(agg_post.most_common(10))}")
     print(f"  key errors         : {dict(agg_keyerr.most_common(10))}")
-    print(f"  #options whose post accepts the goal (per dead-end state): "
-          f"{dict(agg_goal_accept)}")
+    print(
+        f"  #options whose post accepts the goal (per dead-end state): "
+        f"{dict(agg_goal_accept)}"
+    )
 
     if args.out:
         out = Path(args.out)

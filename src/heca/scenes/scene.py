@@ -1,4 +1,3 @@
-import random
 import re
 import abc
 import h5py
@@ -20,10 +19,15 @@ class SceneFeedback:
     terminal: bool
     reward: float
     truncated: bool
+    budget: float
 
     @property
     def success(self) -> bool:
         return self.terminal and self.reward > 0.5
+
+    @property
+    def end(self) -> bool:
+        return self.truncated or self.terminal
 
 
 class Scene(Persistable):
@@ -55,18 +59,25 @@ class Scene(Persistable):
         """Reward shaping for one low-level action (no option counting)."""
         reward = self.cfg.step_reward + self.cfg.success_reward * int(lfb.success)
         return SceneFeedback(
-            reward=reward, terminal=lfb.terminal, truncated=lfb.truncated
+            reward=reward,
+            terminal=lfb.terminal,
+            truncated=lfb.truncated,
+            budget=self.budget,
         )
 
     def count_option(self, fb: SceneFeedback) -> SceneFeedback:
-        """Count one *executed option* (one expert ``act``) against the
-        per-episode budget ``max_steps``. Low-level actions inside an option
-        do not count; only whole option executions do."""
         self.current_step += 1
         truncated = self.current_step >= self.cfg.max_steps or fb.truncated
         return SceneFeedback(
-            reward=fb.reward, terminal=fb.terminal, truncated=truncated
+            reward=fb.reward,
+            terminal=fb.terminal,
+            truncated=truncated,
+            budget=self.budget,
         )
+
+    @property
+    def budget(self) -> float:
+        return max(self.cfg.max_steps - self.current_step, 0) / self.cfg.max_steps
 
     def step(self, action: np.ndarray) -> tuple[DCScene, TDImage, SceneFeedback]:
         obs, fb = self._step(action)

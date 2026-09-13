@@ -1,50 +1,40 @@
-from dataclasses import dataclass
-
 import torch
 from torch import nn
 
-from heca.graphs.data import HecaData
-from heca.heca_gnn.modules.encoders.entity_encoder import EntityRowEncoder
-from heca.heca_gnn.modules.film import FiLMStack, IdentityStack
 
-from heca.heca_gnn.modules.state_critic import StateCritic
+class CriticNetwork(nn.Module):
+    def __init__(self, dim: int, hidden_ratio: float = 0.5):
+        super().__init__()
+        hidden = max(int(dim * hidden_ratio), 16)
 
-from heca.misc.base import Configurable
+        self.project = nn.Linear(3 * dim, dim)
 
-
-class CriticNetwork(Configurable, nn.Module):
-
-    @dataclass(kw_only=True)
-    class Config(Configurable.Config):
-        feature_dim: int = 256
-        use_budget: bool = True
-        use_film: bool = True
-
-    @property
-    def condenser_names(self) -> tuple[str, ...]:
-        """Conditioning inputs, in the order they modulate a site."""
-        return ("goal",)
-
-    def __init__(self, cfg: Config):
-        nn.Module.__init__(self)
-        self.cfg = cfg
-        self.encoder = EntityRowEncoder(cfg.feature_dim)
-        self.films = (
-            FiLMStack(cfg.feature_dim, self.condenser_names)
-            if cfg.use_film
-            else IdentityStack()
+        self.tail = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.ReLU(),
+            nn.Linear(dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, 1),
         )
-        self.state_critic = StateCritic(cfg.feature_dim, use_budget=cfg.use_budget)
 
-    def forward(self, data: HecaData) -> torch.Tensor:
-        canonical_x = self.encoder.encode("canonical", data)
-        conds = {"goal": self.encoder.goal_slot(canonical_x, data)}
+    def forward(
+        self,
+        canonical_x: torch.Tensor,
+        cur_idx: torch.Tensor,
+        goal_idx: torch.Tensor,
+    ) -> torch.Tensor:
+        cur = canonical_x[cur_idx]  # (E, D) — same entity order as goal
+        goal = canonical_x[goal_idx]  # (E, D)
+        res = cur - goal  # per-entity residual (progress toward the goal)
 
-        return self.state_critic(
-            canonical_x,
-            data.canonical.cur_idx,
-            data.canonical.goal_idx,
-            self.films,
-            conds,
-            budget=data.state.budget,
-        )
+        stats = torch.cat(
+            [
+                cur.mean(dim=0),
+                goal.mean(dim=0),
+                res.abs().mean(dim=0),
+            ],
+            dim=-1,
+        )  # (4D,)
+
+        hidden = self.project(stats)
+        return self.tail(hidden).reshape(1)  # (1,)

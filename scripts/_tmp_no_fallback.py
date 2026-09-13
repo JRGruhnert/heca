@@ -34,10 +34,17 @@ def scene(graph, which):
 graph.set_goal(scene(graph, "post"))
 graph.set_start(scene(graph, "pre"))
 
-data = graph.export()
+data = graph.build()
 role = data["entity"].role_ids
-counts = {n: int((role == r).sum()) for n, r in
-          {"current": ROLE_CURRENT, "goal": ROLE_GOAL, "pre": ROLE_PRE, "post": ROLE_POST}.items()}
+counts = {
+    n: int((role == r).sum())
+    for n, r in {
+        "current": ROLE_CURRENT,
+        "goal": ROLE_GOAL,
+        "pre": ROLE_PRE,
+        "post": ROLE_POST,
+    }.items()
+}
 print("normal export: options:", len(graph.export_keys), "roles:", counts)
 assert graph.feasible_keys() == list(graph.export_keys)
 assert counts["pre"] + counts["post"] >= 1
@@ -52,7 +59,7 @@ for label, dce in x.entities():
 graph.set_start(DCScene(far))
 assert graph.feasible_keys() == []
 try:
-    graph.export()
+    graph.build()
     raise AssertionError("expected RuntimeError when no option is feasible")
 except RuntimeError as e:
     print("raised as expected:", str(e)[:80], "...")

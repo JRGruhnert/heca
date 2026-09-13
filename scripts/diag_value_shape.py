@@ -60,7 +60,7 @@ def main():
     (x, _), (y, _) = scene.sample_task()
     graph.set_goal(y)
     graph.set_start(x)
-    data = graph.export()
+    data = graph.build()
 
     net = Network.get(conf.networks.default)
     net.eval()
@@ -76,7 +76,9 @@ def main():
     print(f"\nStateCritic.last_stats       : {tuple(stats.shape)}")
     conds = {"goal": torch.zeros(1, dim)}
     site = net.critic_net.state_critic.SITE
-    print(f"FiLMStack(['D'], conds)      : {tuple(films(torch.zeros(dim), conds, site).shape)}")
+    print(
+        f"FiLMStack(['D'], conds)      : {tuple(films(torch.zeros(dim), conds, site).shape)}"
+    )
     print(
         "  -> a [1, D] conditioning input broadcasts a [D] activation to [1, D],"
         "\n     and the critic's final Linear turns that into [1, 1] instead of [1]."
@@ -93,10 +95,18 @@ def main():
     adv_2d, rtn_2d = buf._gae_for_bucket(
         rewards, terminals, [v.reshape(1, 1) for v in vals]
     )
-    adv_1d, rtn_1d = buf._gae_for_bucket(rewards, terminals, [v.reshape(1) for v in vals])
-    print(f"\nvalues per step [1, 1] -> advantages {tuple(adv_2d.shape)}, returns {tuple(rtn_2d.shape)}")
-    print(f"values per step [1]    -> advantages {tuple(adv_1d.shape)}, returns {tuple(rtn_1d.shape)}")
-    print(f"returns agree on the diagonal: {bool(torch.allclose(torch.diagonal(rtn_2d), rtn_1d))}")
+    adv_1d, rtn_1d = buf._gae_for_bucket(
+        rewards, terminals, [v.reshape(1) for v in vals]
+    )
+    print(
+        f"\nvalues per step [1, 1] -> advantages {tuple(adv_2d.shape)}, returns {tuple(rtn_2d.shape)}"
+    )
+    print(
+        f"values per step [1]    -> advantages {tuple(adv_1d.shape)}, returns {tuple(rtn_1d.shape)}"
+    )
+    print(
+        f"returns agree on the diagonal: {bool(torch.allclose(torch.diagonal(rtn_2d), rtn_1d))}"
+    )
     print(f"max |returns_2d - correct|  : {float((rtn_2d - rtn_1d).abs().max()):.4f}")
 
     # 3./4. what MSELoss optimizes against the [B, T] target
@@ -107,7 +117,9 @@ def main():
     loss.backward()
     optimum = target.mean(dim=1)
     correct = rtn_1d[:B]
-    print(f"\nloss(...) shape                 : {tuple(loss.shape) if loss.dim() else 'scalar'}")
+    print(
+        f"\nloss(...) shape                 : {tuple(loss.shape) if loss.dim() else 'scalar'}"
+    )
     print(f"gradient w.r.t. prediction      : {pred.grad.flatten().tolist()}")
     print(f"optimum (mean over T targets)   : {optimum.tolist()}")
     print(f"correct value target            : {correct.tolist()}")

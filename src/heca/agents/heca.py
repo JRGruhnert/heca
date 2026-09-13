@@ -1,8 +1,6 @@
 from dataclasses import dataclass
 from typing import Sequence
 
-import torch
-
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
 from heca.learning.learner import Learner
@@ -34,7 +32,6 @@ class Heca(Configurable):
         if self.cfg.inference:
             self.learner.eval()
 
-        self._episode = 0
         self._x: DCScene | None = None
         self._y: DCScene | None = None
         self.scene = Scene.get(self.cfg.agents[0].scene)
@@ -48,93 +45,26 @@ class Heca(Configurable):
                 expert.force_recompute()
 
             if self.cfg.virtual:
-
                 expert.virtual()
 
-        self.graph = Graph.generate(
-            list(self.cfg.agents), smode=cfg.smode, max_steps=self.scene.cfg.max_steps
-        )
+        self.graph = Graph.generate(list(self.cfg.agents), smode=cfg.smode)
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
-        if self.cfg.smode in (SubgoalMode.CHAIN, SubgoalMode.BOTH):
-            self.graph.plot_connections(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
 
     def step(
-        self, x: DCScene, new_ep: bool = False
+        self, x: DCScene, y: DCScene, budget: float = 0.0
     ) -> tuple[DCScene, SceneFeedback, bool]:
-        if new_ep:
-            self._episode += 1
-        self.graph.set_start(x)
-        data = self.graph.export()
-        option = self.learner.predict(data, new_ep)
+        data = self.graph.build(x, y, budget)
+        option = self.learner.predict(data)
         a, s = self.graph.select(option)
         z, fb = ExpertModel.get(a).act(x, s)
-        if logger.TRACE:
-            self._trace_step(x, data, option, a, s, z, fb)
-        if stop_requested():
-            return z, fb, False
-        lock = self.learner.update(fb)
-        return z, fb, lock
-
-    def _trace_step(
-        self,
-        x: DCScene,
-        data,
-        option: int,
-        a: ExpertModel.Config,
-        s: DCScene,
-        z: DCScene,
-        fb: SceneFeedback,
-    ):
-        def _indent(text: str, prefix: str = "    ") -> str:
-            return "\n".join(prefix + line for line in text.splitlines())
-
-        lines = [
-            "===== step trace " f"client={self.learner.cfg.tag} ",
-            "start:",
-            _indent(str(x)),
-            "goal:",
-            _indent(str(self.graph.goal)),
-        ]
-
-        net = (
-            self.learner.inference_net
-            if self.learner.train_mode
-            else self.learner.network
-        )
-        with torch.inference_mode():
-            logits = net.actor(data).detach().cpu().squeeze(0)
-        probs = torch.softmax(logits, dim=-1)
-
-        lines.append("options (logits/probs):")
-        for i, key in enumerate(self.graph.export_keys):
-            agent = self.graph.ns_option.items[
-                self.graph.ns_option.get_index(key)
-            ].model.tag
-            lines.append(
-                f"    [{i}] key={key:<45} agent={agent:<28} "
-                f"logit={logits[i]:+.3f} prob={probs[i]:.3f}"
-            )
-        lines.append(
-            f"    selected: idx={option} key={self.graph.export_keys[option]} "
-            f"agent={a.tag}"
-        )
-
-        lines.append("subgoal (given to expert):")
-        lines.append(_indent(str(s)))
-        lines.append("result (expert outcome):")
-        lines.append(_indent(str(z)))
-        lines.append(
-            f"final feedback: terminal={fb.terminal} reward={fb.reward:.4f} "
-            f"truncated={fb.truncated}"
-        )
-        logger.trace("\n".join(lines))
+        finished = self.learner.update(fb)
+        return z, fb, finished
 
     def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        self.graph.set_goal(y)
-        z, fb, lock = self.step(x, True)
-        while not (fb.truncated or fb.terminal or lock):
-            z, fb, lock = self.step(z)
+        z, fb, finished = self.step(x, y, 0.0)
+        while not (fb.end or finished):
+            z, fb, finished = self.step(z, y, fb.budget)
         return z, fb
 
     def sample(self) -> tuple[DCScene, DCScene]:
@@ -143,18 +73,17 @@ class Heca(Configurable):
         return x, y
 
     def tick(self) -> bool:
+        if stop_requested():
+            return True
+
         if self._x is None or self._y is None:
             self._x, self._y = self.sample()
-            self.graph.set_goal(self._y)
-            new_ep = True
-        else:
-            new_ep = False
 
-        z, fb, lock = self.step(self._x, new_ep)
+        z, fb, finished = self.step(self._x, self._y)
         self._x = z
 
-        if fb.truncated or fb.terminal or lock:
+        if fb.end or finished:
             self._x = None
             self._y = None
 
-        return lock
+        return finished

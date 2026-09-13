@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 import numpy as np
 import torch
@@ -13,6 +13,7 @@ D = TypeVar("D", bound=GraphNode)
 
 
 class EdgeSet(Generic[S, D]):
+    type: ClassVar[tuple[str, str, str]]
     has_attrs: bool = True
 
     def __init__(self):
@@ -35,10 +36,10 @@ class EdgeSet(Generic[S, D]):
     @staticmethod
     def gather_features(nset: NodeSet, indices) -> np.ndarray:
         assert nset.x.shape[0] == len(nset.items), f"{nset.type} node set not built"
-        # np.asarray: a tuple of ints would index as multiple dimensions.
         return nset.x.numpy()[np.asarray(indices, dtype=np.intp)]
 
     def build(self, snset: NodeSet[S], dnset: NodeSet[D]):
+        self.edges_from_sets(snset, dnset)
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
         if not self.has_attrs:
@@ -53,14 +54,10 @@ class EdgeSet(Generic[S, D]):
     def update_attr(self, src: S, dst: D, index: int):
         raise NotImplementedError
 
-    @property
-    def type(self) -> tuple[str, str, str]:
-        raise NotImplementedError
-
-    def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D], src_key: str):
+    def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
         """Create edges by matching node source entries to this edge type."""
         for i, node in enumerate(tnset.items):
-            for key in node.sources.get(src_key, set()):
+            for key in node.sources[snset.type]:
                 if snset.has_key(key):
                     j = snset.get_index(key)
                     self.add(j, i)

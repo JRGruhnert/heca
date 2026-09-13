@@ -1,10 +1,13 @@
-from typing import Mapping, NamedTuple, Sequence
+from typing import Mapping, NamedTuple
 
 import torch
 from torch import nn
 
 from heca.data.entity import Entity
 from heca.graphs.data import HecaData
+from heca.graphs.nodes.comp_nodes import CompNodes
+from heca.graphs.nodes.entity_nodes import EntityNodes
+from heca.graphs.nodes.option_nodes import OptionNodes
 from heca.heca_gnn.modules.encoders.common import SetEncoder
 from heca.heca_gnn.modules.encoders.option_encoder import OptionEncoder
 
@@ -13,7 +16,6 @@ class EncodedRows(NamedTuple):
     entity: torch.Tensor
     comp: torch.Tensor
     option: torch.Tensor
-    # optional: only present when "canonical" is in HecaEncoder.ROW_FIELDS
     canonical: torch.Tensor | None = None
 
 
@@ -30,7 +32,7 @@ class RowEncoderGroup(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-    ROW_FIELDS = ("entity", "comp")
+    ROW_FIELDS = (EntityNodes.type, CompNodes.type)
 
     def __init__(self, dim: int, use_option_effects: bool = True):
         nn.Module.__init__(self)
@@ -42,5 +44,5 @@ class EncoderBlock(nn.Module):
         encoded = self.rows(
             {name: (data[name].x, data[name].type_ids) for name in self.rows.fields}
         )
-        encoded["option"] = self.option_encoder(data.option.x)
+        encoded[OptionNodes.type] = self.option_encoder(data.option.x)
         return EncodedRows(**encoded)

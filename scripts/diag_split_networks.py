@@ -43,9 +43,7 @@ OK = "  ok  "
 
 def named(net: Network, prefix: str) -> dict[str, torch.nn.Parameter]:
     """Parameters of one sub-network, keyed by their full container name."""
-    return {
-        k: p for k, p in net.named_parameters() if k.startswith(prefix + ".")
-    }
+    return {k: p for k, p in net.named_parameters() if k.startswith(prefix + ".")}
 
 
 def report(label: str, passed: bool, detail: str = ""):
@@ -69,7 +67,7 @@ def main():
     (x, _), (y, _) = scene.sample_task()
     graph.set_goal(y)
     graph.set_start(x)
-    data = graph.export()
+    data = graph.build()
     print(
         f"graph: {data['entity'].x.shape[0]} entity rows, "
         f"{data['option'].x.shape[0]} options, "
@@ -106,11 +104,18 @@ def main():
         True,
         f"seperate_trunc={net.cfg.seperate_trunc}",
     )
-    report("every parameter is trainable", all(p.requires_grad for p in net.parameters()))
+    report(
+        "every parameter is trainable", all(p.requires_grad for p in net.parameters())
+    )
 
     # 2. gradients do not cross
     logits, value = net(data)
-    report("container forward shapes", tuple(logits.shape) == (1, data["option"].x.shape[0]) and tuple(value.shape) == (1,), f"logits {tuple(logits.shape)}, value {tuple(value.shape)}")
+    report(
+        "container forward shapes",
+        tuple(logits.shape) == (1, data["option"].x.shape[0])
+        and tuple(value.shape) == (1,),
+        f"logits {tuple(logits.shape)}, value {tuple(value.shape)}",
+    )
 
     # Parameters outside the graph of this scene (an unused entity type) and
     # modules a call cannot touch (the GRU without ``mem_step``, the critic's
@@ -168,16 +173,30 @@ def main():
     net.zero_grad(set_to_none=True)
     net.critic_net(data).sum().backward()
     opt.step()
-    frozen_actor = [k for k, p in a.items() if not torch.equal(p.detach(), before_actor[k])]
-    moved_critic = [k for k, p in c.items() if not torch.equal(p.detach(), before_critic[k])]
-    report("a critic-only optimizer step leaves the actor frozen", not frozen_actor, f"moved={frozen_actor[:3]}")
-    report("a critic-only optimizer step updates the critic", bool(moved_critic), f"{len(moved_critic)}/{len(c)} params moved")
+    frozen_actor = [
+        k for k, p in a.items() if not torch.equal(p.detach(), before_actor[k])
+    ]
+    moved_critic = [
+        k for k, p in c.items() if not torch.equal(p.detach(), before_critic[k])
+    ]
+    report(
+        "a critic-only optimizer step leaves the actor frozen",
+        not frozen_actor,
+        f"moved={frozen_actor[:3]}",
+    )
+    report(
+        "a critic-only optimizer step updates the critic",
+        bool(moved_critic),
+        f"{len(moved_critic)}/{len(c)} params moved",
+    )
 
     # 4. container evaluate + independent calls
     logprobs, values, entropies = net.evaluate([data, data], torch.tensor([0, 1]))
     report(
         "evaluate shapes",
-        tuple(logprobs.shape) == (2,) and tuple(values.shape) == (2,) and tuple(entropies.shape) == (2,),
+        tuple(logprobs.shape) == (2,)
+        and tuple(values.shape) == (2,)
+        and tuple(entropies.shape) == (2,),
         f"{tuple(logprobs.shape)} {tuple(values.shape)} {tuple(entropies.shape)}",
     )
     report(
@@ -205,10 +224,10 @@ def main():
     )
     report(
         "critic feature_dim is independent of the actor",
-        separate.critic_net.encoder.dim == 128 and separate.actor_net.encoder.dim == dim,
+        separate.critic_net.encoder.dim == 128
+        and separate.actor_net.encoder.dim == dim,
         f"actor {separate.actor_net.encoder.dim}, critic {separate.critic_net.encoder.dim}",
     )
-
 
     report(
         "the critic has no memory input at all",
@@ -224,7 +243,10 @@ def main():
         f"{len(state)} tensors",
     )
     fresh = Network.get(
-        Network.Config(actor=copy.deepcopy(conf.networks.both.actor), critic=copy.deepcopy(conf.networks.both.critic))
+        Network.Config(
+            actor=copy.deepcopy(conf.networks.both.actor),
+            critic=copy.deepcopy(conf.networks.both.critic),
+        )
     )
     fresh.load_state_dict(state)
     report(
@@ -236,8 +258,10 @@ def main():
     built = []
     for name in conf.networks.NETWORK_NAMES:
         n = Network.get(getattr(conf.networks, name))
-        built.append(f"{name}({sum(p.numel() for p in n.actor_net.parameters())}a/"
-                     f"{sum(p.numel() for p in n.critic_net.parameters())}c)")
+        built.append(
+            f"{name}({sum(p.numel() for p in n.actor_net.parameters())}a/"
+            f"{sum(p.numel() for p in n.critic_net.parameters())}c)"
+        )
     print(f"[{OK}] all presets build: {', '.join(built)}")
 
     # 8. standalone construction, independent of the container
@@ -245,7 +269,8 @@ def main():
     critic = CriticNetwork.get(CriticNetwork.Config(feature_dim=64))
     report(
         "actor and critic run standalone",
-        tuple(actor(data).shape) == (1, data["option"].x.shape[0]) and tuple(critic(data).shape) == (1,),
+        tuple(actor(data).shape) == (1, data["option"].x.shape[0])
+        and tuple(critic(data).shape) == (1,),
     )
 
     print("\nall split checks passed")

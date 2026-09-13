@@ -132,7 +132,7 @@ def main():
         last = None
         for _ in range(scene.cfg.max_steps + 5):
             try:
-                data = graph.export()
+                data = graph.build()
             except RuntimeError:
                 break
             if use_mem and pending is not None:

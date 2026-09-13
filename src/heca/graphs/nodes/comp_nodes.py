@@ -6,10 +6,7 @@ from heca.graphs.nodes.node_set import NodeSet
 
 
 class CompNodes(NodeSet[CompNode]):
-
-    @property
-    def type(self) -> str:
-        return "comp"
+    type = "comp"
 
     def build(self):
         x_np = np.stack([node.data.feature for node in self.items], axis=0)

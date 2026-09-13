@@ -74,11 +74,18 @@ def component_report(entity, value, up) -> list[dict]:
         z = float(np.sqrt(np.sum(zd**2)))
         pose_ok = z <= chi and bool(np.all(zd <= zd_cap))
         p_state = float(pis[k][state])
-        rows.append({"k": k, "weight": round(float(weights[k]), 4),
-                     "z": round(z, 3), "zd_max": round(float(np.max(zd)), 3),
-                     "pose_ok": bool(pose_ok), "p_state": p_state,
-                     "state_ok": bool(p_state > 1e-6),
-                     "accepts": bool(pose_ok and p_state > 1e-6)})
+        rows.append(
+            {
+                "k": k,
+                "weight": round(float(weights[k]), 4),
+                "z": round(z, 3),
+                "zd_max": round(float(np.max(zd)), 3),
+                "pose_ok": bool(pose_ok),
+                "p_state": p_state,
+                "state_ok": bool(p_state > 1e-6),
+                "accepts": bool(pose_ok and p_state > 1e-6),
+            }
+        )
     return rows
 
 
@@ -145,15 +152,14 @@ def main():
                 status = "solved_state"
                 break
             try:
-                graph.export()
+                graph.build()
                 keys = graph.export_keys
             except RuntimeError:
                 status = "dead_end"
                 blocked = {"-": rem}
                 break
             feasible = set(keys)
-            cands = [k for k in keys
-                     if set(pairs[k].target_entities) & set(rem)]
+            cands = [k for k in keys if set(pairs[k].target_entities) & set(rem)]
             if not cands:
                 status = "blocked"
                 # why can no option touch the remaining entities?
@@ -162,8 +168,10 @@ def main():
                     for k in options_touching(label):
                         node = graph.ns_option.get_by_key(k)
                         con = pairs[k]
-                        checks = [cond_value(graph, l, con.pre, "pre", node)
-                                  for l in con.pre.models]
+                        checks = [
+                            cond_value(graph, l, con.pre, "pre", node)
+                            for l in con.pre.models
+                        ]
                         # per-component view for the failing label itself
                         comp = {}
                         if label in con.pre.models:
@@ -171,17 +179,21 @@ def main():
                             try:
                                 val = graph.start.get(label).value
                                 comp[label] = component_report(
-                                    graph.entities[label], val, up)
+                                    graph.entities[label], val, up
+                                )
                             except (KeyError, TypeError):
                                 comp = {}
-                        det.append({
-                            "key": k,
-                            "feasible": k in feasible,
-                            "pre_fail": [c["label"] for c in checks
-                                         if c.get("ok") is False],
-                            "checks": checks,
-                            "components": comp,
-                        })
+                        det.append(
+                            {
+                                "key": k,
+                                "feasible": k in feasible,
+                                "pre_fail": [
+                                    c["label"] for c in checks if c.get("ok") is False
+                                ],
+                                "checks": checks,
+                                "components": comp,
+                            }
+                        )
                     blocked[label] = det
                 break
             # Entity with the largest gap first, then pick the candidate by its
@@ -190,8 +202,7 @@ def main():
             # fresh random draw from the post distribution, so picking it by name
             # order oscillates forever instead of converging.
             target = max(rem, key=lambda e: rem[e])
-            cands_t = [k for k in cands
-                       if target in pairs[k].target_entities] or cands
+            cands_t = [k for k in cands if target in pairs[k].target_entities] or cands
             snap = env_snapshot(scene)
             step_before = scene.current_step
             scored = []
@@ -199,14 +210,15 @@ def main():
                 env_restore(scene, snap)
                 scene.current_step = step_before
                 graph.set_start(x)
-                graph.export()
+                graph.build()
                 here = graph.export_keys
                 if k not in here:
                     continue
                 a_k, s_k = graph.select(here.index(k))
                 z_k, fb_k = ExpertModel.get(a_k).act(x, s_k)
-                scored.append((mismatch(z_k, y0), k,
-                               bool(fb_k.terminal and fb_k.reward > 0.0)))
+                scored.append(
+                    (mismatch(z_k, y0), k, bool(fb_k.terminal and fb_k.reward > 0.0))
+                )
             if not scored:
                 status = "blocked"
                 blocked = {target: []}
@@ -215,20 +227,24 @@ def main():
             env_restore(scene, snap)
             scene.current_step = step_before
             graph.set_start(x)
-            graph.export()
+            graph.build()
             here = graph.export_keys
             idx = here.index(best)
             a, s = graph.select(idx)
             z, fb = ExpertModel.get(a).act(x, s)
-            trace.append({
-                "step": step, "option": best,
-                "sample_variant": best.endswith("s"),
-                "candidates_scored": len(scored),
-                "targets": sorted(set(pairs[best].target_entities) & set(rem)),
-                "remaining_before": rem,
-                "reward": float(fb.reward), "terminal": bool(fb.terminal),
-                "truncated": bool(fb.truncated),
-            })
+            trace.append(
+                {
+                    "step": step,
+                    "option": best,
+                    "sample_variant": best.endswith("s"),
+                    "candidates_scored": len(scored),
+                    "targets": sorted(set(pairs[best].target_entities) & set(rem)),
+                    "remaining_before": rem,
+                    "reward": float(fb.reward),
+                    "terminal": bool(fb.terminal),
+                    "truncated": bool(fb.truncated),
+                }
+            )
             x = z
             graph.set_start(x)
             if fb.terminal and fb.reward > 0.0:
@@ -237,9 +253,13 @@ def main():
             if fb.truncated:
                 status = "truncated"
                 break
-        rec = {"ep": ep, "status": status, "n_steps": len(trace),
-               "remaining": remaining_entities(x, y0, args.tol),
-               "trace": trace}
+        rec = {
+            "ep": ep,
+            "status": status,
+            "n_steps": len(trace),
+            "remaining": remaining_entities(x, y0, args.tol),
+            "trace": trace,
+        }
         # sound unreachability check at the state where the walk stopped
         from scripts.diag_changeability import verdicts
 
@@ -248,25 +268,50 @@ def main():
         if blocked:
             rec["blocked"] = {
                 label: [
-                    {"key": d["key"], "feasible": d["feasible"],
-                     "pre_fail": d["pre_fail"],
-                     "components": d.get("components", {}),
-                     "checks": [
-                         {kk: c[kk] for kk in
-                          ("label", "ok", "z", "chi", "zd_max", "zd_cap",
-                           "state_ok", "in_train_bounds") if kk in c}
-                         for c in d["checks"]]}
-                    for d in det]
+                    {
+                        "key": d["key"],
+                        "feasible": d["feasible"],
+                        "pre_fail": d["pre_fail"],
+                        "components": d.get("components", {}),
+                        "checks": [
+                            {
+                                kk: c[kk]
+                                for kk in (
+                                    "label",
+                                    "ok",
+                                    "z",
+                                    "chi",
+                                    "zd_max",
+                                    "zd_cap",
+                                    "state_ok",
+                                    "in_train_bounds",
+                                )
+                                if kk in c
+                            }
+                            for c in d["checks"]
+                        ],
+                    }
+                    for d in det
+                ]
                 for label, det in blocked.items()
             }
         results.append(rec)
-        print(f"  [{args.scene}] ep {ep}: {status} after {len(trace)} steps, "
-              f"remaining={rec['remaining']}", flush=True)
+        print(
+            f"  [{args.scene}] ep {ep}: {status} after {len(trace)} steps, "
+            f"remaining={rec['remaining']}",
+            flush=True,
+        )
 
-    res = {"scene": args.scene, "env_seed": args.env_seed, "episodes": eps,
-           "tol": args.tol, "results": results,
-           "elapsed_s": round(time.time() - t0, 1)}
+    res = {
+        "scene": args.scene,
+        "env_seed": args.env_seed,
+        "episodes": eps,
+        "tol": args.tol,
+        "results": results,
+        "elapsed_s": round(time.time() - t0, 1),
+    }
     from collections import Counter
+
     print(f"[{args.scene}] statuses: {dict(Counter(r['status'] for r in results))}")
     if args.out:
         out = Path(args.out)

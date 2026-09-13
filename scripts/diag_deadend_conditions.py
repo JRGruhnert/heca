@@ -65,7 +65,9 @@ def margin(entity, value, up) -> dict:
     best_k, z, zd = entity._best_component(pose, p)
     pis = p["measurement"]["state"]["pis"]
     return {
-        "chi": round(float(math.sqrt(chi2.ppf(entity.cfg.z_quantile_joint, len(pose)))), 3),
+        "chi": round(
+            float(math.sqrt(chi2.ppf(entity.cfg.z_quantile_joint, len(pose)))), 3
+        ),
         "z": round(float(z), 3),
         "zd_cap": round(float(entity._z_dim_sigma), 3),
         "zd_max": round(float(np.max(zd)), 3),
@@ -87,10 +89,17 @@ def cond_value(graph, label, con, kind, node) -> dict:
     inside = None
     if bounds is not None:
         lo, hi = bounds
-        inside = bool(np.all(np.asarray(value) >= lo) and np.all(np.asarray(value) <= hi))
+        inside = bool(
+            np.all(np.asarray(value) >= lo) and np.all(np.asarray(value) <= hi)
+        )
     ok = m["z"] <= m["chi"] and m["zd_max"] <= m["zd_cap"] and m["state_ok"]
-    return {"label": label, "kind": kind, "ok": bool(ok), "in_train_bounds": inside,
-            **m}
+    return {
+        "label": label,
+        "kind": kind,
+        "ok": bool(ok),
+        "in_train_bounds": inside,
+        **m,
+    }
 
 
 def gate_report(graph, y) -> dict:
@@ -107,12 +116,20 @@ def gate_report(graph, y) -> dict:
         p = graph.assemble_subgoal(node)
         recs += [cond_value(graph, l, con.post, "post", node) for l in con.post.models]
         # would the goal be accepted directly by this option's post-condition?
-        goal_ok = all(
-            cond_value(graph, l, con.post, "post", node)["ok"]
-            for l in con.post.models
-        ) if p is not None else False
+        goal_ok = (
+            all(
+                cond_value(graph, l, con.post, "post", node)["ok"]
+                for l in con.post.models
+            )
+            if p is not None
+            else False
+        )
         ok = all(r.get("ok", False) for r in recs)
-        per_option[key] = {"ok": bool(ok), "goal_accepted": bool(goal_ok), "checks": recs}
+        per_option[key] = {
+            "ok": bool(ok),
+            "goal_accepted": bool(goal_ok),
+            "checks": recs,
+        }
         for r in recs:
             if not r.get("ok", False):
                 (pre_fail if r["kind"] == "pre" else post_fail)[r["label"]] += 1
@@ -173,7 +190,8 @@ def intervention(graph, x, y, pre_labels) -> dict:
                 base = con.pre.sample(label)
             except Exception as exc:  # noqa: BLE001 - diagnostic
                 out.setdefault(label, []).append(
-                    {"via": key, "error": f"{type(exc).__name__}: {exc}"})
+                    {"via": key, "error": f"{type(exc).__name__}: {exc}"}
+                )
                 continue
             x2 = x.copy()
             x2.set(label, base)
@@ -188,8 +206,14 @@ def intervention(graph, x, y, pre_labels) -> dict:
             graph.set_goal(y)
             graph.set_start(x)
             out.setdefault(label, []).append(
-                {"via": key, "opened": bool(opened), "n_feasible": int(n),
-                 "keys": keys[:5], "sampled_value": fmt(base.value)})
+                {
+                    "via": key,
+                    "opened": bool(opened),
+                    "n_feasible": int(n),
+                    "keys": keys[:5],
+                    "sampled_value": fmt(base.value),
+                }
+            )
     return out
 
 
@@ -246,14 +270,15 @@ def main():
             x = x0
             for step in range(max_opts):
                 try:
-                    graph.export()
+                    graph.build()
                 except RuntimeError:
                     if len(deadends) < args.max_deadends:
                         rep = gate_report(graph, y0)
                         sig = level_signature(x)
                         inter = intervention(graph, x, y0, pre_labels)
                         blocking = sorted(
-                            l for l, v in inter.items()
+                            l
+                            for l, v in inter.items()
                             if any(r.get("opened") for r in v)
                         )
                         for l in blocking:
@@ -264,19 +289,29 @@ def main():
                             for c in opt["checks"]:
                                 if c.get("ok") is False:
                                     agg_bounds[
-                                        (c["kind"], c["label"],
-                                         "inside" if c["in_train_bounds"] else "outside",
-                                         c["in_train_bounds"] is None)
+                                        (
+                                            c["kind"],
+                                            c["label"],
+                                            (
+                                                "inside"
+                                                if c["in_train_bounds"]
+                                                else "outside"
+                                            ),
+                                            c["in_train_bounds"] is None,
+                                        )
                                     ] += 1
-                        deadends.append({
-                            "ep": ep, "step": step,
-                            "report": rep,
-                            "level_signature": sig,
-                            "blocking_entity": blocking,
-                            "intervention": inter,
-                            "x": {l: fmt(v.value) for l, v in x.entities()},
-                            "y": {l: fmt(v.value) for l, v in y0.entities()},
-                        })
+                        deadends.append(
+                            {
+                                "ep": ep,
+                                "step": step,
+                                "report": rep,
+                                "level_signature": sig,
+                                "blocking_entity": blocking,
+                                "intervention": inter,
+                                "x": {l: fmt(v.value) for l, v in x.entities()},
+                                "y": {l: fmt(v.value) for l, v in y0.entities()},
+                            }
+                        )
                         agg_pre.update(rep["pre_fail_by_entity"])
                         agg_post.update(rep["post_fail_by_entity"])
                     ep_has_deadend = True
@@ -292,14 +327,20 @@ def main():
                 break
         if ep_has_deadend:
             n_eps_with_deadend += 1
-        print(f"  [{args.scene}] ep {ep+1}/{args.episodes} deadend-eps="
-              f"{n_eps_with_deadend} recorded={len(deadends)}", flush=True)
+        print(
+            f"  [{args.scene}] ep {ep+1}/{args.episodes} deadend-eps="
+            f"{n_eps_with_deadend} recorded={len(deadends)}",
+            flush=True,
+        )
         if len(deadends) >= args.max_deadends:
             break
 
     res = {
-        "scene": args.scene, "episodes": args.episodes, "tries": args.tries,
-        "seed": args.seed, "max_steps": max_opts,
+        "scene": args.scene,
+        "episodes": args.episodes,
+        "tries": args.tries,
+        "seed": args.seed,
+        "max_steps": max_opts,
         "n_options": len(graph.ns_option.keys),
         "episodes_with_deadend": n_eps_with_deadend,
         "deadends_recorded": len(deadends),
@@ -314,14 +355,22 @@ def main():
         "deadends": deadends,
         "elapsed_s": round(time.time() - t0, 1),
     }
-    print(f"[{args.scene}] dead-ends={len(deadends)} "
-          f"eps_with_deadend={n_eps_with_deadend}")
+    print(
+        f"[{args.scene}] dead-ends={len(deadends)} "
+        f"eps_with_deadend={n_eps_with_deadend}"
+    )
     print(f"  pre-fail  by entity: {dict(agg_pre.most_common(8))}")
     print(f"  post-fail by entity: {dict(agg_post.most_common(8))}")
-    print(f"  entity whose restore re-opens the gate: {dict(agg_blocker.most_common(8))}")
-    print(f"  failing value vs training bounds: "
-          f"{ {f'{k[0]}:{k[1]}:{k[2]}': v for k, v in agg_bounds.most_common(12)} }")
-    print(f"  level histogram: { {f'{k[0]}@{k[1]}': v for k, v in level_hist.most_common(12)} }")
+    print(
+        f"  entity whose restore re-opens the gate: {dict(agg_blocker.most_common(8))}"
+    )
+    print(
+        f"  failing value vs training bounds: "
+        f"{ {f'{k[0]}:{k[1]}:{k[2]}': v for k, v in agg_bounds.most_common(12)} }"
+    )
+    print(
+        f"  level histogram: { {f'{k[0]}@{k[1]}': v for k, v in level_hist.most_common(12)} }"
+    )
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)

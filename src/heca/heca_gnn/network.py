@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.distributions import Categorical
 
+from heca.data.entity import Entity
 from heca.graphs.data import HecaData
 from heca.heca_gnn.actor import ActorNetwork
 from heca.heca_gnn.critic import CriticNetwork
@@ -15,11 +16,10 @@ from heca.misc.base import Configurable
 
 
 class Network(Configurable, nn.Module):
+
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
         trunc: TruncNetwork.Config = TruncNetwork.Config()
-        actor: ActorNetwork.Config = ActorNetwork.Config()
-        critic: CriticNetwork.Config = CriticNetwork.Config()
         seperate_trunc: bool = False
 
     def __init__(self, cfg: Config):
@@ -31,8 +31,8 @@ class Network(Configurable, nn.Module):
         else:
             self.trunc = TruncNetwork(cfg.trunc)
 
-        self.actor_net = ActorNetwork(cfg.actor)
-        self.critic_net = CriticNetwork(cfg.critic)
+        self.actor_net = ActorNetwork(Entity.FEATURE_DIM)
+        self.critic_net = CriticNetwork(Entity.FEATURE_DIM)
 
     def actor(self, data: HecaData) -> torch.Tensor:
         if self.cfg.seperate_trunc:
@@ -82,12 +82,12 @@ class Network(Configurable, nn.Module):
         carried_memory: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         if self.cfg.seperate_trunc:
-            xa = self.actor_trunc(data)
-            xc = self.critic_trunc(data)
-            logits = self.actor_net(xa, carried_memory=carried_memory)
+            xa = self.actor_trunc(data, carried_memory=carried_memory)
+            xc = self.critic_trunc(data, carried_memory=carried_memory)
+            logits = self.actor_net(xa)
             value = self.critic_net(xc)
         else:
-            x = self.trunc(data)
-            logits = self.actor_net(x, carried_memory=carried_memory)
+            x = self.trunc(data, carried_memory=carried_memory)
+            logits = self.actor_net(x)
             value = self.critic_net(x)
         return logits, value

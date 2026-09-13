@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import ClassVar, Generic, TypeVar
 
 import torch
 
@@ -9,6 +9,8 @@ T = TypeVar("T", bound=GraphNode)
 
 
 class NodeSet(Generic[T]):
+    type: ClassVar[str]
+
     def __init__(self):
         self.items: list[T] = []
         self.keys: list[str] = []
@@ -16,19 +18,11 @@ class NodeSet(Generic[T]):
         self.x: torch.Tensor = torch.empty(1)
         self.type_ids: torch.Tensor = torch.empty(0, dtype=torch.long)
 
-    @property
-    def type(self) -> str:
-        raise NotImplementedError
-
     def add(self, key: str, value: T):
         assert key not in self.index, f"duplicate node key: {key}"
         self.index[key] = len(self.items)
         self.items.append(value)
         self.keys.append(key)
-
-    def key_update(self, key: str, data: DCEntity):
-        idx = self.index[key]
-        self.items[idx].data = data
 
     def key_at(self, idx: int) -> str:
         return self.keys[idx]

@@ -131,10 +131,6 @@ class EntityRowEncoder(nn.Module):
         return out
 
     def goal_slot(self, canonical_x: torch.Tensor, data: HecaData) -> torch.Tensor:
-        roles = data["state"].type_ids
-        pooled = self.state_aggregation(
-            canonical_x,
-            data[("canonical", "aggregation", "state")].edge_index,
-            roles.shape[0],
-        )
-        return pooled[roles == ROLE_GOAL]
+        """The pooled goal rows of the canonical set."""
+        roles = data.canonical.role_ids
+        return self.state_aggregation(canonical_x[roles == ROLE_GOAL])

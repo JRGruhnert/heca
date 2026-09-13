@@ -122,7 +122,9 @@ def effect_scores(data, mask: np.ndarray) -> np.ndarray:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--network", default="both", choices=conf.networks.NETWORK_NAMES)
+    parser.add_argument(
+        "--network", default="both", choices=conf.networks.NETWORK_NAMES
+    )
     parser.add_argument("--tag", default="scene0_test9-both-_gv_b")
     parser.add_argument("--ckp", default="ckp_500.pt")
     parser.add_argument("--episodes", type=int, default=60)
@@ -144,11 +146,15 @@ def main():
 
     net = Network.get(getattr(conf.networks, args.network))
     ckp_path = Path("data/network/standard") / args.tag / args.ckp
-    raw = torch.load(ckp_path, map_location=hardware.device, weights_only=False)["network"]
+    raw = torch.load(ckp_path, map_location=hardware.device, weights_only=False)[
+        "network"
+    ]
     mapped, unmapped = remap_legacy(raw)
     missing, unexpected = net.load_state_dict(mapped, strict=False)
     print(f"checkpoint: {ckp_path}")
-    print(f"  {len(mapped)} keys remapped, {len(missing)} missing, {len(unexpected)} unexpected")
+    print(
+        f"  {len(mapped)} keys remapped, {len(missing)} missing, {len(unexpected)} unexpected"
+    )
     if unmapped:
         print(f"  unmapped legacy keys ({len(unmapped)}): {unmapped[:4]}")
     if len(missing) > 10:
@@ -222,14 +228,14 @@ def main():
         np.random.seed(seed)
         graph.set_goal(y0)
         graph.set_start(x0)  # set_start() refreshes the canonical + goal rows
-        data_a = graph.export()
+        data_a = graph.build()
         keys_a = list(graph._export_keys)
         la = logits(data_a)
 
         np.random.seed(seed)
         graph.set_goal(y1)  # swap the goal, keep the same start
         graph.set_start(x0)  # the flow training uses: refresh nodes + edges
-        data_b = graph.export()
+        data_b = graph.build()
         keys_b = list(graph._export_keys)
         lb = logits(data_b)
 
@@ -275,26 +281,38 @@ def main():
     if has_mem:
         print(f"  |dlogit| memory removed          : {stat(d_mem)}")
     print(f"  options shared by both goals     : {stat(overlap)}")
-    print(f"\n  argmax invariant under goal swap : {swap_same}/{n_pairs} "
-          f"({100.0 * swap_same / max(n_pairs, 1):.1f}%)")
-    print(f"  argmax == best effect match      : {np.mean(agree_oracle) * 100:.1f}% "
-          f"({int(np.sum(agree_oracle))}/{n_pairs})")
+    print(
+        f"\n  argmax invariant under goal swap : {swap_same}/{n_pairs} "
+        f"({100.0 * swap_same / max(n_pairs, 1):.1f}%)"
+    )
+    print(
+        f"  argmax == best effect match      : {np.mean(agree_oracle) * 100:.1f}% "
+        f"({int(np.sum(agree_oracle))}/{n_pairs})"
+    )
 
     def m(xs: list[float]) -> float:
         return float(np.mean(xs)) if xs else 0.0
 
     print("\n  actor FiLM / goal generator")
     print(f"    |h_goal|                          : {m(h_norm):.3f}")
-    print(f"    |W h_goal| / |bias|               : {m(wh_norm) / max(bias_norm, 1e-9):.4f}"
-          f"   (|W h| {m(wh_norm):.3f}, |bias| {bias_norm:.3f})")
+    print(
+        f"    |W h_goal| / |bias|               : {m(wh_norm) / max(bias_norm, 1e-9):.4f}"
+        f"   (|W h| {m(wh_norm):.3f}, |bias| {bias_norm:.3f})"
+    )
     print(f"    |gamma|                           : {m(gamma_norm):.3f}")
-    print(f"    |gamma(A)-gamma(B)| / |gamma|     : {m(d_gamma) / max(m(gamma_norm), 1e-9):.4f}"
-          "   (goal-driven share of the modulation)")
-    print(f"    |beta(A)-beta(B)| / |beta|        : {m(d_beta) / max(m(beta_norm), 1e-9):.4f}")
-    print("\n  A high argmax invariance together with a small |dlogit|/spread would mean the "
-          "goal\n  barely enters the decision. Note the greedy effect-match rule is only a "
-          "one-step\n  heuristic: for multi-step goals the right first option is often a "
-          "precondition enabler.")
+    print(
+        f"    |gamma(A)-gamma(B)| / |gamma|     : {m(d_gamma) / max(m(gamma_norm), 1e-9):.4f}"
+        "   (goal-driven share of the modulation)"
+    )
+    print(
+        f"    |beta(A)-beta(B)| / |beta|        : {m(d_beta) / max(m(beta_norm), 1e-9):.4f}"
+    )
+    print(
+        "\n  A high argmax invariance together with a small |dlogit|/spread would mean the "
+        "goal\n  barely enters the decision. Note the greedy effect-match rule is only a "
+        "one-step\n  heuristic: for multi-step goals the right first option is often a "
+        "precondition enabler."
+    )
 
 
 if __name__ == "__main__":

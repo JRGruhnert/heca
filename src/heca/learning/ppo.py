@@ -39,9 +39,7 @@ def score_chunks(
         # own record; every later one is carried over, so the recurrence is
         # unrolled across the chunk and the GRU gets gradient from later steps.
         for pos, t in enumerate(seg):
-            logits, value = net(
-                data[t], carried_memory=carried if pos > 0 else None
-            )
+            logits, value = net(data[t], carried_memory=carried if pos > 0 else None)
             dist = Categorical(logits=logits)
             logprobs.append(dist.log_prob(actions[t : t + 1]))
             values.append(value)
@@ -97,7 +95,7 @@ class PPO(Learner):
         old_values = self.buffer.values.detach().squeeze(-1)
         N = len(old_data)
 
-        use_chunked = self.network.actor_net.cfg.use_timeline_memory
+        use_chunked = self.network.trunc.cfg.use_timeline_memory
         if use_chunked:
             terminals = [
                 t or tr for t, tr in zip(self.buffer.terminals, self.buffer.truncates)

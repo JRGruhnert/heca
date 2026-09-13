@@ -40,7 +40,12 @@ from heca.graphs.graph import Graph, SubgoalMode
 from heca.scenes.scene import Scene
 
 from scripts.common.scenes import find_scene_config, find_scene_models
-from scripts.diag_scene_reachability import env_restore, env_snapshot, run_chain, try_export
+from scripts.diag_scene_reachability import (
+    env_restore,
+    env_snapshot,
+    run_chain,
+    try_export,
+)
 
 
 def mismatch(x, y) -> float:
@@ -65,28 +70,46 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", required=True)
     ap.add_argument("--episodes", type=int, default=60)
-    ap.add_argument("--episode-list", default=None,
-                    help="comma separated episode indices to run instead of "
-                         "range(--episodes); use together with --env-seed to "
-                         "revisit specific reproducible tasks")
-    ap.add_argument("--loose-gate", action="store_true",
-                    help="patch Entity.score_single to always accept, i.e. drop "
-                         "the state gate entirely (control experiment: is the "
-                         "gate what blocks these tasks?)")
-    ap.add_argument("--gate-ratio", type=float, default=1.0,
-                    help="scale the gate's acceptance radii (chi2 joint radius "
-                         "and per-dim sigma cap) by this factor; 1.0 = unchanged. "
-                         "Tests how far outside the fitted support the blocked "
-                         "states are")
+    ap.add_argument(
+        "--episode-list",
+        default=None,
+        help="comma separated episode indices to run instead of "
+        "range(--episodes); use together with --env-seed to "
+        "revisit specific reproducible tasks",
+    )
+    ap.add_argument(
+        "--loose-gate",
+        action="store_true",
+        help="patch Entity.score_single to always accept, i.e. drop "
+        "the state gate entirely (control experiment: is the "
+        "gate what blocks these tasks?)",
+    )
+    ap.add_argument(
+        "--gate-ratio",
+        type=float,
+        default=1.0,
+        help="scale the gate's acceptance radii (chi2 joint radius "
+        "and per-dim sigma cap) by this factor; 1.0 = unchanged. "
+        "Tests how far outside the fitted support the blocked "
+        "states are",
+    )
     ap.add_argument("--tries", type=int, default=60)
     ap.add_argument("--restarts", type=int, default=8)
-    ap.add_argument("--lookahead", type=int, default=3,
-                    help="evaluate best-K candidates with a follow-up step")
+    ap.add_argument(
+        "--lookahead",
+        type=int,
+        default=3,
+        help="evaluate best-K candidates with a follow-up step",
+    )
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--env-seed", type=int, default=None,
-                    help="seed the ogbench env RNG per episode (episode i gets "
-                         "default_rng(env_seed + i)) so the task stream is "
-                         "reproducible across runs")
+    ap.add_argument(
+        "--env-seed",
+        type=int,
+        default=None,
+        help="seed the ogbench env RNG per episode (episode i gets "
+        "default_rng(env_seed + i)) so the task stream is "
+        "reproducible across runs",
+    )
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -100,8 +123,11 @@ def main():
         # ``score_single``
         Entity.score_prepared = lambda self, sample, p, eps=1e-15: True  # type: ignore[assignment]
         Entity.score_single = lambda self, sample, up, eps=1e-15: True  # type: ignore[assignment]
-        print("  [gate] Entity.score_prepared/score_single patched: every option "
-              "is feasible", flush=True)
+        print(
+            "  [gate] Entity.score_prepared/score_single patched: every option "
+            "is feasible",
+            flush=True,
+        )
     elif args.gate_ratio != 1.0:
         import numpy as np
 
@@ -138,7 +164,7 @@ def main():
         graph.set_start(x)
         # ``Graph.select`` indexes the key list of the *last* export, so refresh
         # it for this state before selecting by index.
-        graph.export()
+        graph.build()
         assert i < len(graph.export_keys), (i, len(graph.export_keys))
         a, s = graph.select(i)
         z, fb = ExpertModel.get(a).act(x, s)
@@ -164,11 +190,14 @@ def main():
             # randomize among near-best to explore different orders
             scored.sort(reverse=True)
             best = scored[0][0]
-            pool = [i for sc, i in scored if sc >= best - 1e-6] if best <= 0 else \
-                   [i for sc, i in scored if sc >= best * 0.98]
+            pool = (
+                [i for sc, i in scored if sc >= best - 1e-6]
+                if best <= 0
+                else [i for sc, i in scored if sc >= best * 0.98]
+            )
             # lookahead: refine the top-K by their best follow-up
             if use_lookahead and len(scored) > 1:
-                top = [i for _sc, i in scored[:args.lookahead]]
+                top = [i for _sc, i in scored[: args.lookahead]]
                 refined = []
                 for i in top:
                     z1, fb1 = eval_option(x, y0, i, snap, step_before)
@@ -187,7 +216,7 @@ def main():
                             best2 = sc2
                     refined.append(((base - mismatch(z1, y0)) + (best2 or 0.0), i))
                 refined.sort(reverse=True)
-                pool = [i for _sc, i in refined[:max(1, args.lookahead // 2)]]
+                pool = [i for _sc, i in refined[: max(1, args.lookahead // 2)]]
             pick = int(pool[rng_local.randint(len(pool))])
             z, fb = eval_option(x, y0, pick, snap, step_before)
             trace.append(keys[pick])
@@ -201,8 +230,11 @@ def main():
         return False, n, mismatch(x, y0), trace
 
     results = []
-    eps = ([int(e) for e in args.episode_list.split(",") if e.strip()]
-           if args.episode_list else list(range(args.episodes)))
+    eps = (
+        [int(e) for e in args.episode_list.split(",") if e.strip()]
+        if args.episode_list
+        else list(range(args.episodes))
+    )
     for ep in eps:
         if args.env_seed is not None:
             scene.env.np_random = np.random.default_rng(args.env_seed + ep)
@@ -227,8 +259,10 @@ def main():
         if solved:
             continue
 
-        print(f"  [{args.scene}] ep {ep}: random oracle failed -> guided search",
-              flush=True)
+        print(
+            f"  [{args.scene}] ep {ep}: random oracle failed -> guided search",
+            flush=True,
+        )
         best = None
         for r in range(args.restarts):
             env_restore(scene, snap0)
@@ -237,14 +271,24 @@ def main():
             graph.set_start(x0)
             rng_local = np.random.RandomState(1000 + r)
             ok, ln, mm, trace = guided_chain(
-                x0, y0, snap0, rng_local,
+                x0,
+                y0,
+                snap0,
+                rng_local,
                 use_lookahead=(r % 2 == 1 and args.lookahead > 0),
             )
-            print(f"      restart {r}: solved={ok} opts={ln} mismatch={mm:.4f}",
-                  flush=True)
+            print(
+                f"      restart {r}: solved={ok} opts={ln} mismatch={mm:.4f}",
+                flush=True,
+            )
             if best is None or mm < best["mismatch"]:
-                best = {"solved": ok, "opts": ln, "mismatch": mm,
-                        "restart": r, "trace": trace[:10]}
+                best = {
+                    "solved": ok,
+                    "opts": ln,
+                    "mismatch": mm,
+                    "restart": r,
+                    "trace": trace[:10],
+                }
             if ok:
                 break
         results.append({"ep": ep, **best})
@@ -260,11 +304,15 @@ def main():
         "results": results,
         "elapsed_s": round(time.time() - t0, 1),
     }
-    print(f"[{args.scene}] random failures={len(results)}, "
-          f"guided solved={res['guided_solved']}")
+    print(
+        f"[{args.scene}] random failures={len(results)}, "
+        f"guided solved={res['guided_solved']}"
+    )
     for r in results:
-        print(f"   ep {r['ep']}: solved={r['solved']} best_mismatch={r['mismatch']:.4f} "
-              f"opts={r['opts']}")
+        print(
+            f"   ep {r['ep']}: solved={r['solved']} best_mismatch={r['mismatch']:.4f} "
+            f"opts={r['opts']}"
+        )
     if args.out:
         out = Path(args.out)
         out.parent.mkdir(parents=True, exist_ok=True)

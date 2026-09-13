@@ -138,11 +138,9 @@ class Learner(Persistable):
     def eval(self):
         self.train_mode = False
 
-    def predict(self, data: HecaData, new_episode: bool) -> int:
-        use_mem = self.network.actor_net.cfg.use_timeline_memory
-        if new_episode:
-            self._mem_pending = None
-            self._eval_choice = None
+    def predict(self, data: HecaData) -> int:
+        use_mem = self.network.cfg.trunc.use_timeline_memory
+
         if use_mem and self._mem_pending is not None:
             data.mem_step = self._mem_pending
             self._mem_pending = None
@@ -187,17 +185,9 @@ class Learner(Persistable):
             # Network config
             "network/input_dim": Entity.FEATURE_DIM,
             "network/max_state": Entity.MAX_STATE_DIM,
-            "network/actor/feature_dim": self.cfg.network.actor.feature_dim,
-            "network/actor/use_option_effects": (
-                self.cfg.network.actor.use_option_effects
-            ),
-            "network/actor/use_option_interaction": (
-                self.cfg.network.actor.use_option_interaction
-            ),
-            "network/actor/use_timeline_memory": (
-                self.cfg.network.actor.use_timeline_memory
-            ),
-            "network/critic/feature_dim": self.cfg.network.critic.feature_dim,
+            "network/use_option_effects": (self.cfg.network.trunc.use_effects),
+            "network/use_option_interaction": (self.cfg.network.trunc.use_interaction),
+            "network/use_timeline_memory": (self.cfg.network.trunc.use_timeline_memory),
         }
 
         self._wandb_run = wandb.init(
@@ -237,7 +227,7 @@ class Learner(Persistable):
     def update(self, fb: SceneFeedback) -> bool:
         if self.cfg.normalize_rewards:
             fb.reward = self.normalizer.update(fb.reward)
-        use_mem = self.network.actor_net.cfg.use_timeline_memory
+        use_mem = self.network.trunc.cfg.use_timeline_memory
         if self.train_mode:
             assert isinstance(self.pocket, TempStore)
             if use_mem:
@@ -256,6 +246,9 @@ class Learner(Persistable):
                 emb, mem = self._eval_choice
                 u = self._memory_input(emb)
                 self._mem_pending = (u, mem)
+        if fb.end:
+            self._mem_pending = None
+            self._eval_choice = None
         return False
 
     def _save(self, path: Path):

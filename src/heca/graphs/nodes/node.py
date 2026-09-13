@@ -5,25 +5,26 @@ from enum import Enum
 
 import numpy as np
 
+from heca.data.pair import ConPair
 from heca.experts.expert import ExpertModel
 from heca.data.condition import Condition
-from heca.data.data import DCEntity, DCScene
+from heca.data.data import DCEntity
 
 
 class ValueMode(Enum):
     GOAL = "Goal"
     START = "Start"
     SAMPLE = "Sample"
+    SUBGOAL = "Subgoal"
 
 
 @dataclass(slots=True, kw_only=True)
 class GraphNode(ABC):
-    data: DCEntity
     sources: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set[str]))
 
     def __str__(self) -> str:
         src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
-        return f"data={self.data} sources=[{src_str}]"
+        return f"sources=[{src_str}]"
 
 
 @dataclass(slots=True, kw_only=True)
@@ -32,6 +33,8 @@ class EntityNode(GraphNode):
     type_id: int
     data: DCEntity
     n_states: int
+    con: Condition
+    vmode: ValueMode
 
     def __str__(self) -> str:
         src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
@@ -45,57 +48,35 @@ class EntityNode(GraphNode):
 
 
 @dataclass(slots=True, kw_only=True)
-class SubgoalNode(EntityNode):
+class CompNode(GraphNode):
     entity: str
     type_id: int
     data: DCEntity
     n_states: int
-
-
-@dataclass(slots=True, kw_only=True)
-class ValueNode(EntityNode):
-    entity: str
-    type_id: int
-    data: DCEntity
-    n_states: int
-    #
-    con: Condition
-    vmode: ValueMode
-
-
-@dataclass(slots=True, kw_only=True)
-class CompNode(EntityNode):
-    entity: str
-    type_id: int
-    data: DCEntity
-    n_states: int
-    #
     weight: float
 
 
 @dataclass(slots=True, kw_only=True)
-class CanonicalNode(EntityNode):
-    """A per-entity current or goal value (the critic's side of the fork)."""
+class StateNode(GraphNode):
+    role: int
+    data: float = 0.0
 
+
+@dataclass(slots=True, kw_only=True)
+class CanonicalNode(GraphNode):
     entity: str
     type_id: int
     n_states: int
     #
-    role: int = 0
-    data: DCEntity = field(default_factory=DCEntity.empty)
-
-
-@dataclass(slots=True, kw_only=True)
-class StateNode(GraphNode):
-    role: int = 0
-    data: DCEntity = field(default_factory=DCEntity.empty)
+    role: int
+    data: DCEntity = DCEntity.empty()
 
 
 @dataclass(slots=True, kw_only=True)
 class OptionNode(GraphNode):
     model: ExpertModel.Config
-    data: DCScene = DCScene.empty()
-    effect: np.ndarray | None = None
+    effect: np.ndarray
+    gated: bool = False
 
     # OptionNode __str__:
     def __str__(self) -> str:

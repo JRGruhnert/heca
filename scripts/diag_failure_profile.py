@@ -125,7 +125,7 @@ def main():
         term = trunc = False
         last_fb = None
         for _ in range(max_opts + 5):
-            data = graph.export()
+            data = graph.build()
             keys = graph.export_keys
             if len(keys) == 0:
                 trunc = True
