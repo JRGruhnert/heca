@@ -42,6 +42,7 @@ import conf.networks
 from heca.data.entity import Entity
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
+from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.scenes.scene import Scene
@@ -112,9 +113,9 @@ def cos_to(a: np.ndarray, b: np.ndarray, eps: float = 1e-12) -> np.ndarray:
 
 def effect_scores(data, mask: np.ndarray) -> np.ndarray:
     """cos(effect_i, goal - current) over the mean blocks, per option."""
-    can = data["canonical"]
-    cur = can.x[can.cur_idx].numpy()
-    goal = can.x[can.goal_idx].numpy()
+    ent = data["entity"]
+    cur = ent.x[ent.role_ids == ROLE_CURRENT].numpy()
+    goal = ent.x[ent.role_ids == ROLE_GOAL].numpy()
     delta = (goal - cur).mean(axis=0)
     effects = data["option"].x.numpy()
     return cos_to(effects[:, mask], delta[None, mask])
@@ -173,7 +174,7 @@ def main():
         """Goal slot zeroed (same weights, no goal information)."""
         original = actor.encoder.goal_slot
         dim = actor.cfg.feature_dim
-        actor.encoder.goal_slot = lambda canonical_x, d: canonical_x.new_zeros(1, dim)
+        actor.encoder.goal_slot = lambda entity_x, d: entity_x.new_zeros(1, dim)
         try:
             return logits(data)
         finally:
@@ -210,8 +211,8 @@ def main():
 
     def modulation(data) -> tuple[np.ndarray, np.ndarray]:
         with torch.inference_mode():
-            canonical_x = actor.encoder.encode("canonical", data)
-            h = actor.encoder.goal_slot(canonical_x, data)
+            entity_x = actor.encoder.encode("entity", data)
+            h = actor.encoder.goal_slot(entity_x, data)
             gamma, beta = goal_film.params(h)
             wh = goal_film.generator.weight.detach() @ h.squeeze(0)
         h_norm.append(float(h.norm()))
@@ -227,7 +228,7 @@ def main():
 
         np.random.seed(seed)
         graph.set_goal(y0)
-        graph.set_start(x0)  # set_start() refreshes the canonical + goal rows
+        graph.set_start(x0)  # refreshes the current/goal rows of the entity set
         data_a = graph.build()
         keys_a = list(graph._export_keys)
         la = logits(data_a)

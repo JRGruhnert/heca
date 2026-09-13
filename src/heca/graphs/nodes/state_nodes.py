@@ -2,24 +2,22 @@ import torch
 
 from heca.graphs.nodes.node import StateNode
 from heca.graphs.nodes.node_set import NodeSet
-from heca.graphs.roles import ROLE_ALL, ROLE_GATED, ROLE_UNGATED
+from heca.graphs.roles import ROLE_ALL
 
 
 class StateNodes(NodeSet[StateNode]):
     type = "state"
-    ungated = "ungated"
-    gated = "gated"
-    all = "all"
+    state = "state"
+
+    FEATURE_DIM = 1
 
     def __init__(self):
         super().__init__()
-
-        self.add(self.ungated, StateNode(role=ROLE_UNGATED))
-        self.add(self.all, StateNode(role=ROLE_ALL))
-        self.add(self.gated, StateNode(role=ROLE_GATED))
+        self.add(self.state, StateNode(role=ROLE_ALL))
 
     def build(self, budget: float):
-        self.x = torch.tensor((len(self.items), [budget]), dtype=torch.float32)
+        assert len(self.items) == 1
+        self.x = torch.full((1, self.FEATURE_DIM), float(budget), dtype=torch.float32)
         self.type_ids = torch.tensor(
             [node.role for node in self.items], dtype=torch.long
         )

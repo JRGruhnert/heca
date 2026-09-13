@@ -4,6 +4,8 @@ from typing import NamedTuple
 import torch
 from torch import nn
 from heca.data.entity import Entity
+from heca.heca_gnn.modules.identity import IdentityBlock
+from heca.heca_gnn.modules.interaction import TransformerBlock
 from heca.misc.base import Configurable
 from heca.graphs.data import HecaData
 from heca.graphs.edges.condition_edges import ConditionEdges
@@ -17,79 +19,74 @@ from heca.heca_gnn.modules.overview import SceneGNNBlock
 from heca.heca_gnn.modules.summary import SummaryBlock
 from heca.heca_gnn.modules.timeline import TimelineMemory
 from heca.heca_gnn.modules.translation import TranslationBlock
-from heca.heca_gnn.modules.interaction import OptionInteraction
 
 
 class TruncedRows(NamedTuple):
     option: torch.Tensor
     state: torch.Tensor
+    memory: torch.Tensor | None
 
 
 class TruncNetwork(Configurable, nn.Module):
-    _last_option_x: torch.Tensor
-    _last_mem: torch.Tensor
+    condenser_names = ("memory",)
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        use_interaction: bool = False
-        use_timeline_memory: bool = False
-        use_hyperedge: bool = False
-        use_summary_attr: bool = False
+        use_transformer: bool = False
+        use_memory: bool = False
+        # use_hyperedge: bool = False
         use_effects: bool = False
         use_film: bool = True
 
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, name: str):
         nn.Module.__init__(self)
         self.cfg = cfg
-
+        self.name = name
         self.encoder = EncoderBlock(Entity.FEATURE_DIM, cfg.use_effects)
         self.condition_layer = ConditionBlock(Entity.FEATURE_DIM)
         self.translation_layer = TranslationBlock(Entity.FEATURE_DIM)
         self.summary_layer = SummaryBlock(Entity.FEATURE_DIM)
         self.scene_layer = SceneGNNBlock(Entity.FEATURE_DIM)
-
-        if cfg.use_interaction:
-            self.interaction_layer = OptionInteraction(Entity.FEATURE_DIM)
-        else:
-            self.interaction_layer = None
-
-        if cfg.use_timeline_memory:
-            self.timeline_layer = TimelineMemory(Entity.FEATURE_DIM)
-        else:
-            self.timeline_layer = None
-
         self.films = FiLMStack(Entity.FEATURE_DIM, self.condenser_names)
 
-    # logits gating
-    # hyperedges with canonical
-    # goal node with canonical
-    # film vs concat
-    # memory fix
-    #
-    def _resolve_memory(
-        self,
-        data: HecaData,
-        ref: torch.Tensor,
-        carried: torch.Tensor | None,
-    ) -> torch.Tensor | None:
-        if self.timeline_layer is None:
-            self._last_mem = ref.new_zeros(1, Entity.FEATURE_DIM)
-            return None
-        if carried is None:
-            step = data.mem_step
-            carried = (
-                ref.new_zeros(1, Entity.FEATURE_DIM)
-                if step is None
-                else self.timeline_layer(*step)
-            )
-        self._last_mem = carried  # type: ignore
-        return carried
+        if cfg.use_transformer:
+            self.transformer_layer = TransformerBlock(Entity.FEATURE_DIM)
+        else:
+            self.transformer_layer = IdentityBlock()
 
-    def forward(
-        self,
-        data: HecaData,
-        carried_memory: torch.Tensor | None = None,
+        if cfg.use_memory:
+            self.timeline_layer = TimelineMemory(Entity.FEATURE_DIM)
+        else:
+            self.timeline_layer = IdentityBlock()
+
+    # logits gating
+    # hyperedges over the rows of one entity
+    # goal rows in the option path (see set_goal_rows)
+
+    @property
+    def output_dim(self) -> int:
+        if self.cfg.use_film:
+            return Entity.FEATURE_DIM
+        return Entity.FEATURE_DIM * (1 + len(self.condenser_names))
+
+    def _memory(self, data: HecaData, state: torch.Tensor) -> torch.Tensor | None:
+        if not self.cfg.use_memory:
+            return None
+        return self.timeline_layer(state, data.memory.get(self.name))
+
+    def _condition(
+        self, option_x: torch.Tensor, conds: dict[str, torch.Tensor]
     ) -> torch.Tensor:
+        if not conds:
+            return option_x
+        if self.cfg.use_film:
+            return self.films(option_x, conds)
+        return torch.cat(
+            [option_x] + [c.expand(option_x.shape[0], -1) for c in conds.values()],
+            dim=-1,
+        )
+
+    def forward(self, data: HecaData) -> TruncedRows:
         x: EncodedRows = self.encoder(data)
 
         entity_x = self.condition_layer(
@@ -110,28 +107,17 @@ class TruncNetwork(Configurable, nn.Module):
             data[SummaryEdges.type].edge_index,
         )
 
+        option_x = self.transformer_layer(option_x)
+
         state_x = self.scene_layer(
             option_x,
-            data[SceneEdges.type].x,
+            x.state,
             data[SceneEdges.type].edge_index,
             data[SceneEdges.type].edge_attr,
         )
+        memory = self._memory(data, state_x)
 
-        if self.interaction_layer is not None:
-            option_x = self.interaction_layer(option_x)
+        conds = {} if memory is None else {"memory": memory}
+        option_x = self._condition(option_x, conds)
 
-        self._last_option_x = option_x
-
-        memory = self._resolve_memory(data, option_x, carried_memory)
-        conds = {}
-        if memory is not None:
-            conds["memory"] = memory
-
-        if not self.cfg.use_film:
-            option_x = torch.cat(
-                [option_x]
-                + [conds[name].expand(option_x.shape[0], -1) for name in conds],
-                dim=-1,
-            )
-
-        return self.option_readout(option_x, self.films, conds)
+        return TruncedRows(option=option_x, state=state_x, memory=memory)

@@ -8,6 +8,7 @@ from heca.graphs.data import HecaData
 from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
 from heca.graphs.nodes.option_nodes import OptionNodes
+from heca.graphs.nodes.state_nodes import StateNodes
 from heca.heca_gnn.modules.encoders.common import SetEncoder
 from heca.heca_gnn.modules.encoders.option_encoder import OptionEncoder
 
@@ -16,7 +17,7 @@ class EncodedRows(NamedTuple):
     entity: torch.Tensor
     comp: torch.Tensor
     option: torch.Tensor
-    canonical: torch.Tensor | None = None
+    state: torch.Tensor
 
 
 class RowEncoderGroup(nn.Module):
@@ -39,10 +40,12 @@ class EncoderBlock(nn.Module):
         self.dim = dim
         self.rows = RowEncoderGroup(dim, self.ROW_FIELDS)
         self.option_encoder = OptionEncoder(Entity.FEATURE_DIM, dim, use_option_effects)
+        self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, dim)
 
     def forward(self, data: HecaData) -> EncodedRows:
         encoded = self.rows(
             {name: (data[name].x, data[name].type_ids) for name in self.rows.fields}
         )
         encoded[OptionNodes.type] = self.option_encoder(data.option.x)
+        encoded[StateNodes.type] = self.state_encoder(data[StateNodes.type].x)
         return EncodedRows(**encoded)

@@ -13,7 +13,7 @@ Runs a fixed, seeded sequence of scene0 episodes with the checkpoint's argmax
 
 ``--memory on|off`` controls whether the recurrent memory is carried across
 option steps of an episode the way ``Learner.predict`` does
-(``data.mem_step = (previous_option_embedding, previous_memory)``). Old
+(``data.memory = previous_memory``). Old
 checkpoints predate the state-aggregation layer, so the script also restores the
 mean-pooled goal block they were trained with.
 
@@ -42,6 +42,7 @@ from torch.distributions import Categorical
 import conf.networks
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
+from heca.graphs.roles import ROLE_GOAL
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.scenes.scene import Scene
@@ -90,26 +91,32 @@ def main():
     if args.legacy_goal_pool and "state_aggregation" not in " ".join(
         ckp["network"].keys()
     ):
-        # Pre-aggregation checkpoints saw the mean of the canonical goal rows.
+        # Pre-aggregation checkpoints saw the mean of the goal rows.
         # Only the actor pools a goal slot for its logits, so patch it there.
-        from heca.graphs.graph import CANONICAL
-
-        network.actor_net.encoder.goal_slot = lambda canonical_x, data: (  # type: ignore[method-assign]
-            canonical_x[data[CANONICAL].goal_idx].mean(dim=0, keepdim=True)
+        network.actor_net.encoder.goal_slot = lambda entity_x, data: (  # type: ignore[method-assign]
+            entity_x[data.entity.role_ids == ROLE_GOAL].mean(dim=0, keepdim=True)
         )
     network.eval()
-    block = network.actor_net.interaction_layer
-    use_mem = network.actor_net.timeline_layer is not None
+    # the interaction block and the recurrence live in the trunk
+    actor_trunk = network.trunk_for("actor")
+    block = actor_trunk.transformer_layer
+    use_mem = network.uses_memory
     if args.memory == "on":
         use_mem = True
     elif args.memory == "off":
         use_mem = False
 
     captured: dict[str, torch.Tensor] = {}
-    if block is not None:
-        block.register_forward_pre_hook(
-            lambda _m, inputs: captured.__setitem__("before", inputs[0].detach())
+    # capture the option rows going into and coming out of the block, so the
+    # script does not need any side channel out of the network
+    block.register_forward_pre_hook(
+        lambda _m, inputs: captured.__setitem__("before", inputs[0].detach())
+    )
+    block.register_forward_hook(
+        lambda _m, _inputs, output: captured.__setitem__(
+            "after", output.detach()
         )
+    )
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -135,18 +142,18 @@ def main():
                 data = graph.build()
             except RuntimeError:
                 break
-            if use_mem and pending is not None:
-                data.mem_step = pending
+            if use_mem and pending:
+                data.memory = pending
             with torch.inference_mode():
-                logits = network.actor(data)
+                out = network(data)
+                logits = out.logits
                 before = captured.get("before")
-                after = network.actor_net._last_option_x
-                if block is not None:
-                    network.actor_net.interaction_layer = nn.Identity()
-                    logits_ablated = network.actor(data)
-                    network.actor_net.interaction_layer = block
+                after = captured.get("after")
+                actor_trunk.transformer_layer = nn.Identity()
+                logits_ablated = network(data).logits
+                actor_trunk.transformer_layer = block
             steps_total += 1
-            if block is not None and before is not None and before.shape[0] > 1:
+            if before is not None and after is not None and before.shape[0] > 1:
                 cos_before.append(float(pairwise_cosine(before).mean()))
                 cos_after.append(float(pairwise_cosine(after).mean()))
                 diff = logits.squeeze(0) - logits_ablated.squeeze(0)
@@ -162,10 +169,8 @@ def main():
                 else Categorical(logits=logits).sample()
             )
             if use_mem:
-                pending = (
-                    network.actor_net._last_option_x[action].detach(),
-                    network.actor_net._last_mem.detach(),
-                )
+                # plain tensors: what a replay may differentiate through
+                pending = {name: v.detach().clone() for name, v in out.memory.items()}
             model_cfg, subgoal = graph.select(int(action))
             z, fb = ExpertModel.get(model_cfg).act(x, subgoal)
             x = z

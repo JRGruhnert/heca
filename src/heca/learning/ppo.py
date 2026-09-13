@@ -4,7 +4,7 @@ from torch.nn.utils.clip_grad import clip_grad_norm_
 from torch.distributions import Categorical
 
 from heca.learning.learner import Learner
-from heca.graphs.data import HecaData
+from heca.graphs.data import HecaData, TrunkMemory, installed_memory
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.misc.interrupt import stop_requested
@@ -34,25 +34,17 @@ def score_chunks(
     values: list[torch.Tensor] = []
     entropies: list[torch.Tensor] = []
     for seg in chunks:
-        carried: torch.Tensor | None = None
-        # The first element of a chunk rebuilds its memory from the transition's
-        # own record; every later one is carried over, so the recurrence is
-        # unrolled across the chunk and the GRU gets gradient from later steps.
+        carried: TrunkMemory = {}
         for pos, t in enumerate(seg):
-            logits, value = net(data[t], carried_memory=carried if pos > 0 else None)
-            dist = Categorical(logits=logits)
+            recorded = data[t].memory
+            with installed_memory(data[t], recorded if pos == 0 else carried):
+                out = net(data[t])
+            dist = Categorical(logits=out.logits)
             logprobs.append(dist.log_prob(actions[t : t + 1]))
-            values.append(value)
+            values.append(out.value)
             entropies.append(dist.entropy())
             if pos < len(seg) - 1:
-                nxt = data[seg[pos + 1]].mem_step
-                if nxt is not None:
-                    u, _ = nxt
-                    timeline = net.actor_net.timeline_layer
-                    assert timeline is not None, "Shouldn't happen."
-                    carried = timeline(u.clone(), net.actor_net._last_mem)
-                else:
-                    carried = None
+                carried = out.memory
     return torch.cat(logprobs), torch.cat(values), torch.cat(entropies)
 
 
@@ -95,7 +87,7 @@ class PPO(Learner):
         old_values = self.buffer.values.detach().squeeze(-1)
         N = len(old_data)
 
-        use_chunked = self.network.trunc.cfg.use_timeline_memory
+        use_chunked = self.network.uses_memory
         if use_chunked:
             terminals = [
                 t or tr for t, tr in zip(self.buffer.terminals, self.buffer.truncates)

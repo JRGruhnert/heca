@@ -7,7 +7,7 @@ class CriticNetwork(nn.Module):
         super().__init__()
         hidden = max(int(dim * hidden_ratio), 16)
 
-        self.project = nn.Linear(3 * dim, dim)
+        self.project = nn.Linear(4 * dim, dim)
 
         self.tail = nn.Sequential(
             nn.LayerNorm(dim),
@@ -19,19 +19,22 @@ class CriticNetwork(nn.Module):
 
     def forward(
         self,
-        canonical_x: torch.Tensor,
+        entity_x: torch.Tensor,
         cur_idx: torch.Tensor,
         goal_idx: torch.Tensor,
+        state: torch.Tensor,
     ) -> torch.Tensor:
-        cur = canonical_x[cur_idx]  # (E, D) — same entity order as goal
-        goal = canonical_x[goal_idx]  # (E, D)
+        cur = entity_x[cur_idx]  # (E, D) — same entity order as goal
+        goal = entity_x[goal_idx]  # (E, D)
         res = cur - goal  # per-entity residual (progress toward the goal)
 
+        # per-entity progress toward the goal + the pooled situation (1, D)
         stats = torch.cat(
             [
                 cur.mean(dim=0),
                 goal.mean(dim=0),
                 res.abs().mean(dim=0),
+                state.reshape(-1),
             ],
             dim=-1,
         )  # (4D,)

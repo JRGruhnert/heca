@@ -5,10 +5,10 @@ from enum import Enum
 
 import numpy as np
 
-from heca.data.pair import ConPair
 from heca.experts.expert import ExpertModel
 from heca.data.condition import Condition
 from heca.data.data import DCEntity
+from heca.graphs.roles import ROLE_OTHER
 
 
 class ValueMode(Enum):
@@ -33,8 +33,9 @@ class EntityNode(GraphNode):
     type_id: int
     data: DCEntity
     n_states: int
-    con: Condition
     vmode: ValueMode
+    role: int = ROLE_OTHER
+    con: Condition | None = None
 
     def __str__(self) -> str:
         src_str = ", ".join(f"{self.sources}" if self.sources else "∅")
@@ -60,16 +61,6 @@ class CompNode(GraphNode):
 class StateNode(GraphNode):
     role: int
     data: float = 0.0
-
-
-@dataclass(slots=True, kw_only=True)
-class CanonicalNode(GraphNode):
-    entity: str
-    type_id: int
-    n_states: int
-    #
-    role: int
-    data: DCEntity = DCEntity.empty()
 
 
 @dataclass(slots=True, kw_only=True)

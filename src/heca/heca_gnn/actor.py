@@ -1,12 +1,8 @@
-from dataclasses import dataclass
-
 import torch
 from torch import nn
 
-from heca.misc.base import Configurable
 
-
-class ActorNetwork(Configurable, nn.Module):
+class ActorNetwork(nn.Module):
 
     def __init__(self, dim: int, hidden_ratio: float = 0.5):
         nn.Module.__init__(self)

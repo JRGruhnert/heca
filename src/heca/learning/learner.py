@@ -14,7 +14,7 @@ from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.data.entity import Entity
-from heca.graphs.data import HecaData, MemoryStep
+from heca.graphs.data import HecaData, TrunkMemory
 from heca.heca_gnn.network import Network
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
@@ -40,14 +40,16 @@ from heca.scenes.scene import SceneFeedback
 #         return self.model(batch)
 
 
+def _stored(memory: TrunkMemory) -> TrunkMemory:
+    return {name: value.detach().clone() for name, value in memory.items()}
+
+
 @dataclass(slots=True)
 class TempStore:
     data: HecaData
     action: torch.Tensor
     logprob: torch.Tensor
     value: torch.Tensor
-    opt_emb: torch.Tensor
-    mem_used: torch.Tensor
 
     def complete(self, fb: SceneFeedback) -> BufferData:
         return BufferData(
@@ -94,8 +96,7 @@ class Learner(Persistable):
         self.pocket: TempStore | None = None
         self.train_mode = True
 
-        self._mem_pending: MemoryStep | None = None
-        self._eval_choice: MemoryStep | None = None
+        self._mem_next: TrunkMemory = {}
 
         self._init_wandb()
         self.explainer = Explainer(
@@ -139,33 +140,31 @@ class Learner(Persistable):
         self.train_mode = False
 
     def predict(self, data: HecaData) -> int:
-        use_mem = self.network.cfg.trunc.use_timeline_memory
+        use_mem = self.network.uses_memory
 
-        if use_mem and self._mem_pending is not None:
-            data.mem_step = self._mem_pending
-            self._mem_pending = None
+        data.memory = self._mem_next
+        self._mem_next = {}
+
         if self.train_mode:
             net = self.inference_net
             with torch.inference_mode():
-                logits, value = net(data)
-            dist = Categorical(logits=logits)
+                out = net(data)
+            dist = Categorical(logits=out.logits)
             action = dist.sample()
-            logprob = dist.log_prob(action)
             self.pocket = TempStore(
                 data=data,
                 action=action,
-                logprob=logprob,
-                value=value,
-                opt_emb=net.actor_net._last_option_x[action].detach(),
-                mem_used=net.actor_net._last_mem.detach(),
+                logprob=dist.log_prob(action),
+                value=out.value,
             )
+            if use_mem:
+                self._mem_next = _stored(out.memory)
         else:
             with torch.inference_mode():
-                logits = self.network.actor(data)
-            action = logits.argmax(dim=-1)
+                out = self.network(data)
+            action = out.logits.argmax(dim=-1)
             if use_mem:
-                emb = self.network.actor_net._last_option_x[action].detach()
-                self._eval_choice = (emb, self.network.actor_net._last_mem.detach())
+                self._mem_next = _stored(out.memory)
         return int(action)
 
     def _init_wandb(self):
@@ -186,8 +185,8 @@ class Learner(Persistable):
             "network/input_dim": Entity.FEATURE_DIM,
             "network/max_state": Entity.MAX_STATE_DIM,
             "network/use_option_effects": (self.cfg.network.trunc.use_effects),
-            "network/use_option_interaction": (self.cfg.network.trunc.use_interaction),
-            "network/use_timeline_memory": (self.cfg.network.trunc.use_timeline_memory),
+            "network/use_option_interaction": (self.cfg.network.trunc.use_transformer),
+            "network/use_timeline_memory": (self.cfg.network.trunc.use_memory),
         }
 
         self._wandb_run = wandb.init(
@@ -221,18 +220,11 @@ class Learner(Persistable):
                 {k: v for k, v in self.metrics.items()},
             )
 
-    def _memory_input(self, emb: torch.Tensor) -> torch.Tensor:
-        return emb.reshape(1, -1)
-
     def update(self, fb: SceneFeedback) -> bool:
         if self.cfg.normalize_rewards:
             fb.reward = self.normalizer.update(fb.reward)
-        use_mem = self.network.trunc.cfg.use_timeline_memory
         if self.train_mode:
             assert isinstance(self.pocket, TempStore)
-            if use_mem:
-                u = self._memory_input(self.pocket.opt_emb)
-                self._mem_pending = (u, self.pocket.mem_used)
             data = self.pocket.complete(fb)
             if self.buffer.add(data):
                 self.learn()
@@ -241,14 +233,8 @@ class Learner(Persistable):
                 self.training_log()
                 self.buffer.reset()
                 return True
-        else:
-            if use_mem and self._eval_choice is not None:
-                emb, mem = self._eval_choice
-                u = self._memory_input(emb)
-                self._mem_pending = (u, mem)
         if fb.end:
-            self._mem_pending = None
-            self._eval_choice = None
+            self._mem_next = {}
         return False
 
     def _save(self, path: Path):

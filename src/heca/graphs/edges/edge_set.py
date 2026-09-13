@@ -55,9 +55,14 @@ class EdgeSet(Generic[S, D]):
         raise NotImplementedError
 
     def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
-        """Create edges by matching node source entries to this edge type."""
+        """Create edges by matching node source entries to this edge type.
+
+        A row without an entry for this source type simply has no incoming edge
+        of this kind (e.g. the current/goal rows are plain values), so a missing
+        key is not an error.
+        """
         for i, node in enumerate(tnset.items):
-            for key in node.sources[snset.type]:
+            for key in node.sources.get(snset.type, ()):
                 if snset.has_key(key):
                     j = snset.get_index(key)
                     self.add(j, i)

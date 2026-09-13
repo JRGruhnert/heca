@@ -14,15 +14,15 @@ from heca.graphs.edges.condition_edges import ConditionEdges
 from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
-from heca.graphs.nodes.canonical_nodes import CanonicalNodes
 from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
 from heca.graphs.nodes.node import *
 from heca.graphs.nodes.option_nodes import OptionNodes
 from heca.graphs.nodes.state_nodes import StateNodes
 from heca.graphs.data import HecaData
+from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL
 
-from heca.data.data import DCScene
+from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
 from heca.data.condition import Condition
 from heca.data.pair import ConPair
@@ -47,7 +47,6 @@ class Graph:
         self.ns_entity: EntityNodes = EntityNodes()
         self.ns_option: OptionNodes = OptionNodes()
         self.ns_state: StateNodes = StateNodes()
-        self.ns_canon: CanonicalNodes = CanonicalNodes(self.entities)
 
         self.es_scene: SceneEdges = SceneEdges()
         self.es_summary: SummaryEdges = SummaryEdges()
@@ -62,18 +61,18 @@ class Graph:
         self.goal = goal.copy()
         self.ns_comp.build()
         self.ns_state.build(budget)
-        self.ns_canon.build(self.start, self.goal)
         self.ns_entity.build(self.start, self.goal)
         self.ns_option.build(self.ns_entity)
         self.es_condition.build(self.ns_comp, self.ns_entity)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_translation.build(self.ns_entity, self.ns_entity)
-        self.es_scene.build(self.ns_option, self.ns_state, budget)
+        self.es_scene.build(self.ns_option, self.ns_state)
 
         data = HecaData()
         # Nodes
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids
+        data[self.ns_entity.type].role_ids = self.ns_entity.role_ids
         data[self.ns_comp.type].x = self.ns_comp.x
         data[self.ns_comp.type].type_ids = self.ns_comp.type_ids
         data[self.ns_comp.type].weight = self.ns_comp.weights
@@ -92,6 +91,35 @@ class Graph:
 
         self._validate_export(data)
         return data.to(device=hardware.device.type)
+
+    def set_goal_rows(self):
+        """One current and one goal row per entity.
+
+        They are ordinary entity rows (role ``ROLE_CURRENT`` / ``ROLE_GOAL``,
+        ``vmode`` START / GOAL), so ``EntityNodes.build`` fills them with the
+        scene and the task goal and the same encoder handles them. ``cur_idx``
+        and ``goal_idx`` follow from the roles: both are added in the same entity
+        order, so the two selections line up.
+        """
+        for label, entity in self.entities.items():
+            for role, vmode in (
+                (ROLE_CURRENT, ValueMode.START),
+                (ROLE_GOAL, ValueMode.GOAL),
+            ):
+                self.ns_entity.add(
+                    vmode.value + label,
+                    EntityNode(
+                        entity=label,
+                        type_id=entity.cfg.type_id,
+                        n_states=entity.cfg.n_states,
+                        data=DCEntity.empty(),
+                        vmode=vmode,
+                        role=role,
+                        # plain values, not skill-scoped views: nothing feeds
+                        # them, so condition and translation edges skip them
+                        sources={CompNodes.type: set(), EntityNodes.type: set()},
+                    ),
+                )
 
     def set_comps(self, tag: str, con: Condition) -> dict[str, set[str]]:
         keys: dict[str, set[str]] = defaultdict(set[str])
@@ -200,6 +228,7 @@ class Graph:
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
         graph = cls(entities=entities)
+        graph.set_goal_rows()
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
 
         for a in agents:
@@ -444,14 +473,11 @@ class Graph:
 
     def _validate_export(self, data: HecaData) -> None:
         ent = data[self.ns_entity.type]
-        can = data[self.ns_canon.type]
-
-        assert can.cur_idx.numel() == can.goal_idx.numel() > 0
-        assert can.role_ids.shape[0] == can.x.shape[0] == can.type_ids.shape[0]
-        # canonical rows never enter the entity set
-        assert ent.role_ids.shape[0] == ent.x.shape[0]
-        assert can.x.shape[0] == can.cur_idx.numel() + can.goal_idx.numel()
-        assert data.budget.numel() == 1
+        assert ent.role_ids.shape[0] == ent.x.shape[0] == ent.type_ids.shape[0]
+        # one current and one goal row per entity, added in the same order
+        cur = (ent.role_ids == ROLE_CURRENT).nonzero().flatten()
+        goal = (ent.role_ids == ROLE_GOAL).nonzero().flatten()
+        assert cur.numel() == goal.numel() == len(self.entities) > 0
 
         opt = data[self.ns_option.type]
         assert opt.gated.shape == (opt.x.shape[0],)
@@ -460,13 +486,15 @@ class Graph:
         slots_op = data[self.ns_state.type]
         gate = data[self.es_scene.type].edge_index
         gate_attr = data[self.es_scene.type].edge_attr
-        assert gate.shape[1] == 2 * data[self.ns_option.type].x.shape[0]
+        assert slots_op.x.shape[0] == 1
+        # one edge per option into the single state node, sign only
+        assert gate.shape[1] == data[self.ns_option.type].x.shape[0]
         assert int(gate[0].max()) < data[self.ns_option.type].x.shape[0]
-        assert int(gate[1].max()) < slots_op.type_ids.shape[0]
+        assert int(gate[1].max()) == 0 and int(gate[1].min()) == 0
         assert gate_attr.shape == (gate.shape[1], 1)
         assert torch.equal(
             gate_attr.flatten(),
-            1.0 - slots_op.type_ids[gate[1]].to(gate_attr.dtype),
+            1.0 - 2.0 * data[self.ns_option.type].gated.to(gate_attr.dtype),
         )
 
         comp = data[self.ns_comp.type]

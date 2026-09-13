@@ -5,9 +5,11 @@ from heca.heca_gnn.modules.common import _make_gnn_mlp
 
 
 class SceneGNNBlock(nn.Module):
+    EDGE_DIM = 1
+
     def __init__(self, dim: int, num_layers: int = 2):
         super().__init__()
-        self.conv = GINEConv(nn=_make_gnn_mlp(dim, num_layers))
+        self.conv = GINEConv(nn=_make_gnn_mlp(dim, num_layers), edge_dim=self.EDGE_DIM)
 
     def forward(
         self,

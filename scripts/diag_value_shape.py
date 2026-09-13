@@ -65,7 +65,8 @@ def main():
     net = Network.get(conf.networks.default)
     net.eval()
     with torch.inference_mode():
-        logits, value = net(data)
+        out = net(data)
+        logits, value = out.logits, out.value
     print(f"actor logits shape          : {tuple(logits.shape)}")
     print(f"critic value shape per step : {tuple(value.shape)}")
 

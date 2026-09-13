@@ -70,8 +70,7 @@ def main():
     data = graph.build()
     print(
         f"graph: {data['entity'].x.shape[0]} entity rows, "
-        f"{data['option'].x.shape[0]} options, "
-        f"{data['canonical'].x.shape[0]} canonical rows\n"
+        f"{data['option'].x.shape[0]} options\n"
     )
 
     dim = conf.networks.both.actor.feature_dim
@@ -88,12 +87,10 @@ def main():
         not (a_ids & c_ids),
         f"{len(a_ids)} actor + {len(c_ids)} critic params",
     )
-    trunk_names = [
-        n for n in ("trunc", "actor_trunc", "critic_trunc") if hasattr(net, n)
-    ]
+    trunk_names = list(net.memory_keys)
     trunk_ids: set[int] = set()
     for name in trunk_names:
-        trunk_ids |= {id(p) for p in getattr(net, name).parameters()}
+        trunk_ids |= {id(p) for p in net.trunks[name].parameters()}
     report(
         "container parameters == actor + critic + trunk(s)",
         {id(p) for p in net.parameters()} == a_ids | c_ids | trunk_ids,
@@ -109,7 +106,8 @@ def main():
     )
 
     # 2. gradients do not cross
-    logits, value = net(data)
+    out = net(data)
+    logits, value = out.logits, out.value
     report(
         "container forward shapes",
         tuple(logits.shape) == (1, data["option"].x.shape[0])
@@ -118,7 +116,7 @@ def main():
     )
 
     # Parameters outside the graph of this scene (an unused entity type) and
-    # modules a call cannot touch (the GRU without ``mem_step``, the critic's
+    # modules a call cannot touch (the GRU without ``memory``, the critic's
     # memory generator when no memory is passed) legitimately stay grad-free.
     def unused_only(names: list[str], allow: tuple[str, ...]) -> bool:
         return all(n.startswith(allow) for n in names)
@@ -163,7 +161,7 @@ def main():
                 "actor_net.timeline_layer.",
             ),
         ),
-        f"untouched: {len(actor_untouched)} (unused entity types / no mem_step)",
+        f"untouched: {len(actor_untouched)} (unused entity types / no memory)",
     )
 
     # 3. separate optimizers really are separate
@@ -206,9 +204,9 @@ def main():
     )
 
     # 5. the actor resolves the timeline memory; the critic never reads it
-    data.mem_step = (torch.zeros(1, dim), torch.zeros(1, dim))
-    net(data)
-    used = net.actor_net._last_mem
+    data.memory = {name: torch.zeros(1, dim) for name in net.memory_keys}
+    out = net(data)
+    used = out.memory["trunc"]  # the trunk owns the recurrence
     report(
         "the actor resolves a timeline memory",
         tuple(used.shape) == (1, dim) and bool(used.any()),
