@@ -1,14 +1,17 @@
 import torch
 from torch import nn
 
-from heca.heca_gnn.modules.pair import PairBlock
-
 
 class TranslationBlock(nn.Module):
-
-    def __init__(self, dim: int, num_layers: int = 2):
+    def __init__(self, dim: int):
         super().__init__()
-        self.pair = PairBlock(dim, num_layers=num_layers)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim * 2, dim),
+            nn.GELU(),
+            nn.Linear(dim, dim),
+            nn.LayerNorm(dim),
+        )
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
-        return self.pair(x, x, edge_index)
+        src, dst = edge_index
+        return self.mlp(torch.cat([x[src], x[dst]], dim=-1))

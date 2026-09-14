@@ -1,14 +1,21 @@
 import torch
 from torch import nn
 from torch_geometric.nn import GINEConv, GATv2Conv
-
-from heca.heca_gnn.modules.common import _make_gnn_mlp
+import torch.nn.functional as F
 
 
 class ConditionGinBlock(nn.Module):
-    def __init__(self, dim: int, num_layers: int = 2):
+    def __init__(self, dim: int):
         super().__init__()
-        self.conv = GINEConv(nn=_make_gnn_mlp(dim, num_layers), edge_dim=8)
+        self.conv = GINEConv(
+            nn=nn.Sequential(
+                nn.Linear(dim, dim),
+                nn.GELU(),
+                nn.Linear(dim, dim),
+            ),
+            edge_dim=8,
+        )
+        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -17,7 +24,9 @@ class ConditionGinBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        return self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
+        x = self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
+        x = self.norm(x)
+        return F.gelu(x)
 
 
 class ConditionGatBlock(nn.Module):
@@ -29,6 +38,7 @@ class ConditionGatBlock(nn.Module):
             heads=4,
             edge_dim=8,
         )
+        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -37,4 +47,6 @@ class ConditionGatBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        return self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
+        x = self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
+        x = self.norm(x)
+        return F.gelu(x)

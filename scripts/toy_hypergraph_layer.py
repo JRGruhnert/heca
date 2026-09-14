@@ -37,8 +37,8 @@ class HypergraphLayer(nn.Module):
         self.role = nn.Embedding(n_roles, d)
         self.edge_class = nn.Embedding(n_edge_classes, d)
         # two shared kernels; a per-type variant would be a ModuleDict here
-        self.up = nn.Sequential(nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, d))
-        self.down = nn.Sequential(nn.Linear(2 * d, d), nn.ReLU(), nn.Linear(d, d))
+        self.up = nn.Sequential(nn.Linear(2 * d, d), nn.GELU(), nn.Linear(d, d))
+        self.down = nn.Sequential(nn.Linear(2 * d, d), nn.GELU(), nn.Linear(d, d))
         self.norm = nn.LayerNorm(d)
 
     def forward(self, x, H, node_type, role, edge_class):
@@ -73,20 +73,17 @@ class HypergraphLayer(nn.Module):
         edge_index[0] = member node, edge_index[1] = hyperedge id.
         """
         src, dst = edge_index
-        up_msg = self.up(torch.cat([x[src] + self.node_type(node_type[src]),
-                                    self.role(role)], -1))
+        up_msg = self.up(
+            torch.cat([x[src] + self.node_type(node_type[src]), self.role(role)], -1)
+        )
         E = torch.zeros(n_hyperedges, x.shape[1], dtype=x.dtype)
         E.index_add_(0, dst, up_msg)  # sum members into their hyperedge
-        count = torch.zeros(n_hyperedges, 1).index_add_(
-            0, dst, torch.ones(len(dst), 1)
-        )
+        count = torch.zeros(n_hyperedges, 1).index_add_(0, dst, torch.ones(len(dst), 1))
         E = E / count.clamp(min=1) + self.edge_class(edge_class)
         down_msg = self.down(torch.cat([E[dst], self.role(role)], -1))
         # back to members, averaged over the hyperedges each node belongs to
         msg = torch.zeros_like(x).index_add_(0, src, down_msg)
-        count_v = torch.zeros(x.shape[0], 1).index_add_(
-            0, src, torch.ones(len(src), 1)
-        )
+        count_v = torch.zeros(x.shape[0], 1).index_add_(0, src, torch.ones(len(src), 1))
         msg = msg / count_v.clamp(min=1)
         return self.norm(x + msg), E
 
@@ -116,7 +113,9 @@ def main():
     layer = HypergraphLayer(d, n_node_types=4, n_roles=3, n_edge_classes=2)
     x = torch.randn(n, d)
     x2, E = layer(x, H, node_type, role, edge_class)
-    print(f"x {tuple(x.shape)} -> x' {tuple(x2.shape)} | hyperedge states E {tuple(E.shape)}")
+    print(
+        f"x {tuple(x.shape)} -> x' {tuple(x2.shape)} | hyperedge states E {tuple(E.shape)}"
+    )
     print(f"mean |change| {float((x2 - x).abs().mean()):.4f}")
 
     # 1. what a hyperedge DOES: members exchange information. Perturb one member

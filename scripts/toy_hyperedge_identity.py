@@ -74,9 +74,9 @@ class MLP(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(inp, hidden),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(hidden, hidden),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(hidden, out if out is not None else hidden),
         )
 
@@ -149,7 +149,9 @@ class Toy(nn.Module):
             target = self.pool(ctx)[:, None, None].expand(B, O, E, D)
         else:  # bag: one global mixed pool
             pool = torch.stack([cur_r.mean(1), goal_r.mean(1)], 0).mean(0)
-            target = self.pool(torch.cat([pool, prop_pool.mean(1)], -1))[:, None, None].expand(B, O, E, D)
+            target = self.pool(torch.cat([pool, prop_pool.mean(1)], -1))[
+                :, None, None
+            ].expand(B, O, E, D)
 
         if self.variant == "slots_pooled":
             slots = self.hyperedges(cur_r, goal_r, prop_r)
@@ -198,9 +200,18 @@ def main():
     ap.add_argument("--seeds", type=int, default=3)
     args = ap.parse_args()
 
-    variants = ["bag", "global_role_pool", "slots_pooled", "mean_hub", "role_slots", "paired"]
-    print(f"task: pick the option whose proposal matches its own target entity "
-          f"| chance = {1 / O:.3f}")
+    variants = [
+        "bag",
+        "global_role_pool",
+        "slots_pooled",
+        "mean_hub",
+        "role_slots",
+        "paired",
+    ]
+    print(
+        f"task: pick the option whose proposal matches its own target entity "
+        f"| chance = {1 / O:.3f}"
+    )
     print(f"hand-coded pairing oracle: {oracle_accuracy():.3f}\n")
     print(f"{'variant':20s} {'accuracy (3 seeds)':>20s}   what it has")
     notes = {

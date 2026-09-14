@@ -1,13 +1,20 @@
 import torch
 from torch import nn
-from torch_geometric.nn import GINConv, GCN2Conv
-from heca.heca_gnn.modules.common import _make_gnn_mlp
+from torch_geometric.nn import GINConv, SAGEConv
+import torch.nn.functional as F
 
 
 class SummaryGinBlock(nn.Module):
-    def __init__(self, dim: int, num_layers: int = 2):
+    def __init__(self, dim: int):
         super().__init__()
-        self.conv = GINConv(nn=_make_gnn_mlp(dim, num_layers))
+        self.conv = GINConv(
+            nn=nn.Sequential(
+                nn.Linear(dim, dim),
+                nn.GELU(),
+                nn.Linear(dim, dim),
+            ),
+        )
+        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -15,13 +22,20 @@ class SummaryGinBlock(nn.Module):
         x_option: torch.Tensor,
         edge_index: torch.Tensor,
     ) -> torch.Tensor:
-        return self.conv((x_entity, x_option), edge_index)
+        x = self.conv((x_entity, x_option), edge_index)
+        x = self.norm(x)
+        return F.gelu(x)
 
 
-class SummaryGcnBlock(nn.Module):
-    def __init__(self, dim: int, alpha: float = 0.5):
+class SummarySageBlock(nn.Module):
+    def __init__(self, dim: int):
         super().__init__()
-        self.conv = GCN2Conv(channels=dim, alpha=alpha)
+        self.conv = SAGEConv(
+            in_channels=(dim, dim),
+            out_channels=dim,
+            aggr="mean",
+        )
+        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -29,4 +43,6 @@ class SummaryGcnBlock(nn.Module):
         x_option: torch.Tensor,
         edge_index: torch.Tensor,
     ) -> torch.Tensor:
-        return self.conv((x_entity, x_option), edge_index)
+        x = self.conv((x_entity, x_option), edge_index)
+        x = self.norm(x)
+        return F.gelu(x)

@@ -17,9 +17,9 @@ class ActorNetwork(nn.Module):
 
         self.mlp = nn.Sequential(
             nn.Linear(feature_dim, feature_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(feature_dim, feature_dim // 2),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(feature_dim // 2, 1),
         )
 

@@ -77,7 +77,7 @@ class Network(Configurable, nn.Module):
                     role,
                     feature_dim=cfg.feature_dim,
                     option_transformer=cfg.use_option_transformer,
-                    summary_gcn=cfg.use_summary_gcn,
+                    summary_sage=cfg.use_summary_gcn,
                     memory=cfg.use_memory,
                 )
                 for role in self.ROLES
@@ -88,7 +88,7 @@ class Network(Configurable, nn.Module):
                     self.SHARED,
                     feature_dim=cfg.feature_dim,
                     option_transformer=cfg.use_option_transformer,
-                    summary_gcn=cfg.use_summary_gcn,
+                    summary_sage=cfg.use_summary_gcn,
                     memory=cfg.use_memory,
                 )
             }

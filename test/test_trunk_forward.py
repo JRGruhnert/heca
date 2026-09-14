@@ -75,7 +75,7 @@ def make_trunc(name: str = "shared", memory: bool = True) -> TruncNetwork:
         name,
         feature_dim=D,
         option_transformer=False,
-        summary_gcn=False,
+        summary_sage=False,
         memory=memory,
     )
 

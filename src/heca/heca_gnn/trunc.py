@@ -10,8 +10,8 @@ from heca.graphs.nodes.option_nodes import OptionNodes
 
 from heca.heca_gnn.modules.encoders.encoder import EncodedRows
 from heca.heca_gnn.modules.interaction import IdentityBlock, TransformerBlock
-from heca.heca_gnn.modules.overview import SceneGNNBlock
-from heca.heca_gnn.modules.summary import SummaryGcnBlock, SummaryGinBlock
+from heca.heca_gnn.modules.scene import SceneGATBlock, SceneGINBlock, SceneSageBlock
+from heca.heca_gnn.modules.summary import SummarySageBlock, SummaryGinBlock
 from heca.heca_gnn.modules.timeline import MemoryBlock, NoMemoryBlock
 
 
@@ -22,14 +22,12 @@ class TruncOutput(NamedTuple):
 
 
 class TruncNetwork(nn.Module):
-    """The option rows and the scene row, from the entity rows of the root."""
-
     def __init__(
         self,
         name: str,
         feature_dim: int,
         option_transformer: bool,
-        summary_gcn: bool,
+        summary_sage: bool,
         memory: bool,
     ):
         nn.Module.__init__(self)
@@ -37,8 +35,8 @@ class TruncNetwork(nn.Module):
         self.layers = nn.ModuleDict(
             {
                 "summary": (
-                    SummaryGcnBlock(feature_dim)
-                    if summary_gcn
+                    SummarySageBlock(feature_dim)
+                    if summary_sage
                     else SummaryGinBlock(feature_dim)
                 ),
                 "interaction": (
@@ -46,7 +44,11 @@ class TruncNetwork(nn.Module):
                     if option_transformer
                     else IdentityBlock()
                 ),
-                "scene": SceneGNNBlock(feature_dim),
+                "scene": (
+                    SceneSageBlock(feature_dim)
+                    if option_transformer
+                    else SceneGATBlock(feature_dim)
+                ),
                 "timeline": (MemoryBlock(feature_dim) if memory else NoMemoryBlock()),
             }
         )

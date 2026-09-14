@@ -63,7 +63,7 @@ class Up(MessagePassing):
         super().__init__(aggr="mean", node_dim=0)  # mean over members
         self.role = nn.Embedding(n_roles, dim)
         self.cls = nn.Embedding(n_classes, dim)  # hyperedge class, added here
-        self.mlp = nn.Sequential(nn.Linear(2 * dim, dim), nn.ReLU())
+        self.mlp = nn.Sequential(nn.Linear(2 * dim, dim), nn.GELU())
 
     def forward(self, x_row, edge_index, role_id, class_id, size):
         # size=(n_rows, n_groups): on a bipartite incidence PyG cannot infer both
@@ -81,7 +81,7 @@ class Down(MessagePassing):
     def __init__(self, dim: int, n_roles: int):
         super().__init__(aggr="mean", node_dim=0)  # mean over a row's groups
         self.role = nn.Embedding(n_roles, dim)
-        self.mlp = nn.Sequential(nn.Linear(2 * dim, dim), nn.ReLU())
+        self.mlp = nn.Sequential(nn.Linear(2 * dim, dim), nn.GELU())
 
     def forward(self, x_group, edge_index, role_id, size):
         return self.propagate(edge_index, x=x_group, edge_attr=role_id, size=size)
@@ -106,7 +106,8 @@ def main():
         size=(n_rows, n_groups),
     )
     r = down(
-        g, data["group", "member", "row"].edge_index,
+        g,
+        data["group", "member", "row"].edge_index,
         data["group", "member", "row"].role_id,
         size=(n_groups, n_rows),
     )
@@ -117,11 +118,19 @@ def main():
     # rows that share a group exchange information; rows that do not, do not
     x2 = data["row"].x.clone()
     x2[2] += 5.0  # faucet0.post
-    g2 = up(x2, data["row", "member", "group"].edge_index,
-            data["row", "member", "group"].role_id, data["group"].class_id,
-            size=(n_rows, n_groups))
-    r2 = down(g2, data["group", "member", "row"].edge_index,
-              data["group", "member", "row"].role_id, size=(n_groups, n_rows))
+    g2 = up(
+        x2,
+        data["row", "member", "group"].edge_index,
+        data["row", "member", "group"].role_id,
+        data["group"].class_id,
+        size=(n_rows, n_groups),
+    )
+    r2 = down(
+        g2,
+        data["group", "member", "row"].edge_index,
+        data["group", "member", "row"].role_id,
+        size=(n_groups, n_rows),
+    )
     print(f"same group (row 0) changed by {float((r2[0] - r[0]).abs().mean()):.4f}")
     print(f"other group (row 3) changed by {float((r2[3] - r[3]).abs().mean()):.6f}")
 
@@ -131,8 +140,10 @@ def main():
     hyperedge_weight = torch.ones(hyperedge_index.shape[1])  # per incidence
     hyperedge_attr = torch.randn(n_groups, dim)  # per hyperedge
     out = conv(data["row"].x, hyperedge_index, hyperedge_weight, hyperedge_attr)
-    print(f"\nnative HypergraphConv output {tuple(out.shape)} from "
-          f"hyperedge_index {tuple(hyperedge_index.shape)}")
+    print(
+        f"\nnative HypergraphConv output {tuple(out.shape)} from "
+        f"hyperedge_index {tuple(hyperedge_index.shape)}"
+    )
 
 
 if __name__ == "__main__":

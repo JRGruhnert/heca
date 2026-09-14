@@ -13,9 +13,10 @@ class _Block(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(in_dim, out_dim),
+            nn.Linear(in_dim, out_dim // 2),
+            nn.GELU(),
+            nn.Linear(out_dim // 2, out_dim),
             nn.LayerNorm(out_dim),
-            nn.ReLU(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

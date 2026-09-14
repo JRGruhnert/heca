@@ -16,9 +16,9 @@ class CriticNetwork(nn.Module):
 
         self.mlp = nn.Sequential(
             nn.LayerNorm(feature_dim),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(feature_dim, feature_dim // 2),
-            nn.ReLU(),
+            nn.GELU(),
             nn.Linear(feature_dim // 2, 1),
         )
 

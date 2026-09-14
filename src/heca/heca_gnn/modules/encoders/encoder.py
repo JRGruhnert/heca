@@ -3,7 +3,6 @@ from typing import Mapping, NamedTuple
 import torch
 from torch import nn
 
-from heca.data.entity import Entity
 from heca.graphs.data import HecaData
 from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
