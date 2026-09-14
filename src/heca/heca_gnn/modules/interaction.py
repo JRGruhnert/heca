@@ -12,20 +12,20 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
         self.norm3 = nn.LayerNorm(dim)
 
-    def forward(self, all_opts, good_mask):
-        all_att, _ = self.self_attn(all_opts, all_opts, all_opts)
-        all_opts = self.norm1(all_opts + all_att)
+    def forward(self, option_x, gate_mask):
+        all_att, _ = self.self_attn(option_x, option_x, option_x)
+        option_x = self.norm1(option_x + all_att)
 
-        good_idx = good_mask.nonzero(as_tuple=True)[0]
-        bad_idx = (~good_mask).nonzero(as_tuple=True)[0]
+        good_idx = gate_mask.nonzero(as_tuple=True)[0]
+        bad_idx = (~gate_mask).nonzero(as_tuple=True)[0]
 
-        good = all_opts[:, good_idx]  # (1, n_good, dim)
-        bad = all_opts[:, bad_idx]  # (1, n_bad, dim)
+        good = option_x[:, good_idx]  # (1, n_good, dim)
+        bad = option_x[:, bad_idx]  # (1, n_bad, dim)
 
-        good_att, _ = self.cross_good(good, all_opts, all_opts)
+        good_att, _ = self.cross_good(good, option_x, option_x)
         good = self.norm2(good + good_att)
 
-        bad_att, _ = self.cross_bad(bad, all_opts, all_opts)
+        bad_att, _ = self.cross_bad(bad, option_x, option_x)
         bad = self.norm3(bad + bad_att)
 
         # pool each group to a fixed-size vector
@@ -33,6 +33,12 @@ class TransformerBlock(nn.Module):
         bad_vec = bad.mean(dim=1)  # (1, dim)
 
         return torch.cat([good_vec, bad_vec], dim=-1)  # (1, 2*dim)
+
+
+class IdentityBlock(nn.Module):
+
+    def forward(self, x: torch.Tensor, good_mask) -> torch.Tensor:
+        return x
 
 
 # good scenes: 0, 1, 8

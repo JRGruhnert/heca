@@ -22,6 +22,7 @@ class Heca(Configurable):
         virtual: bool
         reload: bool
         use_gt: bool
+        gating: bool
 
         fit_rotation: bool = True
 
@@ -47,7 +48,9 @@ class Heca(Configurable):
             if self.cfg.virtual:
                 expert.virtual()
 
-        self.graph = Graph.generate(list(self.cfg.agents), smode=cfg.smode)
+        self.graph = Graph.generate(
+            list(self.cfg.agents), smode=cfg.smode, gating=cfg.gating
+        )
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
 

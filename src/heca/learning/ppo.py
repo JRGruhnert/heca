@@ -87,7 +87,7 @@ class PPO(Learner):
         old_values = self.buffer.values.detach().squeeze(-1)
         N = len(old_data)
 
-        use_chunked = self.network.uses_memory
+        use_chunked = self.network.cfg.use_memory
         if use_chunked:
             terminals = [
                 t or tr for t, tr in zip(self.buffer.terminals, self.buffer.truncates)
@@ -110,8 +110,6 @@ class PPO(Learner):
         for _ in range(self.cfg.n_epoch):
             if stop_requested():
                 break
-            # Explained variance is measured with the updated network, so only
-            # the last epoch's predictions are kept.
             ev_values.clear()
             ev_returns.clear()
             if use_chunked:

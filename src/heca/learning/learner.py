@@ -15,7 +15,7 @@ from heca.misc import hardware, logger
 from heca.misc.base import Persistable
 from heca.data.entity import Entity
 from heca.graphs.data import HecaData, TrunkMemory
-from heca.heca_gnn.network import Network
+from heca.heca_gnn.network import Network, NetworkOutput
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
 
@@ -140,15 +140,13 @@ class Learner(Persistable):
         self.train_mode = False
 
     def predict(self, data: HecaData) -> int:
-        use_mem = self.network.uses_memory
-
         data.memory = self._mem_next
         self._mem_next = {}
 
         if self.train_mode:
             net = self.inference_net
             with torch.inference_mode():
-                out = net(data)
+                out: NetworkOutput = net(data)
             dist = Categorical(logits=out.logits)
             action = dist.sample()
             self.pocket = TempStore(
@@ -157,14 +155,12 @@ class Learner(Persistable):
                 logprob=dist.log_prob(action),
                 value=out.value,
             )
-            if use_mem:
-                self._mem_next = _stored(out.memory)
         else:
             with torch.inference_mode():
                 out = self.network(data)
             action = out.logits.argmax(dim=-1)
-            if use_mem:
-                self._mem_next = _stored(out.memory)
+        if self.network.cfg.use_memory:
+            self._mem_next = _stored(out.memory)
         return int(action)
 
     def _init_wandb(self):
@@ -184,9 +180,9 @@ class Learner(Persistable):
             # Network config
             "network/input_dim": Entity.FEATURE_DIM,
             "network/max_state": Entity.MAX_STATE_DIM,
-            "network/use_option_effects": (self.cfg.network.trunc.use_effects),
-            "network/use_option_interaction": (self.cfg.network.trunc.use_transformer),
-            "network/use_timeline_memory": (self.cfg.network.trunc.use_memory),
+            "network/use_option_effects": (self.cfg.network.use_option_effects),
+            "network/use_option_interaction": (self.cfg.network.use_option_transformer),
+            "network/use_timeline_memory": (self.cfg.network.use_memory),
         }
 
         self._wandb_run = wandb.init(

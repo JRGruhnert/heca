@@ -118,6 +118,37 @@ def add_network_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_gating_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--gating",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Restrict option selection to feasible (gated) options. The gate is "
+            "still built and fed to the network either way."
+        ),
+    )
+
+
+def add_sync_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--sync",
+        default="",
+        help=(
+            "Federated layer selection, comma separated, globs over the network's "
+            "layer names: <segment>.<layer> with segments root (encoder, condition, "
+            "hyperedge, translation) and trunc (summary, interaction, scene, "
+            "timeline), plus the whole segment, actor_head and critic_head. With "
+            "seperate_root/seperate_trunc the role comes in between, e.g. "
+            "root.actor.encoder. '!name' excludes. Empty federates everything."
+        ),
+    )
+
+
+def parse_sync(value: str) -> tuple[str, ...]:
+    return tuple(part.strip() for part in value.split(",") if part.strip())
+
+
 def add_heca_arguments(parser: argparse.ArgumentParser):
     add_network_argument(parser)
     add_federated_argument(parser)
@@ -131,6 +162,8 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_smode_argument(parser)
     add_inference_argument(parser)
     add_reload_argument(parser)
+    add_gating_argument(parser)
+    add_sync_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:

@@ -12,16 +12,9 @@ class SceneEdges(EdgeSet[OptionNode, StateNode]):
     has_attrs: bool = True
 
     def build(self, snset: OptionNodes, tnset: NodeSet[StateNode]):
-        """One ``option -> state`` edge per option, carrying only its sign.
-
-        +1 for a feasible (ungated) option, -1 for a gated one; the state node
-        aggregates them, so no budget and no per-view nodes are needed here. The
-        gate is the tensor ``OptionNodes.build`` computed (the per-node field is
-        never set).
-        """
         attrs: list[float] = []
         gated = snset.gated
-        j = tnset.get_index(StateNodes.state)
+        j = tnset.get_index(StateNodes.type)
         for i in range(len(snset.items)):
             self.add(i, j)
             attrs.append(-1.0 if bool(gated[i]) else 1.0)

@@ -1,21 +1,13 @@
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
 
 import numpy as np
 
 from heca.experts.expert import ExpertModel
 from heca.data.condition import Condition
 from heca.data.data import DCEntity
-from heca.graphs.roles import ROLE_OTHER
-
-
-class ValueMode(Enum):
-    GOAL = "Goal"
-    START = "Start"
-    SAMPLE = "Sample"
-    SUBGOAL = "Subgoal"
+from heca.graphs.roles import ENMode, ENRole, OPGate
 
 
 @dataclass(slots=True, kw_only=True)
@@ -33,8 +25,8 @@ class EntityNode(GraphNode):
     type_id: int
     data: DCEntity
     n_states: int
-    vmode: ValueMode
-    role: int = ROLE_OTHER
+    mode: ENMode
+    role: ENRole
     con: Condition | None = None
 
     def __str__(self) -> str:
@@ -59,8 +51,8 @@ class CompNode(GraphNode):
 
 @dataclass(slots=True, kw_only=True)
 class StateNode(GraphNode):
-    role: int
-    data: float = 0.0
+    role: OPGate = OPGate.NONE
+    budget: float = 0.0
 
 
 @dataclass(slots=True, kw_only=True)

@@ -20,7 +20,7 @@ from heca.graphs.nodes.node import *
 from heca.graphs.nodes.option_nodes import OptionNodes
 from heca.graphs.nodes.state_nodes import StateNodes
 from heca.graphs.data import HecaData
-from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL
+from heca.graphs.roles import ENMode
 
 from heca.data.data import DCEntity, DCScene
 from heca.data.entity import Entity
@@ -40,8 +40,9 @@ class SubgoalMode(Enum):
 
 
 class Graph:
-    def __init__(self, entities: dict[str, Entity]):
+    def __init__(self, entities: dict[str, Entity], gating: bool):
         self.entities: dict[str, Entity] = entities
+        self.gating: bool = gating
 
         self.ns_comp: CompNodes = CompNodes()
         self.ns_entity: EntityNodes = EntityNodes()
@@ -69,6 +70,7 @@ class Graph:
         self.es_scene.build(self.ns_option, self.ns_state)
 
         data = HecaData()
+        data.gating = self.gating
         # Nodes
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids
@@ -93,18 +95,10 @@ class Graph:
         return data.to(device=hardware.device.type)
 
     def set_goal_rows(self):
-        """One current and one goal row per entity.
-
-        They are ordinary entity rows (role ``ROLE_CURRENT`` / ``ROLE_GOAL``,
-        ``vmode`` START / GOAL), so ``EntityNodes.build`` fills them with the
-        scene and the task goal and the same encoder handles them. ``cur_idx``
-        and ``goal_idx`` follow from the roles: both are added in the same entity
-        order, so the two selections line up.
-        """
         for label, entity in self.entities.items():
             for role, vmode in (
-                (ROLE_CURRENT, ValueMode.START),
-                (ROLE_GOAL, ValueMode.GOAL),
+                (ENRole.START, ENMode.START),
+                (ENRole.GOAL, ENMode.GOAL),
             ):
                 self.ns_entity.add(
                     vmode.value + label,
@@ -113,10 +107,8 @@ class Graph:
                         type_id=entity.cfg.type_id,
                         n_states=entity.cfg.n_states,
                         data=DCEntity.empty(),
-                        vmode=vmode,
+                        mode=vmode,
                         role=role,
-                        # plain values, not skill-scoped views: nothing feeds
-                        # them, so condition and translation edges skip them
                         sources={CompNodes.type: set(), EntityNodes.type: set()},
                     ),
                 )
@@ -154,7 +146,8 @@ class Graph:
                     data=DCEntity.empty(),
                     sources={CompNodes.type: set(sources)},
                     con=con,
-                    vmode=ValueMode.START,
+                    mode=ENMode.START,
+                    role=ENRole.PRE,
                 ),
             )
         return pre_sources
@@ -166,11 +159,11 @@ class Graph:
         comp_sources: dict[str, set[str]],
         pre_sources: dict[str, str],
         entities: list[str],
-        vmode: ValueMode,
+        mode: ENMode,
     ) -> dict[str, str]:
         post_sources: dict[str, str] = {}
         for entity in entities:
-            key = vmode.value + entity + label
+            key = mode.value + entity + label
             self.ns_entity.add(
                 key,
                 EntityNode(
@@ -183,7 +176,8 @@ class Graph:
                         EntityNodes.type: {pre_sources[entity]},
                     },
                     con=con,
-                    vmode=vmode,
+                    mode=mode,
+                    role=ENRole.POST,
                 ),
             )
             post_sources[entity] = key
@@ -216,18 +210,21 @@ class Graph:
                         EntityNodes.type: {pre_sources[entity]},
                     },
                     con=con,
-                    vmode=ValueMode.SUBGOAL,
+                    mode=ENMode.SUBGOAL,
+                    role=ENRole.POST,
                 ),
             )
             temp_sources[entity] = key
         return set(temp_sources.values())
 
     @classmethod
-    def generate(cls, cfgs: list[ExpertModel.Config], smode: SubgoalMode) -> "Graph":
+    def generate(
+        cls, cfgs: list[ExpertModel.Config], smode: SubgoalMode, gating: bool = True
+    ) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
-        graph = cls(entities=entities)
+        graph = cls(entities=entities, gating=gating)
         graph.set_goal_rows()
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
 
@@ -242,7 +239,7 @@ class Graph:
                 post_comp_sources,
                 pre_sources,
                 entities=ac.anchor_entities,
-                vmode=ValueMode.START,
+                mode=ENMode.START,
             )
             post_goal_sources = graph.set_postcon(
                 ac.label,
@@ -250,7 +247,7 @@ class Graph:
                 post_comp_sources,
                 pre_sources,
                 entities=ac.target_entities,
-                vmode=ValueMode.GOAL,
+                mode=ENMode.GOAL,
             )
             post_sources = post_start_sources | post_goal_sources
             use_sample_variant = smode in (SubgoalMode.GOAL, SubgoalMode.BOTH)
@@ -261,7 +258,7 @@ class Graph:
                     post_comp_sources,
                     pre_sources,
                     entities=ac.target_entities,
-                    vmode=ValueMode.SAMPLE,
+                    mode=ENMode.SAMPLE,
                 )
                 post_sources_alt = post_start_sources | post_sample_sources
             for b in agents:
@@ -475,8 +472,8 @@ class Graph:
         ent = data[self.ns_entity.type]
         assert ent.role_ids.shape[0] == ent.x.shape[0] == ent.type_ids.shape[0]
         # one current and one goal row per entity, added in the same order
-        cur = (ent.role_ids == ROLE_CURRENT).nonzero().flatten()
-        goal = (ent.role_ids == ROLE_GOAL).nonzero().flatten()
+        cur = (ent.role_ids == ENRole.START.value).nonzero().flatten()
+        goal = (ent.role_ids == ENRole.GOAL.value).nonzero().flatten()
         assert cur.numel() == goal.numel() == len(self.entities) > 0
 
         opt = data[self.ns_option.type]

@@ -1,17 +1,12 @@
 import torch
 from torch import nn
 
-from heca.data.entity import Entity
 from heca.graphs.data import HecaData
-from heca.data.free import FreeEntity
 from heca.data.prismatic import PrismaticEntity
 from heca.data.revolute import RevoluteEntity
 from heca.data.static import StaticEntity
-
+from heca.data.free import FreeEntity
 from heca.data.entity import Entity
-from heca.graphs.data import HecaData
-from heca.graphs.roles import ROLE_GOAL
-from heca.heca_gnn.modules.aggregation import StateAggregation
 
 
 class _Block(nn.Module):
@@ -108,7 +103,6 @@ class EntityRowEncoder(nn.Module):
         self.comp_encoders = nn.ModuleDict(
             {name: cls(dim) for name, cls in self.encoder_map.items()}
         )
-        self.state_aggregation = StateAggregation(dim)
 
     @property
     def encoder_map(self) -> dict[str, type[_EntityEncoder]]:
@@ -129,8 +123,3 @@ class EntityRowEncoder(nn.Module):
             if rows.any():
                 out[rows] = encoders[name](x[rows])
         return out
-
-    def goal_slot(self, entity_x: torch.Tensor, data: HecaData) -> torch.Tensor:
-        """The pooled goal rows of the entity set."""
-        roles = data.entity.role_ids
-        return self.state_aggregation(entity_x[roles == ROLE_GOAL])

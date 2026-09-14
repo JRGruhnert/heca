@@ -74,12 +74,14 @@ def main():
             for k in keys:
                 n = graph.ns_entity.get_by_key(k)
                 assert isinstance(n, ValueNode)
-                kinds.append(f"{n.vmode.value}:{k}")
+                kinds.append(f"{n.mode.value}:{k}")
             resolved = np.asarray(sub.get(entity).value, dtype=float)
             start_v = np.asarray(graph.start.get(entity).value, dtype=float)
             goal_v = np.asarray(graph.goal.get(entity).value, dtype=float)
-            which = "start" if np.allclose(resolved, start_v) else (
-                "goal" if np.allclose(resolved, goal_v) else "other"
+            which = (
+                "start"
+                if np.allclose(resolved, start_v)
+                else ("goal" if np.allclose(resolved, goal_v) else "other")
             )
             print(f"  {entity:<24} sources={kinds}")
             print(

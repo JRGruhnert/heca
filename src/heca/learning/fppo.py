@@ -17,17 +17,30 @@ class FPPO(PPO):
         self.server = FLServer.get(cfg.server)
         self.server.register(self.cfg.tag)
         self._last_version = self.server.version
-        self.network.load_state_dict(self.server.global_network.state_dict())
-        # Detached snapshot of the global weights used by the fedprox term. It
-        # is swapped only in ``sync`` (this client's own thread) and read by
-        # ``_fedprox_term`` during ``tick``, so it never races with the shared
-        # server's live ``global_network``, which other clients mutate in their
-        # own ``submit`` calls.
-        self._global_params = [p.detach().clone() for p in self.network.parameters()]
+        self._sync_keys = self.network.sync_keys(self.server.cfg.sync_layers)
+        self._load_global(
+            self.server.sync_state_dict(self.server.global_network.state_dict())
+        )
+        self._global_params = self._global_snapshot()
+
+    def _global_snapshot(self) -> dict[str, torch.Tensor]:
+        return {
+            name: p.detach().clone()
+            for name, p in self.network.named_parameters()
+            if name in self._sync_keys
+        }
+
+    def _load_global(self, state_dict: dict[str, torch.Tensor]) -> None:
+        self.network.load_state_dict(
+            {k: v for k, v in state_dict.items() if k in self._sync_keys}, strict=False
+        )
 
     def _fedprox_term(self) -> torch.Tensor:
         loss = 0.0
-        for local_p, global_p in zip(self.network.parameters(), self._global_params):
+        for name, local_p in self.network.named_parameters():
+            global_p = self._global_params.get(name)
+            if global_p is None:
+                continue
             loss += torch.sum((local_p - global_p) ** 2)  # euklidische distanz squared
         return (self.server.cfg.fedprox_mu / 2) * loss  # type: ignore
 
@@ -37,8 +50,8 @@ class FPPO(PPO):
             cast(dict[str, torch.Tensor], self.network.state_dict()),
             self._last_version,
         )
-        self.network.load_state_dict(state_dict)
-        self._global_params = [p.detach().clone() for p in self.network.parameters()]
+        self._load_global(state_dict)
+        self._global_params = self._global_snapshot()
         self.inference_net.load_state_dict(self.network.state_dict())
         self._last_version = self.server.version
         for pg in self.optim.param_groups:

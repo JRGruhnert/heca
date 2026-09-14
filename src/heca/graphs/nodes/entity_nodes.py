@@ -2,8 +2,9 @@ import numpy as np
 import torch
 
 from heca.data.data import DCScene
-from heca.graphs.nodes.node import EntityNode, ValueMode
+from heca.graphs.nodes.node import EntityNode
 from heca.graphs.nodes.node_set import NodeSet
+from heca.graphs.roles import ENMode
 
 
 class EntityNodes(NodeSet[EntityNode]):
@@ -17,15 +18,15 @@ class EntityNodes(NodeSet[EntityNode]):
             [node.type_id for node in self.items], dtype=torch.long  # type: ignore
         )
         self.role_ids = torch.tensor(
-            [node.role for node in self.items], dtype=torch.long
+            [node.role.value for node in self.items], dtype=torch.long
         )
 
     def update_nodes(self, start: DCScene, goal: DCScene):
         for node in self.items:
-            if node.vmode == ValueMode.START:
+            if node.mode == ENMode.START:
                 node.data = start.get(node.entity)
-            elif node.vmode == ValueMode.GOAL:
+            elif node.mode == ENMode.GOAL:
                 node.data = goal.get(node.entity)
-            elif node.vmode == ValueMode.SAMPLE:
+            elif node.mode == ENMode.SAMPLE:
                 assert node.con is not None
                 node.data = node.con.sample(node.entity)

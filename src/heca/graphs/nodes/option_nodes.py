@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 
+from heca.data.entity import Entity
 from heca.graphs.nodes.entity_nodes import EntityNodes
 from heca.graphs.nodes.node import OptionNode
 from heca.graphs.nodes.node_set import NodeSet
@@ -8,6 +9,7 @@ from heca.graphs.nodes.node_set import NodeSet
 
 class OptionNodes(NodeSet[OptionNode]):
     type = "option"
+    FEATURE_DIM = Entity.FEATURE_DIM
 
     def build(self, ns_entity: EntityNodes):
         self.x = self.effects()
@@ -30,10 +32,12 @@ class OptionNodes(NodeSet[OptionNode]):
     def _gated(self, o: OptionNode, ns_entity: EntityNodes) -> bool:
         for src in o.sources[EntityNodes.type]:
             post = ns_entity.get_by_key(src)
+            assert post.con is not None
             if not post.con.test(post.entity, post.data):
                 return False
             for src2 in post.sources[EntityNodes.type]:
                 pre = ns_entity.get_by_key(src2)
+                assert pre.con is not None
                 if not pre.con.test(pre.entity, pre.data):
                     return False
         return True

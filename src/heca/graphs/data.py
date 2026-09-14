@@ -1,12 +1,11 @@
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Iterator, Protocol, cast
+from typing import Protocol, cast
 
 import torch
 from torch_geometric.data import HeteroData
 from torch_geometric.data.storage import BaseStorage
 
-
-# trunk name -> the memory that decision was conditioned on (missing = none yet)
 TrunkMemory = dict[str, torch.Tensor]
 
 
@@ -39,21 +38,6 @@ class HecaData(HeteroData):
 
     @property
     def memory(self) -> TrunkMemory:
-        """Recurrent memory this decision is conditioned on, per trunk.
-
-        Keyed by trunk name (``Network.memory_keys``), so a network with separate
-        actor/critic trunks keeps two independent recurrences and a shared trunk
-        keeps one; a missing key means "no memory yet", which is the normal state
-        of the first decision of an episode (the network materialises zeros).
-
-        This is the *only* way memory enters a forward pass - the trainer
-        overwrites it while replaying a chunk (see :func:`installed_memory`).
-
-        NOTE: ``pyg`` writes attributes straight into the store and therefore
-        bypasses the setter below, so the mapping is kept *by reference*: hand
-        over a freshly built dict, and do not mutate one that is already stored
-        in a buffered transition.
-        """
         return cast(TrunkMemory, self._global_store.get("memory") or {})
 
     @memory.setter
@@ -62,8 +46,15 @@ class HecaData(HeteroData):
 
     @property
     def budget(self) -> torch.Tensor:
-        """Option budget left in the episode: one value per decision."""
         return cast(torch.Tensor, self._global_store["budget"])
+
+    @property
+    def gating(self) -> bool:
+        return bool(self._global_store.get("gating", True))
+
+    @gating.setter
+    def gating(self, value: bool) -> None:
+        self._global_store["gating"] = bool(value)
 
     @property
     def entity(self) -> EntityRowStore:
@@ -83,15 +74,9 @@ class HecaData(HeteroData):
 
 
 @contextmanager
-def installed_memory(data: HecaData, memory: TrunkMemory) -> Iterator[None]:
-    """Condition ``data`` on ``memory`` (per trunk) for the duration of the block.
-
-    Used by truncated-BPTT replay: the first transition of a chunk is scored
-    with the memory recorded in the buffer (detached), every later one with the
-    live tensors produced by the previous step, so the GRUs get gradient across
-    the chunk. The recorded mapping is restored afterwards, because the buffer is
-    replayed once per epoch.
-    """
+def installed_memory(
+    data: HecaData, memory: TrunkMemory
+) -> Generator[None, None, None]:
     stored = data.memory
     data.memory = memory
     try:

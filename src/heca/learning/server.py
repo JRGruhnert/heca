@@ -15,6 +15,7 @@ class FLServer(Persistable):
         folder: str = "network"
         label: str = "federated"
         network: Network.Config
+        sync_layers: tuple[str, ...] = ()
         fedavgm_beta: float = 0.9
         max_update: int = 1000
         fedprox_mu: float = 0.01
@@ -26,6 +27,12 @@ class FLServer(Persistable):
         self.global_network = Network.get(cfg.network)
         for p in self.global_network.parameters():
             p.requires_grad = False
+        self._sync_keys = self.global_network.sync_keys(cfg.sync_layers)
+        logger.info(
+            f"FLServer: federating {len(self._sync_keys)}/"
+            f"{len(self.global_network.state_dict())} tensors "
+            f"({list(cfg.sync_layers) or 'all layers'})"
+        )
         self._momentum: dict[str, torch.Tensor] = {}
         self._momentum_beta = cfg.fedavgm_beta
         self._version = 0
@@ -34,16 +41,14 @@ class FLServer(Persistable):
         self._cond = threading.Condition()
         self._stop = threading.Event()
 
+    def sync_state_dict(self, state_dict: dict[str, torch.Tensor]):
+        return {k: v for k, v in state_dict.items() if k in self._sync_keys}
+
     def aggregate(self, state_dicts: list[dict[str, torch.Tensor]]):
         avg = self.fedavg(state_dicts)
-        self.global_network.load_state_dict(avg)
+        self.global_network.load_state_dict(avg, strict=False)
 
     def aggregate_with_momentum(self, state_dicts: list[dict[str, torch.Tensor]]):
-        """FedAvgM — server momentum on weight deltas.
-
-        ``new = prev + m`` where ``m = β·m + (1-β)·Δ`` and ``Δ`` is the
-        FedAvg step from the current global model.
-        """
         avg = self.fedavg(state_dicts)
         current = self.global_network.state_dict()
 
@@ -65,7 +70,7 @@ class FLServer(Persistable):
         for k in avg:
             cur = current[k].to(dtype=avg[k].dtype, device=avg[k].device)
             new_weights[k] = cur + self._momentum[k]
-        self.global_network.load_state_dict(new_weights)
+        self.global_network.load_state_dict(new_weights, strict=False)
 
     def aggregate_weighted(
         self,
@@ -73,11 +78,9 @@ class FLServer(Persistable):
         weights: list[float],
     ):
         avg = self.fedavg_weighted(state_dicts, weights)
-        self.global_network.load_state_dict(avg)
+        self.global_network.load_state_dict(avg, strict=False)
 
     def register(self, tag: str):
-        """Register a client before training starts. Must be called for every
-        client before the first ``submit``."""
         self._clients.add(tag)
         logger.info(f"FLServer: registered client '{tag}' ({len(self._clients)} total)")
 
@@ -97,14 +100,15 @@ class FLServer(Persistable):
         state_dict: dict[str, torch.Tensor],
         last_version: int,
     ) -> dict[str, torch.Tensor]:
-        """Deposit weights and block until the round's aggregation is ready.
-
-        The last registered client to submit triggers the aggregation and
-        wakes everyone. Returns the fresh global state_dict.
-        """
         assert tag in self._clients, f"Unregistered client {tag}"
+        missing = self._sync_keys - state_dict.keys()
+        if missing:
+            raise ValueError(
+                f"client '{tag}' is missing {len(missing)} federated tensors, "
+                f"e.g. {sorted(missing)[:3]} (sync_layers={self.cfg.sync_layers})"
+            )
         with self._cond:
-            self._pending[tag] = state_dict
+            self._pending[tag] = self.sync_state_dict(state_dict)
             if len(self._pending) >= len(self._clients):
                 self._aggregate_round()
                 self._version += 1
@@ -122,7 +126,7 @@ class FLServer(Persistable):
                 )
                 while self._version <= last_version and not self._stop.is_set():
                     self._cond.wait()
-            return self.global_network.state_dict()
+            return self.sync_state_dict(self.global_network.state_dict())
 
     def _aggregate_round(self):
         state_dicts = [self._pending[k] for k in sorted(self._pending)]

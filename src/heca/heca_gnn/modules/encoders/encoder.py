@@ -35,12 +35,13 @@ class RowEncoderGroup(nn.Module):
 class EncoderBlock(nn.Module):
     ROW_FIELDS = (EntityNodes.type, CompNodes.type)
 
-    def __init__(self, dim: int, use_option_effects: bool = True):
+    def __init__(self, feature_dim: int, use_option_effects: bool = True):
         nn.Module.__init__(self)
-        self.dim = dim
-        self.rows = RowEncoderGroup(dim, self.ROW_FIELDS)
-        self.option_encoder = OptionEncoder(Entity.FEATURE_DIM, dim, use_option_effects)
-        self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, dim)
+        self.rows = RowEncoderGroup(feature_dim, self.ROW_FIELDS)
+        self.option_encoder = OptionEncoder(
+            OptionNodes.FEATURE_DIM, feature_dim, use_option_effects
+        )
+        self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, feature_dim)
 
     def forward(self, data: HecaData) -> EncodedRows:
         encoded = self.rows(

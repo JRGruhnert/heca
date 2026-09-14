@@ -18,8 +18,8 @@ from torch import nn
 
 from heca.data.entity import Entity
 from heca.graphs.data import HecaData, installed_memory
-from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL
-from heca.heca_gnn.modules.timeline import TimelineMemory
+from heca.graphs.roles import ENRole
+from heca.heca_gnn.modules.timeline import MemoryBlock
 from heca.learning.learner import _stored
 from heca.learning.ppo import score_chunks
 
@@ -44,7 +44,7 @@ class StubNet(nn.Module):
     def __init__(self, keys: tuple[str, ...] = ("trunk",)):
         super().__init__()
         self.keys = keys
-        self.grus = nn.ModuleDict({k: TimelineMemory(DIM) for k in keys})
+        self.grus = nn.ModuleDict({k: MemoryBlock(DIM) for k in keys})
         self.u = nn.Parameter(torch.randn(3, DIM))  # option embeddings
         self.seen: list[dict[str, torch.Tensor]] = []
 
@@ -180,22 +180,40 @@ class SimpleRows(NamedTuple):
     memory: torch.Tensor | None
 
 
+class StubRoot(nn.Module):
+    """Stand-in for ``RootNetwork``: only the contract ``Network`` relies on."""
+
+    def __init__(self, name, feature_dim, condition_gat, hyperedge, effects):
+        super().__init__()
+        self.name = name
+        self.calls = 0
+
+    def forward(self, data):
+        from heca.heca_gnn.modules.encoders.encoder import EncodedRows
+
+        self.calls += 1
+        zeros = torch.zeros(3, DIM)
+        return EncodedRows(
+            entity=zeros, comp=zeros, option=zeros, state=torch.zeros(1, DIM)
+        )
+
+
 class StubTrunk(nn.Module):
     """Stand-in for ``TruncNetwork``: only the contract ``Network`` relies on."""
 
     output_dim = DIM
 
-    def __init__(self, cfg, name):
+    def __init__(self, name, feature_dim, option_transformer, summary_gcn, memory):
         super().__init__()
-        self.cfg = cfg
         self.name = name
+        self.use_memory = memory
         self.lin = nn.Linear(DIM, DIM)
         self.calls = 0
 
-    def forward(self, data):
+    def forward(self, data, x):
         self.calls += 1
         # the real trunk returns None here when the recurrence is disabled
-        memory = torch.zeros(1, DIM) if self.cfg.use_memory else None
+        memory = torch.zeros(1, DIM) if self.use_memory else None
         return SimpleRows(
             option=self.lin(torch.zeros(3, DIM)),
             state=torch.zeros(1, DIM),
@@ -209,57 +227,81 @@ def entity_data(memory: dict[str, torch.Tensor] | None = None) -> HecaData:
     data["entity"].x = torch.randn(4, DIM)  # 2 entities: current, goal
     data["entity"].type_ids = torch.zeros(4, dtype=torch.long)
     data["entity"].role_ids = torch.tensor(
-        [ROLE_CURRENT, ROLE_CURRENT, ROLE_GOAL, ROLE_GOAL]
+        [ENRole.START.value, ENRole.START.value, ENRole.GOAL.value, ENRole.GOAL.value]
     )
+    data.gating = False  # the option mask is not what this file is about
     data.memory = dict(memory or {})
     return data
 
 
 def test_network_trunk_layout_is_name_keyed():
-    """Both layouts expose the same keyed API, and nothing is registered twice."""
+    """Both segments expose the same keyed API, and nothing is registered twice."""
     import heca.heca_gnn.network as net_mod
 
-    real_trunc = net_mod.TruncNetwork
-    real_cfg = real_trunc.Config
+    real_root, real_trunc = net_mod.RootNetwork, net_mod.TruncNetwork
+    net_mod.RootNetwork = StubRoot  # type: ignore[assignment]
     net_mod.TruncNetwork = StubTrunk  # type: ignore[assignment]
     try:
 
-        def make_net(separate: bool, memory: bool = True) -> nn.Module:
+        def make_net(
+            separate_root: bool, separate_trunc: bool, memory: bool = True
+        ) -> nn.Module:
             return net_mod.Network(
                 net_mod.Network.Config(
-                    trunc=real_cfg(use_memory=memory),
-                    seperate_trunc=separate,
+                    feature_dim=DIM,
+                    seperate_root=separate_root,
+                    seperate_trunc=separate_trunc,
+                    use_memory=memory,
                 )
             )
 
-        shared = make_net(separate=False)
-        assert shared.memory_keys == ("trunc",)
-        assert shared.key_for("actor") == shared.key_for("critic") == "trunc"
-        assert shared.trunk_for("actor") is shared.trunk_for("critic")
+        shared = make_net(False, False)
+        assert shared.memory_keys == ("shared",)
+        assert shared.key_for("actor", "root") == shared.key_for("critic", "root")
+        assert shared.root_for("actor") is shared.root_for("critic")
+        assert shared.trunc_for("actor") is shared.trunc_for("critic")
 
         out = shared(entity_data())
-        assert shared.trunks["trunc"].calls == 1  # one pass, not one per role
-        assert set(out.memory) == {"trunc"}
+        # one pass, not one per role, for both segments
+        assert shared.roots["shared"].calls == 1
+        assert shared.truncs["shared"].calls == 1
+        assert set(out.memory) == {"shared"}
         assert out.logits.shape == (1, 3) and out.value.shape == (1,)
 
-        separate = make_net(separate=True)
+        separate = make_net(False, True)
         assert separate.memory_keys == ("actor", "critic")
-        assert separate.trunk_for("actor") is not separate.trunk_for("critic")
+        assert separate.trunc_for("actor") is not separate.trunc_for("critic")
         assert set(separate(entity_data()).memory) == {"actor", "critic"}
 
-        # every trunk is registered exactly once: no aliased parameters, and the
-        # state_dict stays name keyed (trunks.actor.* / trunks.critic.* / ...)
-        for model in (shared, separate):
+        # per-role root with a shared trunc: the shared trunc runs twice, once
+        # per root, so memory would be ambiguous and is rejected
+        split_root = make_net(True, False, memory=False)
+        assert split_root.roots["actor"] is not split_root.roots["critic"]
+        assert split_root.trunc_for("actor") is split_root.trunc_for("critic")
+        split_root(entity_data())
+        assert split_root.truncs["shared"].calls == 2
+        assert split_root.roots["actor"].calls == 1
+        try:
+            make_net(True, False, memory=True)
+            raise AssertionError("seperate_root + shared trunc + memory must fail")
+        except ValueError:
+            pass
+
+        # every block is registered exactly once: no aliased parameters, and the
+        # state_dict stays name keyed (roots.actor.* / truncs.critic.* / ...)
+        for model in (shared, separate, split_root):
             names = [n for n, _ in model.named_parameters()]
             assert len(names) == len(set(names))
             ids = [id(p) for p in model.parameters()]
             assert len(ids) == len(set(ids))
             assert all(
-                k.startswith("trunks.") for k in model.state_dict() if "lin" in k
+                k.startswith(("roots.", "truncs."))
+                for k in model.state_dict()
+                if "lin" in k
             )
 
-        no_mem = make_net(separate=True, memory=False)
-        assert no_mem.uses_memory is False
+        no_mem = make_net(False, True, memory=False)
         assert no_mem(entity_data()).memory == {}
     finally:
+        net_mod.RootNetwork = real_root  # type: ignore[assignment]
         net_mod.TruncNetwork = real_trunc  # type: ignore[assignment]
