@@ -35,3 +35,6 @@ data.zip
 # the manifest lists ~260k paths, so it must not be committed
 /data.zip.sha256
 /data.zip.manifest.txt
+
+# sweep logs (manifest + per-run stdout/stderr)
+/logs

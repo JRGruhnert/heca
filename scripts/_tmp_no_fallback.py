@@ -10,7 +10,7 @@ import numpy as np
 import conf.experts.scene1 as s1
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
-from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL, ROLE_POST, ROLE_PRE
+from heca.graphs.roles import ENRole
 from heca.data.data import DCEntity, DCScene
 
 CFG = s1.faucet0_a_b
@@ -39,10 +39,10 @@ role = data["entity"].role_ids
 counts = {
     n: int((role == r).sum())
     for n, r in {
-        "current": ROLE_CURRENT,
-        "goal": ROLE_GOAL,
-        "pre": ROLE_PRE,
-        "post": ROLE_POST,
+        "current": ENRole.START.value,
+        "goal": ENRole.GOAL.value,
+        "pre": ENRole.PRE.value,
+        "post": ENRole.POST.value,
     }.items()
 }
 print("normal export: options:", len(graph.export_keys), "roles:", counts)

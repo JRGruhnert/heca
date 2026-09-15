@@ -42,7 +42,7 @@ from torch.distributions import Categorical
 import conf.networks
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
-from heca.graphs.roles import ROLE_GOAL
+from heca.graphs.roles import ENRole
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.scenes.scene import Scene
@@ -94,7 +94,9 @@ def main():
         # Pre-aggregation checkpoints saw the mean of the goal rows.
         # Only the actor pools a goal slot for its logits, so patch it there.
         network.actor_net.encoder.goal_slot = lambda entity_x, data: (  # type: ignore[method-assign]
-            entity_x[data.entity.role_ids == ROLE_GOAL].mean(dim=0, keepdim=True)
+            entity_x[
+                data.entity.role_ids == ENRole.GOAL.value
+            ].mean(dim=0, keepdim=True)
         )
     network.eval()
     # the interaction block and the recurrence live in the trunk

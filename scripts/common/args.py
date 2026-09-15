@@ -8,7 +8,7 @@ def add_smode_argument(parser: argparse.ArgumentParser):
         "--smode",
         type=SubgoalMode,
         choices=list(SubgoalMode),
-        default=SubgoalMode.GOAL,
+        default=SubgoalMode.BOTH,
     )
 
 
@@ -68,14 +68,6 @@ def add_use_gt_argument(parser: argparse.ArgumentParser):
     )
 
 
-def add_fit_rotation_argument(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--rotation",
-        action="store_true",
-        help="Fit the conditions with rotations.",
-    )
-
-
 def add_wandb_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--wandb",
@@ -88,7 +80,7 @@ def add_batch_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--batch",
         type=int,
-        default=500,
+        default=1000,
         help="Number of training batches per client.",
     )
 
@@ -118,43 +110,11 @@ def add_network_argument(parser: argparse.ArgumentParser):
     )
 
 
-def add_gating_argument(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--gating",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help=(
-            "Restrict option selection to feasible (gated) options. The gate is "
-            "still built and fed to the network either way."
-        ),
-    )
-
-
-def add_sync_argument(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--sync",
-        default="",
-        help=(
-            "Federated layer selection, comma separated, globs over the network's "
-            "layer names: <segment>.<layer> with segments root (encoder, condition, "
-            "hyperedge, translation) and trunc (summary, interaction, scene, "
-            "timeline), plus the whole segment, actor_head and critic_head. With "
-            "seperate_root/seperate_trunc the role comes in between, e.g. "
-            "root.actor.encoder. '!name' excludes. Empty federates everything."
-        ),
-    )
-
-
-def parse_sync(value: str) -> tuple[str, ...]:
-    return tuple(part.strip() for part in value.split(",") if part.strip())
-
-
 def add_heca_arguments(parser: argparse.ArgumentParser):
     add_network_argument(parser)
     add_federated_argument(parser)
     add_wandb_argument(parser)
     add_use_gt_argument(parser)
-    add_fit_rotation_argument(parser)
     add_batch_argument(parser)
     add_virtual_argument(parser)
     add_scene_argument(parser)
@@ -162,8 +122,6 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_smode_argument(parser)
     add_inference_argument(parser)
     add_reload_argument(parser)
-    add_gating_argument(parser)
-    add_sync_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:
@@ -178,13 +136,12 @@ def subgoal_tag(smode: SubgoalMode) -> str:
 
 def generate_tag(args: argparse.Namespace) -> str:
     final_tag = ""
+    final_tag += "fed-" if args.federated else ""
     final_tag += args.tag
     final_tag += "-"
     final_tag += args.network
     final_tag += "-"
-    final_tag += "f" if args.federated else "_"
-    final_tag += "g" if args.gt else "_"
-    final_tag += "v" if args.virtual else "_"
-    final_tag += "r" if args.rotation else "_"
-    final_tag += subgoal_tag(args.smode)
+    final_tag += "gt" if args.gt else ""
+    final_tag += "-"
+    final_tag += "virt" if args.virtual else ""
     return final_tag

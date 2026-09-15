@@ -22,6 +22,7 @@ from heca.heca_gnn.root import RootNetwork
 from heca.heca_gnn.trunc import TruncNetwork
 
 D = Entity.FEATURE_DIM
+DP = Entity.POINT_FEATURE_DIM  # point values (entity rows) carry no log-std
 
 
 def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> HecaData:
@@ -29,7 +30,7 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     data = HecaData()
 
     # one current and one goal row per entity, current rows first
-    data["entity"].x = torch.randn(2 * n_entities, D)
+    data["entity"].x = torch.randn(2 * n_entities, DP)
     data["entity"].type_ids = torch.zeros(2 * n_entities, dtype=torch.long)  # free
     data["entity"].role_ids = torch.tensor(
         [ENRole.START.value] * n_entities + [ENRole.GOAL.value] * n_entities
@@ -42,7 +43,7 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
 
     cond = [(0, 0), (1, 1)][:n_comps]
     data[ConditionEdges.type].edge_index = torch.tensor(cond, dtype=torch.long).T
-    data[ConditionEdges.type].edge_attr = torch.randn(len(cond), 8)
+    data[ConditionEdges.type].edge_attr = torch.randn(len(cond), 27)
 
     data[TranslationEdges.type].edge_index = torch.tensor([(0, 1)], dtype=torch.long).T
     data[SummaryEdges.type].edge_index = torch.tensor(
@@ -59,14 +60,17 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     )
     data["option"].gated = torch.tensor([float(g) for g in gated])
 
-    data.gating = False  # the policy mask is not what this file is about
     data.memory = {}
     return data
 
 
 def make_root(name: str = "shared") -> RootNetwork:
     return RootNetwork(
-        name, feature_dim=D, condition_gat=False, hyperedge=False, effects=True
+        name,
+        feature_dim=D,
+        condition_gat=False,
+        hyperedge=False,
+        rotation=True,
     )
 
 
@@ -83,7 +87,7 @@ def make_trunc(name: str = "shared", memory: bool = True) -> TruncNetwork:
 def test_root_forward_returns_the_encoded_rows():
     x = make_root()(make_data())
     assert x.entity.shape == (4, D), "one row per entity row"
-    assert x.option.shape == (3, D) and x.state.shape == (1, D), "untouched encodings"
+    assert x.comp.shape == (2, D) and x.state.shape == (1, D), "untouched encodings"
 
 
 def test_trunk_forward_shapes_and_state_to_memory_path():

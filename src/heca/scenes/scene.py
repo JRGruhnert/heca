@@ -37,7 +37,7 @@ class Scene(Persistable):
         width: int = 256
         height: int = 256
         viewer: bool = False
-        reject_prob: float = 0.5
+        gated_fail_prob: float = 0.2
         success_reward: float = 1.0
         step_reward: float = -0.01
         max_steps: int = 32
@@ -88,11 +88,21 @@ class Scene(Persistable):
         x: DCScene,
         y: DCScene,
         elabels: list[str],
-        rand_noise: float = 0.1,
-        fail_noise: float = 0.2,
+        rand_noise: float = 0.0,
+        fail_noise: float = 0.0,
     ) -> tuple[DCScene, TDImage, SceneFeedback]:
         obs, fb = self._step_virt(x, y, elabels, rand_noise, fail_noise)
         return self.package_internal(obs, fb)
+
+    def gated_step_virt(self, x: DCScene) -> tuple[DCScene, SceneFeedback]:
+        failed = bool(np.random.random() < self.cfg.gated_fail_prob)
+        fb = SceneFeedback(
+            terminal=failed,
+            reward=0.0,  # shaped by apply_truncation below (no success reward)
+            truncated=False,
+            budget=self.budget,
+        )
+        return x, self.apply_truncation(fb)
 
     def package_internal(
         self, obs: dict, lfb: SceneFeedback

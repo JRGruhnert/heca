@@ -224,7 +224,10 @@ class OGScene(Scene):
         self._sync_viewer()
         assert isinstance(reward, float)
         return obs, SceneFeedback(
-            terminal=terminated, reward=reward, truncated=truncated
+            terminal=terminated,
+            reward=reward,
+            truncated=truncated,
+            budget=self.budget,
         )
 
     def _step_virt(
@@ -249,7 +252,10 @@ class OGScene(Scene):
         self._sync_viewer()
         assert isinstance(reward, float)
         return obs, SceneFeedback(
-            terminal=terminated, reward=reward, truncated=truncated
+            terminal=terminated,
+            reward=reward,
+            truncated=truncated,
+            budget=self.budget,
         )
 
     def load_dataset(

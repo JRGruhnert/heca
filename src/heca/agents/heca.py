@@ -16,15 +16,13 @@ class Heca(Configurable):
     class Config(Configurable.Config):
         agents: Sequence[ExpertModel.Config]
         learner: Learner.Config
-        smode: SubgoalMode
         visualize: bool
         inference: bool
-        virtual: bool
         reload: bool
+        # training difference
+        smode: SubgoalMode
+        virtual: bool
         use_gt: bool
-        gating: bool
-
-        fit_rotation: bool = True
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -35,6 +33,8 @@ class Heca(Configurable):
 
         self._x: DCScene | None = None
         self._y: DCScene | None = None
+
+        self._episode_steps = 0
         self.scene = Scene.get(self.cfg.agents[0].scene)
 
         for a in self.cfg.agents:
@@ -49,7 +49,9 @@ class Heca(Configurable):
                 expert.virtual()
 
         self.graph = Graph.generate(
-            list(self.cfg.agents), smode=cfg.smode, gating=cfg.gating
+            list(self.cfg.agents),
+            smode=cfg.smode,
+            use_rotation=cfg.learner.network.use_rotation,
         )
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()
@@ -58,9 +60,26 @@ class Heca(Configurable):
         self, x: DCScene, y: DCScene, budget: float = 0.0
     ) -> tuple[DCScene, SceneFeedback, bool]:
         data = self.graph.build(x, y, budget)
+        if self.graph.dead_end:
+            fb = SceneFeedback(
+                terminal=True,
+                truncated=False,
+                reward=self.scene.cfg.step_reward,
+                budget=budget,
+            )
+            if self._episode_steps == 0:
+                logger.warning(
+                    "discarding episode: no option applies to the start state"
+                )
+            else:
+                queue = self.learner.buffer.queue
+                if queue and self.learner.train_mode:
+                    queue[-1].terminal = True
+            return x, fb, False
         option = self.learner.predict(data)
         a, s = self.graph.select(option)
-        z, fb = ExpertModel.get(a).act(x, s)
+        z, fb = ExpertModel.get(a).act(x, s, gated=bool(data.option.gated[option]))
+        self._episode_steps += 1
         finished = self.learner.update(fb)
         return z, fb, finished
 
@@ -80,6 +99,7 @@ class Heca(Configurable):
             return True
 
         if self._x is None or self._y is None:
+            self._episode_steps = 0
             self._x, self._y = self.sample()
 
         z, fb, finished = self.step(self._x, self._y)
@@ -88,5 +108,6 @@ class Heca(Configurable):
         if fb.end or finished:
             self._x = None
             self._y = None
+            self._episode_steps = 0
 
         return finished

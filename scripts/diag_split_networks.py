@@ -254,7 +254,7 @@ def main():
 
     # 7. all presets still build
     built = []
-    for name in conf.networks.NETWORK_NAMES:
+    for name in conf.networks.CURATED_NAMES:
         n = Network.get(getattr(conf.networks, name))
         built.append(
             f"{name}({sum(p.numel() for p in n.actor_net.parameters())}a/"

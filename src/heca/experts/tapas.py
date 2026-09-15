@@ -192,7 +192,9 @@ class TapasExpert(ExpertModel):
             action = None
         while action is not None:
             if stop_requested():
-                return x, SceneFeedback(reward=0.0, terminal=True, truncated=True)
+                return x, SceneFeedback(
+                    reward=0.0, terminal=True, truncated=True, budget=0.0
+                )
             tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
             try:
@@ -200,7 +202,9 @@ class TapasExpert(ExpertModel):
             except StopIteration:
                 action = None
         if fb is None:  # nothing executed: prediction error
-            return x, SceneFeedback(reward=0.0, terminal=True, truncated=False)
+            return x, SceneFeedback(
+                reward=0.0, terminal=True, truncated=False, budget=0.0
+            )
         return z, fb
 
     def _get_prediction(self, x, y):

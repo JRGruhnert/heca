@@ -1,5 +1,4 @@
 import abc
-import random
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
@@ -129,13 +128,15 @@ class ExpertModel(Persistable, abc.ABC):
                 return False
         return True
 
-    def act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:
-        if self.act_virtual:
+    def act(
+        self, x: DCScene, y: DCScene, gated: bool = False
+    ) -> tuple[DCScene, SceneFeedback]:
+        if gated and self.act_virtual:
+            z, fb = self.scene.gated_step_virt(x)
+        elif self.act_virtual:
             z, fb = self.virtual_step(x, y)
         else:
             z, fb = self._act(x, y)
-        # One RL/option step == one whole expert execution (not the individual
-        # low-level env actions inside it).
         return z, self.scene.count_option(fb)
 
     def _act(self, x: DCScene, y: DCScene) -> tuple[DCScene, SceneFeedback]:

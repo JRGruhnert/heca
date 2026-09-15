@@ -40,9 +40,9 @@ class SubgoalMode(Enum):
 
 
 class Graph:
-    def __init__(self, entities: dict[str, Entity], gating: bool):
+    def __init__(self, entities: dict[str, Entity], use_rotation: bool = True):
         self.entities: dict[str, Entity] = entities
-        self.gating: bool = gating
+        self.use_rotation: bool = use_rotation
 
         self.ns_comp: CompNodes = CompNodes()
         self.ns_entity: EntityNodes = EntityNodes()
@@ -60,17 +60,16 @@ class Graph:
     def build(self, start: DCScene, goal: DCScene, budget: float) -> HecaData:
         self.start = start.copy()
         self.goal = goal.copy()
-        self.ns_comp.build()
+        self.ns_comp.build(self.use_rotation)
         self.ns_state.build(budget)
-        self.ns_entity.build(self.start, self.goal)
-        self.ns_option.build(self.ns_entity)
-        self.es_condition.build(self.ns_comp, self.ns_entity)
+        self.ns_entity.build(self.start, self.goal, self.use_rotation)
+        self.ns_option.build(self.ns_entity, self.use_rotation)
+        self.es_condition.build(self.ns_comp, self.ns_entity, self.use_rotation)
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_translation.build(self.ns_entity, self.ns_entity)
         self.es_scene.build(self.ns_option, self.ns_state)
 
         data = HecaData()
-        data.gating = self.gating
         # Nodes
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids
@@ -93,6 +92,13 @@ class Graph:
 
         self._validate_export(data)
         return data.to(device=hardware.device.type)
+
+    @property
+    def dead_end(self) -> bool:
+        gated = getattr(self.ns_option, "gated", None)
+        if gated is None:
+            raise RuntimeError("dead_end needs a build() first")
+        return bool(gated.all()) if gated.numel() else True
 
     def set_goal_rows(self):
         for label, entity in self.entities.items():
@@ -219,12 +225,15 @@ class Graph:
 
     @classmethod
     def generate(
-        cls, cfgs: list[ExpertModel.Config], smode: SubgoalMode, gating: bool = True
+        cls,
+        cfgs: list[ExpertModel.Config],
+        smode: SubgoalMode,
+        use_rotation: bool = True,
     ) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
-        graph = cls(entities=entities, gating=gating)
+        graph = cls(entities=entities, use_rotation=use_rotation)
         graph.set_goal_rows()
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
 
@@ -500,4 +509,3 @@ class Graph:
         assert cond.shape[1] > 0
         assert int(cond[0].max()) < comp.x.shape[0]  # src: components
         assert int(cond[1].max()) < ent.x.shape[0]  # dst: value rows
-        assert data[self.es_condition.type].edge_attr.shape == (cond.shape[1], 8)

@@ -17,7 +17,7 @@ class FPPO(PPO):
         self.server = FLServer.get(cfg.server)
         self.server.register(self.cfg.tag)
         self._last_version = self.server.version
-        self._sync_keys = self.network.sync_keys(self.server.cfg.sync_layers)
+        self._sync_keys = self.network.sync_keys(self.server.cfg.network.sync)
         self._load_global(
             self.server.sync_state_dict(self.server.global_network.state_dict())
         )

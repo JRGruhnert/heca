@@ -13,6 +13,7 @@ class SummaryGinBlock(nn.Module):
                 nn.GELU(),
                 nn.Linear(dim, dim),
             ),
+            eps=-1.0,
         )
         self.norm = nn.LayerNorm(dim)
 

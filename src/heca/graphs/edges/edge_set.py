@@ -29,6 +29,12 @@ class EdgeSet(Generic[S, D]):
             self.attrs.append(np.zeros(0))
         self.rebuild = True
 
+    def reset(self):
+        """Drop the previous build; every edge is rebuilt from the node sets."""
+        self.edges.clear()
+        self.attrs.clear()
+        self.rebuild = True
+
     @property
     def size(self) -> int:
         return len(self.edges)
@@ -39,6 +45,7 @@ class EdgeSet(Generic[S, D]):
         return nset.x.numpy()[np.asarray(indices, dtype=np.intp)]
 
     def build(self, snset: NodeSet[S], dnset: NodeSet[D]):
+        self.reset()
         self.edges_from_sets(snset, dnset)
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
@@ -82,27 +89,83 @@ class EdgeSet(Generic[S, D]):
         return self.residual_batch(x_src, x_dst)[0]
 
     @staticmethod
-    def residual_batch(x_src: np.ndarray, x_dst: np.ndarray, eps=1e-15) -> np.ndarray:
-        O = Entity.MAX_STATE_DIM
+    def residual_batch(
+        x_src: np.ndarray,
+        x_dst: np.ndarray,
+        eps=1e-15,
+        use_rotation: bool = True,
+    ) -> np.ndarray:
+        Lc = Entity.LAYOUT
+        Lp = Entity.POINT_LAYOUT
         x_src = np.atleast_2d(x_src)
         x_dst = np.atleast_2d(x_dst)
 
-        mu_pos_a = x_src[:, O : O + 3]
-        q_a = x_src[:, O + 6 : O + 10]
-        mu_pos_b = x_dst[:, O : O + 3]
-        q_b = x_dst[:, O + 6 : O + 10]
+        mu_pos = x_src[:, Lc["pos"].mean()]
+        ls_pos = x_src[:, Lc["pos"].logstd()]
+        mu_extra = x_src[:, Lc["extra"].mean()]
+        ls_extra = x_src[:, Lc["extra"].logstd()]
 
-        r_vec = Quaternion.log_map(Quaternion.mul(q_b, Quaternion.inv(q_a)))
+        x_pos = x_dst[:, Lp["pos"].mean()]
+        x_extra = x_dst[:, Lp["extra"].mean()]
 
-        z_pos = np.clip(mu_pos_b - mu_pos_a, -Entity.Z_CLIP, Entity.Z_CLIP)
-        z_rot = np.clip(r_vec, -Entity.Z_CLIP, Entity.Z_CLIP)
+        z_pos_raw = (x_pos - mu_pos) * np.exp(-ls_pos)
+        z_extra_raw = (x_extra - mu_extra) * np.exp(-ls_extra)
 
-        # Cross-entropy between the two state distributions.
-        p_src = x_src[:, :O]
-        p_dst = x_dst[:, :O]
-        z_state = -np.sum(p_dst * np.log(p_src + eps), axis=-1)
+        if use_rotation:
+            q_c = x_src[:, Lc["rot"].mean()]
+            ls_rot = x_src[:, Lc["rot"].logstd()]
+            q_x = x_dst[:, Lp["rot"].mean()]
+            r_vec = Quaternion.log_map(Quaternion.mul(q_x, Quaternion.inv(q_c)))
+            z_rot_raw = r_vec * np.exp(-ls_rot)
+            logp_rot = np.sum(
+                np.log(2 * np.pi) + 2.0 * ls_rot + z_rot_raw**2, axis=-1, keepdims=True
+            )
+        else:
+            z_rot_raw = np.zeros_like(x_pos)
+            logp_rot = np.zeros((x_pos.shape[0], 1))
 
-        # Clip to prevent extreme outliers from dominating the edge feature
+        logz_pos = np.log1p(np.abs(z_pos_raw))
+        logz_rot = np.log1p(np.abs(z_rot_raw))
+        logz_extra = np.log1p(np.abs(z_extra_raw))
+
+        z_pos = np.clip(z_pos_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
+        z_rot = np.clip(z_rot_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
+        z_extra = np.clip(z_extra_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
+
+        # log-density of the value under the component (diagonal Gaussian)
+        logp = -0.5 * (
+            np.sum(
+                np.log(2 * np.pi) + 2.0 * ls_pos + z_pos_raw**2, axis=-1, keepdims=True
+            )
+            + logp_rot
+            + np.sum(
+                np.log(2 * np.pi) + 2.0 * ls_extra + z_extra_raw**2,
+                axis=-1,
+                keepdims=True,
+            )
+        )
+        logp = np.clip(logp, -Entity.LOGP_CLIP, Entity.LOGP_CLIP)
+
+        # Cross-entropy between the value's one-hot state and the component's
+        # posterior: -log p_component(state_x)
+        p_c = x_src[:, Lc["state"].mean()]
+        p_x = x_dst[:, Lp["state"].mean()]
+        z_state = -np.sum(p_x * np.log(p_c + eps), axis=-1, keepdims=True)
         z_state = np.clip(z_state, 0.0, Entity.Z_CLIP)
 
-        return np.concatenate([z_pos, z_rot, z_state[:, None]], axis=-1)
+        return np.concatenate(
+            [
+                z_pos,
+                z_pos**2,
+                logz_pos,
+                z_rot,
+                z_rot**2,
+                logz_rot,
+                z_extra,
+                z_extra**2,
+                logz_extra,
+                logp,
+                z_state,
+            ],
+            axis=-1,
+        )

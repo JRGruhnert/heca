@@ -26,23 +26,32 @@ class _Block(nn.Module):
 class _EntityEncoder(nn.Module):
     BLOCKS: tuple[str, ...] = ()
 
-    def __init__(self, out_dim: int):
+    def __init__(self, out_dim: int, rotation: bool = True, logstd: bool = True):
         super().__init__()
+        self.logstd = logstd
+        self.out_dim = out_dim
+        layout = Entity.LAYOUT if logstd else Entity.POINT_LAYOUT
+        blocks = tuple(b for b in self.BLOCKS if rotation or b != "rot")
+        if not blocks:
+            raise ValueError(f"{type(self).__name__} has no blocks left")
+        self.blocks = blocks
 
-        share = max(out_dim // len(self.BLOCKS), 8)
-        dims = {name: share for name in self.BLOCKS}
-        dims[self.BLOCKS[-1]] = out_dim - share * (len(self.BLOCKS) - 1)
-
-        self.dims = dims
+        n_blocks = len(Entity.LAYOUT)
+        share = out_dim // n_blocks
+        self.block_widths = {
+            name: (share if i < n_blocks - 1 else out_dim - share * (n_blocks - 1))
+            for i, name in enumerate(Entity.LAYOUT)
+        }
         self.subs = nn.ModuleDict(
-            {name: _Block(Entity.LAYOUT[name].dim, dims[name]) for name in self.BLOCKS}
+            {name: _Block(layout[name].dim, self.block_widths[name]) for name in blocks}
         )
 
     def _slices(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        layout = Entity.LAYOUT if self.logstd else Entity.POINT_LAYOUT
         out: dict[str, torch.Tensor] = {}
         inv = 1.0 / abs(Entity.BASE_LOGSTD)
-        for name in self.BLOCKS:
-            block = Entity.LAYOUT[name]
+        for name in self.blocks:
+            block = layout[name]
             parts = [x[:, block.mean()]]
             if block.logstd_dim:
                 parts.append(x[:, block.logstd()] * inv)
@@ -51,7 +60,14 @@ class _EntityEncoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         parts = self._slices(x)
-        return torch.cat([self.subs[name](parts[name]) for name in self.BLOCKS], dim=-1)
+        out = x.new_zeros(x.shape[0], self.out_dim)
+        offset = 0
+        for name in Entity.LAYOUT:  # canonical order: state, pos, rot, extra
+            width = self.block_widths[name]
+            if name in self.blocks:
+                out[:, offset : offset + width] = self.subs[name](parts[name])
+            offset += width
+        return out
 
 
 class FreeEncoder(_EntityEncoder):
@@ -79,12 +95,12 @@ class RevoluteEncoder(_EntityEncoder):
 
 
 class SetEncoder(nn.Module):
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, rotation: bool = True, logstd: bool = True):
         nn.Module.__init__(self)
         self.dim = dim
 
         self.encoders = nn.ModuleDict(
-            {name: cls(dim) for name, cls in self.encoder_map.items()}
+            {name: cls(dim, rotation, logstd) for name, cls in self.encoder_map.items()}
         )
 
     @property

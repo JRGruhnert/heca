@@ -53,15 +53,19 @@ class FeatureBlock:
 
 
 def _layout(
-    max_state: int, max_extra: int, pos_dim: int, rot_dim: int
+    max_state: int,
+    max_extra: int,
+    pos_dim: int,
+    rot_dim: int,
+    logstd: bool = True,
 ) -> dict[str, FeatureBlock]:
     blocks: dict[str, FeatureBlock] = {}
     offset = 0
     for name, mean_dim, logstd_dim in (
         ("state", max_state, 0),
-        ("pos", pos_dim, rot_dim),
-        ("rot", 4, rot_dim),
-        ("extra", max_extra, max_extra),
+        ("pos", pos_dim, pos_dim if logstd else 0),
+        ("rot", 4, rot_dim if logstd else 0),
+        ("extra", max_extra, max_extra if logstd else 0),
     ):
         blocks[name] = FeatureBlock(offset, mean_dim, logstd_dim)
         offset += mean_dim + logstd_dim
@@ -101,11 +105,20 @@ class Entity(Configurable):
     ANCHOR_THRESHOLD: float = 0.1
     REG_COVAR = 1e-6
     Z_CLIP = 10.0
+    LOGP_CLIP = 50.0  # clip the log-density: a point-like component can push it to -inf
 
     LAYOUT: ClassVar[dict[str, FeatureBlock]] = _layout(
         MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM
     )
     FEATURE_DIM: ClassVar[int] = _feature_dim(LAYOUT)
+
+    # Point values (the query ``x`` encoded by :meth:`gnn_format`, e.g. entity
+    # rows) carry no uncertainty, so they use a compact layout with every
+    # log-std block removed. Components keep the full ``LAYOUT`` above.
+    POINT_LAYOUT: ClassVar[dict[str, FeatureBlock]] = _layout(
+        MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM, logstd=False
+    )
+    POINT_FEATURE_DIM: ClassVar[int] = _feature_dim(POINT_LAYOUT)
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
@@ -239,6 +252,16 @@ class Entity(Configurable):
                 "Network.Config.max_state) to widen the layout."
             )
 
+    @classmethod
+    def without_rotation(cls, features, layout: dict[str, FeatureBlock] | None = None):
+        layout = layout if layout is not None else cls.LAYOUT
+        out = features.clone() if hasattr(features, "clone") else features.copy()
+        block = layout["rot"]
+        out[:, block.mean()] = 0.0
+        if block.logstd_dim:
+            out[:, block.logstd()] = 0.0
+        return out
+
     def gnn_format(self, value: np.ndarray) -> np.ndarray:
         D = len(value) - 7  # pos(3) + aa(3) + ste(1) = 7 base, extra is rest
         if D > Entity.MAX_EXTRA_DIM:
@@ -248,8 +271,8 @@ class Entity(Configurable):
                 "layout and feature width follow) to widen the graph features"
             )
 
-        L = Entity.LAYOUT
-        feat = np.zeros(Entity.FEATURE_DIM, dtype=np.float32)
+        L = Entity.POINT_LAYOUT
+        feat = np.zeros(Entity.POINT_FEATURE_DIM, dtype=np.float32)
 
         self._check_state_width(self.cfg.n_states)
         state_id = value[6 + D].astype(int)
@@ -260,18 +283,15 @@ class Entity(Configurable):
             state[state_id] = 1.0
 
         feat[L["pos"].mean()] = value[0:3]
-        feat[L["pos"].logstd()] = self.BASE_LOGSTD
 
         if self.cfg.add_rotation:
             quat = Quaternion.exp(value[3:6])
             feat[L["rot"].mean()] = Quaternion.normalize(quat)
         else:
             feat[L["rot"].mean()] = Quaternion.identity()
-        feat[L["rot"].logstd()] = self.BASE_LOGSTD
 
         if D > 0:
             feat[L["extra"].mean(D)] = value[6 : 6 + D]
-            feat[L["extra"].logstd(D)] = self.BASE_LOGSTD
 
         return feat
 
@@ -552,18 +572,6 @@ class Entity(Configurable):
     def comp_feature(
         self, up: dict, eps: float = 1e-8
     ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        NOTE: ASSUMES MODELS USE DIAG MODE
-        Returns:
-            np.ndarray of shape (N, FEATURE_DIM), filled block by block per
-            :data:`Entity.LAYOUT`: the fitted state posterior over the live
-            slots (summing to 1, unseen states at 0), then μ and log(σ) for
-            position, orientation and the extra joint dims.
-
-            Unlike :meth:`gnn_format`, which fills the log-std blocks with the
-            ``BASE_LOGSTD`` sentinel, this writes the fitted log-stds, so both
-            producers have to be scaled alike before they reach the encoder.
-        """
 
         p = self.secure_mix_parameters(up)
         means = p["measurement"]["pose"]["means"]  # (N, n_columns)

@@ -15,7 +15,6 @@ class FLServer(Persistable):
         folder: str = "network"
         label: str = "federated"
         network: Network.Config
-        sync_layers: tuple[str, ...] = ()
         fedavgm_beta: float = 0.9
         max_update: int = 1000
         fedprox_mu: float = 0.01
@@ -27,11 +26,11 @@ class FLServer(Persistable):
         self.global_network = Network.get(cfg.network)
         for p in self.global_network.parameters():
             p.requires_grad = False
-        self._sync_keys = self.global_network.sync_keys(cfg.sync_layers)
+        self._sync_keys = self.global_network.sync_keys(cfg.network.sync)
         logger.info(
             f"FLServer: federating {len(self._sync_keys)}/"
             f"{len(self.global_network.state_dict())} tensors "
-            f"({list(cfg.sync_layers) or 'all layers'})"
+            f"({list(cfg.network.sync) or 'all layers'})"
         )
         self._momentum: dict[str, torch.Tensor] = {}
         self._momentum_beta = cfg.fedavgm_beta
@@ -101,12 +100,6 @@ class FLServer(Persistable):
         last_version: int,
     ) -> dict[str, torch.Tensor]:
         assert tag in self._clients, f"Unregistered client {tag}"
-        missing = self._sync_keys - state_dict.keys()
-        if missing:
-            raise ValueError(
-                f"client '{tag}' is missing {len(missing)} federated tensors, "
-                f"e.g. {sorted(missing)[:3]} (sync_layers={self.cfg.sync_layers})"
-            )
         with self._cond:
             self._pending[tag] = self.sync_state_dict(state_dict)
             if len(self._pending) >= len(self._clients):

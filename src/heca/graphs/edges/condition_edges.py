@@ -11,7 +11,13 @@ from heca.graphs.nodes.node_set import NodeSet
 class ConditionEdges(EdgeSet[CompNode, EntityNode]):
     type = (CompNodes.type, "condition", EntityNodes.type)
 
-    def build(self, snset: NodeSet[CompNode], dnset: NodeSet[EntityNode]):
+    def build(
+        self,
+        snset: NodeSet[CompNode],
+        dnset: NodeSet[EntityNode],
+        use_rotation: bool = True,
+    ):
+        self.reset()
         self.edges_from_sets(snset, dnset)
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
@@ -26,9 +32,14 @@ class ConditionEdges(EdgeSet[CompNode, EntityNode]):
             dtype=np.float32,
             count=len(src_list),
         )
+        log_weights = np.log(weights + 1e-15)
 
         attr = np.concatenate(
-            [self.residual_batch(x_src, x_dst), weights[:, None]], axis=-1
+            [
+                self.residual_batch(x_src, x_dst, use_rotation=use_rotation),
+                log_weights[:, None],
+            ],
+            axis=-1,
         )
         self.attrs = list(attr)
         self.edge_attr = torch.from_numpy(attr).float()

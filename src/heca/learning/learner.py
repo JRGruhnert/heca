@@ -180,7 +180,6 @@ class Learner(Persistable):
             # Network config
             "network/input_dim": Entity.FEATURE_DIM,
             "network/max_state": Entity.MAX_STATE_DIM,
-            "network/use_option_effects": (self.cfg.network.use_option_effects),
             "network/use_option_interaction": (self.cfg.network.use_option_transformer),
             "network/use_timeline_memory": (self.cfg.network.use_memory),
         }

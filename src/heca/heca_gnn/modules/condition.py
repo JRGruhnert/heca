@@ -3,6 +3,8 @@ from torch import nn
 from torch_geometric.nn import GINEConv, GATv2Conv
 import torch.nn.functional as F
 
+EDGE_DIM = 27
+
 
 class ConditionGinBlock(nn.Module):
     def __init__(self, dim: int):
@@ -13,7 +15,7 @@ class ConditionGinBlock(nn.Module):
                 nn.GELU(),
                 nn.Linear(dim, dim),
             ),
-            edge_dim=8,
+            edge_dim=EDGE_DIM,
         )
         self.norm = nn.LayerNorm(dim)
 
@@ -36,7 +38,7 @@ class ConditionGatBlock(nn.Module):
             in_channels=dim,
             out_channels=dim // 4,
             heads=4,
-            edge_dim=8,
+            edge_dim=EDGE_DIM,
         )
         self.norm = nn.LayerNorm(dim)
 

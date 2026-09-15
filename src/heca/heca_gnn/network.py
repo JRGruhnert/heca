@@ -1,16 +1,17 @@
 from dataclasses import dataclass
 from fnmatch import fnmatch
-from typing import NamedTuple, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 import torch
 from torch import nn
 from torch.distributions import Categorical
 
-from heca.misc import hardware
+from heca.misc import hardware, logger
 from heca.misc.base import Configurable
 from heca.graphs.data import HecaData, TrunkMemory
 from heca.heca_gnn.actor import ActorNetwork
 from heca.heca_gnn.critic import CriticNetwork
+from heca.heca_gnn.modules.encoders.encoder import EncodedRows
 from heca.heca_gnn.root import RootNetwork
 from heca.heca_gnn.trunc import TruncNetwork, TruncOutput
 
@@ -25,7 +26,7 @@ class Network(Configurable, nn.Module):
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        feature_dim: int = 256
+        feature_dim: int = 128
         seperate_root: bool = False
         seperate_trunc: bool = False
         use_option_transformer: bool = False
@@ -33,7 +34,9 @@ class Network(Configurable, nn.Module):
         use_summary_gcn: bool = False
         use_memory: bool = False
         use_hyperedge: bool = False
-        use_option_effects: bool = False
+        use_rotation: bool = True
+        gating: bool = True
+        sync: tuple[str, ...] = ()
 
     SHARED = "shared"
     ROLES = ("actor", "critic")
@@ -56,7 +59,7 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
                     hyperedge=cfg.use_hyperedge,
-                    effects=cfg.use_option_effects,
+                    rotation=cfg.use_rotation,
                 )
                 for role in self.ROLES
             }
@@ -67,7 +70,7 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
                     hyperedge=cfg.use_hyperedge,
-                    effects=cfg.use_option_effects,
+                    rotation=cfg.use_rotation,
                 )
             }
         )
@@ -97,7 +100,16 @@ class Network(Configurable, nn.Module):
         self.critic_net = CriticNetwork(cfg.feature_dim, cfg.use_memory)
 
     def key_for(self, role: str, segment: str) -> str:
-        modules = self.roots if segment == "root" else self.truncs
+        if segment == "root":
+            modules = self.roots
+        elif segment == "trunc":
+            modules = self.truncs
+        else:
+            raise ValueError(f"unknown segment {segment!r}; expected 'root' or 'trunc'")
+        if role not in (*self.ROLES, self.SHARED):
+            raise ValueError(
+                f"unknown role {role!r}; expected one of {[*self.ROLES, self.SHARED]}"
+            )
         return role if role in modules else self.SHARED
 
     def root_for(self, role: str) -> nn.Module:
@@ -118,13 +130,21 @@ class Network(Configurable, nn.Module):
     def memory_keys(self) -> tuple[str, ...]:
         return tuple(self.truncs)
 
+    @property
+    def uses_memory(self) -> bool:
+        return self.cfg.use_memory
+
     def _rows(self, data: HecaData) -> dict[tuple[str, str], TruncOutput]:
         rows: dict[tuple[str, str], TruncOutput] = {}
+        encoded: dict[str, EncodedRows] = {}
         for keys in (self.a_keys, self.c_keys):
             if keys in rows:
                 continue
             root_key, trunc_key = keys
-            rows[keys] = self.truncs[trunc_key](data, self.roots[root_key](data))
+            if root_key not in encoded:
+                # both roles can share one root: encode it once, not once per role
+                encoded[root_key] = self.roots[root_key](data)
+            rows[keys] = self.truncs[trunc_key](data, encoded[root_key])
         return rows
 
     @property
@@ -158,6 +178,9 @@ class Network(Configurable, nn.Module):
         names = self.layer_names
         include = [p for p in sync if not p.startswith("!")]
         exclude = [p[1:] for p in sync if p.startswith("!")]
+        if not include:
+            # only exclusions given: federate everything except them
+            include = ["*"]
 
         def matched(patterns: Sequence[str]) -> list[str]:
             return [name for name in names if any(fnmatch(name, p) for p in patterns)]
@@ -175,9 +198,8 @@ class Network(Configurable, nn.Module):
             )
         return keys
 
-    @staticmethod
-    def mask_gated(logits: torch.Tensor, data: HecaData) -> torch.Tensor:
-        if not data.gating:
+    def mask_gated(self, logits: torch.Tensor, data: HecaData) -> torch.Tensor:
+        if not self.cfg.gating:
             return logits
         gated = data.option.gated.bool()
         if not bool(gated.any()):
@@ -198,8 +220,33 @@ class Network(Configurable, nn.Module):
     def critic(self, data: HecaData) -> torch.Tensor:
         return self.critic_net(self.critic_rows(data))
 
-    def upgrade(self, checkpoint):
-        self.load_state_dict(checkpoint, strict=False)
+    def upgrade(self, checkpoint: Mapping[str, torch.Tensor]):
+        """Load a checkpoint with different parameter names, loudly.
+
+        Returns ``(missing, unexpected)``. Raises when *nothing* matches, because
+        a silently ignored checkpoint (e.g. one written before the layers were
+        renamed) would leave a freshly initialized network in place: it looks
+        loaded, trains/evaluates as if it were not.
+        """
+        current = set(self.state_dict())
+        given = set(checkpoint)
+        shared = current & given
+        if not shared:
+            raise ValueError(
+                f"checkpoint shares no parameter name with this network "
+                f"({len(given)} tensors in the checkpoint, {len(current)} in the "
+                f"network, e.g. {sorted(given)[:2]} vs {sorted(current)[:2]}); it "
+                "was probably written with different layer names, so remap it "
+                "before loading"
+            )
+        result = self.load_state_dict(checkpoint, strict=False)
+        if result.missing_keys or result.unexpected_keys:
+            logger.warning(
+                f"upgrade: restored {len(shared)}/{len(current)} tensors "
+                f"({len(result.missing_keys)} missing, "
+                f"{len(result.unexpected_keys)} unexpected)"
+            )
+        return list(result.missing_keys), list(result.unexpected_keys)
 
     def evaluate(
         self, data_list: Sequence[HecaData], actions: torch.Tensor

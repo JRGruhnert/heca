@@ -49,14 +49,6 @@ class HecaData(HeteroData):
         return cast(torch.Tensor, self._global_store["budget"])
 
     @property
-    def gating(self) -> bool:
-        return bool(self._global_store.get("gating", True))
-
-    @gating.setter
-    def gating(self, value: bool) -> None:
-        self._global_store["gating"] = bool(value)
-
-    @property
     def entity(self) -> EntityRowStore:
         return cast(EntityRowStore, self["entity"])
 

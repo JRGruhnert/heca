@@ -42,7 +42,7 @@ import conf.networks
 from heca.data.entity import Entity
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
-from heca.graphs.roles import ROLE_CURRENT, ROLE_GOAL
+from heca.graphs.roles import ENRole
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
 from heca.scenes.scene import Scene
@@ -114,8 +114,8 @@ def cos_to(a: np.ndarray, b: np.ndarray, eps: float = 1e-12) -> np.ndarray:
 def effect_scores(data, mask: np.ndarray) -> np.ndarray:
     """cos(effect_i, goal - current) over the mean blocks, per option."""
     ent = data["entity"]
-    cur = ent.x[ent.role_ids == ROLE_CURRENT].numpy()
-    goal = ent.x[ent.role_ids == ROLE_GOAL].numpy()
+    cur = ent.x[ent.role_ids == ENRole.START.value].numpy()
+    goal = ent.x[ent.role_ids == ENRole.GOAL.value].numpy()
     delta = (goal - cur).mean(axis=0)
     effects = data["option"].x.numpy()
     return cos_to(effects[:, mask], delta[None, mask])

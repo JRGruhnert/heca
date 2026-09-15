@@ -12,6 +12,7 @@ class SceneEdges(EdgeSet[OptionNode, StateNode]):
     has_attrs: bool = True
 
     def build(self, snset: OptionNodes, tnset: NodeSet[StateNode]):
+        self.reset()
         attrs: list[float] = []
         gated = snset.gated
         j = tnset.get_index(StateNodes.type)

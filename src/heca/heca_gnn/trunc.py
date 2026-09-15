@@ -10,7 +10,7 @@ from heca.graphs.nodes.option_nodes import OptionNodes
 
 from heca.heca_gnn.modules.encoders.encoder import EncodedRows
 from heca.heca_gnn.modules.interaction import IdentityBlock, TransformerBlock
-from heca.heca_gnn.modules.scene import SceneGATBlock, SceneGINBlock, SceneSageBlock
+from heca.heca_gnn.modules.scene import SceneGATBlock, SceneSageBlock
 from heca.heca_gnn.modules.summary import SummarySageBlock, SummaryGinBlock
 from heca.heca_gnn.modules.timeline import MemoryBlock, NoMemoryBlock
 
@@ -32,6 +32,7 @@ class TruncNetwork(nn.Module):
     ):
         nn.Module.__init__(self)
         self.name = name
+        self.feature_dim = feature_dim
         self.layers = nn.ModuleDict(
             {
                 "summary": (
@@ -55,9 +56,11 @@ class TruncNetwork(nn.Module):
 
     def forward(self, data: HecaData, x: EncodedRows) -> TruncOutput:
         layer = self.layers
+        n_options = data[OptionNodes.type].x.shape[0]
+        option_x = x.entity.new_zeros(n_options, self.feature_dim)
         option_x = layer["summary"](
             x.entity,
-            x.option,
+            option_x,
             data[SummaryEdges.type].edge_index,
         )
 

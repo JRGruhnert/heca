@@ -14,4 +14,9 @@ class TranslationBlock(nn.Module):
 
     def forward(self, x: torch.Tensor, edge_index: torch.Tensor) -> torch.Tensor:
         src, dst = edge_index
-        return self.mlp(torch.cat([x[src], x[dst]], dim=-1))
+        assert dst.unique().numel() == dst.numel(), (
+            "translation edges must be 1-to-1 into dst; use a scatter for "
+            "multi-predecessor rows"
+        )
+        msg = self.mlp(torch.cat([x[src], x[dst]], dim=-1))
+        return x.index_copy(0, dst, msg)

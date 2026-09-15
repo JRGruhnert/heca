@@ -11,11 +11,11 @@ class OptionNodes(NodeSet[OptionNode]):
     type = "option"
     FEATURE_DIM = Entity.FEATURE_DIM
 
-    def build(self, ns_entity: EntityNodes):
-        self.x = self.effects()
+    def build(self, ns_entity: EntityNodes, use_rotation: bool = True):
+        self.x = self.effects(use_rotation)
         self.gated = self.gates(ns_entity)
 
-    def effects(self) -> torch.Tensor:
+    def effects(self, use_rotation: bool = True) -> torch.Tensor:
         effects = [node.effect for node in self.items]
         widths = [e.shape[-1] for e in effects if e is not None]
         width = widths[0] if widths else 0
@@ -23,7 +23,8 @@ class OptionNodes(NodeSet[OptionNode]):
         for i, effect in enumerate(effects):
             if effect is not None and effect.shape[-1] == width:
                 x_np[i] = effect
-        return torch.from_numpy(x_np).float()
+        x = torch.from_numpy(x_np).float()
+        return x if use_rotation else Entity.without_rotation(x)
 
     def gates(self, ns_entity: EntityNodes) -> torch.Tensor:
         gated = [not self._gated(o, ns_entity) for o in self.items]

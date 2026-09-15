@@ -56,7 +56,7 @@ class PPO(Learner):
         n_epoch: int = 4
         lr: float = 3e-4
         eps_clip: float = 0.2
-        entropy_coef: float = 0.02
+        entropy_coef: float = 0.0
         critic_coef: float = 0.5
         max_grad_norm: float = 0.5
         target_kl: float | None = 0.01

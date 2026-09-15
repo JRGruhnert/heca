@@ -93,11 +93,12 @@ def main():
 
     buf = FairBuffer.__new__(FairBuffer)
     buf.cfg = FairBuffer.Config()
+    truncates = [False] * T
     adv_2d, rtn_2d = buf._gae_for_bucket(
-        rewards, terminals, [v.reshape(1, 1) for v in vals]
+        rewards, terminals, truncates, [v.reshape(1, 1) for v in vals]
     )
     adv_1d, rtn_1d = buf._gae_for_bucket(
-        rewards, terminals, [v.reshape(1) for v in vals]
+        rewards, terminals, truncates, [v.reshape(1) for v in vals]
     )
     print(
         f"\nvalues per step [1, 1] -> advantages {tuple(adv_2d.shape)}, returns {tuple(rtn_2d.shape)}"
