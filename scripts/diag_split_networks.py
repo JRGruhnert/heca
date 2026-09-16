@@ -216,7 +216,7 @@ def main():
     # two widths are independent
     separate = Network.get(
         Network.Config(
-            actor=conf.networks.separate.actor,
+            actor=conf.networks.a1.actor,
             critic=CriticNetwork.Config(feature_dim=128),
         )
     )

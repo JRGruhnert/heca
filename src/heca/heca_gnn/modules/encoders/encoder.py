@@ -6,14 +6,12 @@ from torch import nn
 from heca.graphs.data import HecaData
 from heca.graphs.nodes.comp_nodes import CompNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
-from heca.graphs.nodes.state_nodes import StateNodes
 from heca.heca_gnn.modules.encoders.common import SetEncoder
 
 
 class EncodedRows(NamedTuple):
     entity: torch.Tensor
     comp: torch.Tensor
-    state: torch.Tensor
 
 
 class RowEncoderGroup(nn.Module):
@@ -52,11 +50,11 @@ class EncoderBlock(nn.Module):
             rotation,
             logstd={EntityNodes.type: False, CompNodes.type: True},
         )
-        self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, feature_dim)
+        # self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, feature_dim)
 
     def forward(self, data: HecaData) -> EncodedRows:
         encoded = self.rows(
             {name: (data[name].x, data[name].type_ids) for name in self.rows.fields}
         )
-        encoded[StateNodes.type] = self.state_encoder(data[StateNodes.type].x)
+        # encoded[StateNodes.type] = self.state_encoder(data[StateNodes.type].x)
         return EncodedRows(**encoded)

@@ -62,7 +62,7 @@ def main():
     graph.set_start(x)
     data = graph.build()
 
-    net = Network.get(conf.networks.default)
+    net = Network.get(conf.networks.a0)
     net.eval()
     with torch.inference_mode():
         out = net(data)

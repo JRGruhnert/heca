@@ -1,40 +1,47 @@
 from heca.heca_gnn.network import Network
 
-from conf.sweep import SWEEP, SWEEP_NAMES
+free = Network.Config(gating=False)  # doesnt learn virtual
 
-default = Network.Config()
-free = Network.Config(gating=False)
-sage = Network.Config(use_summary_gcn=True)
-separate = Network.Config(seperate_root=True, seperate_trunc=True)
-separate_trunc = Network.Config(seperate_root=False, seperate_trunc=True)
+# TODO: need greedy search scene0 virtual evaluation
 
-best = Network.Config(
-    seperate_root=False,
-    seperate_trunc=True,
-    use_option_transformer=True,
-    use_condition_gat=True,
-    use_summary_gcn=True,
-    use_memory=True,
-    use_hyperedge=True,
-)
-CURATED_NAMES = [
-    "default",
-    "sage",
-    "free",
-    "separate",
-    "separate_trunc",
+# virtual
+a0 = Network.Config()
+a1 = Network.Config(seperate_root=True, seperate_trunc=True)
+a2 = Network.Config(seperate_root=False, seperate_trunc=True)
+
+# on best of a
+b0 = Network.Config(seperate_root=False, seperate_trunc=True)
+b1 = Network.Config(seperate_root=False, seperate_trunc=True)
+b2 = Network.Config(seperate_root=False, seperate_trunc=True)
+b3 = Network.Config(seperate_root=False, seperate_trunc=True)
+b4 = Network.Config(seperate_root=False, seperate_trunc=True)
+
+# on best model with noise (0.0 ,0.2, 0.4, 0.6)
+c0 = Network.Config()
+
+# with (real models) GT
+d0 = Network.Config()
+
+# with (real models) VISUAL
+e0 = Network.Config()
+
+# FEDERATED
+
+# special on visual (best of all runs at the end)
+# in Network.Config
+sync = ()  # federate everything (baseline)
+sync = ("!actor_head", "!critic_head")  # federate trunk, keep heads local
+sync = ("root",)  # federate only the encoder/root
+sync = ("!critic_head",)  # keep the value head local only
+
+
+NETWORK_NAMES = [
+    "a0",
+    "a1",
+    "a2",
 ]
 
-# every derived sweep config (conf/sweep.py) is a network config too, so
-# ``--network <sweep name>`` works like any curated one
-CONFIGS: dict[str, Network.Config] = {
-    name: globals()[name] for name in CURATED_NAMES
-} | SWEEP
-
-_clashes = set(CURATED_NAMES) & set(SWEEP_NAMES)
-assert not _clashes, f"derived sweep names clash with curated ones: {sorted(_clashes)}"
-
-NETWORK_NAMES = [*CURATED_NAMES, *SWEEP_NAMES]
+CONFIGS: dict[str, Network.Config] = {name: globals()[name] for name in NETWORK_NAMES}
 
 
 def get(name: str) -> Network.Config:
@@ -44,10 +51,3 @@ def get(name: str) -> Network.Config:
             f"unknown network config {name!r}; known: {', '.join(NETWORK_NAMES)}"
         )
     return CONFIGS[name]
-
-
-def __getattr__(name: str) -> Network.Config:
-    """Derived sweep configs as module attributes (``conf.networks.csx``)."""
-    if name in SWEEP:
-        return SWEEP[name]
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,10 +1,13 @@
 import argparse
 import os
+import random
 import signal
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import numpy as np
+import torch
 import matplotlib
 
 from heca.graphs.graph import SubgoalMode
@@ -20,7 +23,7 @@ from heca.learning.server import FLServer
 from heca.misc import logger
 from heca.misc.interrupt import request_stop, stop_requested
 
-from scripts.common.args import add_heca_arguments, generate_tag
+from scripts.common.args import add_heca_arguments, generate_tag, generate_group
 from scripts.common.scenes import agents_by_scene
 
 import conf.networks
@@ -30,6 +33,7 @@ GRACE_SECONDS = 10.0
 
 def generate_clients(
     tag: str,
+    group: str,
     network: Network.Config,
     clients: dict[str, list[ExpertModel.Config]],
     smode: SubgoalMode,
@@ -52,6 +56,7 @@ def generate_clients(
                 agents=agents,
                 learner=FPPO.Config(
                     tag=f"{scene}_{tag}",
+                    group=group,
                     network=network,
                     server=server_cfg,
                     wandb=wandb,
@@ -72,6 +77,7 @@ def generate_clients(
                 agents=agents,
                 learner=PPO.Config(
                     tag=f"{scene}_{tag}",
+                    group=group,
                     network=network,
                     wandb=wandb,
                     max_update=n_batch,
@@ -156,6 +162,11 @@ def main():
 
     signal.signal(signal.SIGTERM, _handle_stop)
 
+    seed = args.seed if args.seed is not None else random.randrange(2**31)
+    args.seed = seed  # so generate_tag picks it up
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
     network = conf.networks.get(args.network)
 
     clients: dict[str, list] = {}
@@ -166,6 +177,7 @@ def main():
 
     exp, server = generate_clients(
         generate_tag(args),
+        generate_group(args),
         network,
         clients,
         inference=args.inference,

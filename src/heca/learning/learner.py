@@ -81,6 +81,9 @@ class Learner(Persistable):
         max_update: int
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
+        # Wandb group: the seed-independent name shared by all repeats, so they
+        # can be fetched together and plotted with a confidence interval.
+        group: str = ""
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -188,6 +191,7 @@ class Learner(Persistable):
             project=self.cfg.wandb.project,
             entity=self.cfg.wandb.entity,
             name=self.cfg.tag,
+            group=self.cfg.group or None,
             config=config_dict,
             mode=self.cfg.wandb.mode,
             save_code=self.cfg.wandb.save_code,

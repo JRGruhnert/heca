@@ -8,6 +8,7 @@ from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.nodes.option_nodes import OptionNodes
 
+from heca.graphs.nodes.state_nodes import StateNodes
 from heca.heca_gnn.modules.encoders.encoder import EncodedRows
 from heca.heca_gnn.modules.interaction import IdentityBlock, TransformerBlock
 from heca.heca_gnn.modules.scene import SceneGATBlock, SceneSageBlock
@@ -56,8 +57,8 @@ class TruncNetwork(nn.Module):
 
     def forward(self, data: HecaData, x: EncodedRows) -> TruncOutput:
         layer = self.layers
-        n_options = data[OptionNodes.type].x.shape[0]
-        option_x = x.entity.new_zeros(n_options, self.feature_dim)
+        n_option = data[OptionNodes.type].x.shape[0]
+        option_x = x.entity.new_zeros(n_option, self.feature_dim)
         option_x = layer["summary"](
             x.entity,
             option_x,
@@ -69,9 +70,11 @@ class TruncNetwork(nn.Module):
             data[OptionNodes.type].gated,
         )
 
+        n_state = data[StateNodes.type].x.shape[0]
+        state_x = x.entity.new_zeros(n_state, self.feature_dim)
         state_x = layer["scene"](
             option_x,
-            x.state,
+            state_x,
             data[SceneEdges.type].edge_index,
             data[SceneEdges.type].edge_attr,
         )

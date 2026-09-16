@@ -110,6 +110,16 @@ def add_network_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_seed_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Random seed. Defaults to a fresh random seed each launch (pass an "
+        "int for a reproducible repeat).",
+    )
+
+
 def add_heca_arguments(parser: argparse.ArgumentParser):
     add_network_argument(parser)
     add_federated_argument(parser)
@@ -122,6 +132,7 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_smode_argument(parser)
     add_inference_argument(parser)
     add_reload_argument(parser)
+    add_seed_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:
@@ -134,7 +145,7 @@ def subgoal_tag(smode: SubgoalMode) -> str:
     raise ValueError
 
 
-def generate_tag(args: argparse.Namespace) -> str:
+def _base_tag(args: argparse.Namespace) -> str:
     final_tag = ""
     final_tag += "fed-" if args.federated else ""
     final_tag += args.tag
@@ -145,3 +156,13 @@ def generate_tag(args: argparse.Namespace) -> str:
     final_tag += "-"
     final_tag += "virt" if args.virtual else ""
     return final_tag
+
+
+def generate_tag(args: argparse.Namespace) -> str:
+    """Full run tag, unique per seed (also the checkpoint directory name)."""
+    return f"{_base_tag(args)}_s{args.seed}"
+
+
+def generate_group(args: argparse.Namespace) -> str:
+    """Wandb group: the seed-independent name shared by every repeat."""
+    return _base_tag(args)
