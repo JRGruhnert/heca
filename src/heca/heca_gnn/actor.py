@@ -6,9 +6,9 @@ from heca.heca_gnn.trunc import TruncOutput
 
 
 class ActorNetwork(nn.Module):
-
     def __init__(self, feature_dim: int, use_memory: bool):
         nn.Module.__init__(self)
+        self.norm = nn.LayerNorm(feature_dim)
 
         if use_memory:
             self.film = FiLM(feature_dim)
@@ -24,6 +24,6 @@ class ActorNetwork(nn.Module):
         )
 
     def forward(self, data: TruncOutput) -> torch.Tensor:
-        option_x = self.film(data.option, data.memory)
+        option_x = self.film(self.norm(data.option), data.memory)
         actor_out = self.mlp(option_x)
         return actor_out.view(1, -1)

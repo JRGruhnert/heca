@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from torch_geometric.nn import GINEConv, GATv2Conv
-import torch.nn.functional as F
 
 EDGE_DIM = 27
 
@@ -17,7 +16,6 @@ class ConditionGinBlock(nn.Module):
             ),
             edge_dim=EDGE_DIM,
         )
-        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -26,9 +24,7 @@ class ConditionGinBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        x = self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
-        x = self.norm(x)
-        return F.gelu(x)
+        return self.conv((x_comp, x_entity), edge_index, edge_attr)
 
 
 class ConditionGatBlock(nn.Module):
@@ -40,7 +36,6 @@ class ConditionGatBlock(nn.Module):
             heads=4,
             edge_dim=EDGE_DIM,
         )
-        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -49,6 +44,4 @@ class ConditionGatBlock(nn.Module):
         edge_index: torch.Tensor,
         edge_attr: torch.Tensor,
     ) -> torch.Tensor:
-        x = self.conv((x_comp, x_entity), edge_index, edge_attr) + x_entity
-        x = self.norm(x)
-        return F.gelu(x)
+        return self.conv((x_comp, x_entity), edge_index, edge_attr)

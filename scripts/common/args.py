@@ -80,7 +80,7 @@ def add_batch_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--batch",
         type=int,
-        default=1000,
+        default=750,
         help="Number of training batches per client.",
     )
 

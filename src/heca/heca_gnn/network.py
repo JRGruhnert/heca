@@ -34,6 +34,8 @@ class Network(Configurable, nn.Module):
         use_summary_gcn: bool = False
         use_memory: bool = False
         use_hyperedge: bool = False
+        use_statistics: bool = False
+        pair_norm: bool = False
         use_rotation: bool = True
         gating: bool = True
         sync: tuple[str, ...] = ()
@@ -59,6 +61,8 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
                     hyperedge=cfg.use_hyperedge,
+                    statistics=cfg.use_statistics,
+                    pair_norm=cfg.pair_norm,
                     rotation=cfg.use_rotation,
                 )
                 for role in self.ROLES
@@ -70,6 +74,8 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
                     hyperedge=cfg.use_hyperedge,
+                    statistics=cfg.use_statistics,
+                    pair_norm=cfg.pair_norm,
                     rotation=cfg.use_rotation,
                 )
             }
@@ -81,6 +87,7 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     option_transformer=cfg.use_option_transformer,
                     summary_sage=cfg.use_summary_gcn,
+                    pair_norm=cfg.pair_norm,
                     memory=cfg.use_memory,
                 )
                 for role in self.ROLES
@@ -92,6 +99,7 @@ class Network(Configurable, nn.Module):
                     feature_dim=cfg.feature_dim,
                     option_transformer=cfg.use_option_transformer,
                     summary_sage=cfg.use_summary_gcn,
+                    pair_norm=cfg.pair_norm,
                     memory=cfg.use_memory,
                 )
             }
@@ -221,13 +229,6 @@ class Network(Configurable, nn.Module):
         return self.critic_net(self.critic_rows(data))
 
     def upgrade(self, checkpoint: Mapping[str, torch.Tensor]):
-        """Load a checkpoint with different parameter names, loudly.
-
-        Returns ``(missing, unexpected)``. Raises when *nothing* matches, because
-        a silently ignored checkpoint (e.g. one written before the layers were
-        renamed) would leave a freshly initialized network in place: it looks
-        loaded, trains/evaluates as if it were not.
-        """
         current = set(self.state_dict())
         given = set(checkpoint)
         shared = current & given

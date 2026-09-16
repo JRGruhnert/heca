@@ -15,6 +15,7 @@ from heca.graphs.edges.condition_edges import ConditionEdges
 from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
+from heca.graphs.nodes.option_nodes import OptionNodes
 from heca.graphs.nodes.state_nodes import StateNodes
 from heca.graphs.roles import ENRole
 from heca.heca_gnn.network import Network
@@ -37,7 +38,7 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     )
     data["comp"].x = torch.randn(n_comps, D)
     data["comp"].type_ids = torch.zeros(n_comps, dtype=torch.long)
-    data["option"].x = torch.randn(n_options, D)
+    data["option"].x = torch.randn(n_options, OptionNodes.FEATURE_DIM)
     data["state"].x = torch.full((1, StateNodes.FEATURE_DIM), 0.75)
     data["state"].type_ids = torch.zeros(1, dtype=torch.long)
 
@@ -50,13 +51,11 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
         [(i % n_entities, i) for i in range(n_options)], dtype=torch.long
     ).T
 
-    # one signed edge per option into the single state node
+    # one edge per option into the single state node (the gate rides the option
+    # feature, so these edges carry no attributes)
     gated = [i % 2 == 1 for i in range(n_options)]
     data[SceneEdges.type].edge_index = torch.tensor(
         [[o for o in range(n_options)], [0] * n_options], dtype=torch.long
-    )
-    data[SceneEdges.type].edge_attr = torch.tensor(
-        [[-1.0 if g else 1.0] for g in gated]
     )
     data["option"].gated = torch.tensor([float(g) for g in gated])
 
@@ -64,22 +63,27 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     return data
 
 
-def make_root(name: str = "shared") -> RootNetwork:
+def make_root(name: str = "shared", pair_norm: bool = False) -> RootNetwork:
     return RootNetwork(
         name,
         feature_dim=D,
         condition_gat=False,
         hyperedge=False,
+        statistics=True,
+        pair_norm=pair_norm,
         rotation=True,
     )
 
 
-def make_trunc(name: str = "shared", memory: bool = True) -> TruncNetwork:
+def make_trunc(
+    name: str = "shared", memory: bool = True, pair_norm: bool = False
+) -> TruncNetwork:
     return TruncNetwork(
         name,
         feature_dim=D,
         option_transformer=False,
         summary_sage=False,
+        pair_norm=pair_norm,
         memory=memory,
     )
 

@@ -2,17 +2,12 @@ import torch
 from torch import nn
 
 
-class OptionEncoder(nn.Module):
+class StateEncoder(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, statistics: bool):
         super().__init__()
         self.statistics = statistics
         self.out_dim = out_dim
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, out_dim // 2),
-            nn.GELU(),
-            nn.Linear(out_dim // 2, out_dim),
-            nn.LayerNorm(out_dim),
-        )
+        self.net = nn.Linear(in_dim, out_dim)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not self.statistics:

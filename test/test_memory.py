@@ -178,7 +178,16 @@ def test_stored_memory_is_replayable_in_autograd():
 class StubRoot(nn.Module):
     """Stand-in for ``RootNetwork``: the stub trunk ignores its output."""
 
-    def __init__(self, name, feature_dim, condition_gat, hyperedge, rotation=True):
+    def __init__(
+        self,
+        name,
+        feature_dim,
+        condition_gat,
+        hyperedge,
+        statistics,
+        pair_norm=False,
+        rotation=True,
+    ):
         super().__init__()
         self.name = name
 
@@ -189,7 +198,9 @@ class StubRoot(nn.Module):
 class StubTrunk(nn.Module):
     """Stand-in for ``TruncNetwork``: only the contract ``Network`` relies on."""
 
-    def __init__(self, name, feature_dim, option_transformer, summary_sage, memory):
+    def __init__(
+        self, name, feature_dim, option_transformer, summary_sage, pair_norm, memory
+    ):
         super().__init__()
         self.name = name
         self.memory_enabled = memory

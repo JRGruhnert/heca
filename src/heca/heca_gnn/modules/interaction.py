@@ -34,11 +34,7 @@ class TransformerBlock(nn.Module):
             nn.Linear(ff_dim, dim),
         )
 
-        self.combine = nn.Sequential(
-            nn.Linear(4 * dim, dim),
-            nn.GELU(),
-            nn.LayerNorm(dim),
-        )
+        self.combine = nn.Linear(4 * dim, dim)
 
     def forward(self, option_x: torch.Tensor, gate_mask: torch.Tensor) -> torch.Tensor:
         good_mask = ~gate_mask.bool()
@@ -63,11 +59,4 @@ class TransformerBlock(nn.Module):
         good_out[good_mask] = good_x
         bad_out[~good_mask] = bad_x
 
-        combined = self.combine(torch.cat([option_x, all_x, good_out, bad_out], dim=-1))
-        return option_x + combined
-
-
-class IdentityBlock(nn.Module):
-
-    def forward(self, x: torch.Tensor, good_mask) -> torch.Tensor:
-        return x
+        return self.combine(torch.cat([option_x, all_x, good_out, bad_out], dim=-1))

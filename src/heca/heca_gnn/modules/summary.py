@@ -1,7 +1,6 @@
 import torch
 from torch import nn
 from torch_geometric.nn import GINConv, SAGEConv
-import torch.nn.functional as F
 
 
 class SummaryGinBlock(nn.Module):
@@ -13,9 +12,7 @@ class SummaryGinBlock(nn.Module):
                 nn.GELU(),
                 nn.Linear(dim, dim),
             ),
-            eps=-1.0,
         )
-        self.norm = nn.LayerNorm(dim)
 
     def forward(
         self,
@@ -23,9 +20,7 @@ class SummaryGinBlock(nn.Module):
         x_option: torch.Tensor,
         edge_index: torch.Tensor,
     ) -> torch.Tensor:
-        x = self.conv((x_entity, x_option), edge_index)
-        x = self.norm(x)
-        return F.gelu(x)
+        return self.conv((x_entity, x_option), edge_index)
 
 
 class SummarySageBlock(nn.Module):
@@ -36,7 +31,10 @@ class SummarySageBlock(nn.Module):
             out_channels=dim,
             aggr="mean",
         )
-        self.norm = nn.LayerNorm(dim)
+        self.head = nn.Sequential(
+            nn.GELU(),
+            nn.Linear(dim, dim),
+        )
 
     def forward(
         self,
@@ -44,6 +42,4 @@ class SummarySageBlock(nn.Module):
         x_option: torch.Tensor,
         edge_index: torch.Tensor,
     ) -> torch.Tensor:
-        x = self.conv((x_entity, x_option), edge_index)
-        x = self.norm(x)
-        return F.gelu(x)
+        return self.head(self.conv((x_entity, x_option), edge_index))

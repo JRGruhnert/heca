@@ -78,6 +78,8 @@ class Heca(Configurable):
             return x, fb, False
         option = self.learner.predict(data)
         a, s = self.graph.select(option)
+        self.graph.ns_option.decay()
+        self.graph.ns_option.record(option)
         z, fb = ExpertModel.get(a).act(x, s, gated=bool(data.option.gated[option]))
         self._episode_steps += 1
         finished = self.learner.update(fb)
@@ -91,6 +93,7 @@ class Heca(Configurable):
 
     def sample(self) -> tuple[DCScene, DCScene]:
         (x, ix), (y, iy) = self.scene.sample_task()
+        self.graph.ns_option.reset_stats()
         logger.debug("New Episode")
         return x, y
 

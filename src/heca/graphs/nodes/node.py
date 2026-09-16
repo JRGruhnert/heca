@@ -58,8 +58,9 @@ class StateNode(GraphNode):
 @dataclass(slots=True, kw_only=True)
 class OptionNode(GraphNode):
     model: ExpertModel.Config
-    effect: np.ndarray
     gated: bool = False
+    exec_count: int = 0
+    recency: float = 0.0
 
     # OptionNode __str__:
     def __str__(self) -> str:

@@ -84,7 +84,6 @@ class Graph:
 
         # Edges
         data[self.es_scene.type].edge_index = self.es_scene.edge_index
-        data[self.es_scene.type].edge_attr = self.es_scene.edge_attr
         data[self.es_condition.type].edge_index = self.es_condition.edge_index
         data[self.es_condition.type].edge_attr = self.es_condition.edge_attr
         data[self.es_summary.type].edge_index = self.es_summary.edge_index
@@ -239,7 +238,6 @@ class Graph:
 
         for a in agents:
             ac = a.conditions
-            effect = graph._option_effect(ac)
             pre_sources = graph.set_precon(ac.label, ac.pre)
             post_comp_sources = graph.set_comps(ac.label, ac.post)
             post_start_sources = graph.set_postcon(
@@ -278,7 +276,6 @@ class Graph:
                         OptionNode(
                             model=a.cfg,
                             sources={EntityNodes.type: set(post_sources.values())},
-                            effect=effect,
                         ),
                     )
                     if use_sample_variant:
@@ -289,7 +286,6 @@ class Graph:
                                 sources={
                                     EntityNodes.type: set(post_sources_alt.values())
                                 },
-                                effect=effect,
                             ),
                         )
                 if smode in (SubgoalMode.CHAIN, SubgoalMode.BOTH):
@@ -308,7 +304,6 @@ class Graph:
                             OptionNode(
                                 model=a.cfg,
                                 sources={EntityNodes.type: sources},
-                                effect=effect,
                             ),
                         )
         return graph
@@ -450,33 +445,6 @@ class Graph:
             summary_lines.append(f"({src}->{dst})")
         logger.info("Summary edges:\n" + ", ".join(summary_lines))
 
-    def _mean_component_feature(
-        self,
-        comps: list[tuple[np.ndarray, float]],
-    ) -> np.ndarray | None:
-        """Weighted mean of a condition's fitted component features."""
-        if not comps:
-            return None
-        feats = np.stack([f for f, _ in comps]).astype(np.float64)
-        weights = np.asarray([w for _, w in comps], dtype=np.float64)
-        total = float(weights.sum())
-        if total <= 0.0:
-            return feats.mean(axis=0)
-        return (feats * (weights / total)[:, None]).sum(axis=0)
-
-    def _option_effect(self, pair: ConPair) -> np.ndarray:
-        pre_feats = pair.pre.comp_features()
-        post_feats = pair.post.comp_features()
-        deltas = []
-        for entity in sorted(set(pre_feats) & set(post_feats)):
-            pre = self._mean_component_feature(pre_feats[entity])
-            post = self._mean_component_feature(post_feats[entity])
-            if pre is not None and post is not None:
-                deltas.append(post - pre)
-        if not deltas:
-            return np.zeros(Entity.FEATURE_DIM, dtype=np.float32)
-        return np.mean(np.stack(deltas), axis=0).astype(np.float32)
-
     def _validate_export(self, data: HecaData) -> None:
         ent = data[self.ns_entity.type]
         assert ent.role_ids.shape[0] == ent.x.shape[0] == ent.type_ids.shape[0]
@@ -491,17 +459,11 @@ class Graph:
 
         slots_op = data[self.ns_state.type]
         gate = data[self.es_scene.type].edge_index
-        gate_attr = data[self.es_scene.type].edge_attr
         assert slots_op.x.shape[0] == 1
-        # one edge per option into the single state node, sign only
         assert gate.shape[1] == data[self.ns_option.type].x.shape[0]
         assert int(gate[0].max()) < data[self.ns_option.type].x.shape[0]
         assert int(gate[1].max()) == 0 and int(gate[1].min()) == 0
-        assert gate_attr.shape == (gate.shape[1], 1)
-        assert torch.equal(
-            gate_attr.flatten(),
-            1.0 - 2.0 * data[self.ns_option.type].gated.to(gate_attr.dtype),
-        )
+        assert "edge_attr" not in data[self.es_scene.type]
 
         comp = data[self.ns_comp.type]
         cond = data[self.es_condition.type].edge_index

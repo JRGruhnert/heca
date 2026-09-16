@@ -9,17 +9,13 @@ from heca.graphs.nodes.state_nodes import StateNodes
 
 class SceneEdges(EdgeSet[OptionNode, StateNode]):
     type = (OptionNodes.type, "scene", StateNodes.type)
-    has_attrs: bool = True
+    has_attrs: bool = False
 
     def build(self, snset: OptionNodes, tnset: NodeSet[StateNode]):
         self.reset()
-        attrs: list[float] = []
-        gated = snset.gated
         j = tnset.get_index(StateNodes.type)
         for i in range(len(snset.items)):
             self.add(i, j)
-            attrs.append(-1.0 if bool(gated[i]) else 1.0)
 
         src_list, dst_list = zip(*self.edges)
         self.edge_index = torch.tensor([src_list, dst_list], dtype=torch.long)
-        self.edge_attr = torch.tensor(attrs, dtype=torch.float32).reshape(-1, 1)

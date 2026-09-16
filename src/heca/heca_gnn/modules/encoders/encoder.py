@@ -5,13 +5,19 @@ from torch import nn
 
 from heca.graphs.data import HecaData
 from heca.graphs.nodes.comp_nodes import CompNodes
+from heca.graphs.nodes.state_nodes import StateNodes
 from heca.graphs.nodes.entity_nodes import EntityNodes
-from heca.heca_gnn.modules.encoders.common import SetEncoder
+from heca.graphs.nodes.option_nodes import OptionNodes
+from heca.heca_gnn.modules.encoders.set_encoder import SetEncoder
+from heca.heca_gnn.modules.encoders.option_encoder import OptionEncoder
+from heca.heca_gnn.modules.encoders.state_encoder import StateEncoder
 
 
 class EncodedRows(NamedTuple):
     entity: torch.Tensor
     comp: torch.Tensor
+    option: torch.Tensor
+    state: torch.Tensor
 
 
 class RowEncoderGroup(nn.Module):
@@ -38,11 +44,7 @@ class RowEncoderGroup(nn.Module):
 class EncoderBlock(nn.Module):
     ROW_FIELDS = (EntityNodes.type, CompNodes.type)
 
-    def __init__(
-        self,
-        feature_dim: int,
-        rotation: bool = True,
-    ):
+    def __init__(self, feature_dim: int, statistics: bool, rotation: bool):
         nn.Module.__init__(self)
         self.rows = RowEncoderGroup(
             feature_dim,
@@ -50,11 +52,21 @@ class EncoderBlock(nn.Module):
             rotation,
             logstd={EntityNodes.type: False, CompNodes.type: True},
         )
-        # self.state_encoder = nn.Linear(StateNodes.FEATURE_DIM, feature_dim)
+        self.option_encoder = OptionEncoder(
+            OptionNodes.FEATURE_DIM,
+            feature_dim,
+            statistics,
+        )
+        self.state_encoder = StateEncoder(
+            StateNodes.FEATURE_DIM,
+            feature_dim,
+            statistics,
+        )
 
     def forward(self, data: HecaData) -> EncodedRows:
         encoded = self.rows(
             {name: (data[name].x, data[name].type_ids) for name in self.rows.fields}
         )
-        # encoded[StateNodes.type] = self.state_encoder(data[StateNodes.type].x)
+        encoded[OptionNodes.type] = self.option_encoder(data.option.x)
+        encoded[StateNodes.type] = self.state_encoder(data[StateNodes.type].x)
         return EncodedRows(**encoded)
