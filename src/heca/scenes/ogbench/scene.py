@@ -24,32 +24,43 @@ class OGScene(Scene):
         tag: str
         viewer: bool = False
         frame_time: float = 0.05
+        mode: str = "randomized"
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
         self.env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
         self._env = self._make_env(self.env_id)
+        self.task_id: int | None = None
+        self.seed: int | None = None
         self._last_ee_pose = None
         self._last_ee_yaw = None
         self._viewer_launched = False
         self._meta_xyz_center = np.array([0.425, 0.0, 0.0], dtype=np.float32)
         self._meta_xyz_scaler = np.array([10.0], dtype=np.float32)
 
+    @property
+    def tasks(self) -> list[dict[str, Any]]:
+        return list(getattr(self.env, "task_infos", []) or [])
+
+    def set_mode(self, mode: str):
+        if mode == self.cfg.mode:
+            return
+        self.close()
+        self.cfg.mode = mode
+        self._env = self._make_env(self.env_id)
+
     def _update_meta(self, obs: dict):
-        """Parse the workspace center/scaler from an env obs dict."""
         if "meta_xyz_center" in obs and "meta_xyz_scaler" in obs:
             self._meta_xyz_center = np.asarray(obs["meta_xyz_center"], dtype=np.float32)
             self._meta_xyz_scaler = np.asarray(obs["meta_xyz_scaler"], dtype=np.float32)
 
     def normalize_position(self, pos) -> np.ndarray:
-        """Map a world-frame position into the scene's normalized frame."""
         return (
             np.asarray(pos, dtype=np.float32) - self._meta_xyz_center
         ) * self._meta_xyz_scaler
 
     def unnormalize_position(self, pos) -> np.ndarray:
-        """Inverse of ``normalize_position`` (raw = norm / scaler + center)."""
         return (
             np.asarray(pos, dtype=np.float32) / self._meta_xyz_scaler
         ) + self._meta_xyz_center
@@ -60,7 +71,7 @@ class OGScene(Scene):
             ogbench.make_env_and_datasets(
                 dataset_name=env_id,
                 env_only=True,
-                mode="randomized",
+                mode=self.cfg.mode,
                 dataset_only=False,
                 # control_timestep=0.5,
             ),
@@ -71,7 +82,6 @@ class OGScene(Scene):
         return cast(SceneEnvBase, self._env.unwrapped)
 
     def _sync_viewer(self):
-        """Launch (once) and sync the passive viewer after a step/reset."""
         if not self.cfg.viewer:
             return
         if not self._viewer_launched:
@@ -83,7 +93,6 @@ class OGScene(Scene):
             time.sleep(self.cfg.frame_time)
 
     def close_viewer(self):
-        """Close the passive viewer if it was launched (idempotent)."""
         if not self._viewer_launched:
             return
         try:
@@ -176,7 +185,13 @@ class OGScene(Scene):
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
-        ob, info = self._env.reset(options={"render_goal": True})
+        options: dict[str, Any] = {"render_goal": True}
+        if self.task_id is not None:
+            options["task_id"] = self.task_id
+        if self.seed is None:
+            ob, info = self._env.reset(options=options)
+        else:
+            ob, info = self._env.reset(options=options, seed=self.seed)
         obs, goal = self.to_internal(ob, info)
         self._update_meta(obs)
         self.last_pos = obs["proprio_effector_pos"]

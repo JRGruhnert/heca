@@ -1,16 +1,3 @@
-"""The memory contract: one field in the data, one entry per trunk.
-
-``HecaData.memory`` maps a trunk name to the recurrence that decision was
-conditioned on. It is the *only* way memory enters a forward pass:
-
-* the trunk reads ``data.memory[name]``, computes ``h_t = GRU(z_t, h_{t-1})`` in
-  the same pass and hands ``h_t`` back with the rows;
-* rollout stores that mapping (as plain tensors) into the next transition's data;
-* replay swaps in the live mapping for the steps after the first one of a chunk,
-  so the GRUs get gradient across the chunk, and restores the recorded mapping
-  afterwards.
-"""
-
 from typing import NamedTuple
 
 import torch
@@ -72,9 +59,6 @@ def test_memory_field_is_per_trunk():
     assert data.memory["critic"] is critic
     assert data.to("cpu").memory["actor"] is actor
 
-    # pyg stores attributes by reference (it bypasses property setters), so the
-    # mapping is NOT copied on assignment: every caller must hand over a dict it
-    # does not mutate afterwards. Pinned here so the contract cannot drift.
     mapping = {"actor": actor}
     data.memory = mapping
     assert data.memory is mapping
@@ -152,13 +136,6 @@ def test_chunks_are_scored_independently():
 
 
 def test_stored_memory_is_replayable_in_autograd():
-    """The memory stored during rollout must be plain tensors.
-
-    Rollout forwards run under ``inference_mode``; tensors *created* there stay
-    "inference tensors" and autograd refuses to save them for backward. Storing
-    therefore clones outside that context, and this pins it, because the buffer is
-    replayed with autograd.
-    """
     with torch.inference_mode():
         produced = {"trunk": torch.randn(1, DIM)}
     assert produced["trunk"].is_inference()
@@ -170,9 +147,6 @@ def test_stored_memory_is_replayable_in_autograd():
     lin = nn.Linear(DIM, DIM)
     lin(stored["trunk"]).sum().backward()
     assert lin.weight.grad is not None
-
-
-# --- trunk registry -------------------------------------------------------
 
 
 class StubRoot(nn.Module):
@@ -187,6 +161,8 @@ class StubRoot(nn.Module):
         statistics,
         pair_norm=False,
         rotation=True,
+        edge_terms=None,
+        goal_residual=False,
     ):
         super().__init__()
         self.name = name
@@ -225,6 +201,7 @@ def entity_data(memory: dict[str, torch.Tensor] | None = None) -> HecaData:
     data["entity"].role_ids = torch.tensor(
         [ENRole.START.value] * 2 + [ENRole.GOAL.value] * 2
     )
+    data["entity"].entity_ids = torch.arange(2).repeat(2)
     data["option"].x = torch.randn(3, DIM)
     data["option"].gated = torch.zeros(3)
     data.memory = dict(memory or {})

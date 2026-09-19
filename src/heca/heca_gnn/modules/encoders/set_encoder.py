@@ -29,8 +29,9 @@ class _EntityEncoder(nn.Module):
     def __init__(self, out_dim: int, rotation: bool = True, logstd: bool = True):
         super().__init__()
         self.logstd = logstd
+        self.rotation = rotation
         self.out_dim = out_dim
-        layout = Entity.LAYOUT if logstd else Entity.POINT_LAYOUT
+        layout = Entity.layout(rotation, logstd)
         blocks = tuple(b for b in self.BLOCKS if rotation or b != "rot")
         if not blocks:
             raise ValueError(f"{type(self).__name__} has no blocks left")
@@ -47,14 +48,13 @@ class _EntityEncoder(nn.Module):
         )
 
     def _slices(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        layout = Entity.LAYOUT if self.logstd else Entity.POINT_LAYOUT
+        layout = Entity.layout(self.rotation, self.logstd)
         out: dict[str, torch.Tensor] = {}
-        inv = 1.0 / abs(Entity.BASE_LOGSTD)
         for name in self.blocks:
             block = layout[name]
             parts = [x[:, block.mean()]]
             if block.logstd_dim:
-                parts.append(x[:, block.logstd()] * inv)
+                parts.append(x[:, block.logstd()])
             out[name] = parts[0] if len(parts) == 1 else torch.cat(parts, dim=-1)
         return out
 

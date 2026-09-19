@@ -19,4 +19,4 @@ class CompNodes(NodeSet[CompNode]):
         )
         self.x = torch.from_numpy(x_np).float()
         if not use_rotation:
-            self.x = Entity.without_rotation(self.x)
+            self.x = Entity.project(self.x, Entity.NO_ROT_LAYOUT)

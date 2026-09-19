@@ -1,20 +1,16 @@
 from heca.heca_gnn.network import Network
 
-free = Network.Config(gating=False)  # doesnt learn virtual
-
-# TODO: need greedy search scene0 virtual evaluation
-
 # virtual
 a0 = Network.Config()
-a1 = Network.Config(seperate_root=True, seperate_trunc=True)
-a2 = Network.Config(seperate_root=False, seperate_trunc=True)
-
-# on best of a
-b0 = Network.Config(seperate_root=False, seperate_trunc=True)
-b1 = Network.Config(seperate_root=False, seperate_trunc=True)
-b2 = Network.Config(seperate_root=False, seperate_trunc=True)
-b3 = Network.Config(seperate_root=False, seperate_trunc=True)
-b4 = Network.Config(seperate_root=False, seperate_trunc=True)
+a1 = Network.Config(goal_conditioning="hyperedge")
+a2 = Network.Config(use_condition_gat=True)
+a3 = Network.Config(goal_conditioning="hyperedge", use_condition_gat=True)
+a4 = Network.Config(use_summary_gcn=True)
+a5 = Network.Config(goal_conditioning="hyperedge", use_summary_gcn=True)
+a6 = Network.Config(use_memory=True)
+a7 = Network.Config(goal_conditioning="hyperedge", use_memory=True)
+a8 = Network.Config(use_statistics=True)
+a9 = Network.Config(goal_conditioning="hyperedge", use_statistics=True)
 
 # on best model with noise (0.0 ,0.2, 0.4, 0.6)
 c0 = Network.Config()
@@ -35,11 +31,7 @@ sync = ("root",)  # federate only the encoder/root
 sync = ("!critic_head",)  # keep the value head local only
 
 
-NETWORK_NAMES = [
-    "a0",
-    "a1",
-    "a2",
-]
+NETWORK_NAMES = ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"]
 
 CONFIGS: dict[str, Network.Config] = {name: globals()[name] for name in NETWORK_NAMES}
 

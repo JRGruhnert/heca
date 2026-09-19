@@ -40,7 +40,7 @@ class Scene(Persistable):
         gated_fail_prob: float = 0.2
         success_reward: float = 1.0
         step_reward: float = -0.01
-        max_steps: int = 32
+        max_steps: int = 16
 
     def __init__(self, cfg: Config):
         self.cfg = cfg

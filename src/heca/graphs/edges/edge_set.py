@@ -12,9 +12,62 @@ S = TypeVar("S", bound=GraphNode)
 D = TypeVar("D", bound=GraphNode)
 
 
+RESIDUAL_TERMS: tuple[str, ...] = ("z", "z2", "logz", "logp", "state", "rbf")
+DEFAULT_TERMS: tuple[str, ...] = ("z", "rbf", "state")
+# DEFAULT_TERMS: tuple[str, ...] = ("z", "z2", "logz", "logp", "state")
+
+
 class EdgeSet(Generic[S, D]):
     type: ClassVar[tuple[str, str, str]]
     has_attrs: bool = True
+    rho_max: float = 1.25
+    rbf_centers: int = 6
+
+    @staticmethod
+    def validate_terms(terms: tuple[str, ...]) -> None:
+        """Reject unknown or empty selections loudly instead of silently shrinking."""
+        unknown = [term for term in terms if term not in RESIDUAL_TERMS]
+        if unknown:
+            raise ValueError(
+                f"unknown residual term(s) {unknown}; known: {', '.join(RESIDUAL_TERMS)}"
+            )
+        if not terms:
+            raise ValueError("the edge feature needs at least one residual term")
+
+    def rbf_features(self, rho: np.ndarray, eps: float = 1e-15) -> np.ndarray:
+        rho = np.asarray(rho, dtype=np.float64).reshape(-1, 1)
+        centres = np.linspace(0.0, self.rho_max, self.rbf_centers).reshape(1, -1)
+        return np.exp(
+            -((rho - centres) ** 2)
+            / (2.0 * (self.rho_max / (self.rbf_centers - 1)) ** 2 + eps)
+        )
+
+    @classmethod
+    def _term_width(cls, term: str, use_rotation: bool) -> int:
+        """Columns one residual term contributes."""
+        rotation = Entity.ROT_DIM if use_rotation else 0
+        if term == "rbf":
+            return cls.rbf_centers
+        if term == "z":
+            return Entity.POS_DIM + rotation + Entity.MAX_EXTRA_DIM
+        if term == "z2":
+            return Entity.POS_DIM + rotation + Entity.MAX_EXTRA_DIM
+        if term == "logz":
+            return Entity.POS_DIM + rotation + Entity.MAX_EXTRA_DIM
+        if term in ("logp", "state"):
+            return 1
+        raise ValueError(
+            f"unknown residual term {term!r}; known: {', '.join(RESIDUAL_TERMS)}"
+        )
+
+    @classmethod
+    def residual_dim(
+        cls,
+        terms: tuple[str, ...] = DEFAULT_TERMS,
+        use_rotation: bool = True,
+    ) -> int:
+        cls.validate_terms(terms)
+        return sum(cls._term_width(term, use_rotation) for term in terms)
 
     def __init__(self):
         self.edge_index: torch.Tensor = torch.empty((2, 0), dtype=torch.long)
@@ -62,12 +115,6 @@ class EdgeSet(Generic[S, D]):
         raise NotImplementedError
 
     def edges_from_sets(self, snset: NodeSet[S], tnset: NodeSet[D]):
-        """Create edges by matching node source entries to this edge type.
-
-        A row without an entry for this source type simply has no incoming edge
-        of this kind (e.g. the current/goal rows are plain values), so a missing
-        key is not an error.
-        """
         for i, node in enumerate(tnset.items):
             for key in node.sources.get(snset.type, ()):
                 if snset.has_key(key):
@@ -84,19 +131,24 @@ class EdgeSet(Generic[S, D]):
         self,
         x_src: np.ndarray,
         x_dst: np.ndarray,
+        radius: np.ndarray | None = None,
     ) -> np.ndarray:
         """Edge feature for a single src/dst feature pair (``[F]`` each)."""
-        return self.residual_batch(x_src, x_dst)[0]
+        return self.residual_batch(x_src, x_dst, radius=radius)[0]
 
-    @staticmethod
     def residual_batch(
+        self,
         x_src: np.ndarray,
         x_dst: np.ndarray,
         eps=1e-15,
         use_rotation: bool = True,
+        terms: tuple[str, ...] = DEFAULT_TERMS,
+        radius: np.ndarray | None = None,
     ) -> np.ndarray:
-        Lc = Entity.LAYOUT
-        Lp = Entity.POINT_LAYOUT
+        EdgeSet.validate_terms(terms)
+        # the layouts the graph actually exports for this rotation mode
+        Lc = Entity.layout(use_rotation, logstd=True)
+        Lp = Entity.layout(use_rotation, logstd=False)
         x_src = np.atleast_2d(x_src)
         x_dst = np.atleast_2d(x_dst)
 
@@ -121,16 +173,38 @@ class EdgeSet(Generic[S, D]):
                 np.log(2 * np.pi) + 2.0 * ls_rot + z_rot_raw**2, axis=-1, keepdims=True
             )
         else:
-            z_rot_raw = np.zeros_like(x_pos)
+            # no rotation: the block is dropped from the feature, not zeroed
+            z_rot_raw = None
             logp_rot = np.zeros((x_pos.shape[0], 1))
 
         logz_pos = np.log1p(np.abs(z_pos_raw))
-        logz_rot = np.log1p(np.abs(z_rot_raw))
         logz_extra = np.log1p(np.abs(z_extra_raw))
 
+        rbf_block: np.ndarray | None = None
+        if "rbf" in terms:
+            if radius is None:
+                raise ValueError(
+                    "the 'rbf' term needs the per-edge acceptance radius "
+                    "(Entity.acceptance_radius) to normalise the residual"
+                )
+            parts = [z_pos_raw, z_extra_raw]
+            if z_rot_raw is not None:
+                parts.append(z_rot_raw)
+            r_raw = np.sqrt(
+                sum(np.sum(part**2, axis=-1, keepdims=True) for part in parts)
+            )
+            r_max = np.asarray(radius, dtype=np.float64).reshape(-1, 1)
+            if np.any(r_max <= 0.0):
+                raise ValueError(
+                    f"acceptance radius must be positive, got {r_max.min()}"
+                )
+            rbf_block = self.rbf_features(r_raw / r_max)
+
         z_pos = np.clip(z_pos_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
-        z_rot = np.clip(z_rot_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
         z_extra = np.clip(z_extra_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
+        if z_rot_raw is not None:
+            logz_rot = np.log1p(np.abs(z_rot_raw))
+            z_rot = np.clip(z_rot_raw, -Entity.Z_CLIP, Entity.Z_CLIP)
 
         # log-density of the value under the component (diagonal Gaussian)
         logp = -0.5 * (
@@ -146,26 +220,33 @@ class EdgeSet(Generic[S, D]):
         )
         logp = np.clip(logp, -Entity.LOGP_CLIP, Entity.LOGP_CLIP)
 
-        # Cross-entropy between the value's one-hot state and the component's
-        # posterior: -log p_component(state_x)
         p_c = x_src[:, Lc["state"].mean()]
         p_x = x_dst[:, Lp["state"].mean()]
         z_state = -np.sum(p_x * np.log(p_c + eps), axis=-1, keepdims=True)
         z_state = np.clip(z_state, 0.0, Entity.Z_CLIP)
 
+        columns: list[tuple[str, np.ndarray]] = [
+            ("z", z_pos),
+            ("z2", z_pos**2),
+            ("logz", logz_pos),
+        ]
+        if z_rot_raw is not None:
+            columns += [
+                ("z", z_rot),
+                ("z2", z_rot**2),
+                ("logz", logz_rot),
+            ]
+        columns += [
+            ("z", z_extra),
+            ("z2", z_extra**2),
+            ("logz", logz_extra),
+        ]
+        if rbf_block is not None:
+            columns.append(("rbf", rbf_block))
+        columns += [
+            ("logp", logp),
+            ("state", z_state),
+        ]
         return np.concatenate(
-            [
-                z_pos,
-                z_pos**2,
-                logz_pos,
-                z_rot,
-                z_rot**2,
-                logz_rot,
-                z_extra,
-                z_extra**2,
-                logz_extra,
-                logp,
-                z_state,
-            ],
-            axis=-1,
+            [block for term, block in columns if term in terms], axis=-1
         )

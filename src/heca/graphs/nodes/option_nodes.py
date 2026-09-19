@@ -39,7 +39,7 @@ class OptionNodes(NodeSet[OptionNode]):
         node.recency = 1.0
 
     def build(self, ns_entity: EntityNodes, use_rotation: bool = True):
-        self.gated = self.gates(ns_entity)
+        self.gated = self.gates(ns_entity, use_rotation)
         self.x = self.statistics()
 
     def statistics(self) -> torch.Tensor:
@@ -71,19 +71,21 @@ class OptionNodes(NodeSet[OptionNode]):
             )
         ).float()
 
-    def gates(self, ns_entity: EntityNodes) -> torch.Tensor:
-        gated = [not self._gated(o, ns_entity) for o in self.items]
+    def gates(self, ns_entity: EntityNodes, rotation: bool = True) -> torch.Tensor:
+        gated = [not self._gated(o, ns_entity, rotation) for o in self.items]
         return torch.tensor(gated, dtype=torch.float32)
 
-    def _gated(self, o: OptionNode, ns_entity: EntityNodes) -> bool:
+    def _gated(
+        self, o: OptionNode, ns_entity: EntityNodes, rotation: bool = True
+    ) -> bool:
         for src in o.sources[EntityNodes.type]:
             post = ns_entity.get_by_key(src)
             assert post.con is not None
-            if not post.con.test(post.entity, post.data):
+            if not post.con.test(post.entity, post.data, rotation):
                 return False
             for src2 in post.sources[EntityNodes.type]:
                 pre = ns_entity.get_by_key(src2)
                 assert pre.con is not None
-                if not pre.con.test(pre.entity, pre.data):
+                if not pre.con.test(pre.entity, pre.data, rotation):
                     return False
         return True

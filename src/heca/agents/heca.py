@@ -52,6 +52,10 @@ class Heca(Configurable):
             list(self.cfg.agents),
             smode=cfg.smode,
             use_rotation=cfg.learner.network.use_rotation,
+            position_jitter=cfg.learner.network.position_jitter,
+            edge_terms=cfg.learner.network.edge_terms,
+            goal_residual=cfg.learner.network.goal_conditioning == "residual",
+            jitter_scope=cfg.learner.network.jitter_scope,
         )
         self.graph.plot(path=self.scene.save_dir(self.scene.cfg))
         self.graph.log()

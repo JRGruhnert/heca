@@ -9,6 +9,7 @@ from torch.distributions import Categorical
 from heca.misc import hardware, logger
 from heca.misc.base import Configurable
 from heca.graphs.data import HecaData, TrunkMemory
+from heca.graphs.edges.edge_set import DEFAULT_TERMS
 from heca.heca_gnn.actor import ActorNetwork
 from heca.heca_gnn.critic import CriticNetwork
 from heca.heca_gnn.modules.encoders.encoder import EncodedRows
@@ -22,6 +23,9 @@ class NetworkOutput(NamedTuple):
     memory: TrunkMemory
 
 
+GOAL_CONDITIONING: tuple[str, ...] = ("hyperedge", "residual")
+
+
 class Network(Configurable, nn.Module):
 
     @dataclass(kw_only=True)
@@ -33,10 +37,13 @@ class Network(Configurable, nn.Module):
         use_condition_gat: bool = False
         use_summary_gcn: bool = False
         use_memory: bool = False
-        use_hyperedge: bool = False
+        goal_conditioning: str = "residual"  # "hyperedge" | "residual"
         use_statistics: bool = False
         pair_norm: bool = False
-        use_rotation: bool = True
+        use_rotation: bool = False
+        position_jitter: float = 1.0  # values around
+        jitter_scope: str = "none"  # "none" | "entity" | "scene" | "both"
+        edge_terms: tuple[str, ...] = DEFAULT_TERMS
         gating: bool = True
         sync: tuple[str, ...] = ()
 
@@ -46,6 +53,15 @@ class Network(Configurable, nn.Module):
     def __init__(self, cfg: Config):
         nn.Module.__init__(self)
         self.cfg = cfg
+
+        # one mutually exclusive channel, so a run cannot accidentally carry both
+        if cfg.goal_conditioning not in GOAL_CONDITIONING:
+            raise ValueError(
+                f"unknown goal_conditioning {cfg.goal_conditioning!r}; "
+                f"known: {', '.join(GOAL_CONDITIONING)}"
+            )
+        hyperedge = cfg.goal_conditioning == "hyperedge"
+        goal_residual = cfg.goal_conditioning == "residual"
 
         if cfg.seperate_root and not cfg.seperate_trunc and cfg.use_memory:
             raise ValueError(
@@ -60,10 +76,12 @@ class Network(Configurable, nn.Module):
                     role,
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
-                    hyperedge=cfg.use_hyperedge,
+                    hyperedge=hyperedge,
                     statistics=cfg.use_statistics,
                     pair_norm=cfg.pair_norm,
                     rotation=cfg.use_rotation,
+                    edge_terms=cfg.edge_terms,
+                    goal_residual=goal_residual,
                 )
                 for role in self.ROLES
             }
@@ -73,10 +91,12 @@ class Network(Configurable, nn.Module):
                     self.SHARED,
                     feature_dim=cfg.feature_dim,
                     condition_gat=cfg.use_condition_gat,
-                    hyperedge=cfg.use_hyperedge,
+                    hyperedge=hyperedge,
                     statistics=cfg.use_statistics,
                     pair_norm=cfg.pair_norm,
                     rotation=cfg.use_rotation,
+                    edge_terms=cfg.edge_terms,
+                    goal_residual=goal_residual,
                 )
             }
         )

@@ -3,6 +3,7 @@ from torch import nn
 from heca.graphs.roles import ENRole
 from heca.graphs.data import HecaData
 from heca.graphs.edges.condition_edges import ConditionEdges
+from heca.graphs.edges.edge_set import DEFAULT_TERMS
 from heca.graphs.edges.translation_edges import TranslationEdges
 from heca.graphs.nodes.entity_nodes import EntityNodes
 from heca.heca_gnn.modules.boundary import BoundaryNorm, NoUpdateBlock, PairNormBlock
@@ -22,6 +23,8 @@ class RootNetwork(nn.Module):
         statistics: bool,
         pair_norm: bool,
         rotation: bool,
+        edge_terms: tuple[str, ...] = DEFAULT_TERMS,
+        goal_residual: bool = False,
     ):
         nn.Module.__init__(self)
         self.name = name
@@ -39,9 +42,9 @@ class RootNetwork(nn.Module):
                 ),
                 "pair": PairNormBlock(("entity",), pair_norm),
                 "condition": (
-                    ConditionGatBlock(feature_dim)
+                    ConditionGatBlock(feature_dim, rotation, edge_terms, goal_residual)
                     if condition_gat
-                    else ConditionGinBlock(feature_dim)
+                    else ConditionGinBlock(feature_dim, rotation, edge_terms, goal_residual)
                 ),
                 "hyperedge": (
                     TypedHyperedgeLayer(feature_dim, num_roles=ENRole.size())
@@ -71,7 +74,7 @@ class RootNetwork(nn.Module):
         entity_x = entity_x + layer["hyperedge"](
             entity_x,
             data[EntityNodes.type].role_ids,
-            data[EntityNodes.type].type_ids,
+            data[EntityNodes.type].entity_ids,
         )
         entity_x = pair("entity", entity_x)
 

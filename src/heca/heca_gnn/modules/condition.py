@@ -1,12 +1,20 @@
 import torch
-from torch import nn
-from torch_geometric.nn import GINEConv, GATv2Conv
 
-EDGE_DIM = 27
+from torch import nn
+from torch_geometric.nn import GATv2Conv, GINEConv
+
+from heca.graphs.edges.condition_edges import ConditionEdges
+from heca.graphs.edges.edge_set import DEFAULT_TERMS
 
 
 class ConditionGinBlock(nn.Module):
-    def __init__(self, dim: int):
+    def __init__(
+        self,
+        dim: int,
+        rotation: bool = True,
+        terms: tuple[str, ...] = DEFAULT_TERMS,
+        goal_residual: bool = False,
+    ):
         super().__init__()
         self.conv = GINEConv(
             nn=nn.Sequential(
@@ -14,7 +22,7 @@ class ConditionGinBlock(nn.Module):
                 nn.GELU(),
                 nn.Linear(dim, dim),
             ),
-            edge_dim=EDGE_DIM,
+            edge_dim=ConditionEdges.edge_dim(rotation, terms, goal_residual),
         )
 
     def forward(
@@ -28,13 +36,20 @@ class ConditionGinBlock(nn.Module):
 
 
 class ConditionGatBlock(nn.Module):
-    def __init__(self, dim: int):
+    def __init__(
+        self,
+        dim: int,
+        rotation: bool = True,
+        terms: tuple[str, ...] = DEFAULT_TERMS,
+        goal_residual: bool = False,
+    ):
         super().__init__()
         self.conv = GATv2Conv(
             in_channels=dim,
             out_channels=dim // 4,
             heads=4,
-            edge_dim=EDGE_DIM,
+            edge_dim=ConditionEdges.edge_dim(rotation, terms, goal_residual),
+            add_self_loops=False,
         )
 
     def forward(

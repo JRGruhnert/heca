@@ -43,9 +43,9 @@ class Condition:
             bounds[key] = (values.min(axis=0), values.max(axis=0))
         return bounds
 
-    def test(self, elabel: str, x: DCEntity) -> bool:
+    def test(self, elabel: str, x: DCEntity, rotation: bool) -> bool:
         up = self.models[elabel].get_parameters().copy()
-        return self.entities[elabel].score_single(x.value, up)
+        return self.entities[elabel].score_single(x.value, up, rotation=rotation)
 
     def sample(self, elabel: str) -> DCEntity:
         value = self.models[elabel].sample(1)[0]

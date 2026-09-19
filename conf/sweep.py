@@ -7,7 +7,8 @@ from heca.heca_gnn.network import Network
 AXES: dict[str, tuple[str, tuple[Any, ...]]] = {
     "use_condition_gat": ("c", (False, True)),
     "use_summary_gcn": ("s", (False, True)),
-    "use_hyperedge": ("h", (False, True)),
+    "goal_conditioning": ("g", ("none", "hyperedge", "residual")),
+    "jitter_scope": ("j", ("none", "entity", "scene", "both")),
     "use_option_transformer": ("x", (False, True)),
 }
 

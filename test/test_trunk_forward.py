@@ -36,6 +36,8 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     data["entity"].role_ids = torch.tensor(
         [ENRole.START.value] * n_entities + [ENRole.GOAL.value] * n_entities
     )
+    # the current and the goal row of an entity share its entity id
+    data["entity"].entity_ids = torch.arange(n_entities).repeat(2)
     data["comp"].x = torch.randn(n_comps, D)
     data["comp"].type_ids = torch.zeros(n_comps, dtype=torch.long)
     data["option"].x = torch.randn(n_options, OptionNodes.FEATURE_DIM)
@@ -44,7 +46,9 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
 
     cond = [(0, 0), (1, 1)][:n_comps]
     data[ConditionEdges.type].edge_index = torch.tensor(cond, dtype=torch.long).T
-    data[ConditionEdges.type].edge_attr = torch.randn(len(cond), 27)
+    data[ConditionEdges.type].edge_attr = torch.randn(
+        len(cond), ConditionEdges.edge_dim()
+    )
 
     data[TranslationEdges.type].edge_index = torch.tensor([(0, 1)], dtype=torch.long).T
     data[SummaryEdges.type].edge_index = torch.tensor(
@@ -63,12 +67,17 @@ def make_data(n_entities: int = 2, n_comps: int = 2, n_options: int = 3) -> Heca
     return data
 
 
-def make_root(name: str = "shared", pair_norm: bool = False) -> RootNetwork:
+def make_root(
+    name: str = "shared",
+    pair_norm: bool = False,
+    hyperedge: bool = False,
+    feature_dim: int = D,
+) -> RootNetwork:
     return RootNetwork(
         name,
-        feature_dim=D,
+        feature_dim=feature_dim,
         condition_gat=False,
-        hyperedge=False,
+        hyperedge=hyperedge,
         statistics=True,
         pair_norm=pair_norm,
         rotation=True,
@@ -92,6 +101,24 @@ def test_root_forward_returns_the_encoded_rows():
     x = make_root()(make_data())
     assert x.entity.shape == (4, D), "one row per entity row"
     assert x.comp.shape == (2, D) and x.state.shape == (1, D), "untouched encodings"
+
+
+def test_root_forward_with_the_hyperedge_enabled():
+    """The hyperedge path needs the entity ids the graph exports."""
+    data = make_data()
+    # one postcondition row of entity 0, appended after the current/goal rows
+    data["entity"].x = torch.cat([data["entity"].x, data["entity"].x[:1]], dim=0)
+    data["entity"].role_ids = torch.cat(
+        [data["entity"].role_ids, torch.tensor([ENRole.POST.value])]
+    )
+    data["entity"].entity_ids = torch.cat([data["entity"].entity_ids, torch.tensor([0])])
+    data["entity"].type_ids = torch.cat([data["entity"].type_ids, torch.tensor([0])])
+
+    shared = make_root(feature_dim=128)(data)
+    x = make_root(hyperedge=True, feature_dim=128)(data)
+    assert x.entity.shape == shared.entity.shape == (5, 128)
+    assert torch.isfinite(x.entity).all()
+    assert not torch.allclose(x.entity[4], shared.entity[4]), "the goal row wrote nothing"
 
 
 def test_trunk_forward_shapes_and_state_to_memory_path():
@@ -141,6 +168,7 @@ def test_network_forward_returns_logits_value_and_memory():
                 seperate_root=separate_root,
                 seperate_trunc=separate_trunc,
                 use_memory=True,
+                use_rotation=True,  # the fixtures below are rotation-shaped
             )
         )
         out = net(make_data())

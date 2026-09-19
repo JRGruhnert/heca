@@ -1,9 +1,11 @@
 import math
+import os
 import warnings
 from functools import lru_cache
 from typing import Any, ClassVar
 
 import numpy as np
+import torch
 from dataclasses import dataclass, field
 from scipy.optimize import minimize
 from scipy.stats import chi2, norm
@@ -12,6 +14,9 @@ from heca.misc.base import Configurable
 from heca.data.data import DCEntity, DCScene
 from heca.utils.quaternion import Quaternion
 from heca.misc import logger
+
+SCORE_VARIANCE_SCALE: float = float(os.environ.get("HECA_SCORE_SCALE", "1.0"))
+SCORE_STATE_SMOOTHING: float = float(os.environ.get("HECA_SCORE_SMOOTHING", "0.0"))
 
 
 @lru_cache(maxsize=256)
@@ -58,15 +63,20 @@ def _layout(
     pos_dim: int,
     rot_dim: int,
     logstd: bool = True,
+    rotation: bool = True,
 ) -> dict[str, FeatureBlock]:
     blocks: dict[str, FeatureBlock] = {}
     offset = 0
     for name, mean_dim, logstd_dim in (
         ("state", max_state, 0),
         ("pos", pos_dim, pos_dim if logstd else 0),
+        # without rotation the block is not zeroed, it is absent: the feature is
+        # narrower, exactly like the encoder that would have encoded it
         ("rot", 4, rot_dim if logstd else 0),
         ("extra", max_extra, max_extra if logstd else 0),
     ):
+        if name == "rot" and not rotation:
+            continue
         blocks[name] = FeatureBlock(offset, mean_dim, logstd_dim)
         offset += mean_dim + logstd_dim
     return blocks
@@ -111,14 +121,75 @@ class Entity(Configurable):
         MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM
     )
     FEATURE_DIM: ClassVar[int] = _feature_dim(LAYOUT)
-
-    # Point values (the query ``x`` encoded by :meth:`gnn_format`, e.g. entity
-    # rows) carry no uncertainty, so they use a compact layout with every
-    # log-std block removed. Components keep the full ``LAYOUT`` above.
     POINT_LAYOUT: ClassVar[dict[str, FeatureBlock]] = _layout(
         MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM, logstd=False
     )
     POINT_FEATURE_DIM: ClassVar[int] = _feature_dim(POINT_LAYOUT)
+
+    NO_ROT_LAYOUT: ClassVar[dict[str, FeatureBlock]] = _layout(
+        MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM, rotation=False
+    )
+    NO_ROT_FEATURE_DIM: ClassVar[int] = _feature_dim(NO_ROT_LAYOUT)
+    NO_ROT_POINT_LAYOUT: ClassVar[dict[str, FeatureBlock]] = _layout(
+        MAX_STATE_DIM, MAX_EXTRA_DIM, POS_DIM, ROT_DIM, logstd=False, rotation=False
+    )
+    NO_ROT_POINT_FEATURE_DIM: ClassVar[int] = _feature_dim(NO_ROT_POINT_LAYOUT)
+
+    @classmethod
+    def layout(
+        cls,
+        rotation: bool = True,
+        logstd: bool = True,
+    ) -> dict[str, FeatureBlock]:
+        """The feature layout for a rotation/log-std mode, one place to ask."""
+        if rotation and logstd:
+            return cls.LAYOUT
+        if rotation:
+            return cls.POINT_LAYOUT
+        return cls.NO_ROT_LAYOUT if logstd else cls.NO_ROT_POINT_LAYOUT
+
+    @classmethod
+    def feature_dim(cls, rotation: bool = True, logstd: bool = True) -> int:
+        return _feature_dim(cls.layout(rotation, logstd))
+
+    @classmethod
+    def layout_of_width(cls, width: int) -> dict[str, FeatureBlock]:
+        layouts = (
+            cls.LAYOUT,
+            cls.POINT_LAYOUT,
+            cls.NO_ROT_LAYOUT,
+            cls.NO_ROT_POINT_LAYOUT,
+        )
+        for layout in layouts:
+            if _feature_dim(layout) == width:
+                return layout
+        raise ValueError(
+            f"no feature layout is {width} columns wide; known widths: "
+            f"{[_feature_dim(layout) for layout in layouts]}"
+        )
+
+    @classmethod
+    def project(cls, features, dst_layout: dict[str, FeatureBlock]):
+        src_layout = cls.layout_of_width(int(features.shape[-1]))
+        chunks = []
+        for name, dst_block in dst_layout.items():
+            if name not in src_layout:
+                raise ValueError(
+                    f"destination block {name!r} is not part of the "
+                    f"{features.shape[-1]}-wide source layout {sorted(src_layout)}"
+                )
+            src_block = src_layout[name]
+            if bool(dst_block.logstd_dim) != bool(src_block.logstd_dim):
+                raise ValueError(
+                    f"block {name!r} carries a log-std in one layout but not the "
+                    f"other, so it cannot be projected between them"
+                )
+            chunks.append(features[..., src_block.mean()])
+            if src_block.logstd_dim:
+                chunks.append(features[..., src_block.logstd()])
+        if isinstance(features, torch.Tensor):
+            return torch.cat(chunks, dim=-1)
+        return np.concatenate(chunks, axis=-1)
 
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
@@ -136,6 +207,9 @@ class Entity(Configurable):
         ang_sigma: float = 0.05  # revolute: radians, as a chord on the unit circle
         ext_sigma: float = 0.05  # fallback for any other extra dims
         canonicalize_rot: bool = False
+        score_variance_scale: float = 1.0
+        score_state_smoothing: float = 0.0
+        score_state_floor: float = 1e-6
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -175,8 +249,23 @@ class Entity(Configurable):
     def pose_dof(self) -> int:
         return len(self.pose_dof_groups)
 
-    def group_squared(self, values: np.ndarray) -> np.ndarray:
-        return np.array([float(np.sum(values[g] ** 2)) for g in self.pose_dof_groups])
+    def rotation_dims(self) -> list[int]:
+        return list(range(Entity.POS_DIM, Entity.POS_DIM + self.rot_dim))
+
+    def acceptance_radius(self, rotation: bool = True) -> float:
+        return _chi_sqrt(self.cfg.z_quantile_joint, len(self.pose_groups(rotation)))
+
+    def pose_groups(self, rotation: bool) -> list[np.ndarray]:
+        if rotation:
+            return self.pose_dof_groups
+        ignored = set(self.rotation_dims())
+        return [g for g in self.pose_dof_groups if not set(g.tolist()) <= ignored]
+
+    def group_squared(
+        self, values: np.ndarray, groups: list[np.ndarray] | None = None
+    ) -> np.ndarray:
+        groups = self.pose_dof_groups if groups is None else groups
+        return np.array([float(np.sum(values[g] ** 2)) for g in groups])
 
     def model_value(self, value: np.ndarray) -> np.ndarray:
         value = np.asarray(value)
@@ -260,6 +349,26 @@ class Entity(Configurable):
         out[:, block.mean()] = 0.0
         if block.logstd_dim:
             out[:, block.logstd()] = 0.0
+        return out
+
+    @classmethod
+    def jitter_positions(
+        cls,
+        features,
+        offsets: np.ndarray,
+        layout: dict[str, FeatureBlock] | None = None,
+    ):
+        layout = layout if layout is not None else cls.LAYOUT
+        out = (
+            features.clone() if isinstance(features, torch.Tensor) else features.copy()
+        )
+        block = layout["pos"]
+        delta = (
+            torch.as_tensor(offsets, dtype=out.dtype, device=out.device)
+            if isinstance(out, torch.Tensor)
+            else np.asarray(offsets)
+        )
+        out[:, block.mean()] = out[:, block.mean()] + delta
         return out
 
     def gnn_format(self, value: np.ndarray) -> np.ndarray:
@@ -351,55 +460,105 @@ class Entity(Configurable):
             measurement["pose"] = pose
         return {**p, "measurement": measurement}
 
-    def score_single(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> bool:
+    @property
+    def score_scale(self) -> float:
+        return float(self.cfg.score_variance_scale) * SCORE_VARIANCE_SCALE
+
+    @property
+    def score_smoothing(self) -> float:
+        return min(float(self.cfg.score_state_smoothing) + SCORE_STATE_SMOOTHING, 1.0)
+
+    def scoring_parameters(self, up: dict, eps: float = 1e-15) -> dict:
+        p = self.secure_mix_parameters(up, add_variance=True)
+        measurements = dict(p["measurement"])
+
+        scale = self.score_scale
+        if scale != 1.0:
+            pose = dict(measurements["pose"])
+            pose["covariances"] = np.asarray(pose["covariances"], dtype=float) * scale
+            measurements["pose"] = pose
+
+        smoothing = self.score_smoothing
+        if smoothing > 0.0:
+            pis = np.asarray(measurements["state"]["pis"], dtype=float)
+            pis = (1.0 - smoothing) * pis + smoothing / pis.shape[1]
+            measurements["state"] = {**measurements["state"], "pis": pis}
+
+        return {**p, "measurement": measurements}
+
+    def score_single(
+        self, sample: np.ndarray, up: dict, rotation: bool, eps: float = 1e-15
+    ) -> bool:
         return self.score_prepared(
-            sample, self.secure_mix_parameters(up, add_variance=True), eps=eps
+            sample, self.scoring_parameters(up), eps=eps, rotation=rotation
         )
 
     def prepare_single(self, up: dict) -> dict:
-        return self.secure_mix_parameters(up, add_variance=True)
+        return self.scoring_parameters(up)
 
-    def score_prepared(self, sample: np.ndarray, p: dict, eps: float = 1e-15) -> bool:
-        """Same test as :meth:`score_single`, on already prepared parameters."""
+    def score_prepared(
+        self,
+        sample: np.ndarray,
+        p: dict,
+        rotation: bool,
+        eps: float = 1e-15,
+    ) -> bool:
         sample = self.model_value(sample)
         pose = sample[:-1]
         state = int(sample[-1])
         pis = p["measurement"]["state"]["pis"]
 
-        best_k, z, zd = self._best_component(pose, p, eps=eps)
-        chi_sqrt = _chi_sqrt(self.cfg.z_quantile_joint, self.pose_dof)
-        capped = bool(np.all(self.group_squared(zd) <= self._z_dim_sigma**2))
+        groups = self.pose_groups(rotation)
+        best_k, z, zd = self._best_component(pose, p, eps=eps, groups=groups)
+        chi_sqrt = _chi_sqrt(self.cfg.z_quantile_joint, len(groups))
+        capped = bool(np.all(self.group_squared(zd, groups) <= self._z_dim_sigma**2))
 
         if not (z <= chi_sqrt and capped):
             return False
-        return bool(pis[best_k][state] > 1e-6)
+        return bool(pis[best_k][state] >= self.cfg.score_state_floor)
 
-    def score_state(self, sample: np.ndarray, up: dict, eps: float = 1e-15) -> bool:
+    def score_state(
+        self,
+        sample: np.ndarray,
+        up: dict,
+        rotation: bool,
+        eps: float = 1e-15,
+    ) -> bool:
         sample = self.model_value(sample)
-        p = self.secure_mix_parameters(up, add_variance=True)
+        p = self.scoring_parameters(up)
         state = int(sample[-1])
         pis = p["measurement"]["state"]["pis"]
 
-        best_k, z, zd = self._best_component(sample[:-1], p, eps=eps)
-        return bool(pis[best_k][state] > 1e-6)
+        best_k, z, zd = self._best_component(
+            sample[:-1], p, eps=eps, groups=self.pose_groups(rotation)
+        )
+        return bool(pis[best_k][state] >= self.cfg.score_state_floor)
 
     @property
     def _z_dim_sigma(self) -> float:
         return _z_dim_sigma(self.cfg.z_quantile_dim)
 
     def _best_component(
-        self, pose: np.ndarray, p: dict, eps: float = 1e-15
+        self,
+        pose: np.ndarray,
+        p: dict,
+        eps: float = 1e-15,
+        groups: list[np.ndarray] | None = None,
     ) -> tuple[int, float, np.ndarray]:
         weights = np.asarray(p["weights"])
         means = np.asarray(p["measurement"]["pose"]["means"])
         vars_ = np.asarray(p["measurement"]["pose"]["covariances"])
         var = np.maximum(vars_, eps)
+        if groups is None:
+            keep = np.arange(pose.shape[-1])
+        else:
+            keep = np.concatenate(groups) if groups else np.array([], dtype=int)
         post = np.log(weights) - 0.5 * np.sum(
-            np.log(2 * np.pi * var) + (pose - means) ** 2 / var, axis=-1
+            (np.log(2 * np.pi * var) + (pose - means) ** 2 / var)[:, keep], axis=-1
         )
         best_k = int(np.argmax(post))
         zd = np.abs(pose - means[best_k]) / np.sqrt(np.maximum(vars_[best_k], eps))
-        z = float(np.sqrt(np.sum(zd**2)))
+        z = float(np.sqrt(sum(float(np.sum(zd[g] ** 2)) for g in (groups or [keep]))))
         return best_k, z, zd
 
     def best_component_cov(

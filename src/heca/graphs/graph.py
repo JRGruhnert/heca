@@ -11,6 +11,7 @@ from matplotlib.patches import Patch
 from heca.experts.expert import ExpertModel
 
 from heca.graphs.edges.condition_edges import ConditionEdges
+from heca.graphs.edges.edge_set import DEFAULT_TERMS
 from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
@@ -39,10 +40,30 @@ class SubgoalMode(Enum):
         return self.value
 
 
+JITTER_SCOPES: tuple[str, ...] = ("none", "entity", "scene", "both")
+
+
 class Graph:
-    def __init__(self, entities: dict[str, Entity], use_rotation: bool = True):
+    def __init__(
+        self,
+        entities: dict[str, Entity],
+        use_rotation: bool,
+        position_jitter: float,
+        edge_terms: tuple[str, ...] = DEFAULT_TERMS,
+        goal_residual: bool = False,
+        jitter_scope: str = "entity",
+    ):
+        if jitter_scope not in JITTER_SCOPES:
+            raise ValueError(
+                f"unknown jitter_scope {jitter_scope!r}; "
+                f"known: {', '.join(JITTER_SCOPES)}"
+            )
         self.entities: dict[str, Entity] = entities
+        self.edge_terms: tuple[str, ...] = edge_terms
         self.use_rotation: bool = use_rotation
+        self.position_jitter: float = position_jitter
+        self.goal_residual: bool = goal_residual
+        self.jitter_scope: str = jitter_scope
 
         self.ns_comp: CompNodes = CompNodes()
         self.ns_entity: EntityNodes = EntityNodes()
@@ -64,7 +85,15 @@ class Graph:
         self.ns_state.build(budget)
         self.ns_entity.build(self.start, self.goal, self.use_rotation)
         self.ns_option.build(self.ns_entity, self.use_rotation)
-        self.es_condition.build(self.ns_comp, self.ns_entity, self.use_rotation)
+        self.es_condition.build(
+            self.ns_comp,
+            self.ns_entity,
+            self.use_rotation,
+            self.edge_terms,
+            self.goal_residual,
+        )
+
+        self._jitter_positions()
         self.es_summary.build(self.ns_entity, self.ns_option)
         self.es_translation.build(self.ns_entity, self.ns_entity)
         self.es_scene.build(self.ns_option, self.ns_state)
@@ -73,6 +102,7 @@ class Graph:
         # Nodes
         data[self.ns_entity.type].x = self.ns_entity.x
         data[self.ns_entity.type].type_ids = self.ns_entity.type_ids
+        data[self.ns_entity.type].entity_ids = self.ns_entity.entity_ids
         data[self.ns_entity.type].role_ids = self.ns_entity.role_ids
         data[self.ns_comp.type].x = self.ns_comp.x
         data[self.ns_comp.type].type_ids = self.ns_comp.type_ids
@@ -91,6 +121,46 @@ class Graph:
 
         self._validate_export(data)
         return data.to(device=hardware.device.type)
+
+    def jitter_offsets(self) -> dict[str, np.ndarray]:
+        limit = self.position_jitter
+        if limit <= 0.0 or self.jitter_scope == "none":
+            return {label: np.zeros(3, dtype=np.float32) for label in self.entities}
+        shared = (
+            np.random.uniform(-limit, limit, size=3)
+            if self.jitter_scope in ("scene", "both")
+            else np.zeros(3, dtype=np.float32)
+        )
+        if self.jitter_scope == "scene":
+            return {label: shared for label in self.entities}
+        if self.jitter_scope == "entity":
+            return {
+                label: np.random.uniform(-limit, limit, size=3)
+                for label in self.entities
+            }
+        return {
+            label: shared + np.random.uniform(-limit, limit, size=3)
+            for label in self.entities
+        }
+
+    def _jitter_positions(self) -> None:
+        """Shift every representation of each entity by its offset."""
+        if self.position_jitter <= 0.0 or self.jitter_scope == "none":
+            return
+        offsets = self.jitter_offsets()
+        zeros = np.zeros(3, dtype=np.float32)
+        self.ns_entity.x = Entity.jitter_positions(
+            self.ns_entity.x,
+            np.stack(
+                [offsets.get(node.entity, zeros) for node in self.ns_entity.items]
+            ),
+            Entity.layout(self.use_rotation, logstd=False),
+        )
+        self.ns_comp.x = Entity.jitter_positions(
+            self.ns_comp.x,
+            np.stack([offsets.get(node.entity, zeros) for node in self.ns_comp.items]),
+            Entity.layout(self.use_rotation, logstd=True),
+        )
 
     @property
     def dead_end(self) -> bool:
@@ -227,12 +297,23 @@ class Graph:
         cls,
         cfgs: list[ExpertModel.Config],
         smode: SubgoalMode,
-        use_rotation: bool = True,
+        use_rotation: bool,
+        position_jitter: float,
+        edge_terms: tuple[str, ...] = DEFAULT_TERMS,
+        goal_residual: bool = False,
+        jitter_scope: str = "entity",
     ) -> "Graph":
         entities = {}
         for cfg in cfgs:
             entities.update(ExpertModel.get(cfg).entities)
-        graph = cls(entities=entities, use_rotation=use_rotation)
+        graph = cls(
+            entities=entities,
+            use_rotation=use_rotation,
+            position_jitter=position_jitter,
+            edge_terms=edge_terms,
+            goal_residual=goal_residual,
+            jitter_scope=jitter_scope,
+        )
         graph.set_goal_rows()
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
 
@@ -448,10 +529,15 @@ class Graph:
     def _validate_export(self, data: HecaData) -> None:
         ent = data[self.ns_entity.type]
         assert ent.role_ids.shape[0] == ent.x.shape[0] == ent.type_ids.shape[0]
+        assert ent.entity_ids.shape[0] == ent.x.shape[0]
         # one current and one goal row per entity, added in the same order
         cur = (ent.role_ids == ENRole.START.value).nonzero().flatten()
         goal = (ent.role_ids == ENRole.GOAL.value).nonzero().flatten()
         assert cur.numel() == goal.numel() == len(self.entities) > 0
+        # current and goal row of the same entity must share its entity id, and
+        # entity ids must be injective over the entities
+        assert torch.equal(ent.entity_ids[cur], ent.entity_ids[goal])
+        assert len(set(ent.entity_ids[cur].tolist())) == len(self.entities)
 
         opt = data[self.ns_option.type]
         assert opt.gated.shape == (opt.x.shape[0],)

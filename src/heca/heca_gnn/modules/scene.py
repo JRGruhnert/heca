@@ -6,7 +6,11 @@ from torch_geometric.nn import SAGEConv, GATv2Conv
 class SceneGATBlock(nn.Module):
     def __init__(self, dim: int):
         super().__init__()
-        self.conv = GATv2Conv(in_channels=(dim, dim), out_channels=dim)
+        self.conv = GATv2Conv(
+            in_channels=(dim, dim),
+            out_channels=dim,
+            add_self_loops=False,
+        )
 
     def forward(
         self,
