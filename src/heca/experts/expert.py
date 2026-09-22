@@ -2,12 +2,15 @@ import abc
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from typing import Sequence
 
 import numpy as np
-import torch
 from heca.data.pair import ConPair
 from heca.data.data import DCEntity, DCScene, TDImage
 from heca.data.entity import Entity
+from heca.data.reference import Reference
+from heca.image_encoders.prior import fill_gaps
+from heca.misc import logger
 from heca.misc.base import Persistable
 from heca.scenes.scene import Scene, SceneFeedback
 from heca.image_encoders.dino_encoder import DinoEncoder
@@ -66,49 +69,105 @@ class ExpertModel(Persistable, abc.ABC):
     def tps(self) -> set[str]:
         raise NotImplementedError
 
-    def from_image(self, image: TDImage) -> dict[str, DCEntity]:
-        kps3d, _, kp_scores = self.kp_extractor.extract_poses(image)
-        states, state_scores = self.ste_extractor.extract_states(image)
-        # extras = self.extras_extractor.extract_extra(image)
-        extras = np.zeros(
-            0
-        )  # TODO: implement extra calculation for prismatic and revoulte
-        # Sanity check on dimensions
-        assert kps3d.shape[1] == len(self.scene.entities)
+    def reset_tracking(self):
+        """Start a new episode: no belief carries over from the previous one."""
+        if self._use_gt:
+            return self
+        self.kp_extractor.reset_tracking()
+        return self
 
-        dc_entities: dict[str, DCEntity] = {}
-        for idx, (key, entity) in enumerate(self.scene.entities.items()):
-            pose, ste = self.get_entity_pose_and_state(
-                kps3d[:, idx], kp_scores[:, idx], states[:, idx], state_scores[:, idx]
+    def read_image(
+        self, image: TDImage
+    ) -> tuple[dict[str, DCEntity], dict[str, float]]:
+        poses = self.kp_extractor.extract_poses(image)
+        states = self.ste_extractor.extract_states(image)
+        references = self.scene.references
+
+        entities: dict[str, DCEntity] = {}
+        confidence: dict[str, float] = {}
+        for label, entity in self.scene.entities.items():
+            keypoint = poses[label]
+            confidence[label] = keypoint.score
+            reference = references[label][Reference.POSITION].xyz
+            position = keypoint.xyz
+            if keypoint.score < self.cfg.score_threshold:
+                logger.warning(
+                    f"{label}: keypoint confidence {keypoint.score:.3f} below "
+                    f"{self.cfg.score_threshold}, falling back to its reference"
+                )
+                position = reference
+
+            positions = {
+                "current": position,
+                "reference": reference,
+                **{
+                    name: references[label][name].xyz for name in entity.reference_names
+                },
+            }
+            extra = entity.extra_from_references(label, positions)
+            ste = np.array([states[label][0] if label in states else 0])
+            pose = np.concatenate(
+                (self.scene.normalize_position(position), np.zeros(entity.rot_dim))
             )
-            extra = extras[:, idx]
-            dc_entities[key] = entity.dc_from_parsed(pose, extra, ste)
-        return dc_entities
+            entities[label] = entity.dc_from_parsed(pose, extra, ste)
+        return entities, confidence
+
+    def from_image(self, image: TDImage) -> dict[str, DCEntity]:
+        return self.read_image(image)[0]
+
+    def encode_episode(
+        self, images: Sequence[TDImage], scenes: Sequence[DCScene]
+    ) -> list[DCScene]:
+        self.reset_tracking()
+        frames: list[dict[str, DCEntity]] = []
+        confidence: list[dict[str, float]] = []
+        for image in images:
+            frame, sure = self.read_image(image)
+            frames.append(frame)
+            confidence.append(sure)
+
+        for label, entity in self.scene.entities.items():
+            weak = [
+                index
+                for index, sure in enumerate(confidence)
+                if sure[label] < self.cfg.score_threshold
+            ]
+            if not weak or len(weak) == len(frames):
+                if weak:
+                    logger.warning(
+                        f"{label}: nothing detected in any of the {len(frames)} "
+                        "frames, its values are all reference positions"
+                    )
+                continue
+            logger.warning(
+                f"{label}: no detection in {len(weak)}/{len(frames)} frame(s), "
+                "filling them from their neighbours"
+            )
+            values: list[np.ndarray | None] = [
+                None if index in weak else frame[label].value
+                for index, frame in enumerate(frames)
+            ]
+            filled = fill_gaps(values)
+            extra_dim = entity.pose_dim - Entity.POS_DIM - entity.rot_dim
+            for index in weak:
+                pose = filled[index][: Entity.POS_DIM + entity.rot_dim]
+                extra = filled[index][
+                    Entity.POS_DIM
+                    + entity.rot_dim : Entity.POS_DIM
+                    + entity.rot_dim
+                    + extra_dim
+                ]
+                frames[index][label] = entity.dc_from_parsed(
+                    pose, extra, filled[index][-1:]
+                )
+
+        return [DCScene(frame, scene.extras) for frame, scene in zip(frames, scenes)]
 
     def make_scene(self, scene: DCScene, image: TDImage) -> DCScene:
         if self._use_gt:
             return scene
         else:
             return DCScene(self.from_image(image), scene.extras)
-
-    def get_entity_pose_and_state(
-        self,
-        poses: torch.Tensor,
-        poses_scores: torch.Tensor,
-        states: torch.Tensor,
-        state_scores: torch.Tensor,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        present = poses_scores > self.cfg.score_threshold
-        if present.sum() == 0:
-            # Not present
-            # TODO: handle missing keypoint, e.g. by interpolation or using a default value
-            pass
-        elif present.sum() == 1:
-            # Present
-            idxx = present.nonzero(as_tuple=True)[0][0]
-            pose = poses[idxx]
-            state = states[idxx]
-        return pose.numpy(), state.numpy()
 
     @cached_property
     def conditions(self) -> ConPair:

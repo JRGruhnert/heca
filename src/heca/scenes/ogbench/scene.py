@@ -106,6 +106,46 @@ class OGScene(Scene):
         self.close_viewer()
         self._env.close()
 
+    def snapshot(self) -> tuple:
+        """qpos/qvel plus the per-object state the env keeps outside the sim."""
+        env = self.env
+        objects = []
+        for obj in env.objects:
+            rec: dict[str, Any] = {}
+            for attr in ("_cur_state", "_target_button_states"):
+                value = getattr(obj, attr, None)
+                rec[attr] = value.copy() if value is not None else None
+            rec["_target_val"] = getattr(obj, "_target_val", None)
+            objects.append((obj, rec))
+        return env._data.qpos.copy(), env._data.qvel.copy(), objects
+
+    def restore(self, snap: tuple, step: int) -> None:
+        """Put the env back into a snapshotted state, at option step ``step``."""
+        env = self.env
+        qpos, qvel, objects = snap
+        env._data.qpos[:] = qpos
+        env._data.qvel[:] = qvel
+        for obj, rec in objects:
+            for attr, value in rec.items():
+                if value is None:
+                    continue
+                if attr == "_target_val":
+                    setattr(obj, attr, value)
+                else:
+                    getattr(obj, attr)[:] = value
+        env._apply_button_states()
+        # the option count lives on the scene, not in the sim
+        self.current_step = step
+
+    def successes(self) -> dict[str, bool]:
+        """The env's per-object success bookkeeping for the current state."""
+        return {name: bool(val) for val, name in self.env._compute_successes()}
+
+    def success(self) -> bool:
+        """The env's own success criterion for the state it currently holds."""
+        env = self.env
+        return bool(env._evaluate_success(env._compute_successes()))
+
     def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
         if not isinstance(image_dict, dict):

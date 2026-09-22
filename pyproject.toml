@@ -44,8 +44,9 @@ dependencies = [
 
     # git dependencies
     "riepybdlib @ git+https://github.com/vonHartz/riepybdlib.git@a56cbdb7c01e44e50956a8accb973d608449ab77",
-    "ogbench @ git+https://github.com/JRGruhnert/ogbench_modified.git@466f908c6d7db921f45f21213aa0d9332d6243cc",
-    "tapas_gmm_modified @ git+https://github.com/JRGruhnert/tapas_gmm_modified.git@aacc7231527f6786eaa56321b74d1607fb28fb74",
+    #"ogbench @ git+https://github.com/JRGruhnert/ogbench_modified.git@466f908c6d7db921f45f21213aa0d9332d6243cc",
+    "ogbench @ git+https://github.com/JRGruhnert/ogbench_modified.git@e20184faf4645f75f6b48afe123a8fa0138043cb",
+    "tapas_gmm @ git+https://github.com/JRGruhnert/TAPAS.git@f40ab0aa5fd6295e690abcb752598b885744e4c5",
     "calvin_env_modified @ git+https://github.com/JRGruhnert/calvin_env_modified.git@1738be9b9ae4ac94fbd572001898b4e36f4c2683",
 ]
 

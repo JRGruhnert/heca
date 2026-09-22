@@ -79,9 +79,9 @@ faucet1_a_b = TapasExpert.Config(
     scene=OGScene1.Config(),
     gt_frames=[
         ["ee_init", "faucet1"],
+        ["faucet1"],
         ["faucet1", "faucet0", "button0"],
-        ["faucet1", "faucet0", "button0"],
-        ["faucet1", "faucet0", "button0"],
+        ["faucet1"],
         ["faucet1", "ee_target"],
     ],
     segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],

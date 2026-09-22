@@ -9,6 +9,7 @@ from heca.data.entity import Entity
 
 class RevoluteEntity(Entity):
     BLOCKS: ClassVar[tuple[str, ...]] = ("state", "pos", "rot", "extra")
+    REFERENCE_NAMES: ClassVar[tuple[str, ...]] = ("min", "mid", "max")
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
@@ -31,6 +32,42 @@ class RevoluteEntity(Entity):
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
         ang = obs[f"heca_{label}_ang"]
         return np.array([np.sin(ang), np.cos(ang)])
+
+    @staticmethod
+    def circle_through(
+        first: np.ndarray, second: np.ndarray, third: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, float]:
+        """Centre, unit normal and radius of the circle through three points."""
+        a = np.asarray(second, dtype=np.float64) - np.asarray(first, dtype=np.float64)
+        b = np.asarray(third, dtype=np.float64) - np.asarray(first, dtype=np.float64)
+        normal = np.cross(a, b)
+        area2 = float(np.dot(normal, normal))
+        if area2 <= 1e-18:
+            raise ValueError
+        centre = np.asarray(first, dtype=np.float64) + np.cross(
+            np.dot(a, a) * b - np.dot(b, b) * a, normal
+        ) / (2.0 * area2)
+        radius = float(np.linalg.norm(np.asarray(first, dtype=np.float64) - centre))
+        return centre, normal / np.sqrt(area2), radius
+
+    def extra_from_references(
+        self, label: str, positions: dict[str, np.ndarray]
+    ) -> np.ndarray:
+        minimum = np.asarray(positions["min"], dtype=np.float64)
+        middle = np.asarray(positions["mid"], dtype=np.float64)
+        maximum = np.asarray(positions["max"], dtype=np.float64)
+        current = np.asarray(positions["current"], dtype=np.float64)
+
+        centre, normal, _ = self.circle_through(minimum, middle, maximum)
+        zero_arm = middle - centre
+        if float(np.linalg.norm(zero_arm)) == 0.0:
+            raise ValueError
+        e1 = zero_arm / np.linalg.norm(zero_arm)
+        e2 = np.cross(normal, e1)
+
+        arm = current - centre
+        angle = float(np.arctan2(np.dot(arm, e2), np.dot(arm, e1)))
+        return np.array([np.sin(angle), np.cos(angle)])
 
     @property
     def extra_sigma(self) -> np.ndarray:

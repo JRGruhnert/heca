@@ -105,6 +105,7 @@ class Persistable(Registerable, abc.ABC):
         load_tag: str | None = None
         tag: str
         folder: str
+        subdir: str | None = None
 
     def __init__(self, cfg: "Persistable.Config"):
         super().__init__(cfg)
@@ -128,21 +129,27 @@ class Persistable(Registerable, abc.ABC):
         return cast(P, cls._persisted_instances[key])
 
     @classmethod
+    def _subdir(cls, cfg: "Persistable.Config", for_load: bool) -> str:
+        """The last path segment: explicit ``subdir``, else tag (load_tag to load)."""
+        if cfg.subdir is not None:
+            return cfg.subdir
+        return (cfg.load_tag or cfg.tag) if for_load else cfg.tag
+
+    @classmethod
     def load_dir(cls, cfg: "Persistable.Config") -> Path:
         """
-        cls.root / cfg.folder / cfg.label / cfg.tag
+        cls.root / cfg.folder / cfg.label / (cfg.subdir or cfg.load_tag or cfg.tag)
         """
-        tag = cfg.load_tag or cfg.tag
-        path = cls.instance_dir(cfg, cfg.folder) / tag
+        path = cls.instance_dir(cfg, cfg.folder) / cls._subdir(cfg, for_load=True)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     @classmethod
     def save_dir(cls, cfg: "Persistable.Config") -> Path:
         """
-        cls.root / cfg.folder / cfg.label / cfg.tag
+        cls.root / cfg.folder / cfg.label / (cfg.subdir or cfg.tag)
         """
-        path = cls.instance_dir(cfg, cfg.folder) / cfg.tag
+        path = cls.instance_dir(cfg, cfg.folder) / cls._subdir(cfg, for_load=False)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -167,3 +174,21 @@ class Persistable(Registerable, abc.ABC):
 
 # root / folder / label / tag
 # data / agents / tapas /
+
+
+def latest_checkpoint(path: Path, prefix: str) -> Path | None:
+    """Newest ``<prefix>_<n>.pt`` in ``path``, or the legacy ``checkpoint.pt``.
+
+    Saving numbers its files (``ckp_550.pt``, ``checkpoint_50.pt``); loading has
+    to look for those numbers instead of a fixed name, otherwise a run can never
+    resume from what it wrote.
+    """
+    numbered: list[tuple[int, Path]] = []
+    for candidate in path.glob(f"{prefix}_*.pt"):
+        number = candidate.stem.rsplit("_", 1)[-1]
+        if number.isdigit():
+            numbered.append((int(number), candidate))
+    if numbered:
+        return max(numbered, key=lambda item: item[0])[1]
+    legacy = path / "checkpoint.pt"
+    return legacy if legacy.exists() else None

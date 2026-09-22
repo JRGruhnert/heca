@@ -107,6 +107,12 @@ def main():
         default=3,
         help="Max attempts per episode before giving up (stage 3).",
     )
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="Max scenes fitted concurrently (0 = one thread per scene, 1 = sequential).",
+    )
     args = parser.parse_args()
 
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
@@ -119,8 +125,9 @@ def main():
         if models:
             jobs.append((scene_cfg, models))
 
-    logger.info(f"Running pipeline for {len(jobs)} scenes in parallel threads.")
-    pool = ThreadPoolExecutor(max_workers=len(jobs))
+    workers = len(jobs) if args.jobs <= 0 else min(args.jobs, len(jobs))
+    logger.info(f"Running pipeline for {len(jobs)} scenes with {workers} worker(s).")
+    pool = ThreadPoolExecutor(max_workers=workers)
     futures = [
         pool.submit(
             pipeline_scene, scene_cfg, models, args.gt, args.episodes, args.max_tries

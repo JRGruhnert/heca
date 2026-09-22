@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import cast
+
 import torch
 
-from heca.learning.server import FLServer
 from heca.learning.ppo import PPO
+from heca.learning.server import FLServer
+from heca.misc import hardware
 
 
 class FPPO(PPO):
@@ -35,14 +37,22 @@ class FPPO(PPO):
             {k: v for k, v in state_dict.items() if k in self._sync_keys}, strict=False
         )
 
-    def _fedprox_term(self) -> torch.Tensor:
-        loss = 0.0
-        for name, local_p in self.network.named_parameters():
-            global_p = self._global_params.get(name)
-            if global_p is None:
+    def _proximal_term(
+        self,
+        net: torch.nn.Module,
+        coef: float,
+        anchor: dict[str, torch.Tensor] | None = None,
+    ) -> torch.Tensor:
+        if coef == 0.0:
+            return torch.tensor(0.0, device=hardware.device)
+        anchor = self._global_params if anchor is None else anchor
+        penalty = torch.zeros((), device=hardware.device)
+        for name, param in net.named_parameters():
+            shared = anchor.get(name)
+            if shared is None:
                 continue
-            loss += torch.sum((local_p - global_p) ** 2)  # euklidische distanz squared
-        return (self.server.cfg.fedprox_mu / 2) * loss  # type: ignore
+            penalty = penalty + torch.sum((param - shared) ** 2)
+        return (coef / 2) * penalty
 
     def sync(self):
         state_dict = self.server.submit(
@@ -52,7 +62,7 @@ class FPPO(PPO):
         )
         self._load_global(state_dict)
         self._global_params = self._global_snapshot()
-        self.inference_net.load_state_dict(self.network.state_dict())
+        self._sync_inference()
         self._last_version = self.server.version
         for pg in self.optim.param_groups:
             for p in pg.get("params", []):
@@ -60,3 +70,4 @@ class FPPO(PPO):
                 if s is not None and "exp_avg" in s:
                     s["exp_avg"].zero_()
                     s["exp_avg_sq"].zero_()
+        self._periodic_save()

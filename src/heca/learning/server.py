@@ -6,7 +6,7 @@ import torch
 
 from heca.heca_gnn.network import Network
 from heca.misc import hardware, logger
-from heca.misc.base import Persistable
+from heca.misc.base import Persistable, latest_checkpoint
 
 
 class FLServer(Persistable):
@@ -17,7 +17,6 @@ class FLServer(Persistable):
         network: Network.Config
         fedavgm_beta: float = 0.9
         max_update: int = 1000
-        fedprox_mu: float = 0.01
         save_interval: int = 50
 
     def __init__(self, cfg: Config):
@@ -142,9 +141,9 @@ class FLServer(Persistable):
         logger.info(f"Saved global checkpoint to {filepath}")
 
     def _load(self, path: Path):
-        filepath = path / "checkpoint.pt"
-        if not filepath.exists():
-            logger.warning(f"No checkpoint found at {filepath}. Starting from scratch.")
+        filepath = latest_checkpoint(path, "checkpoint")
+        if filepath is None:
+            logger.warning(f"No checkpoint found at {path}. Starting from scratch.")
             return
 
         checkpoint = torch.load(filepath, map_location=hardware.device)

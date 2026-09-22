@@ -70,8 +70,6 @@ def _layout(
     for name, mean_dim, logstd_dim in (
         ("state", max_state, 0),
         ("pos", pos_dim, pos_dim if logstd else 0),
-        # without rotation the block is not zeroed, it is absent: the feature is
-        # narrower, exactly like the encoder that would have encoded it
         ("rot", 4, rot_dim if logstd else 0),
         ("extra", max_extra, max_extra if logstd else 0),
     ):
@@ -103,9 +101,9 @@ class Entity(Configurable):
         "revolute",
     )
 
-    # Which measurement blocks a type has, in feature order. Each subclass sets
-    # it and that type's encoder reads it from here, so it is written down once.
     BLOCKS: ClassVar[tuple[str, ...]] = ("state", "pos")
+
+    REFERENCE_NAMES: ClassVar[tuple[str, ...]] = ()
 
     MAX_STATE_DIM: int = 8
     MAX_EXTRA_DIM: int = 2
@@ -303,6 +301,15 @@ class Entity(Configurable):
 
     def extra_part(self, label: str, obs: dict) -> np.ndarray:
         raise NotImplementedError
+
+    @property
+    def reference_names(self) -> tuple[str, ...]:
+        return self.REFERENCE_NAMES
+
+    def extra_from_references(
+        self, label: str, positions: dict[str, np.ndarray]
+    ) -> np.ndarray:
+        return np.zeros(0)
 
     def value_from_gt(self, label: str, obs: dict, normalize_pos=None) -> DCEntity:
         pose = self.common_pose_part(label, obs, normalize_pos=normalize_pos)

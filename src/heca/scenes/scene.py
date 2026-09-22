@@ -1,5 +1,5 @@
-import re
 import abc
+import json
 import h5py
 import torch
 import numpy as np
@@ -11,6 +11,7 @@ from PIL import Image
 
 from heca.data.data import DCScene, TDImage
 from heca.data.entity import Entity
+from heca.data.reference import Reference
 from heca.misc.base import Persistable
 
 
@@ -46,7 +47,12 @@ class Scene(Persistable):
         self.cfg = cfg
         self.current_step = 0
 
-        self.kp_references: dict[str, tuple[Image.Image, int, int, int, int]] = {}
+        # label -> reference name -> annotation.  "pos" is the entity's own
+        # reference picture, the names in ``Entity.reference_names`` are the joint
+        # references its class needs.
+        self.references: dict[str, dict[str, Reference]] = {}
+        # label -> state index -> pictures, only for entities with more than one
+        # state: a single state is constant, so there is nothing to look at.
         self.state_references: dict[str, dict[int, list[Image.Image]]] = {}
 
     def from_internal(self, data) -> tuple[DCScene, TDImage, np.ndarray]:
@@ -165,43 +171,62 @@ class Scene(Persistable):
         raise NotImplementedError()
 
     def _load(self, path: Path) -> bool:
-        dc_pattern = re.compile(rf"xk(\d+)_yk(\d+)_xs(\d+)_ys(\d+)\.png")
-        sample_postfix = r"_sample(\d+)\.png"
+        annotation = "annotation.json"
+        self.references = {}
+        self.state_references = {}
         for label, entity in self.entities.items():
             edir = path / label
+            self.references[label] = {}
             self.state_references[label] = {}
-            for idx in range(entity.cfg.n_states):
-                self.state_references[label][idx] = []
-                state_pattern = re.compile(rf"{idx}{sample_postfix}")
-                for file in edir.glob(f"{idx}_sample*.png"):
-                    if state_pattern.fullmatch(file.name):
-                        self.state_references[label][idx].append(
-                            Image.open(file),
-                        )
-            files = list(edir.glob("xk*_yk*_xs*_ys*.png"))
-            if files:
-                assert len(files) == 1
-                file = files[0]
-                match = dc_pattern.fullmatch(file.name)
-                if match:
-                    self.kp_references[label] = (
-                        Image.open(file),
-                        int(match.group(1)),
-                        int(match.group(2)),
-                        int(match.group(3)),
-                        int(match.group(4)),
-                    )
+            notes = json.loads((edir / annotation).read_text()) if (edir / annotation).exists() else {}
+            for name in (Reference.POSITION, *entity.reference_names):
+                note = notes.get(name)
+                if note is None:
+                    continue
+                self.references[label][name] = Reference(
+                    image=Image.open(edir / f"{name}.png"),
+                    x=int(note["x"]),
+                    y=int(note["y"]),
+                    xyz=np.asarray(note["xyz"], dtype=np.float64),
+                )
+            if entity.cfg.n_states > 1:
+                for idx in range(entity.cfg.n_states):
+                    self.state_references[label][idx] = [
+                        Image.open(file)
+                        for file in sorted(edir.glob(f"state{idx}_sample*.png"))
+                    ]
         return True
 
     def _save(self, path: Path) -> bool:
-        for label in self.entities.keys():
-            entity_dir = path / label
-            entity_dir.mkdir(parents=True, exist_ok=True)
-            for state, samples in self.state_references[label].items():
-                for idx, img in enumerate(samples):
-                    img.save(entity_dir / f"{state}_sample{idx}.png")
-            img, x1, y1, x2, y2 = self.kp_references[label]
-            img.save(entity_dir / f"xk{x1}_yk{y1}_xs{x2}_ys{y2}.png")
+        for label, entity in self.entities.items():
+            edir = path / label
+            edir.mkdir(parents=True, exist_ok=True)
+            notes: dict[str, dict[str, Any]] = {}
+            for name, reference in self.references[label].items():
+                reference.image.save(edir / f"{name}.png")
+                notes[name] = {
+                    "x": int(reference.x),
+                    "y": int(reference.y),
+                    "xyz": [float(v) for v in reference.xyz],
+                }
+            (edir / "annotation.json").write_text(json.dumps(notes, indent=2) + "\n")
+            if entity.cfg.n_states > 1:
+                for state, samples in self.state_references[label].items():
+                    for idx, img in enumerate(samples):
+                        img.save(edir / f"state{state}_sample{idx}.png")
+        return True
+
+    def references_ready(self) -> bool:
+        """Every reference and state sample the scene's entities need is present."""
+        for label, entity in self.entities.items():
+            have = self.references.get(label, {})
+            for name in (Reference.POSITION, *entity.reference_names):
+                if name not in have:
+                    return False
+            if entity.cfg.n_states > 1:
+                states = self.state_references.get(label, {})
+                if any(not states.get(idx) for idx in range(entity.cfg.n_states)):
+                    return False
         return True
 
     @property

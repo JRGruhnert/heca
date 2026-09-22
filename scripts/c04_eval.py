@@ -45,6 +45,58 @@ def rollouts(heca: Heca, count: int, seed_from: int) -> tuple[int, int]:
     return wins, truncated
 
 
+def t_critical(n: int) -> float:
+    """97.5% quantile of Student's t with ``n-1`` dof (95% CI of the mean)."""
+    if n <= 1:
+        return 1.0
+    try:
+        from scipy.stats import t
+
+        return float(t.ppf(0.975, df=n - 1))
+    except Exception:
+        return 1.96  # normal approximation fallback
+
+
+def save_summary(*, network: str, payload: dict) -> Path:
+    """Write the across-seed summary JSON for one network (paper table row)."""
+    out_dir = RUN_ROOT / "eval"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    action = "" if payload.get("greedy", True) else "_sampled"
+    path = out_dir / f"{network}_{payload['mode']}{action}.json"
+    path.write_text(json.dumps(payload, indent=2) + "\n")
+    logger.info(f"  saved {path}")
+    return path
+
+
+def resolve_tags(patterns: list[str]) -> list[str]:
+    """Expand ``--tag`` entries: exact run dir names or globs under RUN_ROOT."""
+    tags: list[str] = []
+    for pattern in patterns:
+        if any(ch in pattern for ch in "*?["):
+            found = sorted(p.name for p in RUN_ROOT.glob(pattern) if p.is_dir())
+            if not found:
+                raise FileNotFoundError(f"{pattern!r} matches no run dir in {RUN_ROOT}")
+        else:
+            if not (RUN_ROOT / pattern).is_dir():
+                raise FileNotFoundError(f"no run dir {RUN_ROOT / pattern}")
+            found = [pattern]
+        for name in found:
+            if name not in tags:
+                tags.append(name)
+    return tags
+
+
+def weight_key(checkpoint: dict, weights: str) -> dict:
+    """The state dict to evaluate, and a clear error if Ditto weights are absent."""
+    key = "personal_network" if weights == "personal" else "network"
+    if key not in checkpoint:
+        raise KeyError(
+            f"checkpoint has no {key!r}: it was written by a run without "
+            f"--method ditto (keys: {sorted(k for k in checkpoint if k.endswith('network'))})"
+        )
+    return checkpoint[key]
+
+
 def save_result(run_dir: Path, payload: dict) -> Path:
     out_dir = run_dir / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -62,7 +114,8 @@ def main():
         "--tag",
         nargs="+",
         required=True,
-        help="run dir(s) under data/network/standard: one per trained seed",
+        help="run dir(s) under data/network/standard: one per trained seed. "
+        "Shell patterns work too, e.g. 'scene0_final-a0-gt-virt_s*'.",
     )
     ap.add_argument("--ckp", default="latest", help="file name, or 'latest'")
     ap.add_argument("--network", default="a0", help="config name from conf.networks")
@@ -91,6 +144,13 @@ def main():
         help="scene env mode: 'task' (eval protocol, one task at a time) or "
         "'randomized' (the training distribution)",
     )
+    ap.add_argument(
+        "--weights",
+        choices=("network", "personal"),
+        default="network",
+        help="which weights to evaluate: the federated model, or the Ditto "
+        "personal model (personal_network) when the run used --method ditto",
+    )
     ap.add_argument("--gt", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument(
@@ -100,6 +160,7 @@ def main():
         "training does; the default (greedy) matches OGBench's eval_temperature 0",
     )
     args = ap.parse_args()
+    args.tag = resolve_tags(args.tag)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -134,37 +195,75 @@ def main():
     started = time.perf_counter()
 
     if args.mode != "task":
-        path = find_checkpoint(RUN_ROOT / args.tag[0], args.ckp)
-        checkpoint = torch.load(path, map_location=hardware.device, weights_only=False)
-        missing, unexpected = heca.learner.network.upgrade(checkpoint["network"])
-        if missing or unexpected:
-            logger.warning(
-                f"  {args.tag[0]}: checkpoint mismatch, {len(missing)} missing, "
-                f"{len(unexpected)} unexpected parameter(s)"
+        per_tag: list[float] = []
+        for tag in args.tag:
+            path = find_checkpoint(RUN_ROOT / tag, args.ckp)
+            checkpoint = torch.load(
+                path, map_location=hardware.device, weights_only=False
             )
-        wins, truncated = rollouts(heca, args.episodes, seed_from=args.seed)
-        rate = wins / args.episodes
+            missing, unexpected = heca.learner.network.upgrade(
+                weight_key(checkpoint, args.weights)
+            )
+            if missing or unexpected:
+                logger.warning(
+                    f"  {tag}: checkpoint mismatch, {len(missing)} missing, "
+                    f"{len(unexpected)} unexpected parameter(s)"
+                )
+            wins, truncated = rollouts(heca, args.episodes, seed_from=args.seed)
+            rate = wins / args.episodes
+            per_tag.append(rate)
+            logger.info(
+                f"{tag} / {path.name}: randomized episodes, success "
+                f"{wins}/{args.episodes} = {100 * rate:.1f}% ({truncated} "
+                f"truncated) in {fmt_duration(time.perf_counter() - started)}"
+            )
+            save_result(
+                RUN_ROOT / tag,
+                {
+                    "tag": tag,
+                    "checkpoint": path.name,
+                    "scene": args.scene,
+                    "network": args.network,
+                "weights": args.weights,
+                    "mode": args.mode,
+                    "greedy": not args.sample,
+                    "episodes": args.episodes,
+                    "seed": args.seed,
+                    "success": wins,
+                    "success_rate": rate,
+                    "truncated": truncated,
+                    "checkpoint_missing": len(missing),
+                    "checkpoint_unexpected": len(unexpected),
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
+
+        spread = stdev(per_tag) if len(per_tag) > 1 else 0.0
+        sem = spread / (len(per_tag) ** 0.5) if len(per_tag) > 1 else 0.0
+        ci = t_critical(len(per_tag)) * sem if len(per_tag) > 1 else 0.0
         logger.info(
-            f"{path.name}: randomized episodes, success {wins}/{args.episodes} = "
-            f"{100 * rate:.1f}% ({truncated} truncated) in "
-            f"{fmt_duration(time.perf_counter() - started)}"
+            f"across {len(per_tag)} tag(s): {100 * mean(per_tag):.2f}% "
+            f"± {100 * spread:.2f} (1 SD over seeds)"
+            + (f", 95% CI ± {100 * ci:.2f}" if len(per_tag) > 1 else "")
         )
-        save_result(
-            RUN_ROOT / args.tag[0],
-            {
-                "tag": args.tag[0],
-                "checkpoint": path.name,
-                "scene": args.scene,
+        save_summary(
+            network=args.network,
+            payload={
                 "network": args.network,
+                "weights": args.weights,
+                "scene": args.scene,
                 "mode": args.mode,
                 "greedy": not args.sample,
-                "episodes": args.episodes,
-                "seed": args.seed,
-                "success": wins,
-                "success_rate": rate,
-                "truncated": truncated,
-                "checkpoint_missing": len(missing),
-                "checkpoint_unexpected": len(unexpected),
+                "checkpoints": args.ckp,
+                "episodes_per_seed": args.episodes,
+                "episode_seed": args.seed,
+                "n_seeds": len(per_tag),
+                "tags": args.tag,
+                "success_rate_per_seed": per_tag,
+                "mean": mean(per_tag),
+                "std": spread,
+                "sem": sem,
+                "ci95": ci,
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
             },
         )
@@ -180,7 +279,9 @@ def main():
     for tag in args.tag:
         path = find_checkpoint(RUN_ROOT / tag, args.ckp)
         checkpoint = torch.load(path, map_location=hardware.device, weights_only=False)
-        missing, unexpected = heca.learner.network.upgrade(checkpoint["network"])
+        missing, unexpected = heca.learner.network.upgrade(
+            weight_key(checkpoint, args.weights)
+        )
         if missing or unexpected:
             logger.warning(
                 f"  {tag}: checkpoint mismatch, {len(missing)} missing, "
@@ -226,6 +327,7 @@ def main():
                 "checkpoint": path.name,
                 "scene": args.scene,
                 "network": args.network,
+                "weights": args.weights,
                 "mode": args.mode,
                 "greedy": not args.sample,
                 "per_task": args.per_task,
@@ -252,10 +354,35 @@ def main():
         )
 
     spread = stdev(per_tag) if len(per_tag) > 1 else 0.0
+    sem = spread / (len(per_tag) ** 0.5) if len(per_tag) > 1 else 0.0
+    ci = t_critical(len(per_tag)) * sem if len(per_tag) > 1 else 0.0
     logger.info(
-        f"across {len(per_tag)} tag(s): {100 * mean(per_tag):.1f}% "
-        f"+/- {100 * spread:.1f} (mean +/- std over tags) in "
-        f"{fmt_duration(time.perf_counter() - started)}"
+        f"across {len(per_tag)} tag(s): {100 * mean(per_tag):.2f}% "
+        f"± {100 * spread:.2f} (1 SD over seeds)"
+        + (f", 95% CI ± {100 * ci:.2f}" if len(per_tag) > 1 else "")
+        + f" in {fmt_duration(time.perf_counter() - started)}"
+    )
+    save_summary(
+        network=args.network,
+        payload={
+            "network": args.network,
+            "scene": args.scene,
+            "mode": args.mode,
+            "greedy": not args.sample,
+            "checkpoints": args.ckp,
+            "per_task": args.per_task,
+            "epochs": args.epochs,
+            "episodes_per_seed": sum(counts),
+            "episode_seed": args.seed,
+            "n_seeds": len(per_tag),
+            "tags": args.tag,
+            "success_rate_per_seed": per_tag,
+            "mean": mean(per_tag),
+            "std": spread,
+            "sem": sem,
+            "ci95": ci,
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+        },
     )
 
 

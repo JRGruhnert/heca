@@ -98,6 +98,8 @@ class Heca(Configurable):
     def sample(self) -> tuple[DCScene, DCScene]:
         (x, ix), (y, iy) = self.scene.sample_task()
         self.graph.ns_option.reset_stats()
+        for agent in self.cfg.agents:
+            ExpertModel.get(agent).reset_tracking()
         logger.debug("New Episode")
         return x, y
 

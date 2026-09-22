@@ -10,7 +10,7 @@
 # from heca.utils.area import Area
 
 # from calvin_env_modified.envs.observation import CalvinEnvObservation
-# from tapas_gmm_modified.env.calvin import Calvin, CalvinConfig
+# from tapas_gmm.env.calvin import Calvin, CalvinConfig
 
 
 # @dataclass(kw_only=True)

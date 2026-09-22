@@ -5,12 +5,11 @@ from statistics import mean
 
 import numpy as np
 import torch
-import wandb
 import matplotlib
 
 from heca.graphs.graph import SubgoalMode
 from heca.heca_gnn.network import Network
-from scripts.common.helper import fmt_duration
+from scripts.common.helper import fmt_duration, generate_clients
 
 matplotlib.use("Agg")
 
@@ -31,7 +30,7 @@ DEFAULTS: dict[str, object] = {
     "scene": "scene0",
     "smode": SubgoalMode.BOTH,
     "wandb": True,
-    "batch": 500,
+    "batch": 1000,
     "repeats": 3,
     "gt": True,
     "virtual": True,
@@ -74,41 +73,6 @@ def get_args() -> Iterator[argparse.Namespace]:
             run_fields = dict(fields)
             run_fields["seed"] = i
             yield argparse.Namespace(**run_fields)
-
-
-def generate_clients(
-    tag: str,
-    group: str,
-    network: Network.Config,
-    scene: str,
-    agents: list[ExpertModel.Config],
-    smode: SubgoalMode,
-    inference: bool,
-    use_wandb: bool,
-    virtual: bool,
-    reload: bool,
-    use_gt: bool,
-    n_batch: int,
-) -> Heca.Config:
-    wandb = logger.WandBConfig(enabled=use_wandb)
-    heca = Heca.Config(
-        agents=agents,
-        learner=PPO.Config(
-            tag=f"{scene}_{tag}",
-            group=group,
-            network=network,
-            wandb=wandb,
-            max_update=n_batch,
-            lr_annealing=False,
-        ),
-        visualize=False,
-        inference=inference,
-        virtual=virtual,
-        reload=reload,
-        use_gt=use_gt,
-        smode=smode,
-    )
-    return heca
 
 
 class SuccessTracker:
@@ -163,12 +127,12 @@ def main():
         torch.manual_seed(args.seed)
         np.random.seed(args.seed)
 
-        exp = generate_clients(
+        exps, _ = generate_clients(
             generate_tag(args),
             generate_group(args),
             conf.networks.get(args.network),
-            args.scene,
-            agents=find_scene_models(args.scene),
+            federated=False,
+            clients={str(args.scene): find_scene_models(args.scene)},
             inference=args.inference,
             virtual=args.virtual,
             use_wandb=args.wandb,
@@ -177,22 +141,31 @@ def main():
             smode=args.smode,
             n_batch=args.batch,
         )
+        exp = exps[0]
         tracker = SuccessTracker()
-        run(Heca.get(exp), args.batch, on_update=tracker.update)
+        agent = Heca.get(exp)
+        failed = True
+        try:
+            run(agent, args.batch, on_update=tracker.update)
 
-        if tracker.ema is None or tracker.best is None:
-            logger.warning(
-                f"  [{i}/{len(planned)}] {generate_tag(args)} logged no {SUCCESS}"
-            )
-        else:
-            logger.info(
-                f"  [{i}/{len(planned)}] {generate_tag(args)}: "
-                f"success ema({EMA_DECAY}) = {tracker.ema:.4f} | "
-                f"max = {tracker.best:.4f} over {tracker.updates} update(s)"
-            )
-            if args.wandb and wandb.run is not None:
-                wandb.run.summary[f"success/ema{EMA_DECAY}"] = tracker.ema
-                wandb.run.summary["success/max"] = tracker.best
+            if tracker.ema is None or tracker.best is None:
+                logger.warning(
+                    f"  [{i}/{len(planned)}] {generate_tag(args)} logged no {SUCCESS}"
+                )
+            else:
+                logger.info(
+                    f"  [{i}/{len(planned)}] {generate_tag(args)}: "
+                    f"success ema({EMA_DECAY}) = {tracker.ema:.4f} | "
+                    f"max = {tracker.best:.4f} over {tracker.updates} update(s)"
+                )
+                if agent.learner.run is not None:
+                    agent.learner.run.summary[f"success/ema{EMA_DECAY}"] = tracker.ema
+                    agent.learner.run.summary["success/max"] = tracker.best
+            failed = False
+        finally:
+            if agent:
+                # exit_code=1 marks a crashed run instead of a finished one
+                agent.learner.finish(exit_code=1 if failed else 0)
 
         durations.append(time.perf_counter() - started)
         elapsed = time.perf_counter() - sweep_start

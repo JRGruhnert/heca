@@ -1,6 +1,6 @@
 from heca.heca_gnn.network import Network
 
-# virtual
+# LOCAL
 a0 = Network.Config()
 a1 = Network.Config(goal_conditioning="hyperedge")
 a2 = Network.Config(use_condition_gat=True)
@@ -11,16 +11,8 @@ a6 = Network.Config(use_memory=True)
 a7 = Network.Config(goal_conditioning="hyperedge", use_memory=True)
 a8 = Network.Config(use_statistics=True)
 a9 = Network.Config(goal_conditioning="hyperedge", use_statistics=True)
-
-# on best model with noise (0.0 ,0.2, 0.4, 0.6)
-c0 = Network.Config()
-
-# with (real models) GT
-d0 = Network.Config()
-
-# with (real models) VISUAL
-e0 = Network.Config()
-
+a10 = Network.Config()  # entity relations layer
+a11 = Network.Config(goal_conditioning="hyperedge")  # entity relations layer
 # FEDERATED
 
 # special on visual (best of all runs at the end)
@@ -31,7 +23,32 @@ sync = ("root",)  # federate only the encoder/root
 sync = ("!critic_head",)  # keep the value head local only
 
 
-NETWORK_NAMES = ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9"]
+NETWORK_NAMES = [
+    "a0",
+    "a1",
+    "a2",
+    "a3",
+    "a4",
+    "a5",
+    "a6",
+    "a7",
+    "a8",
+    "a9",
+    # "a10",
+    # "a11",
+    # "x0",
+    # "x1",
+    # "x2",
+    # "x3",
+    # "x4",
+    # "x5",
+    # "x6",
+    # "x7",
+    # "x8",
+    # "x9",
+    # "x10",
+    # "x11",
+]
 
 CONFIGS: dict[str, Network.Config] = {name: globals()[name] for name in NETWORK_NAMES}
 

@@ -494,37 +494,6 @@ class Graph:
         logger.info(f"Entities: {len(self.entities)}")
         logger.info(f"Entity Nodes: {len(self.ns_entity.items)}")
         logger.info(f"Option Nodes: {len(self.ns_option.items)}")
-        logger.info(f"StepMix Edges: {len(self.es_condition.edges)}")
-        logger.info(f"Summary Edges: {len(self.es_summary.edges)}")
-        logger.info(f"Tapas Edges: {len(self.es_translation.edges)}")
-
-        # Optionally log node details
-        entity_lines = []
-        for key, idx in self.ns_entity.index.items():
-            node = self.ns_entity.items[idx]
-            entity_lines.append(f"{idx}:\t\t{node.entity}\t{key}")
-        logger.debug(f"Entity Nodes:\n" + "\n".join(entity_lines))
-
-        option_lines = []
-        for key, idx in self.ns_option.index.items():
-            node = self.ns_option.items[idx]
-            option_lines.append(f"{idx}:\tagent={node.model.tag}\t\t{key}")
-        logger.debug(f"Option Nodes:\n" + "\n".join(option_lines))
-
-        stepmix_lines = []
-        for src, dst in list(self.es_condition.edges):
-            stepmix_lines.append(f"({src}->{dst})")
-        logger.info("StepMix edges:\n" + ", ".join(stepmix_lines))
-
-        tapas_lines = []
-        for src, dst in list(self.es_translation.edges):
-            tapas_lines.append(f"({src}->{dst})")
-        logger.info("Tapas edges:\n" + ", ".join(tapas_lines))
-
-        summary_lines = []
-        for src, dst in list(self.es_summary.edges):
-            summary_lines.append(f"({src}->{dst})")
-        logger.info("Summary edges:\n" + ", ".join(summary_lines))
 
     def _validate_export(self, data: HecaData) -> None:
         ent = data[self.ns_entity.type]

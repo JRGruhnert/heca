@@ -7,10 +7,10 @@ import numpy as np
 from dataclasses import dataclass, field
 from functools import cached_property
 from tensordict import TensorDict
-from tapas_gmm_modified.utils.robot_trajectory import RobotTrajectory
-from tapas_gmm_modified.policy.gmm import GMMPolicy, GMMPolicyConfig
-from tapas_gmm_modified.utils.observation import SceneObservation, dict_to_tensordict
-from tapas_gmm_modified.policy.models.tpgmm import (
+from tapas_gmm.utils.robot_trajectory import RobotTrajectory
+from tapas_gmm.policy.gmm import GMMPolicy, GMMPolicyConfig
+from tapas_gmm.utils.observation import SceneObservation, dict_to_tensordict
+from tapas_gmm.policy.models.tpgmm import (
     ModelType,
     FittingStage,
     InitStrategy,
@@ -53,6 +53,17 @@ def _hemisphere_quat_log_e_star(g, reg=1e-6):
 _rbd_mappings.quat_log_e = _hemisphere_quat_log_e
 _rbd_mappings.quat_log_e_star = _hemisphere_quat_log_e_star
 # --------------------------------------------------------------------------------
+
+
+class NoopVizEnv:
+    def publish_path(self, trajectory) -> None:
+        pass
+
+    def publish_frames(self, frame_trans, frame_quats) -> None:
+        pass
+
+
+VIZ_ENV = NoopVizEnv()
 
 
 class TapasExpert(ExpertModel):
@@ -103,6 +114,8 @@ class TapasExpert(ExpertModel):
                 invert_prediction_batch=False,
                 return_full_batch=True,
                 batch_predict_in_t_models=True,
+                topp_in_t_models=False,
+                per_segment=False,
             ),
         )
         repeat_actions: int = 0
@@ -151,10 +164,6 @@ class TapasExpert(ExpertModel):
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         self.policy = temp.to(device)
 
-    # Safety cap on predicted plan length. A degenerate HMM-cascade can yield a
-    # near-zero time step and produce a plan of ~1e5-1e6 actions, which would
-    # otherwise freeze the action-replay loop in _act (see "Product did not
-    # converge" warnings). Normal plans are ~40-200 steps.
     MAX_PLAN_STEPS: int = 2000
 
     def make_batch_prediction(
@@ -171,7 +180,9 @@ class TapasExpert(ExpertModel):
                 return None
             return prds  # type: ignore
         except Exception as e:
-            logger.debug(f"Error: {e}")
+            logger.warning(
+                f"{self.cfg.tag}: batch prediction failed: {type(e).__name__}: {e}"
+            )
             return None
 
     def make_prediction(self, x: SceneObservation) -> tuple[np.ndarray | None, bool]:  # type: ignore
@@ -180,7 +191,9 @@ class TapasExpert(ExpertModel):
             prds, info = self.policy.predict(x)  # type: ignore
             return prds, info["done"]  # type: ignore
         except Exception as e:
-            logger.debug(f"Error: {e}")
+            logger.warning(
+                f"{self.cfg.tag}: prediction failed: {type(e).__name__}: {e}"
+            )
             return None, True
 
     def _act(self, x, y):
@@ -202,13 +215,34 @@ class TapasExpert(ExpertModel):
             except StopIteration:
                 action = None
         if fb is None:  # nothing executed: prediction error
+            logger.warning(f"{self.cfg.tag}: nothing executed, prediction failed.")
             return x, SceneFeedback(
                 reward=0.0, terminal=True, truncated=False, budget=0.0
             )
         return z, fb
 
+    def _sync_policy(self) -> None:
+        policy = self.policy
+        model = self.model
+        policy._add_init_ee_pose_as_frame = model._demos.meta_data[
+            "add_init_ee_pose_as_frame"
+        ]
+        policy._add_world_frame = model._demos.meta_data["add_world_frame"]
+        policy._model_contains_rotation = model.add_rotation_component
+        policy._model_contains_time_dim = model.add_time_component
+        policy._model_contains_action_dim = model.add_action_component
+        policy._model_contains_gripper_action = model.add_gripper_action
+        policy._model_factorizes_action = model.action_as_orientation
+        if policy._time_based is None:
+            policy._time_based = policy._model_contains_time_dim
+        policy._local_marginals = model.get_frame_marginals(
+            time_based=policy._time_based
+        )
+
     def _get_prediction(self, x, y):
-        self.policy.reset_episode()
+        if self.policy._local_marginals is None and self.model.segment_gmms:
+            self._sync_policy()
+        self.policy.reset_episode(VIZ_ENV)
         quat0 = x.extras["ee_pose"][3:7] if self.cfg.pos_only else None
 
         def full_action(ee, gripper):
@@ -253,9 +287,9 @@ class TapasExpert(ExpertModel):
 
     def policy_path(self, path: Path) -> Path:
         if self._use_gt:
-            file_name = "policy_gt.pt"
+            file_name = "tapas_gt.pt"
         else:
-            file_name = "policy_img.pt"
+            file_name = "tapas_img.pt"
         return path / file_name
 
     def _save(self, path: Path):
@@ -296,13 +330,6 @@ class TapasExpert(ExpertModel):
         poses["ee_target"] = torch.tensor(dc_goal.extras["ee_pose"])
         object_poses = dict_to_tensordict(poses)
 
-        states = {l: dc_obs[l].tste for l in self.scene.entities}
-
-        for l in self.scene.entities:
-            states[f"{l}_target"] = dc_goal[l].tste
-        states["ee_target"] = torch.tensor(dc_goal.extras["gripper_state"])
-        object_states = dict_to_tensordict(states)
-
         action = torch.Tensor(dc_obs.extras["action"])
         reward = torch.Tensor(dc_obs.extras["reward"])
         joint_pos = torch.Tensor(dc_obs.extras["joint_pos"])
@@ -317,7 +344,6 @@ class TapasExpert(ExpertModel):
             ee_pose=ee_pose,
             gripper_state=gripper_state,
             object_poses=object_poses,
-            object_states=object_states,
             joint_pos=joint_pos,
             joint_vel=joint_vel,
             batch_size=torch.Size([]),
@@ -344,10 +370,11 @@ class TapasExpert(ExpertModel):
 
     @property
     def conditions_cache_path(self) -> Path:
-        name = "condition-gt.joblib" if self._use_gt else "condition-vis.joblib"
+        name = "conditions-gt.joblib" if self._use_gt else "conditions-vis.joblib"
         return self.load_dir(self.cfg) / name
 
     def fit_stage1(self, demos: Demos):
+        self.policy._local_marginals = None
         liks, avg_logliks = self.model.fit_trajectories(
             demos,
             init_strategy=InitStrategy.TIME_BASED,
@@ -357,6 +384,7 @@ class TapasExpert(ExpertModel):
         return liks, avg_logliks
 
     def fit_stage2(self, demos: Demos):
+        self.policy._local_marginals = None
         liks, avg_logliks = self.model.fit_trajectories(
             demos,
             fitting_actions=(FittingStage.EM_HMM,),
@@ -438,11 +466,7 @@ class TapasExpert(ExpertModel):
                 if self._use_gt:
                     td = self.dcscenes_to_tdtapas(demo_scenes)
                 else:
-                    demo_extracted: list[DCScene] = []
-                    for idx, td_img in enumerate(demos_images[0]):
-                        extracted = self.from_image(td_img)
-                        extr_scene = DCScene(extracted, demo_scenes[idx].extras)
-                        demo_extracted.append(extr_scene)
+                    demo_extracted = self.encode_episode(demos_images[0], demo_scenes)
                     td = self.dcscenes_to_tdtapas(demo_extracted)
 
                 vel = np.linalg.norm(td.action[:, :3].numpy().astype(float), axis=1)

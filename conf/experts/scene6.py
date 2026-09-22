@@ -68,9 +68,9 @@ faucet0_b_a = TapasExpert.Config(
     scene=OGScene6.Config(),
     gt_frames=[
         ["ee_init", "faucet0"],
+        ["faucet0"],
         ["faucet0", "button0", "button1"],
-        ["faucet0", "button0", "button1"],
-        ["faucet0", "button0", "button1"],
+        ["faucet0"],
         ["faucet0", "ee_target"],
     ],
     segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20],
@@ -125,7 +125,7 @@ slider0_a_b = TapasExpert.Config(
         ["slider0", "ee_target"],
     ],
     segment_ids=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
-    fix_bimodal=True,
+    fix_bimodal=False,
 )
 
 slider0_b_a = TapasExpert.Config(

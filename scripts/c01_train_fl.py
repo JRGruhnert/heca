@@ -10,15 +10,11 @@ import numpy as np
 import torch
 import matplotlib
 
-from heca.graphs.graph import SubgoalMode
-from heca.heca_gnn.network import Network
+from scripts.common.helper import generate_clients
 
 matplotlib.use("Agg")
 
 from heca.agents.heca import Heca
-from heca.experts.expert import ExpertModel
-from heca.learning.fppo import FPPO
-from heca.learning.ppo import PPO
 from heca.learning.server import FLServer
 from heca.misc import logger
 from heca.misc.interrupt import request_stop, stop_requested
@@ -29,69 +25,6 @@ from scripts.common.scenes import agents_by_scene
 import conf.networks
 
 GRACE_SECONDS = 10.0
-
-
-def generate_clients(
-    tag: str,
-    group: str,
-    network: Network.Config,
-    clients: dict[str, list[ExpertModel.Config]],
-    smode: SubgoalMode,
-    inference: bool,
-    federated: bool,
-    use_wandb: bool,
-    virtual: bool,
-    reload: bool,
-    use_gt: bool,
-    n_batch: int,
-):
-    wandb = logger.WandBConfig(enabled=use_wandb)
-    hecas = []
-    server = None
-    if federated:
-        server_cfg = FLServer.Config(tag=tag, network=network)
-        server = FLServer.get(server_cfg)
-        for scene, agents in clients.items():
-            heca = Heca.Config(
-                agents=agents,
-                learner=FPPO.Config(
-                    tag=f"{scene}_{tag}",
-                    group=group,
-                    network=network,
-                    server=server_cfg,
-                    wandb=wandb,
-                    max_update=n_batch,
-                    lr_annealing=False,
-                ),
-                visualize=False,
-                inference=inference,
-                virtual=virtual,
-                reload=reload,
-                use_gt=use_gt,
-                smode=smode,
-            )
-            hecas.append(heca)
-    else:
-        for scene, agents in clients.items():
-            heca = Heca.Config(
-                agents=agents,
-                learner=PPO.Config(
-                    tag=f"{scene}_{tag}",
-                    group=group,
-                    network=network,
-                    wandb=wandb,
-                    max_update=n_batch,
-                    lr_annealing=False,
-                ),
-                visualize=False,
-                inference=inference,
-                virtual=virtual,
-                reload=reload,
-                use_gt=use_gt,
-                smode=smode,
-            )
-            hecas.append(heca)
-    return hecas, server
 
 
 def train(
@@ -188,6 +121,9 @@ def main():
         use_gt=args.gt,
         smode=args.smode,
         n_batch=args.batch,
+        method=args.method,
+        personal_coef=args.personal_coef,
+        mu=args.mu,
     )
     train(exp, server, args.batch)
 

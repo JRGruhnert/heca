@@ -71,23 +71,40 @@ class PPO(Learner):
         adv, rtn = self.buffer.compute_advantages()
 
         self._mini_batch_loop(adv, rtn)
+        self._anneal()
 
-        if self.cfg.lr_annealing:
-            lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
-            for pg in self.optim.param_groups:
-                pg["lr"] = lr
+    def _anneal(self, optim: torch.optim.Optimizer | None = None):
+        """Learning-rate schedule for ``optim`` (defaults to the local one)."""
+        if not self.cfg.lr_annealing:
+            return
+        optim = self.optim if optim is None else optim
+        lr = self.cfg.lr * (1.0 - self.current_update / self.cfg.max_update)
+        for pg in optim.param_groups:
+            pg["lr"] = lr
 
     def _fedprox_term(self) -> torch.Tensor:
         return torch.tensor(0.0, device=hardware.device)
 
-    def _mini_batch_loop(self, adv: torch.Tensor, rtn: torch.Tensor):
+    def _mini_batch_loop(
+        self,
+        adv: torch.Tensor,
+        rtn: torch.Tensor,
+        net: Network | None = None,
+        optim: torch.optim.Optimizer | None = None,
+        penalty=None,
+        prefix: str = "train/",
+        penalty_key: str = "fedprox_loss",
+    ):
+        net = self.network if net is None else net
+        optim = self.optim if optim is None else optim
+        penalty_fn = self._fedprox_term if penalty is None else penalty
         old_data = self.buffer.data
         old_actions = self.buffer.actions.detach().squeeze(-1)
         old_logprobs = self.buffer.logprobs.detach().squeeze(-1)
         old_values = self.buffer.values.detach().squeeze(-1)
         N = len(old_data)
 
-        use_chunked = self.network.cfg.use_memory
+        use_chunked = net.cfg.use_memory
         if use_chunked:
             terminals = [
                 t or tr for t, tr in zip(self.buffer.terminals, self.buffer.truncates)
@@ -101,7 +118,7 @@ class PPO(Learner):
         total_approx_kl = 0.0
         total_clip_fraction = 0.0
         total_loss = 0.0
-        total_fedprox_loss = 0.0
+        total_penalty = 0.0
         num_minibatches = 0
 
         kl_stop = False
@@ -138,12 +155,12 @@ class PPO(Learner):
                     flat = [i for seg in mb_chunks for i in seg]
                     mb_idx = torch.tensor(flat, dtype=torch.long)
                     logprobs, state_values, entropies = score_chunks(
-                        self.network, mb_chunks, old_data, old_actions
+                        net, mb_chunks, old_data, old_actions
                     )
                 else:
                     mb_idx = torch.tensor(mb, dtype=torch.long)
                     mb_data = [old_data[i] for i in mb]
-                    logprobs, state_values, entropies = self.network.evaluate(
+                    logprobs, state_values, entropies = net.evaluate(
                         mb_data, old_actions[mb_idx]
                     )
                 entropy = entropies.mean()
@@ -186,19 +203,19 @@ class PPO(Learner):
                     - self.cfg.entropy_coef * entropy
                 )
 
-                fedprox = self._fedprox_term()
-                loss = loss + fedprox
+                penalty_value = penalty_fn()
+                loss = loss + penalty_value
 
                 ev_values.append(state_values.detach().reshape(-1))
                 ev_returns.append(mb_rtn.detach().reshape(-1))
 
                 # Gradient step
-                self.optim.zero_grad()
+                optim.zero_grad()
                 loss.mean().backward()
 
-                clip_grad_norm_(self.network.parameters(), self.cfg.max_grad_norm)
+                clip_grad_norm_(net.parameters(), self.cfg.max_grad_norm)
 
-                self.optim.step()
+                optim.step()
 
                 # KL early stopping
                 with torch.no_grad():
@@ -213,7 +230,7 @@ class PPO(Learner):
                     total_approx_kl += approx_kl.item()
                     total_clip_fraction += clip_fraction.item()
                     total_loss += loss.mean().item()
-                    total_fedprox_loss += fedprox.item()
+                    total_penalty += penalty_value.item()
                     num_minibatches += 1
 
                     if (
@@ -239,14 +256,14 @@ class PPO(Learner):
 
         self.metrics.update(
             {
-                "train/policy_loss": total_policy_loss / num_minibatches,
-                "train/value_loss": total_value_loss / num_minibatches,
-                "train/entropy": total_entropy / num_minibatches,
-                "train/approx_kl": total_approx_kl / num_minibatches,
-                "train/clip_frac": total_clip_fraction / num_minibatches,
-                "train/total_loss": total_loss / num_minibatches,
-                "train/fedprox_loss": total_fedprox_loss / num_minibatches,
-                "train/expl_var": explained_var,
-                "train/lr": self.optim.param_groups[0]["lr"],
+                f"{prefix}policy_loss": total_policy_loss / num_minibatches,
+                f"{prefix}value_loss": total_value_loss / num_minibatches,
+                f"{prefix}entropy": total_entropy / num_minibatches,
+                f"{prefix}approx_kl": total_approx_kl / num_minibatches,
+                f"{prefix}clip_frac": total_clip_fraction / num_minibatches,
+                f"{prefix}total_loss": total_loss / num_minibatches,
+                f"{prefix}{penalty_key}": total_penalty / num_minibatches,
+                f"{prefix}expl_var": explained_var,
+                f"{prefix}lr": optim.param_groups[0]["lr"],
             }
         )

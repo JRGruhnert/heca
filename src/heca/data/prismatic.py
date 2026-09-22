@@ -9,6 +9,7 @@ from heca.data.entity import Entity
 
 class PrismaticEntity(Entity):
     BLOCKS: ClassVar[tuple[str, ...]] = ("state", "pos", "rot", "extra")
+    REFERENCE_NAMES: ClassVar[tuple[str, ...]] = ("min", "max")
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
@@ -39,6 +40,21 @@ class PrismaticEntity(Entity):
     @property
     def extra_sigma(self) -> np.ndarray:
         return np.full(1, self.cfg.sca_sigma)
+
+    def extra_from_references(
+        self, label: str, positions: dict[str, np.ndarray]
+    ) -> np.ndarray:
+        axis = np.asarray(positions["max"], dtype=np.float64) - np.asarray(
+            positions["min"], dtype=np.float64
+        )
+        span = float(np.linalg.norm(axis))
+        if span <= 0.0:
+            raise ValueError
+        current = np.asarray(positions["current"], dtype=np.float64) - np.asarray(
+            positions["min"], dtype=np.float64
+        )
+        fraction = float(np.dot(current, axis)) / span**2
+        return np.clip(np.array([2.0 * fraction - 1.0]), -1.0, 1.0)
 
     def env_state_value(
         self, label: str, x: DCScene, unnormalize_pos=None

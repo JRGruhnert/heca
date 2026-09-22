@@ -56,7 +56,39 @@ def add_federated_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--federated",
         action="store_true",
-        help="Federated (FPPO) or plain (PPO) training.",
+        help="Federated (FPPO/FedProxPPO/DittoPPO) or plain (PPO) training.",
+    )
+
+
+def add_method_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--method",
+        choices=("fedavg", "fedprox", "ditto"),
+        default="fedprox",
+        help="Federated method: fedavg (plain aggregation, no penalty), fedprox "
+        "(proximal term mu on the shared model) or ditto (shared model plus a "
+        "personalized local model, lambda). Only applies with --federated.",
+    )
+
+
+def add_personal_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--personal-coef",
+        type=float,
+        default=0.1,
+        help="Ditto's lambda: strength of the pull of the personal model "
+        "towards the shared model (1e-2..1 is the paper's range, negative or 0 "
+        "disables personalization).",
+    )
+
+
+def add_mu_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--mu",
+        type=float,
+        default=0.01,
+        help="FedProx's proximal coefficient for the shared model (ignored by "
+        "--method fedavg; ditto defaults to 0 unless you pass it).",
     )
 
 
@@ -64,7 +96,8 @@ def add_use_gt_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--gt",
         action="store_true",
-        help="Use ground-truth observations (default: true).",
+        help="Use ground-truth observations. Off unless passed, which selects the "
+        "image variant (tapas_img.pt / conditions-vis.joblib).",
     )
 
 
@@ -123,6 +156,9 @@ def add_seed_argument(parser: argparse.ArgumentParser):
 def add_heca_arguments(parser: argparse.ArgumentParser):
     add_network_argument(parser)
     add_federated_argument(parser)
+    add_method_argument(parser)
+    add_personal_argument(parser)
+    add_mu_argument(parser)
     add_wandb_argument(parser)
     add_use_gt_argument(parser)
     add_batch_argument(parser)
@@ -155,6 +191,8 @@ def _base_tag(args: argparse.Namespace) -> str:
     final_tag += "gt" if args.gt else ""
     final_tag += "-"
     final_tag += "virt" if args.virtual else ""
+    if args.federated and getattr(args, "method", "fedprox") == "ditto":
+        final_tag += f"-ditto{args.personal_coef:g}"
     return final_tag
 
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import torch
 import copy
 import wandb
+from wandb.wandb_run import Run
 from thop import profile
 from torch import nn
 from torch.distributions import Categorical
@@ -12,7 +13,7 @@ from torch_geometric.explain import Explainer, CaptumExplainer
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
-from heca.misc.base import Persistable
+from heca.misc.base import Persistable, latest_checkpoint
 from heca.data.entity import Entity
 from heca.graphs.data import HecaData, TrunkMemory
 from heca.heca_gnn.network import Network, NetworkOutput
@@ -81,8 +82,8 @@ class Learner(Persistable):
         max_update: int
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
-        # Wandb group: the seed-independent name shared by all repeats, so they
-        # can be fetched together and plotted with a confidence interval.
+        # Misc
+        save_interval: int = 50
         group: str = ""
 
     def __init__(self, cfg: Config):
@@ -127,7 +128,11 @@ class Learner(Persistable):
     def sync(self):
         """Post-update synchronization hook. Overridden by FPPO."""
         self._sync_inference()
-        if self.current_update % 50 == 0:
+        self._periodic_save()
+
+    def _periodic_save(self):
+        interval = self.cfg.save_interval
+        if interval > 0 and self.current_update % interval == 0:
             self.save()
 
     def learn(self):
@@ -167,6 +172,7 @@ class Learner(Persistable):
         return int(action)
 
     def _init_wandb(self):
+        self._wandb_run: Run | None = None
         if not self.cfg.wandb.enabled:
             return
 
@@ -209,6 +215,15 @@ class Learner(Persistable):
                 log_graph=True,
             )
 
+    @property
+    def run(self) -> Run | None:
+        return self._wandb_run
+
+    def finish(self, exit_code: int | None = None):
+        if self._wandb_run is None:
+            return
+        self._wandb_run.finish(exit_code=exit_code)
+
     def training_log(self):
         display_metrics = {k.removeprefix("train/"): v for k, v in self.metrics.items()}
         metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in display_metrics.items()])
@@ -236,31 +251,22 @@ class Learner(Persistable):
             self._mem_next = {}
         return False
 
-    def _save(self, path: Path):
-        filepath = path / f"ckp_{self.current_update}.pt"
-
-        checkpoint = {
+    def _checkpoint(self) -> dict:
+        return {
             "network": self.network.state_dict(),
             "optimizer": self.optim.state_dict(),
+            "current_update": self.current_update,
             "reward_normalizer": {
                 "mean": self.normalizer.mean,
                 "var": self.normalizer.var,
                 "count": self.normalizer.count,
             },
         }
-        torch.save(checkpoint, filepath)
-        logger.info(f"Saved full checkpoint to {filepath}")
 
-    def _load(self, path: Path):
-        filepath = path / "checkpoint.pt"
-        if not filepath.exists():
-            logger.warning(f"No checkpoint found at {filepath}. Starting from scratch.")
-            return
-
-        checkpoint = torch.load(filepath, map_location=hardware.device)
-
+    def _restore(self, checkpoint: dict):
         self.network.load_state_dict(checkpoint["network"])
         self.optim.load_state_dict(checkpoint["optimizer"])
+        self.current_update = int(checkpoint["current_update"])
 
         # Restore per-tag normalizers
         if "reward_normalizer" in checkpoint:
@@ -270,6 +276,26 @@ class Learner(Persistable):
             logger.info(f"Restored normalizer")
 
         self._sync_inference()
+
+    def _save(self, path: Path):
+        filepath = path / f"ckp_{self.current_update}.pt"
+        torch.save(self._checkpoint(), filepath)
+        logger.info(f"Saved full checkpoint to {filepath}")
+
+    def _load(self, path: Path):
+        filepath = latest_checkpoint(path, "ckp")
+        if filepath is None:
+            logger.warning(f"No checkpoint found at {path}. Starting from scratch.")
+            return
+
+        checkpoint = torch.load(
+            filepath, map_location=hardware.device, weights_only=False
+        )
+        if "current_update" not in checkpoint:
+            # checkpoints written before the payload carried it
+            checkpoint["current_update"] = int(filepath.stem.rsplit("_", 1)[-1])
+
+        self._restore(checkpoint)
         logger.info(
             f"Loaded full checkpoint from {filepath} at update {self.current_update}"
         )

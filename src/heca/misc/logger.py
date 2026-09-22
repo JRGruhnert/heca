@@ -16,7 +16,7 @@ logger.remove()
 
 
 def exclude_external(record):
-    suppressed = ["riepybdlib", "tapas_gmm_modified", "ogbench"]
+    suppressed = ["riepybdlib", "tapas_gmm", "ogbench"]
     return not any(name in record["name"] for name in suppressed)
 
 
