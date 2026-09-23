@@ -127,6 +127,8 @@ class Network(Configurable, nn.Module):
         self.actor_net = ActorNetwork(cfg.feature_dim, cfg.use_memory)
         self.critic_net = CriticNetwork(cfg.feature_dim, cfg.use_memory)
 
+        self.to(hardware.device)
+
     def key_for(self, role: str, segment: str) -> str:
         if segment == "root":
             modules = self.roots

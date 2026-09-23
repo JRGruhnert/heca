@@ -261,7 +261,10 @@ def evaluate_one(
     gt: bool,
 ) -> Counter:
     """Evaluate one model, persist its result, re-plot the scene chart."""
-    model = ExpertModel.get(cfg).use_gt(gt)
+    # select the variant first: `load()` picks tapas_gt.pt or tapas_img.pt from it
+    model = ExpertModel.get(cfg, auto_load=False)
+    model.use_gt(gt)
+    model.load()
     counts = evaluate_model(model, model.scene, episodes, max_tries)
 
     json_path = results_path(scene_cfg)

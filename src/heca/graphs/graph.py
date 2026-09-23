@@ -120,7 +120,9 @@ class Graph:
         data[self.es_translation.type].edge_index = self.es_translation.edge_index
 
         self._validate_export(data)
-        return data.to(device=hardware.device.type)
+        # the full device, not just `.type`: "cuda" without an index silently means
+        # "whatever torch.cuda.current_device() is", which ignores the per-rank pin
+        return data.to(device=hardware.device)
 
     def jitter_offsets(self) -> dict[str, np.ndarray]:
         limit = self.position_jitter
