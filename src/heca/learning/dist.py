@@ -1,5 +1,6 @@
 import os
 import socket
+import tempfile
 from datetime import timedelta
 
 import torch
@@ -91,6 +92,29 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def use_pyg_home(rank: int) -> None:
+    """Point this process at its own PyG template cache.
+
+    PyG renders jinja templates for ``propagate``/``edge_update`` on first use into
+    a *per-user* directory (``$PYG_HOME``, default ``~/.cache/pyg/<tmp_dirname>/``)
+    and imports the rendered file straight after writing it. Every rank of a launch
+    writes the same path, so a rank can exec a file that another rank has just
+    truncated (or a half-written one) and dies with
+
+        AttributeError: module
+        'torch_geometric.nn.conv.gatv2_conv_GATv2Conv_edge_updater' has no
+        attribute 'edge_updater'
+
+    One directory per rank, under node-local tmp, removes the sharing entirely and
+    keeps the writes off a networked home directory. ``get_home_dir()`` reads the
+    environment on every call, so setting it here (before any layer is built) is
+    enough.
+    """
+    os.environ["PYG_HOME"] = os.path.join(
+        tempfile.gettempdir(), "heca_pyg", f"rank{rank}"
+    )
+
+
 def _entry(
     rank: int, worker, world_size: int, args: tuple, port: int, n_gpus: int
 ) -> None:
@@ -99,6 +123,7 @@ def _entry(
     # together race onto the same card and the split differs between runs.
     if n_gpus > 1:
         hardware.use_device(rank % n_gpus)
+    use_pyg_home(rank)
     init(rank, world_size, port)
     try:
         worker(rank, world_size, *args)
@@ -113,6 +138,7 @@ def spawn(worker, world_size: int, args: tuple = ()) -> None:
     path covers single- and multi-client training.
     """
     if world_size <= 1:
+        use_pyg_home(0)
         worker(0, 1, *args)
         return
     n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
