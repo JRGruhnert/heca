@@ -5,6 +5,8 @@ from datetime import timedelta
 import torch
 import torch.distributed as dist
 
+from heca.misc import hardware, logger
+
 DEFAULT_PORT = 29500
 
 
@@ -89,7 +91,14 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _entry(rank: int, worker, world_size: int, args: tuple, port: int) -> None:
+def _entry(
+    rank: int, worker, world_size: int, args: tuple, port: int, n_gpus: int
+) -> None:
+    # Give every rank a fixed GPU. Without this, each process independently picks
+    # "the freest GPU" at import time (heca.misc.hardware), so ranks started
+    # together race onto the same card and the split differs between runs.
+    if n_gpus > 1:
+        hardware.use_device(rank % n_gpus)
     init(rank, world_size, port)
     try:
         worker(rank, world_size, *args)
@@ -106,9 +115,15 @@ def spawn(worker, world_size: int, args: tuple = ()) -> None:
     if world_size <= 1:
         worker(0, 1, *args)
         return
+    n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    if n_gpus > 1:
+        per_gpu = [rank % n_gpus for rank in range(world_size)]
+        counts = {gpu: per_gpu.count(gpu) for gpu in sorted(set(per_gpu))}
+        split = ", ".join(f"cuda:{gpu}x{count}" for gpu, count in counts.items())
+        logger.info(f"Assigning {world_size} ranks over {n_gpus} GPUs: {split}")
     torch.multiprocessing.spawn(
         _entry,
         nprocs=world_size,
-        args=(worker, world_size, args, _free_port()),
+        args=(worker, world_size, args, _free_port(), n_gpus),
         join=True,
     )

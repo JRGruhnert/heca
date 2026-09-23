@@ -27,8 +27,7 @@ from heca.experts.expert import ExpertModel
 from heca.data.pair import ConPair
 from heca.data.data import DCScene
 from heca.data.prismatic import PrismaticEntity
-from heca.misc import logger
-from heca.misc.hardware import device
+from heca.misc import hardware, logger
 from heca.scenes.scene import Scene, SceneFeedback
 from heca.utils.quaternion import Quaternion
 
@@ -187,7 +186,7 @@ class TapasExpert(ExpertModel):
         self.cfg = cfg
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
-        self.policy = temp.to(device)
+        self.policy = temp.to(hardware.device)
 
     MAX_PLAN_STEPS: int = 2000
 
@@ -298,7 +297,7 @@ class TapasExpert(ExpertModel):
         filepath = self.policy_path(path)
         if filepath.exists():
             self.policy.from_disk(str(filepath))
-            self.policy = self.policy.to(device)
+            self.policy = self.policy.to(hardware.device)
             logger.info(f"Loading tapas policy from: {filepath}")
         else:
             logger.warning(f"No tapas policy found at given path: {filepath}")
