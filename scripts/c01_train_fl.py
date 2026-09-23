@@ -5,7 +5,10 @@ import signal
 import numpy as np
 import torch
 import matplotlib
+import sys
+from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from heca.agents.heca import Heca
 from heca.learning import dist as pdist
 from heca.misc import logger
