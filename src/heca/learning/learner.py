@@ -10,6 +10,7 @@ from torch import nn
 from torch.distributions import Categorical
 from torch_geometric.explain import Explainer, CaptumExplainer
 
+from heca.learning import dist as pdist
 from heca.learning.buffers.fair_buffer import FairBuffer
 from heca.learning.reward_normalizer import RewardNormalizer
 from heca.misc import hardware, logger
@@ -132,6 +133,9 @@ class Learner(Persistable):
 
     def _periodic_save(self):
         interval = self.cfg.save_interval
+        if not pdist.is_main():
+            # every rank holds its own copy of the weights; only rank 0 writes
+            return
         if interval > 0 and self.current_update % interval == 0:
             self.save()
 

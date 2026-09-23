@@ -34,7 +34,6 @@ from scripts.common.args import (
     add_use_gt_argument,
     add_viewer_argument,
 )
-from scripts.common.plot_lock import PLOT_LOCK
 from scripts.common.scenes import agents_by_scene
 
 
@@ -201,9 +200,8 @@ def plot_scene(
     max_tries: int,
     episodes: int,
 ) -> Path:
-    """Stacked bar chart of per-attempt success rates (pyplot lock held)."""
-    with PLOT_LOCK:
-        return _plot_scene_impl(scene_tag, results, out_dir, max_tries, episodes)
+    """Stacked bar chart of per-attempt success rates."""
+    return _plot_scene_impl(scene_tag, results, out_dir, max_tries, episodes)
 
 
 def results_path(scene_cfg: Scene.Config) -> Path:

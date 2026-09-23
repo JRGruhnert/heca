@@ -4,21 +4,15 @@ from pathlib import Path
 from typing import ClassVar, TypeVar, cast
 
 from heca.misc import logger
+from heca.misc.paths import data_root
 
 C = TypeVar("C", bound="Configurable")
 R = TypeVar("R", bound="Registerable")
 P = TypeVar("P", bound="Persistable")
 
 
-def find_repo_root(start: Path) -> Path:
-    for p in (start, *start.parents):
-        if (p / "pyproject.toml").exists():
-            return p
-    raise RuntimeError("Could not find repository root")
-
-
 class Configurable(abc.ABC):
-    root: ClassVar[Path] = find_repo_root(Path(__file__).resolve()) / "data"
+    root: ClassVar[Path] = data_root()
     _config_registry: ClassVar[dict[type, type]] = {}
 
     @dataclass(kw_only=True)
@@ -174,6 +168,8 @@ class Persistable(Registerable, abc.ABC):
 
 # root / folder / label / tag
 # data / agents / tapas /
+
+logger.info(f"HECA data root: {Configurable.root}")
 
 
 def latest_checkpoint(path: Path, prefix: str) -> Path | None:

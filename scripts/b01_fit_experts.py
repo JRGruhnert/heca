@@ -1,9 +1,6 @@
 import argparse
-import os
 import signal
-import time
-import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import matplotlib
 
@@ -15,8 +12,8 @@ matplotlib.use("Agg")  # headless plotting
 import matplotlib.pyplot as plt
 
 from heca.experts.tapas import TapasExpert
+from heca.learning import dist as pdist
 from heca.misc import logger
-from heca.misc.interrupt import request_stop, stop_requested
 
 from scripts.b03_plot_tapas_models import evaluate_one
 from scripts.common.args import (
@@ -24,25 +21,20 @@ from scripts.common.args import (
     add_scene_argument,
     add_use_gt_argument,
 )
-from scripts.common.plot_lock import PLOT_LOCK
-from scripts.common.scenes import agents_by_scene
-
-GRACE_SECONDS = 10.0
+from scripts.common.scenes import agents_for_scene, scene_config, scene_tags
 
 
 def fit_tapas(expert: TapasExpert):
     demos = expert.load_demos()
     expert.fit_stage1(demos)
-    with PLOT_LOCK:
-        save_plots(expert, "fit_stage1")  # velocity-segmentation debug figures
-        expert.plot_stage1()
-        save_plots(expert, "stage1")
+    save_plots(expert, "fit_stage1")  # velocity-segmentation debug figures
+    expert.plot_stage1()
+    save_plots(expert, "stage1")
 
     expert.fit_stage2(demos)
-    with PLOT_LOCK:
-        save_plots(expert, "fit_stage2")
-        expert.plot_stage2()
-        save_plots(expert, "stage2")
+    save_plots(expert, "fit_stage2")
+    expert.plot_stage2()
+    save_plots(expert, "stage2")
 
     expert.save()
 
@@ -67,8 +59,6 @@ def pipeline_scene(
 ):
     """Run the full fit/evaluate pipeline for every model of one scene."""
     for cfg in models:
-        if stop_requested():
-            return
         logger.info(f"[{scene_cfg.tag}] === pipeline for {cfg.tag} ===")
         model = ExpertModel.get(cfg)
         model.use_gt(gt)
@@ -76,18 +66,6 @@ def pipeline_scene(
         fit_tapas(model)
         model.fit_conditions()
         evaluate_one(cfg, scene_cfg, episodes, max_tries, gt)
-
-
-def wait_for_workers(futures: list, timeout: float) -> bool:
-    deadline = time.monotonic() + timeout
-    try:
-        while time.monotonic() < deadline:
-            if all(f.done() for f in futures):
-                return True
-            time.sleep(0.05)
-    except KeyboardInterrupt:
-        pass
-    return False
 
 
 def main():
@@ -111,23 +89,35 @@ def main():
         "--jobs",
         type=int,
         default=0,
-        help="Max scenes fitted concurrently (0 = one thread per scene, 1 = sequential).",
+        help="Max scenes fitted concurrently (0 = one process per scene, 1 = sequential).",
     )
     args = parser.parse_args()
 
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt))
 
     jobs = []
-    for scene_cfg, models in agents_by_scene():
-        if args.scene and scene_cfg.tag != args.scene:
+    # filter on tags first, so a single-scene run imports only that scene
+    for tag in scene_tags():
+        if args.scene and tag != args.scene:
             continue
-        models = [m for m in models if not (args.model and m.tag != args.model)]
+        models = [
+            m
+            for m in agents_for_scene(tag)
+            if not (args.model and m.tag != args.model)
+        ]
         if models:
-            jobs.append((scene_cfg, models))
+            jobs.append((scene_config(tag), models))
+
+    if not jobs:
+        logger.error(
+            f"No scene/model matches the given filters "
+            f"(scene={args.scene!r}, model={args.model!r})."
+        )
+        raise SystemExit(1)
 
     workers = len(jobs) if args.jobs <= 0 else min(args.jobs, len(jobs))
-    logger.info(f"Running pipeline for {len(jobs)} scenes with {workers} worker(s).")
-    pool = ThreadPoolExecutor(max_workers=workers)
+    logger.info(f"Running pipeline for {len(jobs)} scenes with {workers} process(es).")
+    pool = ProcessPoolExecutor(max_workers=workers, initializer=pdist.pin_intra_op_threads)
     futures = [
         pool.submit(
             pipeline_scene, scene_cfg, models, args.gt, args.episodes, args.max_tries
@@ -135,30 +125,11 @@ def main():
         for scene_cfg, models in jobs
     ]
 
-    def request_shutdown():
-        request_stop()
-
     try:
         for future in as_completed(futures):
             future.result()
-    except KeyboardInterrupt:
-        request_shutdown()
-        pool.shutdown(wait=False, cancel_futures=True)
-        if not wait_for_workers(futures, GRACE_SECONDS):
-            logger.warning(
-                f"Workers still busy after {GRACE_SECONDS:.0f}s; forcing exit."
-            )
-            os._exit(130)
-        raise SystemExit(130)
-    except Exception:
-        request_shutdown()
-        pool.shutdown(wait=False, cancel_futures=True)
-        if not wait_for_workers(futures, GRACE_SECONDS):
-            traceback.print_exc()
-            logger.error("Workers did not stop in time; forcing exit.")
-            os._exit(1)
-        raise
     finally:
+        # the workers share this process group, so an interrupt reaches them too
         pool.shutdown(wait=False, cancel_futures=True)
 
 

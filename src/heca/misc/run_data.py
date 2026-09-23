@@ -4,11 +4,13 @@ import torch
 import numpy as np
 from pathlib import Path
 
-BASE_DATA_PATH = Path("data")
+from heca.misc.paths import data_root, output_root
+
+BASE_DATA_PATH = data_root()
 AGENT_PATH = BASE_DATA_PATH / "agents"
 ENTITIES_PATH = BASE_DATA_PATH / "entities"
 DEMOS_PATH = BASE_DATA_PATH / "demos"
-BASE_OUTPUT_PATH = Path("output")
+BASE_OUTPUT_PATH = output_root() / "output"
 RESULTS_PATH = BASE_OUTPUT_PATH / "plots"
 LOGS_PATH = BASE_OUTPUT_PATH / "logs"
 

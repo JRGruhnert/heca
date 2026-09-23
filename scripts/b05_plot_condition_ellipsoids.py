@@ -473,7 +473,7 @@ def main():
         available = [sc.tag for sc, _ in agents_by_scene()]
         hint = "none — are the scene modules commented out?"
         parser.error(
-            f"Scene {args.scene!r} not found in conf/scenes.SCENE_MODULES. "
+            f"Scene {args.scene!r} not found in conf/scenes.SCENE_TAGS. "
             f"Available scenes: {available or hint}"
         )
 

@@ -101,6 +101,16 @@ def add_use_gt_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_ranks_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--ranks",
+        type=int,
+        default=0,
+        help="Processes to train in (0 = one per client/scene). Ranks synchronize "
+        "with torch.distributed collectives.",
+    )
+
+
 def add_wandb_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--wandb",
@@ -169,6 +179,7 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_inference_argument(parser)
     add_reload_argument(parser)
     add_seed_argument(parser)
+    add_ranks_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:

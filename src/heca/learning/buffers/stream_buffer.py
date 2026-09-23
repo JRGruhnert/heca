@@ -63,10 +63,15 @@ class StreamBuffer(Buffer):
         """
         T = len(rewards)
         ratios = torch.exp(current_logprobs - behavior_logprobs)  # π / μ
-        advantages = torch.zeros(T)
-        returns = torch.zeros(T)
+        # on the values' device, which is where the loop writes into them
+        advantages = torch.zeros(
+            T, device=current_values.device, dtype=current_values.dtype
+        )
+        returns = torch.zeros(T, device=current_values.device, dtype=current_values.dtype)
         next_val = 0.0 if terminals[-1] else current_values[-1].item()
-        v_next = torch.tensor(next_val)
+        v_next = torch.tensor(
+            next_val, device=current_values.device, dtype=current_values.dtype
+        )
 
         for i in reversed(range(T)):
             rho = torch.clamp(ratios[i], max=1.0)

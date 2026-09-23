@@ -28,14 +28,15 @@ from heca.data.pair import ConPair
 from heca.data.data import DCScene
 from heca.data.prismatic import PrismaticEntity
 from heca.misc import logger
-from heca.misc.interrupt import stop_requested
 from heca.misc.hardware import device
 from heca.scenes.scene import Scene, SceneFeedback
 from heca.utils.quaternion import Quaternion
 
 import riepybdlib.mappings as _rbd_mappings
+import riepybdlib.statistics as _rbd_statistics
 
 _orig_quat_log_e = _rbd_mappings.quat_log_e
+_orig_gaussian_prob = _rbd_statistics.Gaussian.prob
 
 
 def _hemisphere_quat_log_e(g, reg=1e-6, arccos_func=_rbd_mappings.arccos_cont):
@@ -52,7 +53,31 @@ def _hemisphere_quat_log_e_star(g, reg=1e-6):
 
 _rbd_mappings.quat_log_e = _hemisphere_quat_log_e
 _rbd_mappings.quat_log_e_star = _hemisphere_quat_log_e_star
-# --------------------------------------------------------------------------------
+_RBD_PROB_FLOOR = 1e-8
+_rbd_prob_repairs = 0
+
+
+def _guarded_gaussian_prob(self, data, log=False):
+    global _rbd_prob_repairs
+    try:
+        return _orig_gaussian_prob(self, data, log=log)
+    except FloatingPointError:
+        sigma = np.asarray(self.sigma, dtype=float)
+        eigenvalues = np.linalg.eigvalsh(sigma)
+        shift = _RBD_PROB_FLOOR - float(eigenvalues.min())
+        if shift <= 0.0:
+            raise
+        self.sigma = sigma + np.eye(sigma.shape[0]) * shift
+        _rbd_prob_repairs += 1
+        if _rbd_prob_repairs <= 5:
+            logger.warning(
+                f"non-positive-definite covariance ({sigma.shape[0]}d, min eigenvalue "
+                f"{eigenvalues.min():.3e}) floored to {_RBD_PROB_FLOOR:g}"
+            )
+        return _orig_gaussian_prob(self, data, log=log)
+
+
+_rbd_statistics.Gaussian.prob = _guarded_gaussian_prob
 
 
 class NoopVizEnv:
@@ -204,10 +229,6 @@ class TapasExpert(ExpertModel):
         except StopIteration:
             action = None
         while action is not None:
-            if stop_requested():
-                return x, SceneFeedback(
-                    reward=0.0, terminal=True, truncated=True, budget=0.0
-                )
             tdscene, tdimage, fb = self.scene.step(action)
             z = self.make_scene(tdscene, tdimage)
             try:

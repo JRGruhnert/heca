@@ -8,6 +8,7 @@ import torch
 import matplotlib
 
 from heca.graphs.graph import SubgoalMode
+from heca.learning import dist as pdist
 from scripts.common.helper import fmt_duration, generate_clients
 
 matplotlib.use("Agg")
@@ -15,6 +16,7 @@ matplotlib.use("Agg")
 from heca.agents.heca import Heca
 from heca.misc import logger
 from scripts.common.args import add_heca_arguments, generate_tag, generate_group
+from scripts.common.scenes import scene_tags
 
 import conf.networks
 
@@ -23,26 +25,25 @@ EMA_DECAY = 0.99
 
 DEFAULTS: dict[str, object] = {
     "tag": "final",
-    "scene": "scene0",
+    "scene": None,  # None = every scene is a client (omit --scene for real FL)
     "smode": SubgoalMode.BOTH,
     "wandb": True,
     "batch": 1000,
     "repeats": 3,
     "gt": True,
     "virtual": True,
+    "federated": True,
+    "method": "fedprox",
 }
 
 RUNS: list[dict[str, object]] = [
     {"network": "a0"},
-    {"network": "a1"},
-    {"network": "a2"},
-    {"network": "a3"},
-    {"network": "a4"},
-    # {"network": "x5"},
-    # {"network": "x6"},
-    # {"network": "x7"},
-    # {"network": "x8"},
-    # {"network": "x9"},
+    # {"network": "a1"},
+    # {"network": "a2"},
+    # {"network": "a3"},
+    # {"network": "a4"},
+    # {"network": "a0", "method": "fedavg"},
+    # {"network": "a0", "method": "ditto", "personal_coef": 0.1, "mu": 0.0},
 ]
 
 
@@ -93,16 +94,76 @@ class SuccessTracker:
         self.updates += 1
 
 
-def run(agent: Heca, n_batch: int = 1000, on_update=None):
-    """Train ``n_batch`` updates; ``on_update`` sees the metrics of each one."""
+def selected_scenes(args) -> list[str]:
+    """The scene tags (one client each) this run trains on; imports nothing."""
+    return [tag for tag in scene_tags() if not args.scene or tag == args.scene]
+
+
+def train(agent: Heca, tracker: SuccessTracker, n_batch: int) -> int:
+    """Train one client for ``n_batch`` episodes; each syncs with its peers."""
     n = 0
     while n < n_batch:
         if agent.tick():
             n += 1
             agent.learner.sync()
-            if on_update is not None:
-                on_update(dict(agent.learner.metrics))
+            tracker.update(dict(agent.learner.metrics))
     return n
+
+
+def worker(rank: int, world_size: int, args, tag: str, group: str) -> None:
+    """One client, one process: the same run as before, minus the shared server."""
+    pdist.pin_intra_op_threads()
+    torch.manual_seed(args.seed + rank)
+    np.random.seed(args.seed + rank)
+
+    hecas = generate_clients(
+        tag,
+        group,
+        conf.networks.get(args.network),
+        selected_scenes(args),
+        federated=True,
+        method=args.method,
+        personal_coef=args.personal_coef,
+        mu=args.mu,
+        inference=args.inference,
+        virtual=args.virtual,
+        use_wandb=args.wandb,
+        reload=args.reload,
+        use_gt=args.gt,
+        smode=args.smode,
+        n_batch=args.batch,
+        rank=rank,
+        world_size=world_size,
+    )
+    agent = Heca.get(hecas[0])
+    tracker = SuccessTracker()
+    failed = True
+    try:
+        n = train(agent, tracker, args.batch)
+        failed = False
+    finally:
+        run_ = agent.learner.run
+        if run_ is not None and tracker.ema is not None and tracker.best is not None:
+            run_.summary[f"success/ema{EMA_DECAY}"] = tracker.ema
+            run_.summary["success/max"] = tracker.best
+        # exit_code=1 marks a crashed run instead of a finished one
+        agent.learner.finish(exit_code=1 if failed else 0)
+
+    scene = agent.learner.cfg.tag
+    if tracker.ema is None or tracker.best is None:
+        logger.warning(f"[{tag}] {scene} logged no {SUCCESS}")
+    else:
+        logger.info(
+            f"[{tag}] rank {rank}/{world_size} {scene}: {n} update(s), "
+            f"success ema({EMA_DECAY}) = {tracker.ema:.4f} | max = {tracker.best:.4f}"
+        )
+    ema = torch.tensor([tracker.ema if tracker.ema is not None else float("nan")])
+    ema = pdist.mean_tensors({"ema": ema})["ema"]
+    if pdist.is_main() and not ema.isnan():
+        logger.info(
+            f"[{tag}] {world_size} client(s): "
+            f"mean success ema({EMA_DECAY}) = {ema.item():.4f}"
+        )
 
 
 def main():
@@ -120,48 +181,18 @@ def main():
         logger.info(f"[{i}/{len(planned)}] starting {generate_tag(args)}")
         started = time.perf_counter()
 
-        torch.manual_seed(args.seed)
-        np.random.seed(args.seed)
-
-        exps = generate_clients(
-            generate_tag(args),
-            generate_group(args),
-            conf.networks.get(args.network),
-            federated=False,
-            scenes=[args.scene],
-            inference=args.inference,
-            virtual=args.virtual,
-            use_wandb=args.wandb,
-            reload=args.reload,
-            use_gt=args.gt,
-            smode=args.smode,
-            n_batch=args.batch,
+        scenes = selected_scenes(args)
+        n_ranks = args.ranks or len(scenes)
+        if n_ranks != len(scenes):
+            raise SystemExit(
+                f"--ranks {n_ranks} but {len(scenes)} clients; one process per "
+                "client is required. Pass --scene to train a single client."
+            )
+        pdist.spawn(
+            worker,
+            n_ranks,
+            args=(args, generate_tag(args), generate_group(args)),
         )
-        exp = exps[0]
-        tracker = SuccessTracker()
-        agent = Heca.get(exp)
-        failed = True
-        try:
-            run(agent, args.batch, on_update=tracker.update)
-
-            if tracker.ema is None or tracker.best is None:
-                logger.warning(
-                    f"  [{i}/{len(planned)}] {generate_tag(args)} logged no {SUCCESS}"
-                )
-            else:
-                logger.info(
-                    f"  [{i}/{len(planned)}] {generate_tag(args)}: "
-                    f"success ema({EMA_DECAY}) = {tracker.ema:.4f} | "
-                    f"max = {tracker.best:.4f} over {tracker.updates} update(s)"
-                )
-                if agent.learner.run is not None:
-                    agent.learner.run.summary[f"success/ema{EMA_DECAY}"] = tracker.ema
-                    agent.learner.run.summary["success/max"] = tracker.best
-            failed = False
-        finally:
-            if agent:
-                # exit_code=1 marks a crashed run instead of a finished one
-                agent.learner.finish(exit_code=1 if failed else 0)
 
         durations.append(time.perf_counter() - started)
         elapsed = time.perf_counter() - sweep_start

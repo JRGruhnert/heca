@@ -6,6 +6,8 @@ import re
 import sys
 from pathlib import Path
 
+from heca.misc.paths import output_root
+
 _REPO_ROOT = str(Path(__file__).resolve().parents[1])
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
@@ -212,7 +214,11 @@ def main():
         default=["stats/success_rate"],
         help="Metric keys to plot (default: stats/success_rate).",
     )
-    parser.add_argument("--out", default="plots", help="Output directory (./plots).")
+    parser.add_argument(
+        "--out",
+        default=str(output_root() / "plots"),
+        help="Output directory (defaults to <repo or $HECA_OUT>/plots).",
+    )
     parser.add_argument("--samples", type=int, default=10000, help="Max samples/run.")
     parser.add_argument(
         "--x",

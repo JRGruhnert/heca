@@ -20,7 +20,9 @@ from scripts.common.scenes import find_scene_models
 
 import conf.networks
 
-RUN_ROOT = Path("data/network/standard")
+from heca.misc.paths import data_root
+
+RUN_ROOT = data_root() / "network/standard"
 
 
 def find_checkpoint(run_dir: Path, name: str) -> Path:

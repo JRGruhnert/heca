@@ -5,7 +5,6 @@ from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
 from heca.learning.learner import Learner
 from heca.misc import logger
-from heca.misc.interrupt import stop_requested
 from heca.data.data import DCScene
 from heca.misc.base import Configurable
 from heca.scenes.scene import Scene, SceneFeedback
@@ -104,9 +103,6 @@ class Heca(Configurable):
         return x, y
 
     def tick(self) -> bool:
-        if stop_requested():
-            return True
-
         if self._x is None or self._y is None:
             self._episode_steps = 0
             self._x, self._y = self.sample()

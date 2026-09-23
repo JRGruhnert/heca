@@ -25,7 +25,7 @@ class FairBuffer(Buffer):
     def _gae_for_bucket(self, rewards, terminals, truncates, values):
         T = len(rewards)  # Use the actual length of this group!
 
-        advantages = torch.zeros(T)
+        advantages = torch.zeros(T, device=values.device, dtype=values.dtype)
 
         gae = 0.0
         next_value = 0.0 if terminals[-1] else values[-1]
@@ -51,7 +51,9 @@ class FairBuffer(Buffer):
 
             # GAE resets at every episode boundary (terminal *or* truncated).
             is_boundary = float(is_terminal or is_truncated)
-            gae = delta + self.cfg.gamma * self.cfg.gae_lambda * (1.0 - is_boundary) * gae
+            gae = (
+                delta + self.cfg.gamma * self.cfg.gae_lambda * (1.0 - is_boundary) * gae
+            )
             advantages[t] = gae
             next_value = values[t]
 

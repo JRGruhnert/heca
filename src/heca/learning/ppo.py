@@ -7,7 +7,6 @@ from heca.learning.learner import Learner
 from heca.graphs.data import HecaData, TrunkMemory, installed_memory
 from heca.heca_gnn.network import Network
 from heca.misc import hardware
-from heca.misc.interrupt import stop_requested
 
 
 def build_chunks(n: int, terminals: list[bool], seq_len: int) -> list[list[int]]:
@@ -125,8 +124,6 @@ class PPO(Learner):
         ev_values: list[torch.Tensor] = []
         ev_returns: list[torch.Tensor] = []
         for _ in range(self.cfg.n_epoch):
-            if stop_requested():
-                break
             ev_values.clear()
             ev_returns.clear()
             if use_chunked:

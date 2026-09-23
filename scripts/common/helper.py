@@ -1,15 +1,15 @@
+from collections.abc import Sequence
 from pathlib import Path
 
 from heca.agents.heca import Heca
-from heca.experts.expert import ExpertModel
 from heca.graphs.graph import SubgoalMode
 from heca.heca_gnn.network import Network
 from heca.learning.ditto import DittoPPO
 from heca.learning.fedprox import FedProxPPO
 from heca.learning.fppo import FPPO
 from heca.learning.ppo import PPO
-from heca.learning.server import FLServer
 from heca.misc import logger
+from scripts.common.scenes import agents_for_scene
 
 
 def fmt_duration(seconds: float) -> str:
@@ -41,7 +41,7 @@ def generate_clients(
     tag: str,
     group: str,
     network: Network.Config,
-    clients: dict[str, list[ExpertModel.Config]],
+    scenes: Sequence[str],
     smode: SubgoalMode,
     inference: bool,
     federated: bool,
@@ -54,32 +54,32 @@ def generate_clients(
     personal_coef: float = 0.1,
     mu: float = 0.01,
     lr_annealing: bool = False,
-):
+    rank: int | None = None,
+    world_size: int | None = None,
+) -> list[Heca.Config]:
+    if rank is not None and world_size != len(scenes):
+        raise ValueError(
+            f"{world_size} ranks but {len(scenes)} clients; one process per client "
+            "is required (use --ranks with the number of scenes)."
+        )
     wandb = logger.WandBConfig(enabled=use_wandb)
     hecas = []
-    server = None
+    mine = [scenes[rank]] if rank is not None else list(scenes)
     if federated:
-        server_cfg = FLServer.Config(tag=tag, network=network)
-        server = FLServer.get(server_cfg)
-        # the learner class is resolved from the Config type by
-        # Learner.get(cfg), so choosing the method means choosing the class here:
-        # FPPO is FedAvg (no penalty), FedProxPPO adds mu, DittoPPO adds lambda
         learner_cfg = {
             "fedavg": FPPO.Config,
             "fedprox": FedProxPPO.Config,
             "ditto": DittoPPO.Config,
         }[method]
-        for scene, agents in clients.items():
+        for scene in mine:
+            agents = agents_for_scene(scene)
             learner_kwargs = dict(
                 tag=f"{scene}_{tag}",
                 group=group,
                 network=network,
-                server=server_cfg,
                 wandb=wandb,
                 max_update=n_batch,
                 lr_annealing=lr_annealing,
-                # same label as the server, so the run dirs nest instead of
-                # landing next to plain runs in data/network/standard/
                 label="federated",
                 subdir=f"{tag}/clients/{scene}",
             )
@@ -89,9 +89,6 @@ def generate_clients(
                 learner_kwargs["mu"] = mu
             heca = Heca.Config(
                 agents=agents,
-                # every artifact of the federated run lives under
-                # data/network/federated/<tag>/: the server checkpoint in the
-                # run dir itself, each client in clients/<scene>/
                 learner=learner_cfg(**learner_kwargs),
                 visualize=False,
                 inference=inference,
@@ -102,7 +99,8 @@ def generate_clients(
             )
             hecas.append(heca)
     else:
-        for scene, agents in clients.items():
+        for scene in mine:
+            agents = agents_for_scene(scene)
             heca = Heca.Config(
                 agents=agents,
                 learner=PPO.Config(
@@ -121,4 +119,4 @@ def generate_clients(
                 smode=smode,
             )
             hecas.append(heca)
-    return hecas, server
+    return hecas
