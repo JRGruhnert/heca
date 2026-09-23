@@ -7,6 +7,12 @@ import numpy as np
 from dataclasses import dataclass, field
 from functools import cached_property
 from tensordict import TensorDict
+
+# Imported before tapas_gmm on purpose: importing ``heca.misc.hardware`` installs
+# the shim that keeps ``tapas_gmm.utils.select_gpu`` from running its racy,
+# shared ``/tmp/gpu_mem`` probe at import time (see heca.misc.hardware).
+from heca.misc import hardware, logger  # noqa: E402
+
 from tapas_gmm.utils.robot_trajectory import RobotTrajectory
 from tapas_gmm.policy.gmm import GMMPolicy, GMMPolicyConfig
 from tapas_gmm.utils.observation import SceneObservation, dict_to_tensordict
@@ -27,7 +33,6 @@ from heca.experts.expert import ExpertModel
 from heca.data.pair import ConPair
 from heca.data.data import DCScene
 from heca.data.prismatic import PrismaticEntity
-from heca.misc import hardware, logger
 from heca.scenes.scene import Scene, SceneFeedback
 from heca.utils.quaternion import Quaternion
 
