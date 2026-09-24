@@ -11,16 +11,33 @@ from heca.misc import hardware, logger
 DEFAULT_PORT = 29500
 
 
-def pin_intra_op_threads(threads: int = 1) -> None:
-    """Cap BLAS/OpenMP threads.
+def threads_for(ranks: int, threads: int = 0) -> int:
+    """How many BLAS/OpenMP threads one rank may use."""
+    if threads > 0:
+        return threads
+    cores = (
+        len(os.sched_getaffinity(0))
+        if hasattr(os, "sched_getaffinity")
+        else os.cpu_count()
+    )
+    return max(1, int(cores or 1) // max(1, ranks))
 
-    The per-step tensors here are tiny, so intra-op parallelism is overhead:
-    measured 0.42 s vs 1.91 s for the same call at 1 vs 8 threads. One thread per
-    process, many processes, is the configuration that scales.
-    """
-    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
-        os.environ.setdefault(var, str(threads))
+
+def pin_intra_op_threads(threads: int = 1) -> None:
+    """Cap BLAS/OpenMP/torch threads of this process to threads."""
+    for var in (
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    ):
+        os.environ[var] = str(threads)
     torch.set_num_threads(threads)
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        return
+    threadpool_limits(threads)  # applies now, not on __enter__
 
 
 def init(rank: int, world_size: int, port: int = DEFAULT_PORT) -> None:
@@ -95,20 +112,16 @@ def _free_port() -> int:
 def use_pyg_home(rank: int) -> None:
     """Point this process at its own PyG template cache.
 
-    PyG renders jinja templates for ``propagate``/``edge_update`` on first use into
-    a *per-user* directory (``$PYG_HOME``, default ``~/.cache/pyg/<tmp_dirname>/``)
-    and imports the rendered file straight after writing it. Every rank of a launch
-    writes the same path, so a rank can exec a file that another rank has just
-    truncated (or a half-written one) and dies with
-
-        AttributeError: module
-        'torch_geometric.nn.conv.gatv2_conv_GATv2Conv_edge_updater' has no
-        attribute 'edge_updater'
-
-    One directory per rank, under node-local tmp, removes the sharing entirely and
-    keeps the writes off a networked home directory. ``get_home_dir()`` reads the
-    environment on every call, so setting it here (before any layer is built) is
-    enough.
+    NOTE: A Workaround for the following problem:
+        PyG renders jinja templates for ``propagate``/``edge_update`` on first use into
+        a *per-user* directory (``$PYG_HOME``, default ``~/.cache/pyg/<tmp_dirname>/``)
+        and imports the rendered file straight after writing it. Every rank of a launch
+        writes the same path, so a rank can exec a file that another rank has just
+        truncated (or a half-written one) and dies with
+        One directory per rank, under node-local tmp, removes the sharing entirely and
+        keeps the writes off a networked home directory. ``get_home_dir()`` reads the
+        environment on every call, so setting it here (before any layer is built) is
+        enough.
     """
     os.environ["PYG_HOME"] = os.path.join(
         tempfile.gettempdir(), "heca_pyg", f"rank{rank}"
@@ -116,8 +129,15 @@ def use_pyg_home(rank: int) -> None:
 
 
 def _entry(
-    rank: int, worker, world_size: int, args: tuple, port: int, n_gpus: int
+    rank: int,
+    worker,
+    world_size: int,
+    args: tuple,
+    port: int,
+    n_gpus: int,
+    threads: int,
 ) -> None:
+    pin_intra_op_threads(threads)
     # Give every rank a fixed GPU. Without this, each process independently picks
     # "the freest GPU" at import time (heca.misc.hardware), so ranks started
     # together race onto the same card and the split differs between runs.
@@ -131,13 +151,22 @@ def _entry(
         shutdown()
 
 
-def spawn(worker, world_size: int, args: tuple = ()) -> None:
+def spawn(worker, world_size: int, args: tuple = (), threads: int = 0) -> None:
     """Run ``worker(rank, world_size, *args)`` in ``world_size`` processes.
+
+    ``threads`` is the per-rank BLAS/OpenMP budget (``0`` = split the cores this
+    launch may use over its ranks); it is applied here, in the parent, because the
+    environment variables have to be in place before the ranks import numpy/BLAS.
 
     ``world_size == 1`` runs the worker in the current process, so the same code
     path covers single- and multi-client training.
     """
+    threads = threads_for(world_size, threads)
+    logger.info(f"Threads per rank: {threads} (world size {world_size})")
+    for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
+        os.environ[var] = str(threads)
     if world_size <= 1:
+        pin_intra_op_threads(threads)
         use_pyg_home(0)
         worker(0, 1, *args)
         return
@@ -150,6 +179,6 @@ def spawn(worker, world_size: int, args: tuple = ()) -> None:
     torch.multiprocessing.spawn(
         _entry,
         nprocs=world_size,
-        args=(worker, world_size, args, _free_port(), n_gpus),
+        args=(worker, world_size, args, _free_port(), n_gpus, threads),
         join=True,
     )

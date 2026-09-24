@@ -11,6 +11,7 @@ from scripts.common.scenes import (
     scene_config,
     scene_module,
     scene_tags,
+    selected_scenes,
 )
 
 __all__ = [
@@ -27,4 +28,5 @@ __all__ = [
     "scene_config",
     "scene_module",
     "scene_tags",
+    "selected_scenes",
 ]

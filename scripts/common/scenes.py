@@ -10,6 +10,16 @@ def scene_tags() -> tuple[str, ...]:
     return SCENE_TAGS
 
 
+def selected_scenes(args) -> list[str]:
+    """The scene tags a run trains on, one client each.
+
+    ``scenes`` (a list) wins, then the single ``scene`` tag, else every scene.
+    """
+    if args.scenes:
+        return list(args.scenes)
+    return [args.scene] if args.scene else list(SCENE_TAGS)
+
+
 def agents_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
     """The agent configs of one scene; imports that scene only."""
     return list(scene_module(scene_tag).agents)

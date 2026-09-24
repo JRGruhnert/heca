@@ -33,16 +33,16 @@ DEFAULTS: dict[str, object] = {
 }
 
 RUNS: list[dict[str, object]] = [
-    {"network": "a0"},
-    {"network": "a1"},
-    {"network": "a2"},
-    {"network": "a3"},
-    {"network": "a4"},
-    # {"network": "x5"},
-    # {"network": "x6"},
-    # {"network": "x7"},
-    # {"network": "x8"},
-    # {"network": "x9"},
+    # {"network": "a0"},
+    # {"network": "a1"},
+    # {"network": "a2"},
+    # {"network": "a3"},
+    # {"network": "a4"},
+    {"network": "a5"},
+    {"network": "a6"},
+    {"network": "a7"},
+    {"network": "a8"},
+    {"network": "a9"},
 ]
 
 

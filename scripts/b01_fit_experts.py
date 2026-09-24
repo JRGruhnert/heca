@@ -1,6 +1,7 @@
 import argparse
 import signal
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
 
 import matplotlib
 
@@ -19,6 +20,7 @@ from scripts.b03_plot_tapas_models import evaluate_one
 from scripts.common.args import (
     add_model_argument,
     add_scene_argument,
+    add_threads_argument,
     add_use_gt_argument,
 )
 from scripts.common.scenes import agents_for_scene, scene_config, scene_tags
@@ -75,6 +77,7 @@ def main():
     add_scene_argument(parser)
     add_model_argument(parser)
     add_use_gt_argument(parser)
+    add_threads_argument(parser)
     parser.add_argument(
         "--episodes",
         type=int,
@@ -119,7 +122,12 @@ def main():
 
     workers = len(jobs) if args.jobs <= 0 else min(args.jobs, len(jobs))
     logger.info(f"Running pipeline for {len(jobs)} scenes with {workers} process(es).")
-    pool = ProcessPoolExecutor(max_workers=workers, initializer=pdist.pin_intra_op_threads)
+    threads = pdist.threads_for(workers, args.threads)
+    logger.info(f"Threads per worker: {threads} (for {workers} process(es))")
+    pool = ProcessPoolExecutor(
+        max_workers=workers,
+        initializer=partial(pdist.pin_intra_op_threads, threads),
+    )
     futures = [
         pool.submit(
             pipeline_scene, scene_cfg, models, args.gt, args.episodes, args.max_tries

@@ -24,7 +24,7 @@ def add_scene_argument(parser: argparse.ArgumentParser, default=None):
     parser.add_argument(
         "--scene",
         default=default,
-        help="Scene module tag (e.g. scene1, sceneog).",
+        help="Scene module tag (e.g. scene0, scene1).",
     )
 
 
@@ -111,6 +111,27 @@ def add_ranks_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_scenes_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--scenes",
+        nargs="+",
+        default=None,
+        help="Scene tags to train, one client each (default: --scene's tag, else "
+        "every tag in conf/scenes.SCENE_TAGS).",
+    )
+
+
+def add_threads_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--threads",
+        type=int,
+        default=1,
+        help="BLAS/OpenMP threads per rank, so one rank occupies that many cores. "
+        "1 = one core per client, 0 = auto (cores available to this launch divided "
+        "by the number of ranks).",
+    )
+
+
 def add_wandb_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--wandb",
@@ -174,12 +195,14 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_batch_argument(parser)
     add_virtual_argument(parser)
     add_scene_argument(parser)
+    add_scenes_argument(parser)
     add_tag_argument(parser)
     add_smode_argument(parser)
     add_inference_argument(parser)
     add_reload_argument(parser)
     add_seed_argument(parser)
     add_ranks_argument(parser)
+    add_threads_argument(parser)
 
 
 def subgoal_tag(smode: SubgoalMode) -> str:

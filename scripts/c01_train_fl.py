@@ -15,26 +15,14 @@ from heca.misc import logger
 
 from scripts.common.args import add_heca_arguments, generate_tag, generate_group
 from scripts.common.helper import generate_clients
-from scripts.common.scenes import scene_tags
+from scripts.common.scenes import selected_scenes
 
 matplotlib.use("Agg")
 
 import conf.networks  # noqa: E402
 
 
-def selected_scenes(args) -> list[str]:
-    """The scene tags (one client each) this run trains on; imports nothing."""
-    return [tag for tag in scene_tags() if not args.scene or tag == args.scene]
-
-
 def worker(rank: int, world_size: int, args) -> None:
-    """One client, one process: collect ``args.batch`` episodes, syncing each one.
-
-    Rebuilding everything from ``args`` (rather than receiving ready-made configs)
-    keeps the spawn arguments trivial to pickle and gives every rank its own env,
-    experts, graph, buffer and network copy.
-    """
-    pdist.pin_intra_op_threads()
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
@@ -88,7 +76,7 @@ def main():
             "required. Pass --scene to train a single client."
         )
     logger.info(f"Training {len(scenes)} clients in {n_ranks} process(es).")
-    pdist.spawn(worker, n_ranks, args=(args,))
+    pdist.spawn(worker, n_ranks, args=(args,), threads=args.threads)
 
 
 if __name__ == "__main__":

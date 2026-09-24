@@ -16,7 +16,7 @@ matplotlib.use("Agg")
 from heca.agents.heca import Heca
 from heca.misc import logger
 from scripts.common.args import add_heca_arguments, generate_tag, generate_group
-from scripts.common.scenes import scene_tags
+from scripts.common.scenes import selected_scenes
 
 import conf.networks
 
@@ -25,7 +25,16 @@ EMA_DECAY = 0.99
 
 DEFAULTS: dict[str, object] = {
     "tag": "final",
-    "scene": None,  # None = every scene is a client (omit --scene for real FL)
+    "scenes": [
+        "scene1",
+        "scene3",
+        "scene5",
+        "scene6",
+        "scene7",
+        "scene8",
+        "scene9",
+        "scene10",
+    ],
     "smode": SubgoalMode.BOTH,
     "wandb": True,
     "batch": 1000,
@@ -38,6 +47,7 @@ DEFAULTS: dict[str, object] = {
 
 RUNS: list[dict[str, object]] = [
     {"network": "a0"},
+    # {"network": "a0", "scenes": ["scene1", "scene3"]},
     # {"network": "a1"},
     # {"network": "a2"},
     # {"network": "a3"},
@@ -94,11 +104,6 @@ class SuccessTracker:
         self.updates += 1
 
 
-def selected_scenes(args) -> list[str]:
-    """The scene tags (one client each) this run trains on; imports nothing."""
-    return [tag for tag in scene_tags() if not args.scene or tag == args.scene]
-
-
 def train(agent: Heca, tracker: SuccessTracker, n_batch: int) -> int:
     """Train one client for ``n_batch`` episodes; each syncs with its peers."""
     n = 0
@@ -112,7 +117,7 @@ def train(agent: Heca, tracker: SuccessTracker, n_batch: int) -> int:
 
 def worker(rank: int, world_size: int, args, tag: str, group: str) -> None:
     """One client, one process: the same run as before, minus the shared server."""
-    pdist.pin_intra_op_threads()
+    # threads are pinned by the spawner, before the ranks import numpy/BLAS
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
 
@@ -192,6 +197,7 @@ def main():
             worker,
             n_ranks,
             args=(args, generate_tag(args), generate_group(args)),
+            threads=args.threads,
         )
 
         durations.append(time.perf_counter() - started)

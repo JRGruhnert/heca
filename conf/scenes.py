@@ -2,11 +2,11 @@ from importlib import import_module
 from types import ModuleType
 
 SCENE_TAGS = (
-    # "scene0",
+    "scene0",
     "scene1",
-    # "scene2",
+    "scene2",
     "scene3",
-    # "scene4",
+    "scene4",
     "scene5",
     "scene6",
     "scene7",

@@ -1,6 +1,6 @@
 from heca.heca_gnn.network import Network
 
-# LOCAL
+# NETWOR ABLATIONS
 a0 = Network.Config()
 a1 = Network.Config(goal_conditioning="hyperedge")
 a2 = Network.Config(use_condition_gat=True)
@@ -11,17 +11,10 @@ a6 = Network.Config(use_memory=True)
 a7 = Network.Config(goal_conditioning="hyperedge", use_memory=True)
 a8 = Network.Config(use_statistics=True)
 a9 = Network.Config(goal_conditioning="hyperedge", use_statistics=True)
-a10 = Network.Config()  # entity relations layer
-a11 = Network.Config(goal_conditioning="hyperedge")  # entity relations layer
-# FEDERATED
 
-# special on visual (best of all runs at the end)
-# in Network.Config
-sync = ()  # federate everything (baseline)
-sync = ("!actor_head", "!critic_head")  # federate trunk, keep heads local
-sync = ("root",)  # federate only the encoder/root
-sync = ("!critic_head",)  # keep the value head local only
-
+# FEDERATED ONLY ABLATIONS
+x0 = Network.Config(sync=("!actor_head", "!critic_head"))  # federate trunk
+x1 = Network.Config(sync=("root",))  # federate only root
 
 NETWORK_NAMES = [
     "a0",
@@ -34,20 +27,8 @@ NETWORK_NAMES = [
     "a7",
     "a8",
     "a9",
-    # "a10",
-    # "a11",
-    # "x0",
-    # "x1",
-    # "x2",
-    # "x3",
-    # "x4",
-    # "x5",
-    # "x6",
-    # "x7",
-    # "x8",
-    # "x9",
-    # "x10",
-    # "x11",
+    "x0",
+    "x1",
 ]
 
 CONFIGS: dict[str, Network.Config] = {name: globals()[name] for name in NETWORK_NAMES}

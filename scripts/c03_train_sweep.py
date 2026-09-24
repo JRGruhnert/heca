@@ -14,19 +14,14 @@ from heca.misc import logger
 
 from scripts.common.args import add_heca_arguments, generate_tag, generate_group
 from scripts.common.helper import generate_clients
-from scripts.common.scenes import scene_tags
+from scripts.common.scenes import selected_scenes
 
 import conf.networks
 
 
-def selected_scenes(args) -> list[str]:
-    """The scene tags (one client each) this run trains on; imports nothing."""
-    return [tag for tag in scene_tags() if not args.scene or tag == args.scene]
-
-
 def worker(rank: int, world_size: int, args) -> None:
     """One client, one process: the same run as before, minus the shared server."""
-    pdist.pin_intra_op_threads()
+    # threads are pinned by the spawner, before the ranks import numpy/BLAS
     torch.manual_seed(args.seed + rank)
     np.random.seed(args.seed + rank)
 
@@ -80,7 +75,7 @@ def main():
             "is required. Pass --scene to train a single client."
         )
     logger.info(f"Training {len(scenes)} clients in {n_ranks} process(es).")
-    pdist.spawn(worker, n_ranks, args=(args,))
+    pdist.spawn(worker, n_ranks, args=(args,), threads=args.threads)
 
 
 if __name__ == "__main__":
