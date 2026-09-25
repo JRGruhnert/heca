@@ -169,7 +169,7 @@ def main():
 
     heca = Heca.get(
         Heca.Config(
-            agents=find_scene_models(args.scene),
+            experts=find_scene_models(args.scene),
             learner=PPO.Config(
                 tag=args.tag[0],
                 network=conf.networks.get(args.network),
@@ -226,7 +226,7 @@ def main():
                     "checkpoint": path.name,
                     "scene": args.scene,
                     "network": args.network,
-                "weights": args.weights,
+                    "weights": args.weights,
                     "mode": args.mode,
                     "greedy": not args.sample,
                     "episodes": args.episodes,

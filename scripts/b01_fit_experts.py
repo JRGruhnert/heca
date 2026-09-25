@@ -23,7 +23,7 @@ from scripts.common.args import (
     add_threads_argument,
     add_use_gt_argument,
 )
-from scripts.common.scenes import agents_for_scene, scene_config, scene_tags
+from scripts.common.scenes import experts_for_scene, scene_config, scene_tags
 
 
 def fit_tapas(expert: TapasExpert):
@@ -62,8 +62,6 @@ def pipeline_scene(
     """Run the full fit/evaluate pipeline for every model of one scene."""
     for cfg in models:
         logger.info(f"[{scene_cfg.tag}] === pipeline for {cfg.tag} ===")
-        # auto_load=False: fitting starts from scratch, and loading here would use
-        # the default variant before `use_gt` gets to select the requested one.
         model = ExpertModel.get(cfg, auto_load=False)
         model.use_gt(gt)
         assert isinstance(model, TapasExpert), "Only Tapas is supported atm."
@@ -107,7 +105,7 @@ def main():
             continue
         models = [
             m
-            for m in agents_for_scene(tag)
+            for m in experts_for_scene(tag)
             if not (args.model and m.tag != args.model)
         ]
         if models:

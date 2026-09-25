@@ -280,7 +280,7 @@ def build_heca(scene_cfg, model_cfgs, args) -> Heca:
     """The training entry point, so the graph is exactly the training graph."""
     return Heca.get(
         Heca.Config(
-            agents=model_cfgs,
+            experts=model_cfgs,
             learner=PPO.Config(
                 tag=scene_cfg.tag,
                 network=conf.networks.CONFIGS[conf.networks.NETWORK_NAMES[0]],

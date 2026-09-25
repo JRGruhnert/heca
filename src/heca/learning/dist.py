@@ -2,10 +2,11 @@ import os
 import socket
 import tempfile
 from datetime import timedelta
+from typing import Any
 
 import torch
 import torch.distributed as dist
-
+from torch.multiprocessing.spawn import start_processes
 from heca.misc import hardware, logger
 
 DEFAULT_PORT = 29500
@@ -41,11 +42,7 @@ def pin_intra_op_threads(threads: int = 1) -> None:
 
 
 def init(rank: int, world_size: int, port: int = DEFAULT_PORT) -> None:
-    """Join the process group (gloo: everything here runs on CPU).
-
-    The timeout bounds every collective: a peer that dies mid-training aborts the
-    others instead of leaving them waiting forever for a barrier that never comes.
-    """
+    """Join the process group (gloo: everything here runs on CPU)."""
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
     os.environ.setdefault("MASTER_PORT", str(port))
     dist.init_process_group(
@@ -90,6 +87,14 @@ def mean_tensors(tensors: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         dist.all_reduce(t, op=dist.ReduceOp.SUM)
         t.div_(n)
     return tensors
+
+
+def gather_objects(values: Any) -> list[Any]:
+    if not active():
+        return [values]
+    out: list[Any] = [None] * world_size()
+    dist.all_gather_object(out, values)
+    return out
 
 
 def shutdown() -> None:
@@ -138,9 +143,6 @@ def _entry(
     threads: int,
 ) -> None:
     pin_intra_op_threads(threads)
-    # Give every rank a fixed GPU. Without this, each process independently picks
-    # "the freest GPU" at import time (heca.misc.hardware), so ranks started
-    # together race onto the same card and the split differs between runs.
     if n_gpus > 1:
         hardware.use_device(rank % n_gpus)
     use_pyg_home(rank)
@@ -152,31 +154,17 @@ def _entry(
 
 
 def spawn(worker, world_size: int, args: tuple = (), threads: int = 0) -> None:
-    """Run ``worker(rank, world_size, *args)`` in ``world_size`` processes.
-
-    ``threads`` is the per-rank BLAS/OpenMP budget (``0`` = split the cores this
-    launch may use over its ranks); it is applied here, in the parent, because the
-    environment variables have to be in place before the ranks import numpy/BLAS.
-
-    ``world_size == 1`` runs the worker in the current process, so the same code
-    path covers single- and multi-client training.
-    """
     threads = threads_for(world_size, threads)
     logger.info(f"Threads per rank: {threads} (world size {world_size})")
     for var in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS"):
         os.environ[var] = str(threads)
-    if world_size <= 1:
-        pin_intra_op_threads(threads)
-        use_pyg_home(0)
-        worker(0, 1, *args)
-        return
     n_gpus = torch.cuda.device_count() if torch.cuda.is_available() else 0
     if n_gpus > 1:
         per_gpu = [rank % n_gpus for rank in range(world_size)]
         counts = {gpu: per_gpu.count(gpu) for gpu in sorted(set(per_gpu))}
         split = ", ".join(f"cuda:{gpu}x{count}" for gpu, count in counts.items())
         logger.info(f"Assigning {world_size} ranks over {n_gpus} GPUs: {split}")
-    torch.multiprocessing.spawn(
+    start_processes(
         _entry,
         nprocs=world_size,
         args=(worker, world_size, args, _free_port(), n_gpus, threads),

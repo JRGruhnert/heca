@@ -496,7 +496,7 @@ def main():
 
     heca = Heca.get(
         Heca.Config(
-            agents=find_scene_models(args.scene),
+            experts=find_scene_models(args.scene),
             learner=PPO.Config(
                 tag=args.tag[0],
                 network=conf.networks.get(args.network),
@@ -505,7 +505,6 @@ def main():
                 lr_annealing=False,
                 normalize_rewards=False,
             ),
-            visualize=False,
             inference=True,
             virtual=args.virtual,
             reload=False,

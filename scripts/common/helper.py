@@ -1,15 +1,20 @@
+import argparse
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Iterator
 
 from heca.agents.heca import Heca
 from heca.graphs.graph import SubgoalMode
 from heca.heca_gnn.network import Network
-from heca.learning.ditto import DittoPPO
 from heca.learning.fedprox import FedProxPPO
-from heca.learning.fppo import FPPO
 from heca.learning.ppo import PPO
 from heca.misc import logger
-from scripts.common.scenes import agents_for_scene
+from scripts.common.args import (
+    add_eval_arguments,
+    add_fed_arguments,
+    add_heca_arguments,
+)
+from scripts.common.scenes import experts_for_scene
 
 
 def fmt_duration(seconds: float) -> str:
@@ -37,86 +42,98 @@ def find_checkpoint(run_dir: Path, name: str) -> Path:
     return checkpoints[-1]
 
 
-def generate_clients(
+def get_sim_args(
+    defaults: dict[str, object], runs: list[dict[str, object]]
+) -> Iterator[argparse.Namespace]:
+    """Yield one seeded Namespace per run (and per repeat) of the table."""
+    parser = argparse.ArgumentParser(add_help=False)
+    add_heca_arguments(parser)
+    add_fed_arguments(parser)
+    add_eval_arguments(parser)
+    base = {action.dest: action.default for action in parser._actions}
+    for row in runs:
+        fields = {**base, **defaults, **row}
+        repeats = int(fields.pop("repeats", 1))  # type: ignore
+
+        for i in range(repeats):
+            run_fields = dict(fields)
+            run_fields["seed"] = i
+            yield argparse.Namespace(**run_fields)
+
+
+def generate_client(
     tag: str,
     group: str,
     network: Network.Config,
-    scenes: Sequence[str],
+    scene: str,
     smode: SubgoalMode,
     inference: bool,
-    federated: bool,
     use_wandb: bool,
     virtual: bool,
     reload: bool,
     use_gt: bool,
     n_batch: int,
-    method: str = "fedprox",
-    personal_coef: float = 0.1,
-    mu: float = 0.01,
-    lr_annealing: bool = False,
-    rank: int | None = None,
-    world_size: int | None = None,
-) -> list[Heca.Config]:
-    if rank is not None and world_size != len(scenes):
-        raise ValueError(
-            f"{world_size} ranks but {len(scenes)} clients; one process per client "
-            "is required (use --ranks with the number of scenes)."
-        )
+    lr_annealing: bool,
+) -> Heca.Config:
     wandb = logger.WandBConfig(enabled=use_wandb)
-    hecas = []
-    mine = [scenes[rank]] if rank is not None else list(scenes)
-    if federated:
-        learner_cfg = {
-            "fedavg": FPPO.Config,
-            "fedprox": FedProxPPO.Config,
-            "ditto": DittoPPO.Config,
-        }[method]
-        for scene in mine:
-            agents = agents_for_scene(scene)
-            learner_kwargs = dict(
-                tag=f"{scene}_{tag}",
-                group=group,
-                network=network,
-                wandb=wandb,
-                max_update=n_batch,
-                lr_annealing=lr_annealing,
-                label="federated",
-                subdir=f"{tag}/clients/{scene}",
-            )
-            if method == "ditto":
-                learner_kwargs["personal_coef"] = personal_coef
-            if method != "fedavg":
-                learner_kwargs["mu"] = mu
-            heca = Heca.Config(
-                agents=agents,
-                learner=learner_cfg(**learner_kwargs),
-                visualize=False,
-                inference=inference,
-                virtual=virtual,
-                reload=reload,
-                use_gt=use_gt,
-                smode=smode,
-            )
-            hecas.append(heca)
-    else:
-        for scene in mine:
-            agents = agents_for_scene(scene)
-            heca = Heca.Config(
-                agents=agents,
-                learner=PPO.Config(
-                    tag=f"{scene}_{tag}",
-                    group=group,
-                    network=network,
-                    wandb=wandb,
-                    max_update=n_batch,
-                    lr_annealing=lr_annealing,
-                ),
-                visualize=False,
-                inference=inference,
-                virtual=virtual,
-                reload=reload,
-                use_gt=use_gt,
-                smode=smode,
-            )
-            hecas.append(heca)
-    return hecas
+    experts = experts_for_scene(scene)
+    return Heca.Config(
+        experts=experts,
+        learner=PPO.Config(
+            tag=f"{scene}_{tag}",
+            group=group,
+            network=network,
+            wandb=wandb,
+            max_update=n_batch,
+            lr_annealing=lr_annealing,
+        ),
+        inference=inference,
+        virtual=virtual,
+        reload=reload,
+        use_gt=use_gt,
+        smode=smode,
+    )
+
+
+def generate_fed_client(
+    tag: str,
+    group: str,
+    network: Network.Config,
+    scene: str,
+    smode: SubgoalMode,
+    inference: bool,
+    use_wandb: bool,
+    virtual: bool,
+    reload: bool,
+    use_gt: bool,
+    n_batch: int,
+    mu: float,
+    k: int,
+    lr_annealing: bool,
+    server_lr: float | None = None,
+    fedavgm_beta: float = 0.9,
+) -> Heca.Config:
+    wandb = logger.WandBConfig(enabled=use_wandb)
+    experts = experts_for_scene(scene)
+    return Heca.Config(
+        experts=experts,
+        learner=FedProxPPO.Config(
+            tag=f"{scene}_{tag}",
+            group=group,
+            network=network,
+            wandb=wandb,
+            max_update=n_batch,
+            lr_annealing=lr_annealing,
+            label="federated",
+            subdir=f"{tag}/clients/{scene}",
+            k=k,
+            server_lr=server_lr,
+            fedavgm_beta=fedavgm_beta,
+            mu=mu,
+        ),
+        inference=inference,
+        virtual=virtual,
+        reload=reload,
+        use_gt=use_gt,
+        smode=smode,
+    )

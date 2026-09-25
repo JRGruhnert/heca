@@ -54,6 +54,11 @@ class DittoPPO(FedProxPPO):
             )
             self._anneal(self.personal_optim)
 
+        # the federated model's drift from the anchor, and the personal model's: the
+        # second is what Ditto's lambda actually restrains, the first what mu does
+        self.metrics["fedprox/drift_norm"] = self.drift_norm()
+        self.metrics["ditto/drift_norm"] = self.drift_norm(self.personal)
+
     def _sync_inference(self):
         """Let the personal model collect experience, if asked to."""
         source = self.personal if self.cfg.act_personal else self.network

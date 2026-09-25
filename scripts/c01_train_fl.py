@@ -13,8 +13,13 @@ from heca.agents.heca import Heca
 from heca.learning import dist as pdist
 from heca.misc import logger
 
-from scripts.common.args import add_heca_arguments, generate_tag, generate_group
-from scripts.common.helper import generate_clients
+from scripts.common.args import (
+    add_fed_arguments,
+    add_heca_arguments,
+    generate_group,
+    generate_tag,
+)
+from scripts.common.helper import generate_fed_client
 from scripts.common.scenes import selected_scenes
 
 matplotlib.use("Agg")
@@ -23,41 +28,45 @@ import conf.networks  # noqa: E402
 
 
 def worker(rank: int, world_size: int, args) -> None:
+    scenes = selected_scenes(args)
+    assert world_size == len(scenes), f"{world_size} ranks but {len(scenes)} scenes"
+    scene = scenes[rank]
+
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    hecas = generate_clients(
-        generate_tag(args),
-        generate_group(args),
+    heca_cfg = generate_fed_client(
+        generate_tag(args, federated=True),
+        generate_group(args, federated=True),
         conf.networks.get(args.network),
-        selected_scenes(args),
-        inference=args.inference,
-        federated=args.federated,
+        scene,
+        inference=False,
         virtual=args.virtual,
         use_wandb=args.wandb,
         reload=args.reload,
         use_gt=args.gt,
         smode=args.smode,
         n_batch=args.batch,
-        method=args.method,
-        personal_coef=args.personal_coef,
         mu=args.mu,
-        rank=rank,
-        world_size=world_size,
+        k=args.k,
+        server_lr=args.server_lr,
+        fedavgm_beta=args.fedavgm_beta,
+        lr_annealing=args.lr_annealing,
     )
-    agent = Heca.get(hecas[0])
+    agent = Heca.get(heca_cfg)
 
     n = 0
     while n < args.batch:
         if agent.tick():
             n += 1
             agent.learner.sync()
-    logger.info(f"[rank {rank}/{world_size}] finished {n} episodes")
+    logger.info(f"[Heca on {scene}] finished {n} episodes")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_heca_arguments(parser)
+    add_fed_arguments(parser)
     args = parser.parse_args()
 
     def _handle_stop(signum, frame):
@@ -65,22 +74,16 @@ def main():
 
     signal.signal(signal.SIGTERM, _handle_stop)
 
-    seed = args.seed if args.seed is not None else random.randrange(2**31)
-    args.seed = seed  # so generate_tag picks it up
-
     scenes = selected_scenes(args)
-    n_ranks = args.ranks or len(scenes)
-    if n_ranks != len(scenes):
-        raise SystemExit(
-            f"--ranks {n_ranks} but {len(scenes)} clients; one process per client is "
-            "required. Pass --scene to train a single client."
-        )
-    logger.info(f"Training {len(scenes)} clients in {n_ranks} process(es).")
-    pdist.spawn(worker, n_ranks, args=(args,), threads=args.threads)
+    if args.seed is None:
+        args.seed = random.randrange(2**31)
+
+    logger.info(
+        f"Training {len(scenes)} clients in {len(scenes)} process(es), "
+        f"{args.threads} thread(s) each, seed {args.seed}."
+    )
+    pdist.spawn(worker, len(scenes), args=(args,), threads=args.threads)
 
 
 if __name__ == "__main__":
     main()
-
-# good scenes: 0, 1, 8
-# bad scenes: 2, 4

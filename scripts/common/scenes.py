@@ -20,27 +20,27 @@ def selected_scenes(args) -> list[str]:
     return [args.scene] if args.scene else list(SCENE_TAGS)
 
 
-def agents_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
+def experts_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
     """The agent configs of one scene; imports that scene only."""
     return list(scene_module(scene_tag).agents)
 
 
 def scene_config(scene_tag: str) -> Scene.Config:
     """The scene config of one scene; imports that scene only."""
-    return agents_for_scene(scene_tag)[0].scene
+    return experts_for_scene(scene_tag)[0].scene
 
 
 def agents_by_scene(
     tags: Sequence[str] = SCENE_TAGS,
 ) -> list[tuple[Scene.Config, list[ExpertModel.Config]]]:
     """``(scene, agents)`` for every given tag (all of them by default)."""
-    return [(scene_config(tag), agents_for_scene(tag)) for tag in tags]
+    return [(scene_config(tag), experts_for_scene(tag)) for tag in tags]
 
 
 def iter_agents() -> Iterator[ExpertModel.Config]:
     """Yield every agent config, scene by scene."""
     for tag in SCENE_TAGS:
-        yield from agents_for_scene(tag)
+        yield from experts_for_scene(tag)
 
 
 def iter_scene_configs() -> Iterator[Scene.Config]:
@@ -51,7 +51,7 @@ def iter_scene_configs() -> Iterator[Scene.Config]:
 
 def find_model(scene_tag: str, model_tag: str) -> ExpertModel.Config:
     """Return the one agent config carrying both tags."""
-    agents = agents_for_scene(scene_tag)
+    agents = experts_for_scene(scene_tag)
     for cfg in agents:
         if cfg.tag == model_tag:
             return cfg
@@ -61,7 +61,7 @@ def find_model(scene_tag: str, model_tag: str) -> ExpertModel.Config:
 
 def find_scene_models(scene_tag: str) -> list[ExpertModel.Config]:
     """Return every agent config of one scene."""
-    return agents_for_scene(scene_tag)
+    return experts_for_scene(scene_tag)
 
 
 def find_scene_config(scene_tag: str) -> Scene.Config:

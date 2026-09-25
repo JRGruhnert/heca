@@ -3,12 +3,21 @@ from conf.networks import NETWORK_NAMES
 from heca.graphs.graph import SubgoalMode
 
 
+def add_tag_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--tag",
+        required=True,
+        help="Run tag for identification.",
+    )
+
+
 def add_smode_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--smode",
         type=SubgoalMode,
         choices=list(SubgoalMode),
         default=SubgoalMode.BOTH,
+        help="Steers option generation.",
     )
 
 
@@ -28,18 +37,20 @@ def add_scene_argument(parser: argparse.ArgumentParser, default=None):
     )
 
 
-def add_tag_argument(parser: argparse.ArgumentParser):
+def add_scenes_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--tag",
-        required=True,
-        help="Run tag for identification.",
+        "--scenes",
+        nargs="+",
+        default=None,
+        help="Scene tags to train, one client each (default: --scene's tag, else "
+        "every tag in conf/scenes.SCENE_TAGS).",
     )
 
 
-def add_model_argument(parser: argparse.ArgumentParser, default=None):
+def add_model_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--model",
-        default=default,
+        default=None,
         help="Agent tag within the selected scene.",
     )
 
@@ -92,12 +103,46 @@ def add_mu_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_sync_every_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--k",
+        type=int,
+        default=1,
+        help="Federated aggregation period, in local updates. 1 (default) ",
+    )
+
+
+def add_fedavgm_beta_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--fedavgm-beta",
+        type=float,
+        default=0.9,
+        help="Server momentum of FedAvgM. 0 disables it, which makes the server "
+        "take the plain FedAvg step (the average itself); with --mu 0 that gives "
+        "FedAvg, with mu > 0 it gives FedProx as published (plain-average server "
+        "+ proximal client term).",
+    )
+
+
+def add_server_lr_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--server-lr",
+        type=float,
+        default=None,
+        help="Server learning rate of the federated update. Unset means 1 - beta, "
+        "the gain-neutral value: the steady-state server step then equals plain "
+        "FedAvg's, so beta only smooths and nothing has to be compensated on the "
+        "client side. 1.0 is the unscaled form of FedAvgM (1/(1-beta) times "
+        "larger, i.e. 10x at beta=0.9); 0 freezes the global model, a no-sharing "
+        "control.",
+    )
+
+
 def add_use_gt_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--gt",
         action="store_true",
-        help="Use ground-truth observations. Off unless passed, which selects the "
-        "image variant (tapas_img.pt / conditions-vis.joblib).",
+        help="Use ground-truth observations if selected.",
     )
 
 
@@ -106,18 +151,7 @@ def add_ranks_argument(parser: argparse.ArgumentParser):
         "--ranks",
         type=int,
         default=0,
-        help="Processes to train in (0 = one per client/scene). Ranks synchronize "
-        "with torch.distributed collectives.",
-    )
-
-
-def add_scenes_argument(parser: argparse.ArgumentParser):
-    parser.add_argument(
-        "--scenes",
-        nargs="+",
-        default=None,
-        help="Scene tags to train, one client each (default: --scene's tag, else "
-        "every tag in conf/scenes.SCENE_TAGS).",
+        help="Processes to train in (0 = one per client/scene).",
     )
 
 
@@ -144,7 +178,7 @@ def add_batch_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--batch",
         type=int,
-        default=750,
+        default=1000,
         help="Number of training batches per client.",
     )
 
@@ -184,57 +218,68 @@ def add_seed_argument(parser: argparse.ArgumentParser):
     )
 
 
-def add_heca_arguments(parser: argparse.ArgumentParser):
-    add_network_argument(parser)
+def add_checkpoint_path(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--ckp_path",
+        type=str,
+        help="Relative checkpoint path from data folder.",
+    )
+
+
+def add_fed_arguments(parser: argparse.ArgumentParser):
     add_federated_argument(parser)
     add_method_argument(parser)
     add_personal_argument(parser)
     add_mu_argument(parser)
+    add_ranks_argument(parser)
+    add_sync_every_argument(parser)
+    add_server_lr_argument(parser)
+    add_fedavgm_beta_argument(parser)
+    add_threads_argument(parser)
+
+
+def add_heca_arguments(parser: argparse.ArgumentParser):
+    add_network_argument(parser)
     add_wandb_argument(parser)
     add_use_gt_argument(parser)
     add_batch_argument(parser)
     add_virtual_argument(parser)
-    add_scene_argument(parser)
     add_scenes_argument(parser)
     add_tag_argument(parser)
     add_smode_argument(parser)
-    add_inference_argument(parser)
     add_reload_argument(parser)
     add_seed_argument(parser)
-    add_ranks_argument(parser)
-    add_threads_argument(parser)
 
 
-def subgoal_tag(smode: SubgoalMode) -> str:
-    if smode == SubgoalMode.GOAL:
-        return "g"
-    elif smode == SubgoalMode.CHAIN:
-        return "c"
-    elif smode == SubgoalMode.BOTH:
-        return "b"
-    raise ValueError
+def add_eval_arguments(parser: argparse.ArgumentParser):
+    add_inference_argument(parser)
+    add_checkpoint_path(parser)
 
 
-def _base_tag(args: argparse.Namespace) -> str:
+def _base_tag(args: argparse.Namespace, federated: bool) -> str:
     final_tag = ""
-    final_tag += "fed-" if args.federated else ""
     final_tag += args.tag
     final_tag += "-"
     final_tag += args.network
     final_tag += "-"
-    final_tag += "gt" if args.gt else ""
-    final_tag += "-"
-    final_tag += "virt" if args.virtual else ""
-    if args.federated and getattr(args, "method", "fedprox") == "ditto":
-        final_tag += f"-ditto{args.personal_coef:g}"
+    final_tag += "gt-" if args.gt else ""
+    final_tag += "virt-" if args.virtual else ""
+    final_tag += "fed-" if federated else ""
+    if federated:
+        final_tag += f"k{args.k}-"
+        final_tag += f"mu{args.mu}"
+        beta = getattr(args, "fedavgm_beta", 0.9)
+        eta = getattr(args, "server_lr", None)
+        eta = 1.0 - beta if eta is None else eta
+        final_tag += f"-b{beta:g}-eta{eta:g}"
     return final_tag
 
 
-def generate_tag(args: argparse.Namespace) -> str:
+def generate_tag(args: argparse.Namespace, federated: bool) -> str:
     """Full run tag, unique per seed (also the checkpoint directory name)."""
-    return f"{_base_tag(args)}_s{args.seed}"
+    return f"{_base_tag(args, federated)}_s{args.seed}"
 
 
-def generate_group(args: argparse.Namespace) -> str:
+def generate_group(args: argparse.Namespace, federated: bool) -> str:
     """Wandb group: the seed-independent name shared by every repeat."""
-    return _base_tag(args)
+    return _base_tag(args, federated)

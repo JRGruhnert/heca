@@ -80,7 +80,7 @@ arm = (
 )
 heca = Heca.get(
     Heca.Config(
-        agents=find_scene_models(args.scene),
+        experts=find_scene_models(args.scene),
         learner=PPO.Config(
             tag=f"ab_{arm}",
             group="ab",

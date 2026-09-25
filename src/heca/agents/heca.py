@@ -13,9 +13,8 @@ from heca.scenes.scene import Scene, SceneFeedback
 class Heca(Configurable):
     @dataclass(kw_only=True)
     class Config(Configurable.Config):
-        agents: Sequence[ExpertModel.Config]
+        experts: Sequence[ExpertModel.Config]
         learner: Learner.Config
-        visualize: bool
         inference: bool
         reload: bool
         # training difference
@@ -34,9 +33,9 @@ class Heca(Configurable):
         self._y: DCScene | None = None
 
         self._episode_steps = 0
-        self.scene = Scene.get(self.cfg.agents[0].scene)
+        self.scene = Scene.get(self.cfg.experts[0].scene)
 
-        for a in self.cfg.agents:
+        for a in self.cfg.experts:
             expert = ExpertModel.get(a, auto_load=False)
             expert.use_gt(self.cfg.use_gt)
             expert.load()
@@ -48,7 +47,7 @@ class Heca(Configurable):
                 expert.virtual()
 
         self.graph = Graph.generate(
-            list(self.cfg.agents),
+            list(self.cfg.experts),
             smode=cfg.smode,
             use_rotation=cfg.learner.network.use_rotation,
             position_jitter=cfg.learner.network.position_jitter,
@@ -97,7 +96,7 @@ class Heca(Configurable):
     def sample(self) -> tuple[DCScene, DCScene]:
         (x, ix), (y, iy) = self.scene.sample_task()
         self.graph.ns_option.reset_stats()
-        for agent in self.cfg.agents:
+        for agent in self.cfg.experts:
             ExpertModel.get(agent).reset_tracking()
         logger.debug("New Episode")
         return x, y
@@ -115,4 +114,14 @@ class Heca(Configurable):
             self._y = None
             self._episode_steps = 0
 
-        return finished
+        return finished  # the learner just finished
+
+    def train(self, n_batch: int) -> int:
+        n = 0
+        while n < n_batch:
+            if self.tick():
+                n += 1
+                self.learner.sync()
+        self.learner.finish()
+
+        return n
