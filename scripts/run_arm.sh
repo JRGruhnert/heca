@@ -29,6 +29,16 @@ module="${3:-scripts.c02_train_seq_fl}"
 env_name="${HECA_CONDA_ENV:-hecarim}"
 log="${HECA_ARM_LOG:-$HOME/arm$index.log}"
 
+# GPU placement. Unset: inherit whatever the launcher shell had (all cards visible).
+#   HECA_ARM_CPU=1     -> no GPU at all (the simulator dominates; frees VRAM entirely)
+#   HECA_ARM_GPUS=N    -> this shard sees only card (index % N), which stops every
+#                         process from paying a CUDA context on all four cards
+if [[ -n "${HECA_ARM_CPU:-}" ]]; then
+    export CUDA_VISIBLE_DEVICES=""
+elif [[ -n "${HECA_ARM_GPUS:-}" ]]; then
+    export CUDA_VISIBLE_DEVICES="$((index % HECA_ARM_GPUS))"
+fi
+
 # Per-arm wandb directories. Prefer the big shared filesystem when the machine has
 # one (/export on pearl2), otherwise fall back to $HOME, so the same script works on
 # either node without extra setup.

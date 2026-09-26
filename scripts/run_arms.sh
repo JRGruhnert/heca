@@ -41,8 +41,11 @@ for (( i = first; i < first + count; i++ )); do
         echo "skip: session $name already exists"
         continue
     fi
-    tmux new -d -s "$name" "$worker $i $total $module"
-    echo "started $name -> shard $i/$total"
+    # tmux panes inherit the *server's* environment, not this shell's, so the
+    # placement variables have to travel inside the command string.
+    placement="HECA_ARM_CPU='${HECA_ARM_CPU:-}' HECA_ARM_GPUS='${HECA_ARM_GPUS:-}'"
+    tmux new -d -s "$name" "$placement $worker $i $total $module"
+    echo "started $name -> shard $i/$total  [$placement]"
     sleep "$stagger"
 done
 
