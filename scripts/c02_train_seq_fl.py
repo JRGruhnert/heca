@@ -30,12 +30,21 @@ DEFAULTS: dict[str, object] = {
     "repeats": 3,
     "gt": True,
     "virtual": True,
-    "mu": 0.01,
-    "k": 1,
 }
 
 RUNS: list[dict[str, object]] = [
-    {"network": "a0"},
+    {"network": "a0", "k": 1},  # FedAvg
+    {"network": "a0", "k": 5},  # FedAvg
+    {"network": "a0", "k": 1, "mu": 0.01},  # FedProx
+    {"network": "a0", "k": 5, "mu": 0.01},  # FedProx
+    {"network": "a0", "k": 1, "mu": 0.1},  # FedProx
+    {"network": "a0", "k": 5, "mu": 0.1},  # FedProx
+    {"network": "a0", "k": 1, "mu": 1.0},  # FedProx
+    {"network": "a0", "k": 5, "mu": 1.0},  # FedProx
+    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5},  # FedAdamW
+    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
+    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
+    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
 ]
 
 
@@ -52,8 +61,9 @@ def worker(rank: int, world_size: int, args, tag: str, group: str) -> None:
         selected_scenes(args)[rank],
         mu=args.mu,
         k=args.k,
-        server_lr=args.server_lr,
-        fedavgm_beta=args.fedavgm_beta,
+        fedadamw_alpha=args.fedadamw_alpha,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
         inference=args.inference,
         virtual=args.virtual,
         use_wandb=args.wandb,

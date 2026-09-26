@@ -110,8 +110,9 @@ def generate_fed_client(
     mu: float,
     k: int,
     lr_annealing: bool,
-    server_lr: float | None = None,
-    fedavgm_beta: float = 0.9,
+    fedadamw_alpha: float | None,
+    lr: float,
+    weight_decay: float,
 ) -> Heca.Config:
     wandb = logger.WandBConfig(enabled=use_wandb)
     experts = experts_for_scene(scene)
@@ -127,8 +128,9 @@ def generate_fed_client(
             label="federated",
             subdir=f"{tag}/clients/{scene}",
             k=k,
-            server_lr=server_lr,
-            fedavgm_beta=fedavgm_beta,
+            fedadamw_alpha=fedadamw_alpha,
+            lr=lr,
+            weight_decay=weight_decay,
             mu=mu,
         ),
         inference=inference,

@@ -16,10 +16,7 @@ class FedProxPPO(FPPO):
 
     def learn(self):
         super().learn()
-        # measured once, after the whole local phase: the penalty logged inside the
-        # minibatch loop is a mean over parameter states, from no drift (first batch
-        # of an epoch) to the largest drift (last one), so it understates this
         self.metrics["fedprox/drift_norm"] = self.drift_norm()
 
-    def _fedprox_term(self) -> torch.Tensor:
+    def _penality_term(self) -> torch.Tensor:
         return self._proximal_term(self.network, self.cfg.mu)

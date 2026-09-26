@@ -97,7 +97,7 @@ def add_mu_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--mu",
         type=float,
-        default=0.01,
+        default=0.0,
         help="FedProx's proximal coefficient for the shared model (ignored by "
         "--method fedavg; ditto defaults to 0 unless you pass it).",
     )
@@ -112,29 +112,30 @@ def add_sync_every_argument(parser: argparse.ArgumentParser):
     )
 
 
-def add_fedavgm_beta_argument(parser: argparse.ArgumentParser):
+def add_fedadamw_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--fedavgm-beta",
+        "--fedadamw-alpha",
         type=float,
-        default=0.9,
-        help="Server momentum of FedAvgM. 0 disables it, which makes the server "
-        "take the plain FedAvg step (the average itself); with --mu 0 that gives "
-        "FedAvg, with mu > 0 it gives FedProx as published (plain-average server "
-        "+ proximal client term).",
+        default=None,
+        help="FedAdamW's alignment coefficient (papers best 0.5)",
     )
 
 
-def add_server_lr_argument(parser: argparse.ArgumentParser):
+def add_lr_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
-        "--server-lr",
+        "--lr",
         type=float,
-        default=None,
-        help="Server learning rate of the federated update. Unset means 1 - beta, "
-        "the gain-neutral value: the steady-state server step then equals plain "
-        "FedAvg's, so beta only smooths and nothing has to be compensated on the "
-        "client side. 1.0 is the unscaled form of FedAvgM (1/(1-beta) times "
-        "larger, i.e. 10x at beta=0.9); 0 freezes the global model, a no-sharing "
-        "control.",
+        default=3e-4,
+        help="Client learning rate.",
+    )
+
+
+def add_weight_decay_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--weight-decay",
+        type=float,
+        default=0.01,
+        help="Decoupled weight decay of FedAdamW's lambda (0.01  paper default).",
     )
 
 
@@ -191,6 +192,14 @@ def add_reload_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_lr_annealing_argument(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--lr-annealing",
+        action="store_true",
+        help="Linearly decay the client learning rate to zero over max_update.",
+    )
+
+
 def add_inference_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--inference",
@@ -233,8 +242,7 @@ def add_fed_arguments(parser: argparse.ArgumentParser):
     add_mu_argument(parser)
     add_ranks_argument(parser)
     add_sync_every_argument(parser)
-    add_server_lr_argument(parser)
-    add_fedavgm_beta_argument(parser)
+    add_fedadamw_argument(parser)
     add_threads_argument(parser)
 
 
@@ -243,6 +251,9 @@ def add_heca_arguments(parser: argparse.ArgumentParser):
     add_wandb_argument(parser)
     add_use_gt_argument(parser)
     add_batch_argument(parser)
+    add_lr_argument(parser)
+    add_weight_decay_argument(parser)
+    add_lr_annealing_argument(parser)
     add_virtual_argument(parser)
     add_scenes_argument(parser)
     add_tag_argument(parser)
@@ -267,11 +278,11 @@ def _base_tag(args: argparse.Namespace, federated: bool) -> str:
     final_tag += "fed-" if federated else ""
     if federated:
         final_tag += f"k{args.k}-"
-        final_tag += f"mu{args.mu}"
-        beta = getattr(args, "fedavgm_beta", 0.9)
-        eta = getattr(args, "server_lr", None)
-        eta = 1.0 - beta if eta is None else eta
-        final_tag += f"-b{beta:g}-eta{eta:g}"
+        final_tag += f"mu{args.mu}-"
+        final_tag += f"lr{args.lr:g}-"
+        final_tag += f"wd{args.weight_decay:g}"
+        if args.fedadamw_alpha is not None:
+            final_tag += f"-alpha{args.fedadamw_alpha:g}"
     return final_tag
 
 

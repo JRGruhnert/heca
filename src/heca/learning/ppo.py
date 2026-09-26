@@ -81,8 +81,12 @@ class PPO(Learner):
         for pg in optim.param_groups:
             pg["lr"] = lr
 
-    def _fedprox_term(self) -> torch.Tensor:
+    def _penality_term(self) -> torch.Tensor:
         return torch.tensor(0.0, device=hardware.device)
+
+    def _optim_update_hook(self) -> None:
+        """Hook after each optimizer step; a no-op unless a method overrides it."""
+        return
 
     def _mini_batch_loop(
         self,
@@ -90,13 +94,10 @@ class PPO(Learner):
         rtn: torch.Tensor,
         net: Network | None = None,
         optim: torch.optim.Optimizer | None = None,
-        penalty=None,
         prefix: str = "train/",
-        penalty_key: str = "fedprox_loss",
     ):
         net = self.network if net is None else net
         optim = self.optim if optim is None else optim
-        penalty_fn = self._fedprox_term if penalty is None else penalty
         old_data = self.buffer.data
         old_actions = self.buffer.actions.detach().squeeze(-1)
         old_logprobs = self.buffer.logprobs.detach().squeeze(-1)
@@ -200,7 +201,7 @@ class PPO(Learner):
                     - self.cfg.entropy_coef * entropy
                 )
 
-                penalty_value = penalty_fn()
+                penalty_value = self._penality_term()
                 loss = loss + penalty_value
 
                 ev_values.append(state_values.detach().reshape(-1))
@@ -213,6 +214,7 @@ class PPO(Learner):
                 clip_grad_norm_(net.parameters(), self.cfg.max_grad_norm)
 
                 optim.step()
+                self._optim_update_hook()
 
                 # KL early stopping
                 with torch.no_grad():
@@ -259,7 +261,7 @@ class PPO(Learner):
                 f"{prefix}approx_kl": total_approx_kl / num_minibatches,
                 f"{prefix}clip_frac": total_clip_fraction / num_minibatches,
                 f"{prefix}total_loss": total_loss / num_minibatches,
-                f"{prefix}{penalty_key}": total_penalty / num_minibatches,
+                f"{prefix}fed_loss": total_penalty / num_minibatches,
                 f"{prefix}expl_var": explained_var,
                 f"{prefix}lr": optim.param_groups[0]["lr"],
             }

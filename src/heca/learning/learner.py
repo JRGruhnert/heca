@@ -21,26 +21,6 @@ from heca.heca_gnn.network import Network, NetworkOutput
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
 
-# class _ExplainerWrapper(nn.Module):
-#     def __init__(self, model: nn.Module):
-#         super().__init__()
-#         self.model = model
-#         self._edge_attr_dict: dict = {}
-
-#     def set_edge_attrs(self, edge_attr_dict: dict):
-#         self._edge_attr_dict = edge_attr_dict
-
-#     def forward(self, x_dict: dict, edge_index_dict: dict):
-#         data = HeteroData()
-#         for key, x in x_dict.items():
-#             data[key].x = x
-#         for key, edge_index in edge_index_dict.items():
-#             data[key].edge_index = edge_index
-#         for key, edge_attr in self._edge_attr_dict.items():
-#             data[key].edge_attr = edge_attr
-#         batch = Batch.from_data_list([data])
-#         return self.model(batch)
-
 
 def _stored(memory: TrunkMemory) -> TrunkMemory:
     return {name: value.detach().clone() for name, value in memory.items()}
@@ -74,13 +54,14 @@ class Learner(Persistable):
         network: Network.Config
         wandb: logger.WandBConfig = logger.WandBConfig()
         # Hyperparameters
-        lr: float
         max_grad_norm: float
         entropy_coef: float
         critic_coef: float
         eps_clip: float
         lr_annealing: bool
         max_update: int
+        lr: float
+        weight_decay: float = 0.01
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
         # Misc
@@ -91,9 +72,7 @@ class Learner(Persistable):
         self.cfg = cfg
         self.mse_loss = nn.MSELoss()
         self.network = Network.get(cfg.network)
-        self.optim: torch.optim.Optimizer = torch.optim.AdamW(
-            self.network.parameters(), lr=self.cfg.lr
-        )
+        self.optim: torch.optim.Optimizer = self._make_optimizer()
         self.metrics: dict[str, float] = {}
         self.current_update: int = 0
         self.normalizer: RewardNormalizer = RewardNormalizer()
@@ -115,6 +94,14 @@ class Learner(Persistable):
                 task_level="node",
                 return_type="probs",
             ),
+        )
+
+    def _make_optimizer(self) -> torch.optim.Optimizer:
+        """The local optimizer; the federated clients override it (FedAdamW)."""
+        return torch.optim.AdamW(
+            self.network.parameters(),
+            lr=self.cfg.lr,
+            weight_decay=self.cfg.weight_decay,
         )
 
     @cached_property
@@ -199,8 +186,6 @@ class Learner(Persistable):
             # Network config
             "network/input_dim": Entity.FEATURE_DIM,
             "network/max_state": Entity.MAX_STATE_DIM,
-            "network/use_option_interaction": (self.cfg.network.use_option_transformer),
-            "network/use_timeline_memory": (self.cfg.network.use_memory),
         }
 
         for tag in tags:

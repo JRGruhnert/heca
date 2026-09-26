@@ -22,7 +22,7 @@ import conf.networks
 
 from heca.misc.paths import data_root
 
-RUN_ROOT = data_root() / "network/standard"
+DEFAULT_ROOT = data_root() / "network/standard"
 
 
 def find_checkpoint(run_dir: Path, name: str) -> Path:
@@ -59,9 +59,9 @@ def t_critical(n: int) -> float:
         return 1.96  # normal approximation fallback
 
 
-def save_summary(*, network: str, payload: dict) -> Path:
+def save_summary(*, root: Path, network: str, payload: dict) -> Path:
     """Write the across-seed summary JSON for one network (paper table row)."""
-    out_dir = RUN_ROOT / "eval"
+    out_dir = root / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     action = "" if payload.get("greedy", True) else "_sampled"
     path = out_dir / f"{network}_{payload['mode']}{action}.json"
@@ -70,17 +70,19 @@ def save_summary(*, network: str, payload: dict) -> Path:
     return path
 
 
-def resolve_tags(patterns: list[str]) -> list[str]:
-    """Expand ``--tag`` entries: exact run dir names or globs under RUN_ROOT."""
+def resolve_tags(root: Path, patterns: list[str]) -> list[str]:
+    """Expand ``--tag`` entries: run dirs (or relative paths) under ``root``."""
     tags: list[str] = []
     for pattern in patterns:
         if any(ch in pattern for ch in "*?["):
-            found = sorted(p.name for p in RUN_ROOT.glob(pattern) if p.is_dir())
+            found = sorted(
+                str(p.relative_to(root)) for p in root.glob(pattern) if p.is_dir()
+            )
             if not found:
-                raise FileNotFoundError(f"{pattern!r} matches no run dir in {RUN_ROOT}")
+                raise FileNotFoundError(f"{pattern!r} matches no run dir in {root}")
         else:
-            if not (RUN_ROOT / pattern).is_dir():
-                raise FileNotFoundError(f"no run dir {RUN_ROOT / pattern}")
+            if not (root / pattern).is_dir():
+                raise FileNotFoundError(f"no run dir {root / pattern}")
             found = [pattern]
         for name in found:
             if name not in tags:
@@ -116,8 +118,18 @@ def main():
         "--tag",
         nargs="+",
         required=True,
-        help="run dir(s) under data/network/standard: one per trained seed. "
-        "Shell patterns work too, e.g. 'scene0_final-a0-gt-virt_s*'.",
+        help="run dir(s) under --root: one per trained seed. Shell patterns "
+        "work too, e.g. 'scene0_final-a0-gt-virt_s*'; with --root pointing at a "
+        "federated run, use 'global' or 'clients/<scene>'.",
+    )
+    ap.add_argument(
+        "--root",
+        type=Path,
+        default=DEFAULT_ROOT,
+        help="directory holding the run dir(s) named by --tag (default "
+        "data/network/standard). For a federated run point it at the run "
+        "directory and pick the model with --tag: 'global' for the aggregated "
+        "model, 'clients/<scene>' for one client's local weights.",
     )
     ap.add_argument("--ckp", default="latest", help="file name, or 'latest'")
     ap.add_argument("--network", default="a0", help="config name from conf.networks")
@@ -162,7 +174,7 @@ def main():
         "training does; the default (greedy) matches OGBench's eval_temperature 0",
     )
     args = ap.parse_args()
-    args.tag = resolve_tags(args.tag)
+    args.tag = resolve_tags(args.root, args.tag)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -179,7 +191,6 @@ def main():
                 # keep fb.reward raw: success is read straight off it
                 normalize_rewards=False,
             ),
-            visualize=False,
             inference=True,
             virtual=args.virtual,
             reload=False,
@@ -199,7 +210,7 @@ def main():
     if args.mode != "task":
         per_tag: list[float] = []
         for tag in args.tag:
-            path = find_checkpoint(RUN_ROOT / tag, args.ckp)
+            path = find_checkpoint(args.root / tag, args.ckp)
             checkpoint = torch.load(
                 path, map_location=hardware.device, weights_only=False
             )
@@ -220,7 +231,7 @@ def main():
                 f"truncated) in {fmt_duration(time.perf_counter() - started)}"
             )
             save_result(
-                RUN_ROOT / tag,
+                args.root / tag,
                 {
                     "tag": tag,
                     "checkpoint": path.name,
@@ -249,6 +260,7 @@ def main():
             + (f", 95% CI ± {100 * ci:.2f}" if len(per_tag) > 1 else "")
         )
         save_summary(
+            root=args.root,
             network=args.network,
             payload={
                 "network": args.network,
@@ -279,7 +291,7 @@ def main():
 
     per_tag: list[float] = []
     for tag in args.tag:
-        path = find_checkpoint(RUN_ROOT / tag, args.ckp)
+        path = find_checkpoint(args.root / tag, args.ckp)
         checkpoint = torch.load(path, map_location=hardware.device, weights_only=False)
         missing, unexpected = heca.learner.network.upgrade(
             weight_key(checkpoint, args.weights)
@@ -323,7 +335,7 @@ def main():
             f"{sum(counts)} episodes, {truncated_total} truncated)"
         )
         save_result(
-            RUN_ROOT / tag,
+            args.root / tag,
             {
                 "tag": tag,
                 "checkpoint": path.name,
@@ -365,6 +377,7 @@ def main():
         + f" in {fmt_duration(time.perf_counter() - started)}"
     )
     save_summary(
+        root=args.root,
         network=args.network,
         payload={
             "network": args.network,

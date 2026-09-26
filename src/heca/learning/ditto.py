@@ -25,14 +25,8 @@ class DittoPPO(FedProxPPO):
             lr=cfg.personal_lr if cfg.personal_lr is not None else cfg.lr,
         )
 
-    def _personal_term(self) -> torch.Tensor:
-        """``lambda/2 * ||v_k - w||^2`` over the federated tensors.
-
-        ``_global_params`` is the shared model as of the last aggregation, so
-        during one local phase the personal model is pulled towards a fixed
-        anchor. Only tensors the server aggregates are penalized; the local
-        heads are personal either way.
-        """
+    def _penality_term(self) -> torch.Tensor:
+        """``lambda/2 * ||v_k - w||^2`` over the federated tensors."""
         return self._proximal_term(self.personal, self.cfg.personal_coef)
 
     def learn(self):
@@ -48,15 +42,10 @@ class DittoPPO(FedProxPPO):
                 rtn,
                 net=self.personal,
                 optim=self.personal_optim,
-                penalty=self._personal_term,
                 prefix="personal/",
-                penalty_key="ditto_penalty",
             )
             self._anneal(self.personal_optim)
 
-        # the federated model's drift from the anchor, and the personal model's: the
-        # second is what Ditto's lambda actually restrains, the first what mu does
-        self.metrics["fedprox/drift_norm"] = self.drift_norm()
         self.metrics["ditto/drift_norm"] = self.drift_norm(self.personal)
 
     def _sync_inference(self):

@@ -49,8 +49,9 @@ def worker(rank: int, world_size: int, args) -> None:
         n_batch=args.batch,
         mu=args.mu,
         k=args.k,
-        server_lr=args.server_lr,
-        fedavgm_beta=args.fedavgm_beta,
+        fedadamw_alpha=args.fedadamw_alpha,
+        lr=args.lr,
+        weight_decay=args.weight_decay,
         lr_annealing=args.lr_annealing,
     )
     agent = Heca.get(heca_cfg)
