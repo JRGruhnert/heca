@@ -10,6 +10,30 @@ from torch.multiprocessing.spawn import start_processes
 from heca.misc import hardware, logger
 
 DEFAULT_PORT = 29500
+DEFAULT_TIMEOUT_MIN = 30.0
+
+
+def collective_timeout() -> timedelta:
+    """Timeout for one collective on the process group.
+
+    A rank that is merely slow (oversubscribed node, GPU contention) must not
+    take down an otherwise healthy shard, so the default is generous.
+    Override with HECA_PG_TIMEOUT_MINUTES=<minutes> (e.g. 5 to fail fast).
+    """
+    raw = os.environ.get("HECA_PG_TIMEOUT_MINUTES", "").strip()
+    if not raw:
+        return timedelta(minutes=DEFAULT_TIMEOUT_MIN)
+    try:
+        minutes = float(raw)
+    except ValueError:
+        minutes = 0.0
+    if minutes <= 0:
+        logger.warning(
+            f"HECA_PG_TIMEOUT_MINUTES={raw!r} is not a positive number, "
+            f"using {DEFAULT_TIMEOUT_MIN:g} min"
+        )
+        return timedelta(minutes=DEFAULT_TIMEOUT_MIN)
+    return timedelta(minutes=minutes)
 
 
 def threads_for(ranks: int, threads: int = 0) -> int:
@@ -42,15 +66,25 @@ def pin_intra_op_threads(threads: int = 1) -> None:
 
 
 def init(rank: int, world_size: int, port: int = DEFAULT_PORT) -> None:
-    """Join the process group (gloo: everything here runs on CPU)."""
+    """Join the process group (gloo: everything here runs on CPU).
+
+    The collective timeout comes from HECA_PG_TIMEOUT_MINUTES (default 30):
+    too low and a slow-but-alive rank kills the shard.
+    """
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
     os.environ.setdefault("MASTER_PORT", str(port))
+    timeout = collective_timeout()
     dist.init_process_group(
         backend="gloo",
         rank=rank,
         world_size=world_size,
-        timeout=timedelta(minutes=5),
+        timeout=timeout,
     )
+    if rank == 0:
+        logger.info(
+            f"gloo ready: world_size={world_size}, collective timeout "
+            f"{timeout.total_seconds() / 60:g} min (HECA_PG_TIMEOUT_MINUTES)"
+        )
 
 
 def active() -> bool:
