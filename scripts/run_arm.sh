@@ -27,8 +27,18 @@ total="$2"
 module="${3:-scripts.c02_train_seq_fl}"
 
 env_name="${HECA_CONDA_ENV:-hecarim}"
-wandb_root="${HECA_WANDB_ROOT:-/export/$USER/heca/wandb}"
 log="${HECA_ARM_LOG:-$HOME/arm$index.log}"
+
+# Per-arm wandb directories. Prefer the big shared filesystem when the machine has
+# one (/export on pearl2), otherwise fall back to $HOME, so the same script works on
+# either node without extra setup.
+default_wandb_root() {
+    for base in "/export/$USER/heca" "$HOME/heca"; do
+        if [[ -d "$base" && -w "$base" ]]; then echo "$base/wandb"; return; fi
+    done
+    echo "$HOME/heca/wandb"
+}
+wandb_root="${HECA_WANDB_ROOT:-$(default_wandb_root)}"
 
 # --- conda: find the base, then activate inside this process -------------------
 find_conda_base() {
@@ -60,11 +70,37 @@ export PLAN_SHARD="$index/$total"
 export WANDB_DIR="$wandb_root/job$index"
 export PYTHONUNBUFFERED=1
 
-mkdir -p "$WANDB_DIR"
+if ! mkdir -p "$WANDB_DIR" 2>/dev/null; then
+    echo "error: cannot create WANDB_DIR=$WANDB_DIR" >&2
+    echo "       set HECA_WANDB_ROOT to a writable path on this machine" >&2
+    exit 1
+fi
+if [[ ! -e "$(dirname "$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)")" ]]; then
+    echo "error: repository parent directory does not exist" >&2
+    exit 1
+fi
+
 {
     echo "=== $(date '+%F %T') | shard $index/$total | module $module"
     echo "=== python=$python_bin"
     echo "=== WANDB_DIR=$WANDB_DIR log=$log"
+    if [[ -f .env ]]; then
+        echo "=== .env: $(grep -E '^(HECA_DATA|WANDB_DIR|WANDB_MODE|MUJOCO_GL)=' .env | tr '\n' ' ')"
+    else
+        echo "=== WARNING: no .env in $(pwd) — HECA_DATA falls back to <repo>/data"
+    fi
+    # the root the run will actually read: catches a wrong/missing data dir (and a
+    # broken import) before 64 processes are started
+    data_root_line="$(python -c 'from heca.misc.paths import data_root; print(data_root())' 2>&1)"
+    echo "=== data root: $data_root_line"
+    if [[ -d "$data_root_line" ]]; then
+        echo "=== experts there: $(find "$data_root_line" -name 'tapas_gt.pt' 2>/dev/null | wc -l)"
+    fi
 } | tee -a "$log"
+
+if [[ -n "${HECA_ARM_DRY:-}" ]]; then
+    echo "=== dry run: environment is fine, not starting training"
+    exit 0
+fi
 
 python -m "$module" 2>&1 | tee -a "$log"
