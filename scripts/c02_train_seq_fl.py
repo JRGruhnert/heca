@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 
@@ -45,6 +47,10 @@ RUNS: list[dict[str, object]] = [
     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
+    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
+    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 ]
 
 
@@ -79,7 +85,13 @@ def worker(rank: int, world_size: int, args, tag: str, group: str) -> None:
 
 def main():
     planned = list(get_sim_args(DEFAULTS, RUNS))
-    logger.info(f"{len(planned)} run(s) planned:")
+    shard = os.environ.get("PLAN_SHARD")
+    if shard:
+        index, total = (int(part) for part in shard.split("/"))
+        planned = planned[index::total]
+    logger.info(
+        f"{len(planned)} run(s) planned" + (f" (shard {shard})" if shard else ":")
+    )
 
     for args in planned:
         scenes = selected_scenes(args)
