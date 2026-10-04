@@ -33,18 +33,20 @@ DEFAULTS: dict[str, object] = {
     "gt": True,
     "virtual": True,
 }
-
+# mean of the second-moment
+# proximal term
+# alpha, mu: Clients follow the global direction more closely.
 RUNS: list[dict[str, object]] = [
-    {"network": "a0", "k": 1},  # FedAvg
-    {"network": "a0", "k": 5},  # FedAvg
-    {"network": "a0", "k": 1, "mu": 0.01},  # FedProx
+    #    {"network": "a0", "k": 1},  # FedAvg
+    #    {"network": "a0", "k": 5},  # FedAvg
+    {"network": "a0", "k": 1, "mu": 0.01},  # FedProx #proximal term
     {"network": "a0", "k": 5, "mu": 0.01},  # FedProx
     {"network": "a0", "k": 1, "mu": 0.1},  # FedProx
     {"network": "a0", "k": 5, "mu": 0.1},  # FedProx
     {"network": "a0", "k": 1, "mu": 1.0},  # FedProx
     {"network": "a0", "k": 5, "mu": 1.0},  # FedProx
-    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5},  # FedAdamW
-    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
+    #    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5},  # FedAdamW
+    #    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx

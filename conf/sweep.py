@@ -9,7 +9,7 @@ AXES: dict[str, tuple[str, tuple[Any, ...]]] = {
     "use_summary_gcn": ("s", (False, True)),
     "goal_conditioning": ("g", ("none", "hyperedge", "residual")),
     "jitter_scope": ("j", ("none", "entity", "scene", "both")),
-    "use_option_transformer": ("x", (False, True)),
+    "use_option_relation": ("x", (True, False)),
 }
 
 BASE_NAME = "base"

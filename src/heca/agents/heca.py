@@ -33,6 +33,7 @@ class Heca(Configurable):
         self._y: DCScene | None = None
 
         self._episode_steps = 0
+        self._budget = 0.0
         self.scene = Scene.get(self.cfg.experts[0].scene)
 
         for a in self.cfg.experts:
@@ -105,9 +106,11 @@ class Heca(Configurable):
         if self._x is None or self._y is None:
             self._episode_steps = 0
             self._x, self._y = self.sample()
+            self._budget = 0.0
 
-        z, fb, finished = self.step(self._x, self._y)
+        z, fb, finished = self.step(self._x, self._y, self._budget)
         self._x = z
+        self._budget = fb.budget
 
         if fb.end or finished:
             self._x = None

@@ -18,11 +18,27 @@ class OptionNodes(NodeSet[OptionNode]):
     type = "option"
 
     FEATURE_DIM = 4
-    RECENCY_HALF_LIFE: float = 4.0  # steps until a use decays to half weight
+    RECENCY_HALF_LIFE_FRACTION: float = 0.25
+    RECENCY_HALF_LIFE_FLOOR: float = 1.0
+
+    def __init__(self):
+        super().__init__()
+        self.horizon: int = 1
+
+    def set_horizon(self, max_steps: int):
+        self.horizon = max_steps
+
+    @property
+    def recency_half_life(self) -> float:
+        """Option executions after which a use decays to half weight."""
+        return max(
+            self.RECENCY_HALF_LIFE_FLOOR,
+            self.RECENCY_HALF_LIFE_FRACTION * self.horizon,
+        )
 
     def decay(self):
         """One elapsed step: let every option's recency fade (call every step)."""
-        factor = 0.5 ** (1.0 / self.RECENCY_HALF_LIFE)
+        factor = 0.5 ** (1.0 / self.recency_half_life)
         for node in self.items:
             node.recency *= factor
 
@@ -43,7 +59,7 @@ class OptionNodes(NodeSet[OptionNode]):
         self.x = self.statistics()
 
     def statistics(self) -> torch.Tensor:
-        """(n_options, FEATURE_DIM): z-scored count / group / recency + gate."""
+        """(n_options, FEATURE_DIM): z-scored count / group mean / recency + gate."""
         per_option = np.array(
             [node.exec_count for node in self.items], dtype=np.float32
         )
@@ -51,12 +67,17 @@ class OptionNodes(NodeSet[OptionNode]):
         gated = self.gated.numpy().astype(np.float32)
 
         per_group: dict[str, int] = {}
+        group_size: dict[str, int] = {}
         for node in self.items:
-            per_group[node.model.tag] = (
-                per_group.get(node.model.tag, 0) + node.exec_count
-            )
+            tag = node.model.tag
+            per_group[tag] = per_group.get(tag, 0) + node.exec_count
+            group_size[tag] = group_size.get(tag, 0) + 1
         group_of_option = np.array(
-            [per_group[node.model.tag] for node in self.items], dtype=np.float32
+            [
+                per_group[node.model.tag] / group_size[node.model.tag]
+                for node in self.items
+            ],
+            dtype=np.float32,
         )
 
         return torch.from_numpy(

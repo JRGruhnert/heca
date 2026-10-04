@@ -33,7 +33,7 @@ class Network(Configurable, nn.Module):
         feature_dim: int = 128
         seperate_root: bool = False
         seperate_trunc: bool = False
-        use_option_transformer: bool = False
+        use_option_relation: bool = False
         use_condition_gat: bool = False
         use_summary_gcn: bool = False
         use_memory: bool = False
@@ -105,7 +105,7 @@ class Network(Configurable, nn.Module):
                 role: TruncNetwork(
                     role,
                     feature_dim=cfg.feature_dim,
-                    option_transformer=cfg.use_option_transformer,
+                    option_relation=cfg.use_option_relation,
                     summary_sage=cfg.use_summary_gcn,
                     pair_norm=cfg.pair_norm,
                     memory=cfg.use_memory,
@@ -117,7 +117,7 @@ class Network(Configurable, nn.Module):
                 self.SHARED: TruncNetwork(
                     self.SHARED,
                     feature_dim=cfg.feature_dim,
-                    option_transformer=cfg.use_option_transformer,
+                    option_relation=cfg.use_option_relation,
                     summary_sage=cfg.use_summary_gcn,
                     pair_norm=cfg.pair_norm,
                     memory=cfg.use_memory,

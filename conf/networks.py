@@ -11,7 +11,8 @@ a6 = Network.Config(use_memory=True)
 a7 = Network.Config(goal_conditioning="hyperedge", use_memory=True)
 a8 = Network.Config(use_statistics=True)
 a9 = Network.Config(goal_conditioning="hyperedge", use_statistics=True)
-
+a10 = Network.Config(use_option_relation=True)
+a11 = Network.Config(goal_conditioning="hyperedge", use_option_relation=True)
 # FEDERATED ONLY ABLATIONS
 x0 = Network.Config(sync=("!actor_head", "!critic_head"))  # federate trunk
 x1 = Network.Config(sync=("root",))  # federate only root
@@ -27,6 +28,8 @@ NETWORK_NAMES = [
     "a7",
     "a8",
     "a9",
+    "a10",
+    "a11",
     "x0",
     "x1",
 ]

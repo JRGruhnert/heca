@@ -12,6 +12,7 @@ from heca.experts.expert import ExpertModel
 
 from heca.graphs.edges.condition_edges import ConditionEdges
 from heca.graphs.edges.edge_set import DEFAULT_TERMS
+from heca.graphs.edges.option_edges import OptionEdges
 from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
 from heca.graphs.edges.translation_edges import TranslationEdges
@@ -72,6 +73,7 @@ class Graph:
 
         self.es_scene: SceneEdges = SceneEdges()
         self.es_summary: SummaryEdges = SummaryEdges()
+        self.es_option: OptionEdges = OptionEdges()
         self.es_condition: ConditionEdges = ConditionEdges()
         self.es_translation: TranslationEdges = TranslationEdges()
 
@@ -95,6 +97,7 @@ class Graph:
 
         self._jitter_positions()
         self.es_summary.build(self.ns_entity, self.ns_option)
+        self.es_option.build(self.ns_option, self.ns_entity)
         self.es_translation.build(self.ns_entity, self.ns_entity)
         self.es_scene.build(self.ns_option, self.ns_state)
 
@@ -117,6 +120,7 @@ class Graph:
         data[self.es_condition.type].edge_index = self.es_condition.edge_index
         data[self.es_condition.type].edge_attr = self.es_condition.edge_attr
         data[self.es_summary.type].edge_index = self.es_summary.edge_index
+        data[self.es_option.type].edge_index = self.es_option.edge_index
         data[self.es_translation.type].edge_index = self.es_translation.edge_index
 
         self._validate_export(data)
@@ -315,6 +319,7 @@ class Graph:
             jitter_scope=jitter_scope,
         )
         graph.set_goal_rows()
+        graph.ns_option.set_horizon(cfgs[0].scene.max_steps)
         agents = [ExpertModel.get(cfg) for cfg in cfgs]
 
         for a in agents:
@@ -511,6 +516,15 @@ class Graph:
         opt = data[self.ns_option.type]
         assert opt.gated.shape == (opt.x.shape[0],)
         assert bool(((opt.gated == 0) | (opt.gated == 1)).all())
+
+        opt_edges = data[self.es_option.type].edge_index
+        assert opt_edges.shape[0] == 2
+        if opt_edges.shape[1]:
+            assert bool((opt_edges[0] != opt_edges[1]).all())
+            assert int(opt_edges.max()) < opt.x.shape[0]
+            pairs = {(int(a), int(b)) for a, b in zip(opt_edges[0], opt_edges[1])}
+            assert len(pairs) == opt_edges.shape[1], "duplicate option edge"
+            assert all((b, a) in pairs for a, b in pairs), "option edges not symmetric"
 
         slots_op = data[self.ns_state.type]
         gate = data[self.es_scene.type].edge_index

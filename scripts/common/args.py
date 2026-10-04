@@ -272,15 +272,12 @@ def _base_tag(args: argparse.Namespace, federated: bool) -> str:
     final_tag += args.tag
     final_tag += "-"
     final_tag += args.network
-    final_tag += "-"
-    final_tag += "gt-" if args.gt else ""
-    final_tag += "virt-" if args.virtual else ""
-    final_tag += "fed-" if federated else ""
+    final_tag += "-gt" if args.gt else ""
+    final_tag += "-virt" if args.virtual else ""
+    final_tag += "-fed" if federated else ""
     if federated:
-        final_tag += f"k{args.k}-"
-        final_tag += f"mu{args.mu}-"
-        final_tag += f"lr{args.lr:g}-"
-        final_tag += f"wd{args.weight_decay:g}"
+        final_tag += f"-k{args.k}"
+        final_tag += f"-mu{args.mu}"
         if args.fedadamw_alpha is not None:
             final_tag += f"-alpha{args.fedadamw_alpha:g}"
     return final_tag

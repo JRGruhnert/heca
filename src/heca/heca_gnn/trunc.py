@@ -4,14 +4,14 @@ import torch
 from torch import nn
 
 from heca.graphs.data import HecaData
+from heca.graphs.edges.option_edges import OptionEdges
 from heca.graphs.edges.scene_edges import SceneEdges
 from heca.graphs.edges.summary_edges import SummaryEdges
-from heca.graphs.nodes.option_nodes import OptionNodes
 
 from heca.heca_gnn.modules.boundary import BoundaryNorm, NoUpdateBlock, PairNormBlock
 from heca.heca_gnn.modules.encoders.encoder import EncodedRows
-from heca.heca_gnn.modules.interaction import TransformerBlock
-from heca.heca_gnn.modules.scene import SceneGATBlock, SceneSageBlock
+from heca.heca_gnn.modules.relation import OptionRelationBlock
+from heca.heca_gnn.modules.scene import SceneGATBlock
 from heca.heca_gnn.modules.summary import SummarySageBlock, SummaryGinBlock
 from heca.heca_gnn.modules.timeline import MemoryBlock, NoMemoryBlock
 
@@ -27,7 +27,7 @@ class TruncNetwork(nn.Module):
         self,
         name: str,
         feature_dim: int,
-        option_transformer: bool,
+        option_relation: bool,
         summary_sage: bool,
         pair_norm: bool,
         memory: bool,
@@ -42,7 +42,7 @@ class TruncNetwork(nn.Module):
                     (
                         "summary_entity",
                         "summary_option",
-                        "interaction_option",
+                        "relation_option",
                         "scene_option",
                         "scene_state",
                         "timeline_state",
@@ -54,16 +54,12 @@ class TruncNetwork(nn.Module):
                     if summary_sage
                     else SummaryGinBlock(feature_dim)
                 ),
-                "interaction": (
-                    TransformerBlock(feature_dim)
-                    if option_transformer
+                "relation": (
+                    OptionRelationBlock(feature_dim)
+                    if option_relation
                     else NoUpdateBlock()
                 ),
-                "scene": (
-                    SceneSageBlock(feature_dim)
-                    if option_transformer
-                    else SceneGATBlock(feature_dim)
-                ),
+                "scene": SceneGATBlock(feature_dim),
                 "timeline": (MemoryBlock(feature_dim) if memory else NoMemoryBlock()),
             }
         )
@@ -82,10 +78,10 @@ class TruncNetwork(nn.Module):
         )
         option_x = pair("option", option_x)
 
-        option_x = norm("interaction_option", option_x)
-        option_x = option_x + layer["interaction"](
+        option_x = norm("relation_option", option_x)
+        option_x = option_x + layer["relation"](
             option_x,
-            data[OptionNodes.type].gated,
+            data[OptionEdges.type].edge_index,
         )
         option_x = pair("option", option_x)
 
