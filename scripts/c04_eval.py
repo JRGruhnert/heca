@@ -67,6 +67,59 @@ def save_summary(*, root: Path, network: str, payload: dict) -> Path:
     path = out_dir / f"{network}_{payload['mode']}{action}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
     logger.info(f"  saved {path}")
+    save_benchmark(root, payload)
+    return path
+
+
+def benchmark_key(cell: dict) -> tuple:
+    """What makes two evaluations the same benchmark cell."""
+    return (
+        cell.get("scene"),
+        cell.get("network"),
+        cell.get("weights"),
+        cell.get("gt"),
+        cell.get("virtual"),
+        cell.get("mode"),
+        cell.get("greedy"),
+    )
+
+
+def save_benchmark(root: Path, payload: dict) -> Path:
+    """Add this evaluation to the benchmark table, one cell per network.
+
+    Success rates are the mean over training seeds plus the standard deviation
+    across them, so a table row reads mean +- std over seeds.
+    """
+    path = root / "eval" / "benchmark.json"
+    cells: list[dict] = json.loads(path.read_text()) if path.exists() else []
+    cell = {
+        "scene": payload["scene"],
+        "network": payload["network"],
+        "weights": payload.get("weights", "network"),
+        "gt": payload["gt"],
+        "virtual": payload["virtual"],
+        "mode": payload["mode"],
+        "greedy": payload["greedy"],
+        "checkpoint": payload["checkpoints"],
+        "n_seeds": payload["n_seeds"],
+        "episodes_per_seed": payload["episodes_per_seed"],
+        "runs": payload["tags"],
+        "success_rate_per_seed": payload["success_rate_per_seed"],
+        "mean": payload["mean"],
+        "std": payload["std"],
+        "sem": payload["sem"],
+        "ci95": payload["ci95"],
+        "timestamp": payload["timestamp"],
+    }
+    cells = [c for c in cells if benchmark_key(c) != benchmark_key(cell)]
+    cells.append(cell)
+    cells.sort(key=lambda c: (c["scene"], c["network"], c["mode"]))
+    path.write_text(json.dumps(cells, indent=2) + "\n")
+    logger.info(
+        f"  benchmark {payload['scene']} / {payload['network']}: "
+        f"{100 * payload['mean']:.1f}% +- {100 * payload['std']:.1f} "
+        f"(std over {payload['n_seeds']} seed(s)) -> {path}"
+    )
     return path
 
 
@@ -88,6 +141,60 @@ def resolve_tags(root: Path, patterns: list[str]) -> list[str]:
             if name not in tags:
                 tags.append(name)
     return tags
+
+
+def parse_run(name: str) -> dict:
+    """The parts of a run dir name that evaluation depends on.
+
+    ``scene0_final-a0-gt-virt_s2`` -> scene0, a0, ground truth, virtual, seed 2.
+    Everything else in the name (protocol, hyperparameters) is a training
+    parameter, so a changed tag layout cannot hide a run from selection.
+    """
+    stem, _, seed = name.rpartition("_s")
+    if not (stem and seed.isdigit()):
+        stem, seed = name, ""
+    scene, _, rest = stem.partition("_")
+    tokens = [token for token in rest.split("-") if token]
+    return {
+        "scene": scene,
+        "network": next((t for t in tokens if t in conf.networks.CONFIGS), None),
+        "gt": "gt" in tokens,
+        "virtual": "virt" in tokens,
+        "seed": int(seed) if seed else None,
+    }
+
+
+def select_runs(
+    root: Path,
+    scene: str,
+    network: str,
+    gt: bool,
+    virtual: bool,
+    only: list[str],
+) -> list[str]:
+    """Every checkpointed run under ``root`` matching what evaluation needs.
+
+    ``only`` keeps whole runs out of the sample without caring about layout,
+    e.g. ``--only final`` drops ``scene0_smoke4-a0-gt-virt_s0``.
+    """
+    found: list[str] = []
+    for path in sorted(root.glob("*")):
+        if not path.is_dir() or not path.glob("ckp_*.pt"):
+            continue
+        parts = parse_run(path.name)
+        if (parts["scene"], parts["network"]) != (scene, network):
+            continue
+        if (parts["gt"], parts["virtual"]) != (gt, virtual):
+            continue
+        if only and not any(token in path.name for token in only):
+            continue
+        found.append(path.name)
+    if not found:
+        raise FileNotFoundError(
+            f"no run in {root} for scene={scene} network={network} "
+            f"gt={gt} virtual={virtual}" + (f" only={only}" if only else "")
+        )
+    return found
 
 
 def weight_key(checkpoint: dict, weights: str) -> dict:
@@ -117,10 +224,18 @@ def main():
     ap.add_argument(
         "--tag",
         nargs="+",
-        required=True,
         help="run dir(s) under --root: one per trained seed. Shell patterns "
         "work too, e.g. 'scene0_final-a0-gt-virt_s*'; with --root pointing at a "
-        "federated run, use 'global' or 'clients/<scene>'.",
+        "federated run, use 'global' or 'clients/<scene>'. Omitted: every run "
+        "matching --scene, --network, --gt and --virtual is evaluated, whatever "
+        "the rest of its name says.",
+    )
+    ap.add_argument(
+        "--only",
+        nargs="+",
+        default=[],
+        help="with no --tag, require these words in the run name, e.g. "
+        "'--only final' to skip smoke runs",
     )
     ap.add_argument(
         "--root",
@@ -174,7 +289,13 @@ def main():
         "training does; the default (greedy) matches OGBench's eval_temperature 0",
     )
     args = ap.parse_args()
-    args.tag = resolve_tags(args.root, args.tag)
+    args.tag = (
+        resolve_tags(args.root, args.tag)
+        if args.tag
+        else select_runs(
+            args.root, args.scene, args.network, args.gt, args.virtual, args.only
+        )
+    )
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -199,10 +320,12 @@ def main():
         )
     )
 
+    heca.learner.sample_options(args.sample)
     heca.scene.set_mode(args.mode)
     logger.info(
-        f"{len(args.tag)} tag(s), net={args.network}, mode={heca.scene.cfg.mode}, "
-        f"greedy={not args.sample}"
+        f"{len(args.tag)} run(s), {args.scene} / {args.network}, gt={args.gt}, "
+        f"virtual={args.virtual}, mode={heca.scene.cfg.mode}, "
+        f"greedy={not args.sample}\n" + "\n".join(f"  {tag}" for tag in args.tag)
     )
 
     started = time.perf_counter()
@@ -238,6 +361,8 @@ def main():
                     "scene": args.scene,
                     "network": args.network,
                     "weights": args.weights,
+                    "gt": args.gt,
+                    "virtual": args.virtual,
                     "mode": args.mode,
                     "greedy": not args.sample,
                     "episodes": args.episodes,
@@ -266,6 +391,8 @@ def main():
                 "network": args.network,
                 "weights": args.weights,
                 "scene": args.scene,
+                "gt": args.gt,
+                "virtual": args.virtual,
                 "mode": args.mode,
                 "greedy": not args.sample,
                 "checkpoints": args.ckp,
@@ -382,6 +509,9 @@ def main():
         payload={
             "network": args.network,
             "scene": args.scene,
+            "weights": args.weights,
+            "gt": args.gt,
+            "virtual": args.virtual,
             "mode": args.mode,
             "greedy": not args.sample,
             "checkpoints": args.ckp,

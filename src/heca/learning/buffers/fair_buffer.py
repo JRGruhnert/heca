@@ -36,14 +36,13 @@ class FairBuffer(Buffer):
 
             # Value of the state *after* this transition.
             #   terminal  -> 0 (the episode truly ended)
-            #   truncated -> V(s_t) itself: V(s_{t+1}) is never stored (the next
-            #                buffer slot belongs to a *new* episode), so instead of
-            #                forcing 0 we bootstrap with the adjacent-state value.
+            #   truncated -> 0: the option budget is used up and the episode is
+            #                scored as a failure, so nothing is inherited.
+            #                Bootstrapping V(s_t) here made timing out look as
+            #                good as succeeding and the critic never learned it.
             #   otherwise -> V(s_{t+1}) (the next transition's value)
-            if is_terminal:
+            if is_terminal or is_truncated:
                 boot = 0.0
-            elif is_truncated:
-                boot = values[t]
             else:
                 boot = next_value
 

@@ -288,7 +288,6 @@ def build_heca(scene_cfg, model_cfgs, args) -> Heca:
                 max_update=0,
                 lr_annealing=False,
             ),
-            visualize=False,
             inference=True,
             virtual=args.virtual,
             reload=False,
