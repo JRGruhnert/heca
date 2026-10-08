@@ -40,12 +40,16 @@ class Heca(Configurable):
             expert = ExpertModel.get(a, auto_load=False)
             expert.use_gt(self.cfg.use_gt)
             expert.load()
+            expert.load_extras()
 
             if self.cfg.reload:
                 expert.force_recompute()
 
             if self.cfg.virtual:
                 expert.virtual()
+
+        self.scene.finish_extras()
+        self.scene.save()
 
         self.graph = Graph.generate(
             list(self.cfg.experts),
@@ -95,10 +99,15 @@ class Heca(Configurable):
         return z, fb
 
     def sample(self) -> tuple[DCScene, DCScene]:
-        (x, ix), (y, iy) = self.scene.sample_task()
+        (x, x_frame), (y, y_frame) = self.scene.sample_task(with_scenes=self.cfg.use_gt)
         self.graph.ns_option.reset_stats()
         for agent in self.cfg.experts:
             ExpertModel.get(agent).reset_tracking()
+        if not self.cfg.use_gt:
+            reader = ExpertModel.get(self.cfg.experts[0])
+            x = reader.make_scene(x, x_frame)
+            reader.reset_tracking()
+            y = reader.make_scene(y, y_frame)
         logger.debug("New Episode")
         return x, y
 

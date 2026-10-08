@@ -4,6 +4,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import Sequence
 
+import h5py
 import numpy as np
 from heca.data.pair import ConPair
 from heca.data.data import DCEntity, DCScene, TDImage
@@ -57,13 +58,48 @@ class ExpertModel(Persistable, abc.ABC):
 
     def use_gt(self, flag: bool) -> "ExpertModel":
         self._use_gt = flag
+        # a run that reads images needs frames, and the live environment only
+        # offers those rendered, never in an observation
+        self.scene.render_frames = not flag
         if not flag:
-            self.scene.load()
+            # only load what has not been read: a reload empties the scene's pools,
+            # and every expert is told whether to use ground truth, so reloading
+            # here would throw away the frames the expert before it derived
+            if not self.scene.loaded:
+                self.scene.load()
             self.kp_extractor = ImageEncoder.get(self.cfg.kp_extraction)
             self.ste_extractor = ImageEncoder.get(self.cfg.state_extraction)
             self.kp_extractor.prepare_for_scene(self.cfg.scene)
             self.ste_extractor.prepare_for_scene(self.cfg.scene)
         return self
+
+    def load_extras(self) -> None:
+        """Derive the extra ends this expert's demos imply, into the scene."""
+        with h5py.File(self.load_dir(self.cfg) / "demos.h5", "r") as demos:
+            # reading the demo scenes back as ground truth needs the ends first
+            for label, entity in self.scene.entities.items():
+                values = entity.extra_values(label, demos)
+                if values is None:
+                    continue
+                self.scene.add_extra_range(label, *values)
+            if not self._use_gt:
+                self.add_extra_positions(demos)
+
+    def add_extra_positions(self, demos: h5py.File) -> None:
+        wanted = [
+            label for label in self.entities if label not in self.scene.extra_references
+        ]
+        if not wanted:
+            return
+        _, demos_images = self.scene.load_dataset(
+            demos, only_conditions=True, with_scenes=False, with_images=True
+        )
+        for images in demos_images:
+            for image in images:
+                self.reset_tracking()
+                poses = self.kp_extractor.extract_poses(image)
+                for label in wanted:
+                    self.scene.add_extra_positions(label, poses[label].xyz)
 
     @cached_property
     def tps(self) -> set[str]:
@@ -100,6 +136,7 @@ class ExpertModel(Persistable, abc.ABC):
             positions = {
                 "current": position,
                 "reference": reference,
+                **self.scene.extra_references.get(label, {}),
                 **{
                     name: references[label][name].xyz for name in entity.reference_names
                 },
@@ -172,20 +209,6 @@ class ExpertModel(Persistable, abc.ABC):
     @cached_property
     def conditions(self) -> ConPair:
         raise NotImplementedError
-
-    def valid_task(self, x: DCScene, y: DCScene) -> bool:
-        for label, entity in self.entities.items():
-            x_valid = entity.score_single(
-                x.get(label).value,
-                self.conditions.pre.models[label].get_parameters(),
-            )
-            y_valid = entity.score_single(
-                y.get(label).value,
-                self.conditions.post.models[label].get_parameters(),
-            )
-            if not (x_valid and y_valid):
-                return False
-        return True
 
     def act(
         self, x: DCScene, y: DCScene, gated: bool = False

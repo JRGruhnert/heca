@@ -89,6 +89,7 @@ class Registerable(Configurable):
 
 class Persistable(Registerable, abc.ABC):
     _persisted_instances: ClassVar[dict[tuple[type, str], "Persistable"]] = {}
+    loaded: bool = False
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -113,14 +114,12 @@ class Persistable(Registerable, abc.ABC):
     def get(cls: type[P], cfg: "Persistable.Config", auto_load: bool = True) -> P:
         target_cls = cls._config_registry.get(type(cfg), cls)
         key = cls._key(cfg)
-        # print(key)
         if key not in cls._persisted_instances:
-            # print("new")
-            instance = cast(P, target_cls(cfg))
-            if auto_load:
-                instance.load()
-            cls._persisted_instances[key] = instance
-        return cast(P, cls._persisted_instances[key])
+            cls._persisted_instances[key] = cast(P, target_cls(cfg))
+        instance = cast(P, cls._persisted_instances[key])
+        if auto_load and not instance.loaded:
+            instance.load()
+        return instance
 
     @classmethod
     def _subdir(cls, cfg: "Persistable.Config", for_load: bool) -> str:
@@ -156,6 +155,7 @@ class Persistable(Registerable, abc.ABC):
         path = self.load_dir(self.cfg)
         logger.info(f"Loading {type(self)} from {path}")
         self._load(path)
+        self.loaded = True
 
     @abc.abstractmethod
     def _save(self, path: Path) -> bool:

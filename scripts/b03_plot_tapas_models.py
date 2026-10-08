@@ -56,7 +56,9 @@ def condition_info_dict(con: Condition, scene: Scene) -> dict:
     for label, entity in con.entities.items():
         info.update(
             entity.env_state_value(
-                label, dcscene, unnormalize_pos=scene.unnormalize_position
+                label,
+                dcscene,
+                unnormalize_pos=scene.unnormalize_position,
             )
         )
     return info
@@ -265,6 +267,7 @@ def evaluate_one(
     model = ExpertModel.get(cfg, auto_load=False)
     model.use_gt(gt)
     model.load()
+    model.load_extras()
     counts = evaluate_model(model, model.scene, episodes, max_tries)
 
     json_path = results_path(scene_cfg)

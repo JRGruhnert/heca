@@ -31,11 +31,6 @@ class Request:
     label: str
     name: str
     hint: str
-    state: int | None = None
-
-
-def state_name(idx: int) -> str:
-    return f"state{idx}"
 
 
 def joint_hint(entity: Entity, name: str) -> str:
@@ -56,13 +51,6 @@ def reference_requests(entities: dict[str, Entity]) -> list[Request]:
         )
         for name in entity.reference_names:
             requests.append(Request(label, name, joint_hint(entity, name)))
-        if entity.cfg.n_states > 1:
-            for idx in range(entity.cfg.n_states):
-                requests.append(
-                    Request(
-                        label, state_name(idx), f"a picture of state {idx}", state=idx
-                    )
-                )
     return requests
 
 
@@ -72,7 +60,6 @@ class SceneRefSelector(Configurable):
         scene: Scene.Config
         dataset_name: str = ""  # empty: the scene's own h5 in its folder
         marker_radius: int = 3
-        sample_count: int = 5
         vis_size: tuple[int, int] = (512, 512)
 
     def __init__(self, cfg: Config):
@@ -115,10 +102,6 @@ class SceneRefSelector(Configurable):
         self.references: dict[str, dict[str, Reference]] = {
             label: {} for label in self.scene.entities
         }
-        self.state_samples: dict[str, dict[int, list[Image.Image]]] = {
-            label: {idx: [] for idx in range(entity.cfg.n_states)}
-            for label, entity in self.scene.entities.items()
-        }
         self.requests = reference_requests(self.scene.entities)
         self.selection_iter = iter(self.requests)
         self.request: Request | None = None
@@ -136,6 +119,22 @@ class SceneRefSelector(Configurable):
         self.extrinsics = self.dataset["extrinsics"]
         self.intrinsics = self.dataset["intrinsics"]
         self.title = "{entity}: add {what} - {hint}"
+        self.prompt = ""
+        self.prompt_item: int | None = None
+        self.on_next_btn()  # show the first request instead of an empty window
+
+    def draw_prompt(self):
+        """Keep what to click next on the picture, not just in the title bar."""
+        if self.prompt_item is not None:
+            self.canvas.delete(self.prompt_item)
+        self.prompt_item = self.canvas.create_text(
+            8,
+            8,
+            anchor="nw",
+            text=self.prompt,
+            fill="#FDE047",
+            font=("TkDefaultFont", 13, "bold"),
+        )
 
     def update_title(self, extra: str = ""):
         if self.request is None:
@@ -143,18 +142,14 @@ class SceneRefSelector(Configurable):
         what = (
             "the entity's position reference"
             if self.request.name == Reference.POSITION
-            else (
-                f"state {self.request.state} sample"
-                if self.request.state is not None
-                else f"the joint '{self.request.name}' reference"
-            )
+            else f"the joint '{self.request.name}' reference"
         )
-        self.window.title(
-            self.title.format(
-                entity=self.request.label, what=what, hint=self.request.hint
-            )
-            + (f" ({extra})" if extra else "")
-        )
+        text = self.title.format(
+            entity=self.request.label, what=what, hint=self.request.hint
+        ) + (f" ({extra})" if extra else "")
+        self.window.title(text)
+        self.prompt = text
+        self.draw_prompt()
 
     def place_marker(self, x: int, y: int) -> int:
         r = self.cfg.marker_radius
@@ -168,9 +163,11 @@ class SceneRefSelector(Configurable):
             self.img.resize((self.display_w, self.display_h), Image.Resampling.NEAREST)
         )
         self.canvas.delete("all")
+        self.prompt_item = None
         self.canvas.create_image(
             self.offset_x, self.offset_y, anchor="nw", image=self.img_tk
         )
+        self.draw_prompt()
 
     def scale_point_to_image(self, x: int, y: int) -> tuple[int, int]:
         return (
@@ -179,9 +176,7 @@ class SceneRefSelector(Configurable):
         )
 
     def on_canvas_click(self, event: tk.Event):
-        if self.request is None or self.request.state is not None:
-            # A state sample is a whole picture: the frame is the sample, so a
-            # click on it means nothing.
+        if self.request is None:
             return
         if self.kp_marker is not None:
             self.canvas.delete(self.kp_marker)
@@ -211,16 +206,6 @@ class SceneRefSelector(Configurable):
     def on_add_btn(self):
         request = self.request
         assert request is not None, "No reference in progress"
-        if request.state is not None:
-            self.state_samples[request.label][request.state].append(self.img)
-            count = len(self.state_samples[request.label][request.state])
-            if count >= self.cfg.sample_count:
-                self.on_next_btn()
-            else:
-                self.update_title(f"{count}/{self.cfg.sample_count}")
-                self.on_resample_btn()
-            return
-
         assert self.pending is not None, "Click the keypoint in the image first"
         self.references[request.label][request.name] = self.pending
         logger.info(
@@ -238,9 +223,11 @@ class SceneRefSelector(Configurable):
         self.update_title()
         self.on_resample_btn()
 
+    def run(self):
+        self.window.mainloop()
+
     def finish(self):
         self.scene.references = self.references
-        self.scene.state_references = self.state_samples
         self.scene.save()
         logger.info(
             f"saved references for {len(self.references)} entities to "

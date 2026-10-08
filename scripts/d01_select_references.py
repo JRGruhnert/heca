@@ -14,9 +14,6 @@ def main():
         default="",
         help="demo .h5 to take the frames from; default: the scene's own",
     )
-    parser.add_argument(
-        "--samples", type=int, default=5, help="state pictures per state"
-    )
     args = parser.parse_args()
 
     scene_cfg = find_scene_config(args.scene)
@@ -27,7 +24,6 @@ def main():
         SceneRefSelector.Config(
             scene=scene_cfg,
             dataset_name=args.dataset,
-            sample_count=args.samples,
         )
     )
     selector.run()

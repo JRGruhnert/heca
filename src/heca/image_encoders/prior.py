@@ -34,13 +34,14 @@ class KeypointPrior:
             (self.pixel[1] + 1.0) * 0.5 * (width - 1),
         )
 
-    def predict(self, height: int, width: int) -> torch.Tensor | None:
-        """The prior over the descriptor grid, or ``None`` without a belief."""
+    def predict(
+        self, height: int, width: int, device: torch.device | None = None
+    ) -> torch.Tensor | None:
         if self.pixel is None:
             return None
         centre = self.grid_position(height, width)
-        rows = torch.arange(height, dtype=torch.float32).reshape(-1, 1)
-        cols = torch.arange(width, dtype=torch.float32).reshape(1, -1)
+        rows = torch.arange(height, dtype=torch.float32, device=device).reshape(-1, 1)
+        cols = torch.arange(width, dtype=torch.float32, device=device).reshape(1, -1)
         distance2 = (rows - centre[0]) ** 2 + (cols - centre[1]) ** 2
         return torch.exp(-0.5 * distance2 / self.cfg.sigma**2)
 

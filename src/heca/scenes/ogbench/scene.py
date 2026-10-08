@@ -117,14 +117,14 @@ class OGScene(Scene):
                 rec[attr] = value.copy() if value is not None else None
             rec["_target_val"] = getattr(obj, "_target_val", None)
             objects.append((obj, rec))
-        return env._data.qpos.copy(), env._data.qvel.copy(), objects
+        return env._data.qpos.copy(), env._data.qvel.copy(), objects  # type: ignore
 
     def restore(self, snap: tuple, step: int) -> None:
         """Put the env back into a snapshotted state, at option step ``step``."""
         env = self.env
         qpos, qvel, objects = snap
-        env._data.qpos[:] = qpos
-        env._data.qvel[:] = qvel
+        env._data.qpos[:] = qpos  # type: ignore
+        env._data.qvel[:] = qvel  # type: ignore
         for obj, rec in objects:
             for attr, value in rec.items():
                 if value is None:
@@ -146,9 +146,14 @@ class OGScene(Scene):
         env = self.env
         return bool(env._evaluate_success(env._compute_successes()))
 
+    def render_frame(self) -> TDImage:
+        return self.to_td_image({"image": self.env.get_pixel_observation()})
+
     def to_td_image(self, obs: dict) -> TDImage:
         image_dict = obs["image"]
         if not isinstance(image_dict, dict):
+            if self.render_frames:
+                return self.render_frame()
             empty = torch.empty(0)
             return TDImage(
                 rgb=empty.clone(),
@@ -221,6 +226,7 @@ class OGScene(Scene):
 
     def _sample_task(
         self,
+        with_scenes: bool = True,
     ) -> tuple[
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
@@ -237,10 +243,20 @@ class OGScene(Scene):
         self.last_pos = obs["proprio_effector_pos"]
         self.last_rot = obs["proprio_effector_yaw"]
         self.last_ste = obs["proprio_gripper_opening"]
-        s_scene, s_image, _ = self.from_internal(obs)
-        g_scene, g_image, _ = self.from_internal(goal)
+        if self.render_frames and goal is not None:
+            self.env._render_goal = True
+            self.env.set_goal(goal, return_info=False)
+            goal["image"] = self.env._cur_goal_rendered
+        s_scene, s_image = self._task_frame(obs, with_scenes)
+        g_scene, g_image = self._task_frame(goal, with_scenes)
         self._sync_viewer()
         return (s_scene, s_image), (g_scene, g_image)
+
+    def _task_frame(self, obs: dict, with_scenes: bool) -> tuple[DCScene, TDImage]:
+        if with_scenes:
+            scene, image, _ = self.from_internal(obs)
+            return scene, image
+        return DCScene({}, extras=self.get_extras(obs)), self.to_td_image(obs)
 
     def get_ee_dc(self, obs) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         pos = obs["proprio_effector_pos"]
@@ -319,7 +335,10 @@ class OGScene(Scene):
         selections: list[int] | None = None,
         only_conditions: bool = False,
         with_images: bool = True,
+        with_scenes: bool = True,
     ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
+        if not with_images and not with_scenes:
+            raise ValueError("load_dataset would produce neither scenes nor images")
         demo_indices: np.ndarray = file["demo"][:]  # type: ignore
 
         change_points = np.where(np.diff(demo_indices) != 0)[0] + 1
@@ -361,11 +380,15 @@ class OGScene(Scene):
                         intrinsics=file["intrinsics"][i],  # type: ignore
                     )
                     obs, _ = self.to_internal(image, ob)
-                    dc_scene, td_image, _ = self.from_internal(obs)
+                    if with_scenes:
+                        dc_scene, td_image, _ = self.from_internal(obs)
+                    else:
+                        td_image = self.to_td_image(obs)
                     segment_image.append(td_image)
                 else:
                     dc_scene = self.to_dc_scene(ob)
-                segment_scene.append(dc_scene)
+                if with_scenes:
+                    segment_scene.append(dc_scene)
             segments_scene.append(segment_scene)
             segments_image.append(segment_image)
 
@@ -376,7 +399,10 @@ class OGScene(Scene):
         dc_entities: dict[str, DCEntity] = {}
         for label, entity in self.entities.items():
             dc_entities[label] = entity.value_from_gt(
-                label, obs, normalize_pos=self.normalize_position
+                label,
+                obs,
+                normalize_pos=self.normalize_position,
+                extra_range=self.extra_ranges.get(label),
             )
         extras = self.get_extras(obs)
         return DCScene(dc_entities, extras=extras)

@@ -56,6 +56,22 @@ class ImageEncoder(Registerable):
         target_yx = self.scale_normalized_coords(ref_norm_yx, (target_h, target_w))
         return int(target_yx[0].item()), int(target_yx[1].item())
 
+    def patch_index(
+        self,
+        x: int,
+        y: int,
+        origin_hw: tuple[int, int],
+        target_hw: tuple[int, int],
+    ) -> tuple[int, int]:
+        return self.transform_coords(
+            y=y,
+            x=x,
+            origin_h=origin_hw[0],
+            origin_w=origin_hw[1],
+            target_h=target_hw[0],
+            target_w=target_hw[1],
+        )
+
     def scale_normalized_coords(
         self, norm_coords: torch.Tensor, size_hw: tuple[int, int]
     ) -> torch.Tensor:
@@ -80,21 +96,20 @@ class ImageEncoder(Registerable):
     def hard_pixels_to_3D_world(
         y_pixel: torch.Tensor,  # B, N
         x_pixel: torch.Tensor,  # B, N
-        depth: torch.Tensor,  # N, H, W
-        extr: torch.Tensor,  # N, 4, 4
-        intr: torch.Tensor,  # N, 3, 3
+        depth: torch.Tensor,  # (H, W) or (N, H, W)
+        extr: torch.Tensor,  # 4, 4 or N, 4, 4
+        intr: torch.Tensor,  # 3, 3 or N, 3, 3
     ) -> torch.Tensor:
-        """Pixels plus their measured depth -> world points, as (B, N, 3).
-
-        TAPAS returned these flattened per keypoint and followed by an identity
-        quaternion, which is their pose convention; nothing here reads a rotation
-        off the keypoint encoder, so the quaternion is dropped and the shape stays
-        one point per keypoint.
-        """
+        """Pixels plus their measured depth -> world points, as (B, N, 3)."""
         B, N = x_pixel.shape
-        rows = torch.arange(B, device=depth.device, dtype=torch.long).repeat_interleave(N)
-        # depth is (H, W), so the row comes first and the projection takes u = x
-        z = depth[rows, y_pixel.flatten(), x_pixel.flatten()].reshape(B, N)
+        if depth.ndim == 3:
+            rows = torch.arange(
+                B, device=depth.device, dtype=torch.long
+            ).repeat_interleave(N)
+            z = depth[rows, y_pixel.flatten(), x_pixel.flatten()].reshape(B, N)
+        else:
+            # depth is (H, W), so the row comes first and the projection takes u = x
+            z = depth[y_pixel.flatten(), x_pixel.flatten()].reshape(B, N)
         return ImageEncoder.batched_pinhole_projection_image_to_world_coordinates_orig(
             x_pixel, y_pixel, z, intr, extr
         )

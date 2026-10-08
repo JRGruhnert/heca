@@ -13,7 +13,7 @@ from PIL import Image
 import numpy as np
 
 from heca.scenes.scene import Scene
-from heca.misc import logger
+from heca.misc import hardware, logger
 from heca.data.data import TDImage
 from heca.data.reference import Keypoint, Reference
 from heca.image_encoders.image_encoder import ImageEncoder
@@ -52,7 +52,9 @@ class DinoEncoder(ImageEncoder):
         self.model, self.patch_size = DinoEncoder.patch_vit_resolution(
             self.model, self.cfg.stride
         )
-        self.model.eval()
+        self.model = self.model.to(hardware.device)  # type: ignore[arg-type]
+        logger.info(f"{type(self).__name__}: keypoint model on {hardware.device}")
+        self.model.eval()  # type: ignore[union-attr]
         data_config = resolve_model_data_config(self.model)
         self.transforms = create_transform(**data_config, is_training=False)
 
@@ -132,8 +134,7 @@ class DinoEncoder(ImageEncoder):
     def get_image_size(self, image: Image.Image | torch.Tensor) -> tuple[int, int]:
         if isinstance(image, Image.Image):
             return image.height, image.width
-        else:
-            return image.shape[2], image.shape[3]
+        return int(image.shape[-2]), int(image.shape[-1])
 
     # @measure_runtime
     def compute_descriptor(self, image: Image.Image | torch.Tensor) -> torch.Tensor:
@@ -142,6 +143,7 @@ class DinoEncoder(ImageEncoder):
             assert isinstance(prep, torch.Tensor)
             if prep.ndim == 3:
                 prep = prep.unsqueeze(0)
+            prep = prep.to(hardware.device)
             feats: torch.Tensor = self.model.forward_features(prep)
             # output is unpooled, a (1, 261, 4096) shaped tensor
             # [B, 1 + N, C]
@@ -217,7 +219,7 @@ class DinoEncoder(ImageEncoder):
             held = prior.hold()
             assert held is not None
             return held, False
-        belief = prior.predict(*similarity.shape[-2:])
+        belief = prior.predict(*similarity.shape[-2:], device=similarity.device)
         posterior = similarity if belief is None else similarity * belief
         total = posterior.sum()
         posterior = posterior / total if total > 0 else similarity
@@ -343,6 +345,13 @@ class DinoEncoder(ImageEncoder):
 
         return stacked_2d_features
 
+    def compute_patch_grid_size(self, image_size: tuple[int, int]) -> tuple[int, int]:
+        """The descriptor grid a given image size produces, patches per side."""
+        height, width = image_size
+        grid_h = 1 + (height - self.patch_size) // self.cfg.stride
+        grid_w = 1 + (width - self.patch_size) // self.cfg.stride
+        return grid_h, grid_w
+
     def prepare_for_scene(self, config: Scene.Config):
         scene = Scene.get(config)
         if not scene.references_ready():
@@ -352,13 +361,11 @@ class DinoEncoder(ImageEncoder):
         for label, entity in scene.entities.items():
             reference = scene.references[label][Reference.POSITION]
             image_desc = self.compute_descriptor(reference.image)  # (1, D, H, W)
-            dc_py, dc_px = self.transform_coords(
-                reference.x,
-                reference.y,
-                reference.image.height,
-                reference.image.width,
-                image_desc.shape[2],
-                image_desc.shape[3],
+            dc_py, dc_px = self.patch_index(
+                x=reference.x,
+                y=reference.y,
+                origin_hw=(reference.image.height, reference.image.width),
+                target_hw=(image_desc.shape[2], image_desc.shape[3]),
             )
             self.kp_descriptors[label] = image_desc[0, :, dc_py, dc_px]
             self.kp_labels.append(label)

@@ -63,7 +63,7 @@ def save_summary(*, root: Path, network: str, payload: dict) -> Path:
     """Write the across-seed summary JSON for one network (paper table row)."""
     out_dir = root / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
-    action = "" if payload.get("greedy", True) else "_sampled"
+    action = ""
     path = out_dir / f"{network}_{payload['mode']}{action}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
     logger.info(f"  saved {path}")
@@ -211,7 +211,7 @@ def weight_key(checkpoint: dict, weights: str) -> dict:
 def save_result(run_dir: Path, payload: dict) -> Path:
     out_dir = run_dir / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
-    action = "" if payload.get("greedy", True) else "_sampled"
+    action = ""
     stem = Path(str(payload["checkpoint"])).stem
     path = out_dir / f"{stem}_{payload['mode']}{action}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
@@ -282,12 +282,6 @@ def main():
     )
     ap.add_argument("--gt", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
-    ap.add_argument(
-        "--sample",
-        action="store_true",
-        help="sample options instead of taking the argmax, i.e. act the way "
-        "training does; the default (greedy) matches OGBench's eval_temperature 0",
-    )
     args = ap.parse_args()
     args.tag = (
         resolve_tags(args.root, args.tag)
@@ -320,12 +314,11 @@ def main():
         )
     )
 
-    heca.learner.sample_options(args.sample)
     heca.scene.set_mode(args.mode)
     logger.info(
         f"{len(args.tag)} run(s), {args.scene} / {args.network}, gt={args.gt}, "
         f"virtual={args.virtual}, mode={heca.scene.cfg.mode}, "
-        f"greedy={not args.sample}\n" + "\n".join(f"  {tag}" for tag in args.tag)
+        f"greedy=True\n" + "\n".join(f"  {tag}" for tag in args.tag)
     )
 
     started = time.perf_counter()
@@ -364,7 +357,7 @@ def main():
                     "gt": args.gt,
                     "virtual": args.virtual,
                     "mode": args.mode,
-                    "greedy": not args.sample,
+                    "greedy": True,
                     "episodes": args.episodes,
                     "seed": args.seed,
                     "success": wins,
@@ -394,7 +387,7 @@ def main():
                 "gt": args.gt,
                 "virtual": args.virtual,
                 "mode": args.mode,
-                "greedy": not args.sample,
+                "greedy": True,
                 "checkpoints": args.ckp,
                 "episodes_per_seed": args.episodes,
                 "episode_seed": args.seed,
@@ -455,7 +448,7 @@ def main():
         logger.info(
             f"{tag} / {path.name} "
             f"({args.per_task} rollouts/task x {args.epochs} epoch(s), "
-            f"{'sampled' if args.sample else 'greedy'})\n"
+            f"greedy)\n"
             f"{table}\n"
             f"  {tag}: overall {100 * overall:.1f}% "
             f"(unweighted mean over {len(rates)} tasks, "
@@ -470,7 +463,7 @@ def main():
                 "network": args.network,
                 "weights": args.weights,
                 "mode": args.mode,
-                "greedy": not args.sample,
+                "greedy": True,
                 "per_task": args.per_task,
                 "epochs": args.epochs,
                 "seed": args.seed,
@@ -513,7 +506,7 @@ def main():
             "gt": args.gt,
             "virtual": args.virtual,
             "mode": args.mode,
-            "greedy": not args.sample,
+            "greedy": True,
             "checkpoints": args.ckp,
             "per_task": args.per_task,
             "epochs": args.epochs,

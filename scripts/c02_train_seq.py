@@ -10,27 +10,31 @@ from scripts.common.helper import generate_client, get_sim_args
 import conf.networks
 
 DEFAULTS: dict[str, object] = {
-    "tag": "final2",
+    "tag": "test",
     "scene": "scene0",
     "smode": SubgoalMode.BOTH,
     "wandb": True,
     "batch": 1000,
-    "repeats": 3,
+    "repeats": 1,
     "gt": True,
     "virtual": True,
 }
 
 RUNS: list[dict[str, object]] = [
-    {"network": "a0"},
-    {"network": "a1"},
-    {"network": "a2"},
-    {"network": "a3"},
-    {"network": "a4"},
-    {"network": "a5"},
-    {"network": "a6"},
-    {"network": "a7"},
-    {"network": "a8"},
-    {"network": "a9"},
+    # {"network": "a0"},
+    # {"network": "a1"},
+    # {"network": "a2"},
+    # {"network": "a3"},
+    # {"network": "a4"},
+    # {"network": "a5"},
+    # {"network": "a6"},
+    # {"network": "a7"},
+    # {"network": "a8"},
+    # {"network": "a9"},
+    # {"network": "a10"},
+    # {"network": "a12"},
+    {"network": "a13"},
+    # {"network": "a11"},
 ]
 
 

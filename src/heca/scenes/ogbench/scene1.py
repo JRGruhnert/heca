@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 
 from heca.data.entity import Entity
 from heca.data.free import FreeEntity
@@ -18,7 +19,7 @@ class OGScene1(OGScene):
         super().__init__(cfg)
         self.cfg = cfg
 
-    @property
+    @cached_property
     def entities(self) -> dict[str, Entity]:
         ents = {
             "button0": StaticEntity.Config(n_states=3),

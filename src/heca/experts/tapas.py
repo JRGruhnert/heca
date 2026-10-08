@@ -92,9 +92,6 @@ class NoopVizEnv:
         pass
 
 
-VIZ_ENV = NoopVizEnv()
-
-
 class TapasExpert(ExpertModel):
     @dataclass(kw_only=True)
     class Config(ExpertModel.Config):
@@ -192,19 +189,18 @@ class TapasExpert(ExpertModel):
         temp = GMMPolicy(self.cfg.policy)
         assert isinstance(temp, GMMPolicy), "Policy model must be a GMMPolicy."
         self.policy = temp.to(hardware.device)
-
-    MAX_PLAN_STEPS: int = 2000
+        self.noop_env = NoopVizEnv()
 
     def make_batch_prediction(
-        self, x: SceneObservation  # type: ignore
+        self, x: SceneObservation, max_steps: int = 2000  # type: ignore
     ) -> RobotTrajectory | None:
         # prds, _ = self.policy.predict(x)
         try:
             prds, _ = self.policy.predict(x)  # type: ignore
-            if prds is not None and len(prds.points) > self.MAX_PLAN_STEPS:
+            if prds is not None and len(prds.points) > max_steps:  # type: ignore
                 logger.warning(
-                    f"{self.cfg.tag}: predicted plan of {len(prds.points)} "
-                    f"steps (> {self.MAX_PLAN_STEPS}); aborting this option."
+                    f"{self.cfg.tag}: predicted plan of {len(prds.points)} "  # type: ignore
+                    f"steps (> {max_steps}); aborting this option."
                 )
                 return None
             return prds  # type: ignore
@@ -246,28 +242,8 @@ class TapasExpert(ExpertModel):
             )
         return z, fb
 
-    def _sync_policy(self) -> None:
-        policy = self.policy
-        model = self.model
-        policy._add_init_ee_pose_as_frame = model._demos.meta_data[
-            "add_init_ee_pose_as_frame"
-        ]
-        policy._add_world_frame = model._demos.meta_data["add_world_frame"]
-        policy._model_contains_rotation = model.add_rotation_component
-        policy._model_contains_time_dim = model.add_time_component
-        policy._model_contains_action_dim = model.add_action_component
-        policy._model_contains_gripper_action = model.add_gripper_action
-        policy._model_factorizes_action = model.action_as_orientation
-        if policy._time_based is None:
-            policy._time_based = policy._model_contains_time_dim
-        policy._local_marginals = model.get_frame_marginals(
-            time_based=policy._time_based
-        )
-
     def _get_prediction(self, x, y):
-        if self.policy._local_marginals is None and self.model.segment_gmms:
-            self._sync_policy()
-        self.policy.reset_episode(VIZ_ENV)
+        self.policy.reset_episode(self.noop_env)  # type: ignore
         quat0 = x.extras["ee_pose"][3:7] if self.cfg.pos_only else None
 
         def full_action(ee, gripper):
@@ -378,7 +354,7 @@ class TapasExpert(ExpertModel):
     def tps(self) -> set[str]:
         labels = set()
         for idx, key in enumerate(self.demos.frame_names):
-            if idx in self.model._used_frames and key in self.scene.entities:
+            if idx in self.model._used_frames and key in self.scene.entities:  # type: ignore
                 labels.add(key)
         logger.debug(f"{self.cfg.tag} entities: {labels}")
         return labels
@@ -642,7 +618,8 @@ class TapasExpert(ExpertModel):
             )
         )
 
-    def _fold_bimodal_yaw(self, scenes: list[DCScene]) -> None:
+    def _fold_bimodal_yaw(self, scenes: list[DCScene]):
+        # could potentially help with bimodal problems. worth a try
         label = self._target_label()
         if label is None:
             return
@@ -656,10 +633,6 @@ class TapasExpert(ExpertModel):
         )
         rel = (rel + np.pi) % (2.0 * np.pi) - np.pi
         if isinstance(self.scene.entities[label], PrismaticEntity):
-            # Prismatic targets keep a fixed world orientation, so the two grasp
-            # orientations sit at rel ~ 0 and rel ~ +-180, exactly on the
-            # sin(circular_mean) == 0 boundary of the test below, which makes the
-            # fold decision degenerate. Use the median instead (|med| > 90 deg).
             fold = abs(float(np.median(rel))) > np.pi / 2.0
         else:
             mean_rel = float(np.arctan2(np.sin(rel).mean(), np.cos(rel).mean()))

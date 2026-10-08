@@ -29,7 +29,12 @@ class RevoluteEntity(Entity):
             },
         }
 
-    def extra_part(self, label: str, obs: dict) -> np.ndarray:
+    def extra_part(
+        self,
+        label: str,
+        obs: dict,
+        extra_range: tuple[float, float] | None = None,
+    ) -> np.ndarray:
         ang = obs[f"heca_{label}_ang"]
         return np.array([np.sin(ang), np.cos(ang)])
 

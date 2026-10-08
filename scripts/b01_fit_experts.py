@@ -52,6 +52,15 @@ def save_plots(agent: TapasExpert, stage: str):
     plt.close("all")
 
 
+def prepare_scene_extras(models: list[ExpertModel.Config], gt: bool) -> None:
+    for cfg in models:
+        model = ExpertModel.get(cfg, auto_load=False)
+        model.use_gt(gt)
+        model.load_extras()
+    if models:
+        ExpertModel.get(models[0], auto_load=False).scene.finish_extras()
+
+
 def pipeline_scene(
     scene_cfg: Scene.Config,
     models: list[ExpertModel.Config],
@@ -60,6 +69,7 @@ def pipeline_scene(
     max_tries: int,
 ):
     """Run the full fit/evaluate pipeline for every model of one scene."""
+    prepare_scene_extras(models, gt)
     for cfg in models:
         logger.info(f"[{scene_cfg.tag}] === pipeline for {cfg.tag} ===")
         model = ExpertModel.get(cfg, auto_load=False)

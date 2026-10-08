@@ -299,8 +299,23 @@ class Entity(Configurable):
         aa = Quaternion.log_map(quat)
         return np.concatenate((pos, aa))
 
-    def extra_part(self, label: str, obs: dict) -> np.ndarray:
+    def extra_part(
+        self,
+        label: str,
+        obs: dict,
+        extra_range: tuple[float, float] | None = None,
+    ) -> np.ndarray:
         raise NotImplementedError
+
+    def extra_values(self, label: str, demos: Any) -> tuple[float, float] | None:
+        """The joint ends one expert's demos give this entity, if it needs any."""
+        return None
+
+    def reference_positions(
+        self, positions: np.ndarray
+    ) -> dict[str, np.ndarray] | None:
+        """The reference points this entity derives from encoded positions."""
+        return None
 
     @property
     def reference_names(self) -> tuple[str, ...]:
@@ -311,9 +326,15 @@ class Entity(Configurable):
     ) -> np.ndarray:
         return np.zeros(0)
 
-    def value_from_gt(self, label: str, obs: dict, normalize_pos=None) -> DCEntity:
+    def value_from_gt(
+        self,
+        label: str,
+        obs: dict,
+        normalize_pos=None,
+        extra_range: tuple[float, float] | None = None,
+    ) -> DCEntity:
         pose = self.common_pose_part(label, obs, normalize_pos=normalize_pos)
-        extra = self.extra_part(label, obs)
+        extra = self.extra_part(label, obs, extra_range=extra_range)
         ste = obs[f"heca_{label}_ste"]
         return self.dc_from_parsed(pose, extra, ste)
 

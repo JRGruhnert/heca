@@ -28,7 +28,12 @@ class StaticEntity(Entity):
             },
         }
 
-    def extra_part(self, label: str, obs: dict) -> np.ndarray:
+    def extra_part(
+        self,
+        label: str,
+        obs: dict,
+        extra_range: tuple[float, float] | None = None,
+    ) -> np.ndarray:
         return np.zeros(0)
 
     def env_state_value(

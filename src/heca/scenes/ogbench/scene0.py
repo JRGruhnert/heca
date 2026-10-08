@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import cached_property
 from textwrap import dedent
 
 import numpy as np
@@ -57,7 +58,7 @@ class OGScene0(OGScene):
             - White = unlocked
         """)
 
-    @property
+    @cached_property
     def entities(self) -> dict[str, Entity]:
         ents = {
             "drawer0": PrismaticEntity.Config(

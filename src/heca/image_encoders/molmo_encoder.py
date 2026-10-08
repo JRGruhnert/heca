@@ -18,7 +18,7 @@ from heca.helper import molmo
 from heca.image_encoders.image_encoder import ImageEncoder
 from heca.data.data import TDImage
 
-from heca.misc import logger
+from heca.misc import hardware, logger
 
 
 class MolmoEncoder(ImageEncoder):
@@ -52,7 +52,7 @@ class MolmoEncoder(ImageEncoder):
             self.cfg.tag,
             trust_remote_code=True,
             dtype=torch.float32,
-            device_map="auto",
+            device_map=hardware.device,
         )
         self.model.eval()
         self.tokens = {
@@ -73,8 +73,6 @@ class MolmoEncoder(ImageEncoder):
     def extract_states(self, image: TDImage) -> dict[str, tuple[int, float]]:
         """The state of every entity that has more than one, keyed by label."""
         if not self.chat_texts:
-            # No entity in this scene has a state to tell apart, so nothing is
-            # asked and the weights are never loaded.
             return {}
         self.load_model()
         images = [self.as_image(image)] * len(self.chat_texts)
@@ -83,7 +81,7 @@ class MolmoEncoder(ImageEncoder):
             text=self.chat_texts,
             return_tensors="pt",
             padding=True,
-        ).to(self.model.device)
+        )
 
         inputs.pop("token_type_ids", None)
 

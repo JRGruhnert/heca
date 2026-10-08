@@ -31,6 +31,32 @@ class SceneFeedback:
         return self.truncated or self.terminal
 
 
+def reference_note(reference: Reference) -> dict[str, Any]:
+    """One reference as the ``annotation.json`` entry ``Scene._save`` writes."""
+    return {
+        "x": int(reference.x),
+        "y": int(reference.y),
+        "xyz": [float(v) for v in reference.xyz],
+    }
+
+
+def reference_from_note(note: dict, image: Image.Image) -> Reference:
+    """Read back what :func:`reference_note` wrote."""
+    return Reference(
+        image=image,
+        x=int(note["x"]),
+        y=int(note["y"]),
+        xyz=np.asarray(note["xyz"], dtype=np.float64),
+    )
+
+
+def save_reference(edir: Path, name: str, reference: Reference) -> dict[str, Any]:
+    """Write one reference beside its siblings, returning its annotation entry."""
+    edir.mkdir(parents=True, exist_ok=True)
+    reference.image.save(edir / f"{name}.png")
+    return reference_note(reference)
+
+
 class Scene(Persistable):
     @dataclass(kw_only=True)
     class Config(Persistable.Config):
@@ -46,14 +72,32 @@ class Scene(Persistable):
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.current_step = 0
-
-        # label -> reference name -> annotation.  "pos" is the entity's own
-        # reference picture, the names in ``Entity.reference_names`` are the joint
-        # references its class needs.
         self.references: dict[str, dict[str, Reference]] = {}
-        # label -> state index -> pictures, only for entities with more than one
-        # state: a single state is constant, so there is nothing to look at.
-        self.state_references: dict[str, dict[int, list[Image.Image]]] = {}
+        self.extra_ranges: dict[str, tuple[float, float]] = {}
+        self.extra_references: dict[str, dict[str, np.ndarray]] = {}
+        self.extra_positions: dict[str, list[np.ndarray]] = {}
+        self.render_frames = False
+
+    def add_extra_range(self, label: str, lo: float, hi: float) -> None:
+        """Fold one expert's demo range into the scene's, over all its experts."""
+        old = self.extra_ranges.get(label)
+        self.extra_ranges[label] = (
+            (lo, hi) if old is None else (min(old[0], lo), max(old[1], hi))
+        )
+
+    def add_extra_positions(self, label: str, positions: np.ndarray) -> None:
+        self.extra_positions.setdefault(label, []).append(
+            np.atleast_2d(np.asarray(positions))
+        )
+
+    def finish_extras(self) -> None:
+        """Derive each label's references from every expert's encoded positions."""
+        for label, chunks in self.extra_positions.items():
+            found = self.entities[label].reference_positions(
+                np.concatenate(chunks, axis=0)
+            )
+            self.extra_references[label] = found if found is not None else {}
+        self.extra_positions = {}
 
     def from_internal(self, data) -> tuple[DCScene, TDImage, np.ndarray]:
         tdscene = self.to_dc_scene(data)
@@ -132,14 +176,14 @@ class Scene(Persistable):
     ) -> tuple[Any, SceneFeedback]:
         raise NotImplementedError()
 
-    def sample_task(self) -> tuple[
+    def sample_task(self, with_scenes: bool = True) -> tuple[
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
         self.current_step = 0
-        return self._sample_task()
+        return self._sample_task(with_scenes)
 
-    def _sample_task(self) -> tuple[
+    def _sample_task(self, with_scenes: bool = True) -> tuple[
         tuple[DCScene, TDImage],
         tuple[DCScene, TDImage],
     ]:
@@ -167,65 +211,63 @@ class Scene(Persistable):
         selections: list[int] | None = None,
         only_conditions: bool = False,
         with_images: bool = True,
+        with_scenes: bool = True,
     ) -> tuple[list[list[DCScene]], list[list[TDImage]]]:
         raise NotImplementedError()
 
     def _load(self, path: Path) -> bool:
-        annotation = "annotation.json"
         self.references = {}
-        self.state_references = {}
+        self.extra_references = {}
+        self.extra_positions = {}
         for label, entity in self.entities.items():
             edir = path / label
             self.references[label] = {}
-            self.state_references[label] = {}
-            notes = json.loads((edir / annotation).read_text()) if (edir / annotation).exists() else {}
+            stored = edir / "annotation.json"
+            notes = json.loads(stored.read_text()) if stored.exists() else {}
             for name in (Reference.POSITION, *entity.reference_names):
                 note = notes.get(name)
                 if note is None:
                     continue
-                self.references[label][name] = Reference(
-                    image=Image.open(edir / f"{name}.png"),
-                    x=int(note["x"]),
-                    y=int(note["y"]),
-                    xyz=np.asarray(note["xyz"], dtype=np.float64),
+                self.references[label][name] = reference_from_note(
+                    note, Image.open(edir / f"{name}.png")
                 )
-            if entity.cfg.n_states > 1:
-                for idx in range(entity.cfg.n_states):
-                    self.state_references[label][idx] = [
-                        Image.open(file)
-                        for file in sorted(edir.glob(f"state{idx}_sample*.png"))
-                    ]
+            extra = notes.get("extra")
+            if extra is not None:
+                self.extra_ranges[label] = (float(extra[0]), float(extra[1]))
+            derived = notes.get("extra_references")
+            if derived is not None:
+                self.extra_references[label] = {
+                    name: np.asarray(xyz, dtype=np.float64)
+                    for name, xyz in derived.items()
+                }
         return True
 
     def _save(self, path: Path) -> bool:
         for label, entity in self.entities.items():
             edir = path / label
             edir.mkdir(parents=True, exist_ok=True)
-            notes: dict[str, dict[str, Any]] = {}
-            for name, reference in self.references[label].items():
-                reference.image.save(edir / f"{name}.png")
-                notes[name] = {
-                    "x": int(reference.x),
-                    "y": int(reference.y),
-                    "xyz": [float(v) for v in reference.xyz],
+            existing = edir / "annotation.json"
+            notes: dict[str, dict[str, Any]] = (
+                json.loads(existing.read_text()) if existing.exists() else {}
+            )
+            for name, reference in self.references.get(label, {}).items():
+                notes[name] = save_reference(edir, name, reference)
+            if label in self.extra_ranges:
+                notes["extra"] = list(self.extra_ranges[label])
+            if label in self.extra_references:
+                notes["extra_references"] = {
+                    name: [float(v) for v in xyz]
+                    for name, xyz in self.extra_references[label].items()
                 }
             (edir / "annotation.json").write_text(json.dumps(notes, indent=2) + "\n")
-            if entity.cfg.n_states > 1:
-                for state, samples in self.state_references[label].items():
-                    for idx, img in enumerate(samples):
-                        img.save(edir / f"state{state}_sample{idx}.png")
         return True
 
     def references_ready(self) -> bool:
-        """Every reference and state sample the scene's entities need is present."""
+        """Every reference the scene's entities need is present."""
         for label, entity in self.entities.items():
             have = self.references.get(label, {})
             for name in (Reference.POSITION, *entity.reference_names):
                 if name not in have:
-                    return False
-            if entity.cfg.n_states > 1:
-                states = self.state_references.get(label, {})
-                if any(not states.get(idx) for idx in range(entity.cfg.n_states)):
                     return False
         return True
 

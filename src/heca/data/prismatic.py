@@ -9,7 +9,7 @@ from heca.data.entity import Entity
 
 class PrismaticEntity(Entity):
     BLOCKS: ClassVar[tuple[str, ...]] = ("state", "pos", "rot", "extra")
-    REFERENCE_NAMES: ClassVar[tuple[str, ...]] = ("min", "max")
+    REFERENCE_NAMES: ClassVar[tuple[str, ...]] = ()
 
     @dataclass(kw_only=True)
     class Config(Entity.Config):
@@ -29,13 +29,53 @@ class PrismaticEntity(Entity):
             },
         }
 
-    def extra_part(self, label: str, obs: dict) -> np.ndarray:
-        min_pos = obs[f"heca_{label}_sca_min"]
-        max_pos = obs[f"heca_{label}_sca_max"]
-        current_pos = obs[f"heca_{label}_sca"]
-        relative = (current_pos - min_pos) / (max_pos - min_pos)
-        relative = 2 * relative - 1
-        return np.array([relative])
+    def extra_values(self, label: str, demos: Any) -> tuple[float, float]:
+        sca = np.asarray(demos[f"heca_{label}_sca"])
+        return float(sca.min()), float(sca.max())
+
+    def reference_positions(self, positions: np.ndarray) -> dict[str, np.ndarray]:
+        positions = np.asarray(positions, dtype=np.float64)
+        if positions.ndim != 2 or positions.shape[-1] != 3:
+            raise ValueError(
+                f"expected a pool of (N, 3) encoded positions, got "
+                f"{positions.shape}"
+            )
+        centred = positions - positions.mean(axis=0)
+        # the travel's own axis: the direction the pool spreads out along most
+        _, vectors = np.linalg.eigh(centred.T @ centred)
+        axis = vectors[:, -1]
+        if axis[int(np.argmax(np.abs(axis)))] < 0:
+            axis = -axis
+        projection = centred @ axis
+        if float(projection.max()) - float(projection.min()) <= 0.0:
+            raise ValueError(
+                "every encoded position is the same point, so the slide has no "
+                "travel to derive ends from"
+            )
+        low_band = positions[projection <= np.quantile(projection, 0.10)]
+        high_band = positions[projection >= np.quantile(projection, 0.90)]
+        return {
+            "min": np.median(low_band, axis=0),
+            "max": np.median(high_band, axis=0),
+        }
+
+    def extra_part(
+        self,
+        label: str,
+        obs: dict,
+        extra_range: tuple[float, float] | None = None,
+    ) -> np.ndarray:
+        if extra_range is None:
+            raise ValueError(
+                f"{label}: a slide needs the travel the demos recorded, and the "
+                "scene has none for it"
+            )
+        current = float(np.asarray(obs[f"heca_{label}_sca"]).ravel()[0])
+        return np.array([np.clip(self.fraction(current, extra_range), -1.0, 1.0)])
+
+    def fraction(self, current: float, extra_range: tuple[float, float]) -> float:
+        lo, hi = extra_range
+        return 2.0 * (current - lo) / (hi - lo) - 1.0
 
     @property
     def extra_sigma(self) -> np.ndarray:
@@ -65,7 +105,6 @@ class PrismaticEntity(Entity):
             f"heca_{label}_pos": pos,
             f"heca_{label}_rot": dc.rot,
             f"heca_{label}_ste": dc.ste,
-            f"heca_{label}_sca": float(dc.ext[0]),
         }
 
     def make_agent_key(self, label: str, obs: Any, start: int, end: int) -> str:
