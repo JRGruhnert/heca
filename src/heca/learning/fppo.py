@@ -146,7 +146,10 @@ class FPPO(PPO):
                 delta = self._applied.get(name)
                 if delta is None:
                     continue
-                param.add_(delta.to(dtype=param.dtype) * scale)
+                # _applied holds a CPU snapshot: the aggregation reduces on CPU,
+                # so the dtype cast alone leaves a CPU tensor against a parameter
+                # on the accelerator
+                param.add_(delta.to(device=param.device, dtype=param.dtype) * scale)
 
     def sync(self) -> None:
         every = max(1, self.cfg.k)
