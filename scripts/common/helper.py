@@ -1,5 +1,4 @@
 import argparse
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Iterator
 
@@ -9,12 +8,21 @@ from heca.heca_gnn.network import Network
 from heca.learning.fedprox import FedProxPPO
 from heca.learning.ppo import PPO
 from heca.misc import logger
+from heca.misc.base import latest_checkpoint
 from scripts.common.args import (
     add_eval_arguments,
     add_fed_arguments,
     add_heca_arguments,
 )
 from scripts.common.scenes import experts_for_scene
+
+
+def latest_update(directory: Path | None) -> int:
+    checkpoint = latest_checkpoint(directory, "ckp") if directory else None
+    if checkpoint is None:
+        return 0
+    number = checkpoint.stem.rsplit("_", 1)[-1]
+    return int(number) if number.isdigit() else 0
 
 
 def fmt_duration(seconds: float) -> str:

@@ -75,7 +75,15 @@ class ExpertModel(Persistable, abc.ABC):
 
     def load_extras(self) -> None:
         """Derive the extra ends this expert's demos imply, into the scene."""
-        with h5py.File(self.load_dir(self.cfg) / "demos.h5", "r") as demos:
+        path = self.load_dir(self.cfg) / "demos.h5"
+        if not path.exists():
+            logger.warning(
+                f"{self.cfg.tag}: no demos.h5 in {path.parent}; keeping the extra "
+                f"ranges already stored in the scene (slides fall back to the "
+                f"environment's joint limits)"
+            )
+            return
+        with h5py.File(path, "r") as demos:
             # reading the demo scenes back as ground truth needs the ends first
             for label, entity in self.scene.entities.items():
                 values = entity.extra_values(label, demos)

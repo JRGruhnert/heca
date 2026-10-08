@@ -27,7 +27,19 @@ total="$2"
 module="${3:-scripts.c02_train_seq_fl}"
 
 env_name="${HECA_CONDA_ENV:-hecarim}"
-log="${HECA_ARM_LOG:-$HOME/arm$index.log}"
+# the log follows the session prefix, so a second family of arms (e.g.
+# HECA_ARM_PREFIX=seq for the non-federated runs) does not append to the first one
+prefix="${HECA_ARM_PREFIX:-arm}"
+log="${HECA_ARM_LOG:-$HOME/$prefix$index.log}"
+
+# BLAS threads per process, for the single-process scripts that do not pin them
+# themselves (the federated ones do it per rank from --threads)
+if [[ -n "${HECA_ARM_THREADS:-}" ]]; then
+    export OMP_NUM_THREADS="$HECA_ARM_THREADS"
+    export MKL_NUM_THREADS="$HECA_ARM_THREADS"
+    export OPENBLAS_NUM_THREADS="$HECA_ARM_THREADS"
+    export NUMEXPR_NUM_THREADS="$HECA_ARM_THREADS"
+fi
 
 # GPU placement. Unset: inherit whatever the launcher shell had (all cards visible).
 #   HECA_ARM_CPU=1     -> no GPU at all (the simulator dominates; frees VRAM entirely)

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from typing import ClassVar, Any
 
@@ -65,13 +66,28 @@ class PrismaticEntity(Entity):
         obs: dict,
         extra_range: tuple[float, float] | None = None,
     ) -> np.ndarray:
-        if extra_range is None:
-            raise ValueError(
-                f"{label}: a slide needs the travel the demos recorded, and the "
-                "scene has none for it"
-            )
         current = float(np.asarray(obs[f"heca_{label}_sca"]).ravel()[0])
-        return np.array([np.clip(self.fraction(current, extra_range), -1.0, 1.0)])
+        lo, hi = self.travel(label, obs, extra_range)
+        return np.array([np.clip(self.fraction(current, (lo, hi)), -1.0, 1.0)])
+
+    @staticmethod
+    def env_travel(label: str, obs: dict) -> tuple[float, float]:
+        """The slide's joint limits as the environment reports them."""
+        lo_key, hi_key = f"heca_{label}_sca_min", f"heca_{label}_sca_max"
+        lo = float(np.asarray(obs[lo_key]).ravel()[0])
+        hi = float(np.asarray(obs[hi_key]).ravel()[0])
+        return (lo, hi)
+
+    def travel(
+        self,
+        label: str,
+        obs: dict,
+        extra_range: tuple[float, float] | None,
+    ) -> tuple[float, float]:
+        if extra_range is not None:
+            return extra_range
+        else:
+            return self.env_travel(label, obs)
 
     def fraction(self, current: float, extra_range: tuple[float, float]) -> float:
         lo, hi = extra_range
