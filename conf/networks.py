@@ -15,9 +15,12 @@ a10 = Network.Config(use_option_relation=True)
 a11 = Network.Config(
     use_option_relation=True,
     use_statistics=True,
-    jitter_scope="both",
 )
 a12 = Network.Config(
+    use_option_relation=True,
+    jitter_scope="entity",
+)
+a13 = Network.Config(
     use_option_relation=True,
     use_statistics=True,
     jitter_scope="entity",
@@ -40,6 +43,7 @@ NETWORK_NAMES = [
     "a10",
     "a11",
     "a12",
+    "a13",
     "x0",
     "x1",
 ]

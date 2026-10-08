@@ -17,7 +17,7 @@ DEFAULTS: dict[str, object] = {
     "batch": 1000,
     "repeats": 3,
     "gt": True,
-    "virtual": False,
+    "virtual": True,
 }
 
 RUNS: list[dict[str, object]] = [
@@ -34,6 +34,7 @@ RUNS: list[dict[str, object]] = [
     {"network": "a10"},
     {"network": "a11"},
     {"network": "a12"},
+    {"network": "a13"},
 ]
 
 
