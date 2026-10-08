@@ -35,9 +35,9 @@ RUNS: list[dict[str, object]] = [
     # {"network": "a8"},
     # {"network": "a9"},
     {"network": "a10"},
-    {"network": "a11"},
-    {"network": "a12"},
-    {"network": "a13"},
+    # {"network": "a11"},
+    # {"network": "a12"},
+    # {"network": "a13"},
 ]
 
 
