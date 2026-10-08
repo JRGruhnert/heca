@@ -10,14 +10,14 @@ from scripts.common.helper import generate_client, get_sim_args
 import conf.networks
 
 DEFAULTS: dict[str, object] = {
-    "tag": "test",
+    "tag": "final",
     "scene": "scene0",
     "smode": SubgoalMode.BOTH,
     "wandb": True,
     "batch": 1000,
-    "repeats": 1,
+    "repeats": 3,
     "gt": True,
-    "virtual": True,
+    "virtual": False,
 }
 
 RUNS: list[dict[str, object]] = [
@@ -31,10 +31,9 @@ RUNS: list[dict[str, object]] = [
     # {"network": "a7"},
     # {"network": "a8"},
     # {"network": "a9"},
-    # {"network": "a10"},
-    # {"network": "a12"},
-    {"network": "a13"},
-    # {"network": "a11"},
+    {"network": "a10"},
+    {"network": "a11"},
+    {"network": "a12"},
 ]
 
 
