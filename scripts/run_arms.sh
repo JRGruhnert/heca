@@ -49,8 +49,5 @@ done
 
 cat <<'EOF'
 
-check after a few seconds:
-  tmux ls                                   # one session per shard
-  head -3 ~/arm0.log                        # "shard 0/8 | python=…/envs/hecarim/bin/python"
-  grep -m1 "run(s) planned" ~/arm0.log      # must say "(shard 0/8)" — if it says 48, kill it
+Done!
 EOF
