@@ -8,6 +8,7 @@ from typing import cast
 
 from heca.data.condition import Condition
 from heca.data.entity import Entity
+from heca.data.pair import ConPair
 from heca.scenes.ogbench.scene import OGScene
 from heca.scenes.scene import Scene
 
@@ -65,18 +66,17 @@ def condition_info_dict(con: Condition, scene: Scene) -> dict:
     return info
 
 
-def anchor_entities(agent: ExpertModel) -> set[str]:
+def anchor_entities(conditions: ConPair) -> set[str]:
     return {
         label
-        for label, score in agent.conditions.change_scores.items()
+        for label, score in conditions.change_scores.items()
         if score < Entity.ANCHOR_THRESHOLD
     }
 
 
 def sample_task_conditions(
-    agent: ExpertModel, scene: Scene, anchors: set[str]
+    pair: ConPair, scene: Scene, anchors: set[str]
 ) -> tuple[dict, dict]:
-    pair = agent.conditions
     pre_info = condition_info_dict(pair.pre, scene)
     post_info = condition_info_dict(pair.post, scene)
     for label in anchors:
@@ -96,14 +96,15 @@ def evaluate_model(
     scene: Scene,
     episodes: int,
     max_tries: int,
+    conditions: ConPair,
 ) -> Counter:
     env = get_env_safely(scene)
     counts: Counter = Counter()
-    anchors = anchor_entities(model)
+    anchors = anchor_entities(conditions)
     began = time.perf_counter()
     for ep in range(episodes):
         env.reset(options={"render_goal": True})
-        pre_info, post_info = sample_task_conditions(model, scene, anchors)
+        pre_info, post_info = sample_task_conditions(conditions, scene, anchors)
 
         env.set_start(pre_info)
         env.set_goal(post_info)
@@ -278,7 +279,22 @@ def evaluate_one(
     # reaches the TPGMM, and the policies were fitted with it off as well. Asking
     # Molmo per step is what made episodes take minutes.
     model.use_states = False
-    counts = evaluate_model(model, model.scene, episodes, max_tries)
+    # the task instance is sampled from the *ground-truth* conditions even for a
+    # visual policy: a visual condition describes the tracked keypoint, and its
+    # position block is that keypoint while its rotation block is hard zero, so
+    # turning one into a reset state puts the object in the wrong place, facing the
+    # wrong way. The policy still acts on images; only the task definition is GT.
+    if gt:
+        conditions = model.conditions
+    else:
+        # fetched without touching the visual pair: that one needs Molmo
+        model.__dict__.pop("conditions", None)
+        model._use_gt = True
+        try:
+            conditions = model.conditions
+        finally:
+            model._use_gt = gt
+    counts = evaluate_model(model, model.scene, episodes, max_tries, conditions)
 
     json_path = results_path(scene_cfg)
     update_results(
