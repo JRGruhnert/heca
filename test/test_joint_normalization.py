@@ -132,10 +132,24 @@ def test_prismatic_extras_stay_in_the_normalized_range():
     assert np.all(vision >= -1.0) and np.all(vision <= 1.0)
 
 
-def test_a_slide_without_a_travel_is_refused():
-    """Cropping the readout would silently use the wrong ends; say so instead."""
-    with pytest.raises(ValueError):
-        prismatic().extra_part("drawer0", drawer_obs(-0.08))
+def test_a_slide_uses_the_given_travel_over_the_one_the_environment_declares():
+    """An explicit travel wins; the environment's own limits are only a fallback.
+
+    The two are not the same pair -- the drawer's demos record -0.1666..0.0014 while
+    the environment declares -0.16..0.0 -- so which one is used decides the scale of
+    every fraction, and a run must be able to say which it means.
+    """
+    entity = prismatic()
+    declared = {"heca_drawer0_sca": np.array([-0.08]),
+                "heca_drawer0_sca_min": np.array([DECLARED_MIN]),
+                "heca_drawer0_sca_max": np.array([0.0])}
+
+    from_declared = entity.extra_part("drawer0", declared).ravel()[0]
+    from_demos = entity.extra_part("drawer0", declared, DEMO_RANGE).ravel()[0]
+
+    assert np.isclose(from_declared, 0.0), "-0.08 is halfway through (-0.16, 0)"
+    assert np.isclose(from_demos, 0.0310, atol=1e-3), "and not of the demo travel"
+    assert not np.isclose(from_declared, from_demos)
 
 
 def test_prismatic_env_value_sends_the_point_and_no_joint_value():
@@ -452,10 +466,85 @@ def reference(xyz=(0.0, 0.0, 0.0)) -> Reference:
     )
 
 
-def test_the_annotation_holds_only_the_point_and_its_pixel():
+def test_the_annotation_holds_the_point_its_pixel_and_its_frame():
     note = reference_note(reference(xyz=(1.0, 2.0, 3.0)))
     assert note == {"x": 1, "y": 1, "xyz": [1.0, 2.0, 3.0]}, "no joint value stored"
 
     back = reference_from_note(note, Image.new("RGB", (2, 2)))
     assert np.allclose(back.xyz, [1.0, 2.0, 3.0])
     assert back.x == 1 and back.y == 1
+    assert back.frame is None, "an older annotation simply does not say"
+
+    clicked = Reference(
+        image=Image.new("RGB", (2, 2)), x=1, y=1, xyz=np.zeros(3), frame=180149
+    )
+    note = reference_note(clicked)
+    assert note["frame"] == 180149
+    assert reference_from_note(note, Image.new("RGB", (2, 2))).frame == 180149
+
+
+def test_the_offset_report_returns_the_correction_and_what_it_leaves():
+    """A click beside the object costs the same on every frame; the residual is the rest.
+
+    Without that split the two are indistinguishable: a reference 40 mm off the
+    object's own point looks like 40 mm of tracking error on a perfect tracker.
+    """
+    from scripts.d02_test_references import offset_report
+
+    correction = np.array([0.04, 0.0, 0.0])  # the click sits 40 mm +x of the record
+    offsets = {
+        0: correction + np.array([0.0, 0.002, 0.0]),
+        1: correction + np.array([0.0, -0.003, 0.0]),
+        7: correction,
+    }
+
+    report = offset_report(offsets, correction)
+    assert np.allclose(report["correction"], correction)
+    assert np.isclose(report["min"], 0.0), "the click frame itself has none"
+    assert np.isclose(report["max"], 0.003), "the residual is only the wander"
+    assert report["min"] <= report["mean"] <= report["max"]
+
+    # an older reference that does not record its frame falls back to the median
+    legacy = offset_report(offsets, None)
+    assert np.allclose(legacy["correction"], correction, atol=1e-9)
+
+    # a tracker that jumps a surface shows up as residual, not as correction
+    jumped = {0: correction, 1: correction, 2: correction + np.array([0.0, 0.25, 0.0])}
+    report = offset_report(jumped, correction)
+    assert np.allclose(report["correction"], correction)
+    assert np.isclose(report["max"], 0.25)
+
+
+def test_the_offset_report_reads_a_rotation_off_the_travel():
+    """A residual that grows with how far the object moved is a rotated frame.
+
+    One constant offset cannot absorb a rotation: the displacement it leaves behind
+    is the rotation angle times how far the point travelled, so the slope of
+    residual against travel is that angle.
+    """
+    from scripts.d02_test_references import offset_report
+
+    angle = 0.2  # radians between the two coordinate frames
+    travelled = np.array([0.0, 0.05, 0.1, 0.2])
+    offsets, moved = {}, {}
+    for frame, distance in enumerate(travelled):
+        # a point 0.2 m from the origin, rotated: the offset it gains is O(angle d)
+        point = np.array([0.2, 0.0, 0.0])
+        rotated = np.array(
+            [point[0] * np.cos(angle), point[0] * np.sin(angle), 0.0]
+        )
+        offsets[frame] = rotated - point + np.array([0.0, 0.0, distance * 0.0])
+        moved[frame] = distance
+
+    flat = offset_report(offsets, offsets[0], moved)
+    assert np.isnan(flat["slope"]), "a constant offset has no slope to report"
+    assert np.isclose(flat["max"], 0.0)
+
+    # now let the offset actually grow with the travel, as a rotation does
+    for frame, distance in enumerate(travelled):
+        offsets[frame] = offsets[frame] + np.array([0.0, angle * distance, 0.0])
+    rotating = offset_report(offsets, offsets[0], moved)
+    assert rotating["slope"] > 0.1, "the slope picks the rotation up"
+    assert rotating["max"] > rotating["min"]
+
+

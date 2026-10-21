@@ -2,13 +2,14 @@ import argparse
 
 from heca.guis.scene_sample_selector import SceneRefSelector
 
-from scripts.common.args import add_scene_argument
-from scripts.common.scenes import find_scene_config
+from scripts.common.args import add_encoder_arguments, add_scene_argument
+from scripts.common.scenes import find_scene_config, select_encoder
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
+    add_encoder_arguments(parser)
     parser.add_argument(
         "--dataset",
         default="",
@@ -24,6 +25,7 @@ def main():
         SceneRefSelector.Config(
             scene=scene_cfg,
             dataset_name=args.dataset,
+            kp_extraction=select_encoder(args.scene, args.backbone, args.stride),
         )
     )
     selector.run()

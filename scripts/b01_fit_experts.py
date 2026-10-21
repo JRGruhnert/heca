@@ -16,14 +16,19 @@ from heca.experts.tapas import TapasExpert
 from heca.learning import dist as pdist
 from heca.misc import logger
 
-from scripts.b03_plot_tapas_models import evaluate_one
 from scripts.common.args import (
+    add_encoder_arguments,
     add_model_argument,
     add_scene_argument,
     add_threads_argument,
     add_use_gt_argument,
 )
-from scripts.common.scenes import experts_for_scene, scene_config, scene_tags
+from scripts.common.scenes import (
+    experts_for_scene,
+    scene_config,
+    scene_tags,
+    select_encoder,
+)
 
 
 def fit_tapas(expert: TapasExpert):
@@ -52,11 +57,13 @@ def save_plots(agent: TapasExpert, stage: str):
     plt.close("all")
 
 
-def prepare_scene_extras(models: list[ExpertModel.Config], gt: bool) -> None:
+def prepare_scene_extras(
+    models: list[ExpertModel.Config], gt: bool, derive_extras: bool = True
+) -> None:
     for cfg in models:
         model = ExpertModel.get(cfg, auto_load=False)
         model.use_gt(gt)
-        model.load_extras()
+        model.load_extras(derive_extras)
     if models:
         ExpertModel.get(models[0], auto_load=False).scene.finish_extras()
 
@@ -67,22 +74,33 @@ def pipeline_scene(
     gt: bool,
     episodes: int,
     max_tries: int,
+    skip_fit: bool = False,
+    skip_conditions: bool = False,
+    skip_eval: bool = False,
+    condition_demos: int = 0,
 ):
     """Run the full fit/evaluate pipeline for every model of one scene."""
-    prepare_scene_extras(models, gt)
+    prepare_scene_extras(models, gt, derive_extras=not skip_conditions)
     for cfg in models:
         logger.info(f"[{scene_cfg.tag}] === pipeline for {cfg.tag} ===")
         model = ExpertModel.get(cfg, auto_load=False)
         model.use_gt(gt)
         assert isinstance(model, TapasExpert), "Only Tapas is supported atm."
-        fit_tapas(model)
-        model.fit_conditions()
-        evaluate_one(cfg, scene_cfg, episodes, max_tries, gt)
+        if not skip_fit:
+            fit_tapas(model)
+        if not skip_conditions:
+            model.fit_conditions(condition_demos)
+        if not skip_eval:
+            # imported here so a fit-only run does not need the plotting module
+            from scripts.b03_plot_tapas_models import evaluate_one
+
+            evaluate_one(cfg, scene_cfg, episodes, max_tries, gt)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
+    add_encoder_arguments(parser)
     add_model_argument(parser)
     add_use_gt_argument(parser)
     add_threads_argument(parser)
@@ -91,6 +109,28 @@ def main():
         type=int,
         default=100,
         help="Evaluation episodes per agent (stage 3).",
+    )
+    parser.add_argument(
+        "--skip-fit",
+        action="store_true",
+        help="Keep the policies on disk and only build the conditions.",
+    )
+    parser.add_argument(
+        "--skip-conditions",
+        action="store_true",
+        help="Only fit the policies; the conditions need the state readout and "
+        "can be built on their own later.",
+    )
+    parser.add_argument(
+        "--skip-eval",
+        action="store_true",
+        help="Fit (and build conditions) without stage 3.",
+    )
+    parser.add_argument(
+        "--condition-demos",
+        type=int,
+        default=0,
+        help="Demos to build the conditions from (0 = every demo in the file).",
     )
     parser.add_argument(
         "--max-tries",
@@ -113,6 +153,8 @@ def main():
     for tag in scene_tags():
         if args.scene and tag != args.scene:
             continue
+        # before the configs go to the workers, so they carry the choice
+        select_encoder(tag, args.backbone, args.stride)
         models = [
             m
             for m in experts_for_scene(tag)
@@ -138,7 +180,16 @@ def main():
     )
     futures = [
         pool.submit(
-            pipeline_scene, scene_cfg, models, args.gt, args.episodes, args.max_tries
+            pipeline_scene,
+            scene_cfg,
+            models,
+            args.gt,
+            args.episodes,
+            args.max_tries,
+            args.skip_fit,
+            args.skip_conditions,
+            args.skip_eval,
+            args.condition_demos,
         )
         for scene_cfg, models in jobs
     ]
