@@ -10,6 +10,7 @@ import numpy as np
 import torch
 
 from dataclasses import dataclass
+from typing import Any
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
 from heca.scenes.scene import Scene
@@ -26,6 +27,11 @@ class MolmoEncoder(ImageEncoder):
     class Config(ImageEncoder.Config):
         image_size: tuple[int, int] = (256, 256)
         tag: str = "allenai/Molmo2-4B"
+        # per-card budget for the weights, and what may spill to host memory; the
+        # keypoint encoder of the same process already holds ~2 GB of each card.
+        # Empty string disables the cap (weights must then fit on the device alone).
+        max_gpu_memory: str = "8000MiB"
+        max_cpu_memory: str = "24GiB"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -62,19 +68,33 @@ class MolmoEncoder(ImageEncoder):
         self.load_processor()
         if self.model is not None:
             return
-        # 4.85B parameters: fp32 is 19.4 GB, which does not fit an 11 GB card and
-        # would make accelerate offload. fp16 halves it and is hardware-accelerated
-        # on Turing (bf16 is emulated there and has a smaller mantissa); the state
-        # readout is one argmax over the answer letters, so fp16 is ample. CPU stays
-        # fp32, where neither half precision is a win.
-        dtype = torch.float16 if hardware.device.type == "cuda" else torch.float32
+        # 4.85B parameters: fp32 is 19.4 GB, which no card here holds, and fp16 is
+        # 9.7 GB -- still more than is left once the keypoint encoder of the same
+        # process is up (~2 GB) on an 11 GB card. So the weights go through a device
+        # map with a cap: the overflow lands in host memory instead of an OOM.
+        # fp16 rather than bf16 because Turing accelerates fp16 and emulates bf16.
+        half = hardware.device.type == "cuda"
+        dtype = torch.float16 if half else torch.float32
+        device_map: Any = hardware.device
+        max_memory = None
+        if half and self.cfg.max_gpu_memory:
+            device_map = "auto"
+            max_memory = {
+                index: self.cfg.max_gpu_memory
+                for index in range(torch.cuda.device_count())
+            }
+            max_memory["cpu"] = self.cfg.max_cpu_memory
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,
             trust_remote_code=True,
             dtype=dtype,
-            device_map=hardware.device,
+            device_map=device_map,
+            max_memory=max_memory,
         )
-        logger.info(f"Molmo loaded in {dtype} on {hardware.device}")
+        logger.info(
+            f"Molmo loaded in {dtype} ({device_map}), map: "
+            f"{getattr(self.model, 'hf_device_map', None)}"
+        )
         self.model.eval()
 
     @staticmethod
@@ -103,6 +123,13 @@ class MolmoEncoder(ImageEncoder):
         )
 
         inputs.pop("token_type_ids", None)
+        # with a device map the first module may not be the card everything else
+        # lives on, so the batch follows the parameters
+        device = next(self.model.parameters()).device
+        inputs = {
+            key: value.to(device) if torch.is_tensor(value) else value
+            for key, value in inputs.items()
+        }
 
         with torch.inference_mode():
             outputs = self.model(**inputs)
