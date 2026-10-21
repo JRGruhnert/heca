@@ -101,6 +101,11 @@ def evaluate_model(
     env = get_env_safely(scene)
     counts: Counter = Counter()
     anchors = anchor_entities(conditions)
+    # a visual policy reads images, so both scenes it plans from are the rendered
+    # frames through its own encoder -- the GT poses would be a different frame
+    # than the one it was fitted in. The task instance still comes from the
+    # conditions above.
+    visual = not model._use_gt
     began = time.perf_counter()
     for ep in range(episodes):
         env.reset(options={"render_goal": True})
@@ -108,11 +113,22 @@ def evaluate_model(
 
         env.set_start(pre_info)
         env.set_goal(post_info)
-        y = scene.to_dc_scene(env.get_reset_info()["goal"])
+        goal_info = dict(env.get_reset_info()["goal"])
+        y = scene.to_dc_scene(goal_info)
+        if visual:
+            # render the goal from the state just set, the way _sample_task does
+            env._render_goal = True
+            env.set_goal(goal_info, return_info=False)
+            goal_info["image"] = env._cur_goal_rendered
+            y = model.make_scene(y, scene.to_td_image(goal_info))
+            env.set_start(pre_info)  # the goal render may have moved the state
 
         succeeded_on = 0
         for attempt in range(1, max_tries + 1):
-            x = scene.to_dc_scene(env.compute_ob_info())
+            ob_info = env.compute_ob_info()
+            x = scene.to_dc_scene(ob_info)
+            if visual:
+                x = model.make_scene(x, scene.to_td_image(ob_info))
             _, fb = model.act(x, y)
             if fb.success:
                 succeeded_on = attempt
