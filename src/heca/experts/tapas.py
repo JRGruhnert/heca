@@ -147,6 +147,10 @@ class TapasExpert(ExpertModel):
         )
         repeat_actions: int = 0
         gt_frames: list[list[str]] | None = None
+        # components per condition GMM. One means a single Gaussian per entity,
+        # i.e. mean and covariance and a Mahalanobis test: fitting tracking noise
+        # with a mixture makes the gating accept whatever cluster the noise forms.
+        conditions_components: int = 1
         segment_ids: list[int] | None = None
         max_con_comps: int = 10
         fix_bimodal: bool = False
@@ -699,6 +703,8 @@ class TapasExpert(ExpertModel):
         # intersected with the *fitted* model's frames, and this also has to run
         # when the policies were fitted in an earlier run (--skip-fit)
         entities = self.scene.entities
+        for entity in entities.values():
+            entity.cfg.max_fit_components = self.cfg.conditions_components
         for key in entities:
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])

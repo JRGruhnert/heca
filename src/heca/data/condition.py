@@ -119,10 +119,10 @@ class Condition:
         return models, bics
 
     def plot(self, path: Path):
-        ks = range(1, 10 + 1)
         plt.figure(figsize=(8, 5))
         for name, bic in self._bics.items():
-            plt.plot(ks, bic, marker="o", label=f"{name}")
+            # one point per component count actually tried, not a fixed ten
+            plt.plot(range(1, len(bic) + 1), bic, marker="o", label=f"{name}")
         plt.xlabel("Number of latent classes")
         plt.ylabel("BIC")
         plt.title("Model selection")
