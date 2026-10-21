@@ -1,6 +1,7 @@
 import argparse
 import json
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 from typing import cast
@@ -99,6 +100,7 @@ def evaluate_model(
     env = get_env_safely(scene)
     counts: Counter = Counter()
     anchors = anchor_entities(model)
+    began = time.perf_counter()
     for ep in range(episodes):
         env.reset(options={"render_goal": True})
         pre_info, post_info = sample_task_conditions(model, scene, anchors)
@@ -116,9 +118,12 @@ def evaluate_model(
                 break
 
         counts[succeeded_on] += 1
-        logger.debug(
+        elapsed = time.perf_counter() - began
+        left = elapsed / (ep + 1) * (episodes - ep - 1)
+        logger.info(
             f"[{scene.cfg.tag}] {model.cfg.tag} episode {ep + 1}/{episodes}: "
             f"{'success on try ' + str(succeeded_on) if succeeded_on else 'failed'}"
+            f" (counts {dict(counts)}, ~{left / 60:.0f} min left)"
         )
     return counts
 

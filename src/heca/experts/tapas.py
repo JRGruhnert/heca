@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 import h5py
 import joblib
@@ -670,8 +671,21 @@ class TapasExpert(ExpertModel):
             start_scenes = [demo[0] for demo in demos_scenes]
             end_scenes = [demo[-1] for demo in demos_scenes]
         else:
-            start_scenes = [self.from_image(demo[0]) for demo in demos_images]
-            end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
+            # one line every 20 demos: the state questions are the slow part, so
+            # without it a conditions stage that takes an hour looks like a hang
+            total = len(demos_images)
+            began = time.perf_counter()
+            start_scenes, end_scenes = [], []
+            for done, demo in enumerate(demos_images, start=1):
+                start_scenes.append(self.from_image(demo[0]))
+                end_scenes.append(self.from_image(demo[-1]))
+                if done % 20 == 0 or done == total:
+                    elapsed = time.perf_counter() - began
+                    left = elapsed / done * (total - done)
+                    logger.info(
+                        f"{self.cfg.tag}: conditions {done}/{total} demos, "
+                        f"{elapsed / 60:.1f} min elapsed, ~{left / 60:.1f} min left"
+                    )
 
         # the scene's entities, not ``self.entities``: that is the scene's entities
         # intersected with the *fitted* model's frames, and this also has to run
