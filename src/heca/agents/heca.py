@@ -129,7 +129,7 @@ class Heca(Configurable):
         return finished  # the learner just finished
 
     def train(self, n_batch: int) -> int:
-        n = 0
+        n = self.learner.current_update
         while n < n_batch:
             if self.tick():
                 n += 1
