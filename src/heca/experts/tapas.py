@@ -673,11 +673,15 @@ class TapasExpert(ExpertModel):
             start_scenes = [self.from_image(demo[0]) for demo in demos_images]
             end_scenes = [self.from_image(demo[-1]) for demo in demos_images]
 
-        for key in self.entities:
+        # the scene's entities, not ``self.entities``: that is the scene's entities
+        # intersected with the *fitted* model's frames, and this also has to run
+        # when the policies were fitted in an earlier run (--skip-fit)
+        entities = self.scene.entities
+        for key in entities:
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])
 
-        pair = ConPair.make(self.cfg.tag, pre_data, post_data, self.entities)
+        pair = ConPair.make(self.cfg.tag, pre_data, post_data, entities)
         pair.plot(path)
         joblib.dump(pair, cache_path)
         logger.info(f"Saved conditions to {cache_path}")
