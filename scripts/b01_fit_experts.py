@@ -1,4 +1,5 @@
 import argparse
+import multiprocessing as mp
 import signal
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -181,9 +182,13 @@ def main():
     logger.info(f"Running pipeline for {len(jobs)} scenes with {workers} process(es).")
     threads = pdist.threads_for(workers, args.threads)
     logger.info(f"Threads per worker: {threads} (for {workers} process(es))")
+    # spawn, not fork: hardware.device initialises CUDA when this module is
+    # imported (it asks the cards how much memory they have), and a forked child
+    # cannot re-initialise it -- "Cannot re-initialize CUDA in forked subprocess"
     pool = ProcessPoolExecutor(
         max_workers=workers,
         initializer=partial(pdist.pin_intra_op_threads, threads),
+        mp_context=mp.get_context("spawn"),
     )
     futures = [
         pool.submit(
