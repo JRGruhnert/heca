@@ -62,12 +62,19 @@ class MolmoEncoder(ImageEncoder):
         self.load_processor()
         if self.model is not None:
             return
+        # 4.85B parameters: fp32 is 19.4 GB, which does not fit an 11 GB card and
+        # would make accelerate offload. fp16 halves it and is hardware-accelerated
+        # on Turing (bf16 is emulated there and has a smaller mantissa); the state
+        # readout is one argmax over the answer letters, so fp16 is ample. CPU stays
+        # fp32, where neither half precision is a win.
+        dtype = torch.float16 if hardware.device.type == "cuda" else torch.float32
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,
             trust_remote_code=True,
-            dtype=torch.float32,
+            dtype=dtype,
             device_map=hardware.device,
         )
+        logger.info(f"Molmo loaded in {dtype} on {hardware.device}")
         self.model.eval()
 
     @staticmethod
