@@ -168,7 +168,7 @@ class Graph:
 
     @property
     def dead_end(self) -> bool:
-        gated = getattr(self.ns_option, "gated", None)
+        gated = self.ns_option.gated
         if gated is None:
             raise RuntimeError("dead_end needs a build() first")
         return bool(gated.all()) if gated.numel() else True
