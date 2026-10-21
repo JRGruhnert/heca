@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 import h5py
 import joblib
@@ -665,22 +666,34 @@ class TapasExpert(ExpertModel):
         path = self.load_dir(self.cfg)
         cache_path = self.conditions_cache_path
         demos_file = h5py.File(path / f"demos.h5", "r")
-        # the conditions describe the task in the room: which object moved where,
-        # as env poses. A visual observation is a keypoint with a zeroed rotation,
-        # which is not an object pose -- turning one into a reset state puts the
-        # object where its handle was. So the values here always come from the
-        # recording, whatever the observation variant of the policy is.
-        demos_scenes, _ = self.scene.load_dataset(
+        demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
             selections=list(range(demos)) if demos else None,
             only_conditions=True,
-            with_images=False,
+            with_images=not self._use_gt,
         )
 
         pre_data: dict[str, np.ndarray] = {}
         post_data: dict[str, np.ndarray] = {}
-        start_scenes = [demo[0] for demo in demos_scenes]
-        end_scenes = [demo[-1] for demo in demos_scenes]
+        if self._use_gt:
+            start_scenes = [demo[0] for demo in demos_scenes]
+            end_scenes = [demo[-1] for demo in demos_scenes]
+        else:
+            # one line every 20 demos: the state questions are the slow part, so
+            # without it a conditions stage that takes an hour looks like a hang
+            total = len(demos_images)
+            began = time.perf_counter()
+            start_scenes, end_scenes = [], []
+            for done, demo in enumerate(demos_images, start=1):
+                start_scenes.append(self.from_image(demo[0]))
+                end_scenes.append(self.from_image(demo[-1]))
+                if done % 20 == 0 or done == total:
+                    elapsed = time.perf_counter() - began
+                    left = elapsed / done * (total - done)
+                    logger.info(
+                        f"{self.cfg.tag}: conditions {done}/{total} demos, "
+                        f"{elapsed / 60:.1f} min elapsed, ~{left / 60:.1f} min left"
+                    )
 
         # the scene's entities, not ``self.entities``: that is the scene's entities
         # intersected with the *fitted* model's frames, and this also has to run
