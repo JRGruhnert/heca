@@ -224,18 +224,26 @@ class TapasExpert(ExpertModel):
 
     def _act(self, x, y):
         gen = self._get_prediction(x, y)
-        z, fb = x, None
+        z, fb, image = x, None, None
+        # a full-batch prediction is open loop: the plan is fixed from x and y and
+        # the scene fed back into the generator is ignored. Re-encoding the frame
+        # per step is what made visual rollouts cost seconds per env step, so only
+        # the closed-loop path pays for it -- the final scene is encoded once below
+        online = not self.cfg.policy.return_full_batch
         try:
             action = next(gen)
         except StopIteration:
             action = None
         while action is not None:
             tdscene, tdimage, fb = self.scene.step(action)
-            z = self.make_scene(tdscene, tdimage)
+            image = tdimage
+            z = self.make_scene(tdscene, tdimage) if online else tdscene
             try:
                 action = gen.send(z)  # online: feed reached scene back
             except StopIteration:
                 action = None
+        if not online and not self._use_gt and image is not None:
+            z = self.make_scene(z, image)
         if fb is None:  # nothing executed: prediction error
             logger.warning(f"{self.cfg.tag}: nothing executed, prediction failed.")
             return x, SceneFeedback(
