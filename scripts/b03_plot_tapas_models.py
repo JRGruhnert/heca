@@ -119,8 +119,15 @@ def evaluate_model(
             # render the goal from the state just set, the way _sample_task does
             env._render_goal = True
             env.set_goal(goal_info, return_info=False)
-            goal_info["image"] = env._cur_goal_rendered
-            y = model.make_scene(y, scene.to_td_image(goal_info))
+            rendered = getattr(env, "_cur_goal_rendered", None)
+            if rendered is None:
+                logger.warning(
+                    f"[{scene.cfg.tag}] no goal render available; the goal stays "
+                    "ground truth for this episode"
+                )
+            else:
+                goal_info["image"] = rendered
+                y = model.make_scene(y, scene.to_td_image(goal_info))
             env.set_start(pre_info)  # the goal render may have moved the state
 
         succeeded_on = 0
@@ -128,7 +135,8 @@ def evaluate_model(
             ob_info = env.compute_ob_info()
             x = scene.to_dc_scene(ob_info)
             if visual:
-                x = model.make_scene(x, scene.to_td_image(ob_info))
+                # compute_ob_info carries no image, so the frame is rendered
+                x = model.make_scene(x, scene.render_frame())
             _, fb = model.act(x, y)
             if fb.success:
                 succeeded_on = attempt
