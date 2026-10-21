@@ -1,3 +1,4 @@
+import dataclasses
 from collections.abc import Iterator, Sequence
 
 from conf.scenes import SCENE_TAGS, scene_module
@@ -28,6 +29,25 @@ def experts_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
 def scene_config(scene_tag: str) -> Scene.Config:
     """The scene config of one scene; imports that scene only."""
     return experts_for_scene(scene_tag)[0].scene
+
+
+def select_encoder(tag: str, backbone: str = "", stride: int = 0):
+    agents = experts_for_scene(tag)
+    base = agents[0].kp_extraction
+    if not backbone and not stride:
+        return base
+    changes: dict = {}
+    if backbone:
+        changes["backbone"] = backbone
+    if stride:
+        changes["stride"] = stride
+    chosen = dataclasses.replace(base, **changes)
+    chosen = dataclasses.replace(
+        chosen, label=f"kp_{chosen.backbone.split('.')[0]}_{chosen.stride}"
+    )
+    for agent in agents:
+        agent.kp_extraction = chosen
+    return chosen
 
 
 def agents_by_scene(

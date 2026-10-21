@@ -40,14 +40,28 @@ class MolmoEncoder(ImageEncoder):
             "letter of the correct answer. There can only be one correct answer."
         )
 
-    def load_model(self):
-        """Load the weights, once, when there is a state to ask about."""
-        if self.model is not None:
+    def load_processor(self):
+        """The tokenizer side only: enough to build the questions, and cheap."""
+        if self.processor is not None:
             return
         self.processor = AutoProcessor.from_pretrained(
             self.cfg.tag,
             trust_remote_code=True,
         )
+        self.tokens = {
+            letter: self.processor.tokenizer.encode(letter, add_special_tokens=False)[0]
+            for letter in molmo.ALPHABET
+        }
+
+    def load_model(self):
+        """Load the weights, once, when there is a state to ask about.
+
+        Kept apart from the processor on purpose: fitting the demos asks no state
+        questions, so it must not pull 19 GB of weights into the run.
+        """
+        self.load_processor()
+        if self.model is not None:
+            return
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,
             trust_remote_code=True,
@@ -55,10 +69,6 @@ class MolmoEncoder(ImageEncoder):
             device_map=hardware.device,
         )
         self.model.eval()
-        self.tokens = {
-            letter: self.processor.tokenizer.encode(letter, add_special_tokens=False)[0]
-            for letter in molmo.ALPHABET
-        }
 
     @staticmethod
     def as_image(image: TDImage) -> np.ndarray:
@@ -75,6 +85,8 @@ class MolmoEncoder(ImageEncoder):
         if not self.chat_texts:
             return {}
         self.load_model()
+        assert self.processor is not None
+        assert self.model is not None
         images = [self.as_image(image)] * len(self.chat_texts)
         inputs = self.processor(
             images=images,
@@ -101,8 +113,7 @@ class MolmoEncoder(ImageEncoder):
                 [next_logits[self.tokens[letter]] for letter in letters]
             )
             probs = torch.softmax(letter_logits, dim=0).numpy()
-            prior = self.priors.get(label)
-            state_idx = int(probs.argmax()) if prior is None else prior.update(probs)
+            state_idx = int(probs.argmax())
             states[label] = (state_idx, float(probs[state_idx]))
 
         return states
@@ -121,7 +132,7 @@ class MolmoEncoder(ImageEncoder):
         self.entity_letters = []
         if not wanted:
             return
-        self.load_model()
+        self.load_processor()
 
         for label, entity in wanted:
             letters = molmo.ALPHABET[: len(entity.cfg.answers)]
@@ -151,6 +162,7 @@ class MolmoEncoder(ImageEncoder):
                     ],
                 }
             ]
+            assert self.processor is not None
             self.chat_texts.append(
                 self.processor.apply_chat_template(
                     messages, tokenize=False, add_generation_prompt=True

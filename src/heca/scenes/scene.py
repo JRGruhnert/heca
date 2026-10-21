@@ -33,20 +33,25 @@ class SceneFeedback:
 
 def reference_note(reference: Reference) -> dict[str, Any]:
     """One reference as the ``annotation.json`` entry ``Scene._save`` writes."""
-    return {
+    note: dict[str, Any] = {
         "x": int(reference.x),
         "y": int(reference.y),
         "xyz": [float(v) for v in reference.xyz],
     }
+    if reference.frame is not None:
+        note["frame"] = int(reference.frame)
+    return note
 
 
 def reference_from_note(note: dict, image: Image.Image) -> Reference:
     """Read back what :func:`reference_note` wrote."""
+    frame = note.get("frame")
     return Reference(
         image=image,
         x=int(note["x"]),
         y=int(note["y"]),
         xyz=np.asarray(note["xyz"], dtype=np.float64),
+        frame=None if frame is None else int(frame),
     )
 
 

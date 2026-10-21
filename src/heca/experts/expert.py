@@ -34,6 +34,8 @@ class ExpertModel(Persistable, abc.ABC):
         self.act_virtual = False
         self._force_recompute = False
         self._use_gt = True
+        self.use_states = True
+        self.use_extra = True
 
     @cached_property
     def entities(self) -> dict[str, Entity]:
@@ -73,7 +75,7 @@ class ExpertModel(Persistable, abc.ABC):
             self.ste_extractor.prepare_for_scene(self.cfg.scene)
         return self
 
-    def load_extras(self) -> None:
+    def load_extras(self, derive_extras: bool = True) -> None:
         """Derive the extra ends this expert's demos imply, into the scene."""
         path = self.load_dir(self.cfg) / "demos.h5"
         if not path.exists():
@@ -90,12 +92,15 @@ class ExpertModel(Persistable, abc.ABC):
                 if values is None:
                     continue
                 self.scene.add_extra_range(label, *values)
-            if not self._use_gt:
+            if not self._use_gt and derive_extras:
                 self.add_extra_positions(demos)
 
     def add_extra_positions(self, demos: h5py.File) -> None:
         wanted = [
-            label for label in self.entities if label not in self.scene.extra_references
+            label
+            for label in self.entities
+            if label not in self.scene.extra_references
+            and label not in self.scene.extra_positions
         ]
         if not wanted:
             return
@@ -124,7 +129,7 @@ class ExpertModel(Persistable, abc.ABC):
         self, image: TDImage
     ) -> tuple[dict[str, DCEntity], dict[str, float]]:
         poses = self.kp_extractor.extract_poses(image)
-        states = self.ste_extractor.extract_states(image)
+        states = self.ste_extractor.extract_states(image) if self.use_states else {}
         references = self.scene.references
 
         entities: dict[str, DCEntity] = {}
@@ -141,15 +146,23 @@ class ExpertModel(Persistable, abc.ABC):
                 )
                 position = reference
 
-            positions = {
-                "current": position,
-                "reference": reference,
-                **self.scene.extra_references.get(label, {}),
-                **{
-                    name: references[label][name].xyz for name in entity.reference_names
-                },
-            }
-            extra = entity.extra_from_references(label, positions)
+            if self.use_extra:
+                positions = {
+                    "current": position,
+                    "reference": reference,
+                    **self.scene.extra_references.get(label, {}),
+                    **{
+                        name: references[label][name].xyz
+                        for name in entity.reference_names
+                    },
+                }
+                # without derived ends there is nothing to project onto
+                if {"min", "max"} <= positions.keys():
+                    extra = entity.extra_from_references(label, positions)
+                else:
+                    extra = np.zeros_like(entity.extra_sigma)
+            else:
+                extra = np.zeros_like(entity.extra_sigma)
             ste = np.array([states[label][0] if label in states else 0])
             pose = np.concatenate(
                 (self.scene.normalize_position(position), np.zeros(entity.rot_dim))

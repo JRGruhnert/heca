@@ -1,5 +1,6 @@
 import math
 from enum import Enum
+from pathlib import Path
 import torch
 import timm
 import types
@@ -24,6 +25,12 @@ from heca.image_encoders.particle_filter import (
 from heca.image_encoders.prior import KeypointPrior, PriorConfig
 
 # NOTE: copied and adapted from TAPAS (https://github.com/robot-learning-freiburg/TAPAS.git)
+DINO_V1_BACKBONES = {
+    "dino_vits8": ("vit_small_patch8_224", "dino_deitsmall8_pretrain.pth"),
+    "dino_vits16": ("vit_small_patch16_224", "dino_deitsmall16_pretrain.pth"),
+    "dino_vitb8": ("vit_base_patch8_224", "dino_vitbase8_pretrain.pth"),
+    "dino_vitb16": ("vit_base_patch16_224", "dino_vitbase16_pretrain.pth"),
+}
 
 
 class TrackingMode(Enum):
@@ -35,20 +42,20 @@ class TrackingMode(Enum):
 class DinoEncoder(ImageEncoder):
     @dataclass(kw_only=True)
     class Config(ImageEncoder.Config):
-        stride: int = 8
+        stride: int = 4
+        backbone: str = "vit_base_patch16_dinov3.lvd1689m"
         taper_sm: int = 25
 
         kp_selection_threshold: float = 0.2
-        interpolate_descriptors: bool = False
+        interpolate_descriptors: bool = True
         tracking: TrackingMode = TrackingMode.PARTICLE
         particle_filter: ParticleFilterConfig = ParticleFilterConfig()
         prior: PriorConfig = PriorConfig()
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.model = timm.create_model(
-            "vit_base_patch16_dinov3.lvd1689m", pretrained=True
-        )
+        self.model = self._create_backbone(self.cfg.backbone)
+        self.prefix_tokens = int(getattr(self.model, "num_prefix_tokens", 1))
         self.model, self.patch_size = DinoEncoder.patch_vit_resolution(
             self.model, self.cfg.stride
         )
@@ -56,6 +63,8 @@ class DinoEncoder(ImageEncoder):
         logger.info(f"{type(self).__name__}: keypoint model on {hardware.device}")
         self.model.eval()  # type: ignore[union-attr]
         data_config = resolve_model_data_config(self.model)
+        height, width = self.cfg.image_size
+        data_config["input_size"] = (3, height, width)
         self.transforms = create_transform(**data_config, is_training=False)
 
         self.kp_descriptors: dict[str, torch.Tensor] = {}
@@ -64,6 +73,28 @@ class DinoEncoder(ImageEncoder):
         self.filter = KeypointParticleFilter(
             self.cfg.particle_filter, self.cfg.taper_sm
         )
+
+    @staticmethod
+    def _create_backbone(name: str) -> nn.Module:
+        """timm weights, or TAPAS's DINO v1 checkpoint dropped into its timm twin."""
+        if name not in DINO_V1_BACKBONES:
+            return timm.create_model(name, pretrained=True)
+        timm_name, checkpoint = DINO_V1_BACKBONES[name]
+        model = timm.create_model(timm_name, pretrained=False, dynamic_img_size=True)
+        path = Path(torch.hub.get_dir()) / "checkpoints" / checkpoint
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{name}: the DINO v1 weights are not in {path}; fetch them once "
+                f'with torch.hub.load("facebookresearch/dino:main", "{name}")'
+            )
+        missing, unexpected = model.load_state_dict(
+            torch.load(path, map_location="cpu"), strict=False
+        )
+        logger.info(
+            f"{name}: DINO v1 weights from {path.name} "
+            f"(missing {list(missing)}, unexpected {list(unexpected)})"
+        )
+        return model
 
     @staticmethod
     def _fix_pos_enc(patch_size: int, stride_hw: tuple[int, int]):
@@ -149,11 +180,10 @@ class DinoEncoder(ImageEncoder):
             # [B, 1 + N, C]
         # cls_token = feats[:, 0] # Not using atm
         # register_token = feats[:, 1:5] # Not using atm
-        patch_tokens = feats[:, 5:]
+        patch_tokens = feats[:, self.prefix_tokens :]
 
         B, N, C = patch_tokens.shape
-        # logger.debug(f"Patch tokens shape: {patch_tokens.shape}")
-        image_size = self.get_image_size(image)
+        image_size = (int(prep.shape[-2]), int(prep.shape[-1]))
         grid_h, grid_w = self.compute_patch_grid_size(image_size)
         descr = patch_tokens.reshape(B, grid_h, grid_w, C)
         # logger.debug(f"Reshaped patch tokens to: {descr.shape}")
@@ -303,23 +333,19 @@ class DinoEncoder(ImageEncoder):
         ref_descriptor: torch.Tensor,
     ) -> torch.Tensor:
         N, D, H, W = descriptor_images.shape
-        # print("N, D, H, W", N, D, H, W)
         Nref, Dref = ref_descriptor.shape
-        # print("Nref, Dref", Nref, Dref)
         assert Dref == D
 
-        descriptor_images = descriptor_images.permute(0, 2, 3, 1)  # N, H, W, D
-        descriptor_images = descriptor_images.unsqueeze(3)  # N, H, W, 1, D
-
-        # print(descriptor_images.shape, "should be N, H, W, 1, D")
-        descriptor_images = descriptor_images.expand(N, H, W, Nref, D)
-        # print(descriptor_images.shape, "should be N, H, W, Nref, D")
-
-        distance = torch.nn.functional.cosine_similarity(
-            descriptor_images, ref_descriptor[None, None, None, :], dim=4
-        )
-
-        return distance.permute(0, 3, 1, 2)
+        # cosine similarity as one dot product: the broadcast form this used to be
+        # builds a (N, H, W, Nref, D) tensor, which on a pixel-resolution map
+        # (256x256 descriptors of 768 dims) is gigabytes. Same values, (H*W, D) x
+        # (D, Nref) instead.
+        flat = descriptor_images.reshape(N, D, H * W).permute(0, 2, 1)  # N, HW, D
+        refs = ref_descriptor.to(flat.dtype)  # Nref, D
+        norms = flat.norm(dim=2).clamp_min(1e-8).unsqueeze(2)  # N, HW, 1
+        ref_norms = refs.norm(dim=1).clamp_min(1e-8)  # Nref
+        distance = (flat @ refs.transpose(0, 1)) / (norms * ref_norms)
+        return distance.permute(0, 2, 1).reshape(N, Nref, H, W)
 
     def get_mode(self, softmax_activations: torch.Tensor) -> torch.Tensor:
         # need argmax over two last dimensions, so join them first

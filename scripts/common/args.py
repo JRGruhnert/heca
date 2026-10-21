@@ -29,6 +29,22 @@ def add_viewer_argument(parser: argparse.ArgumentParser):
     )
 
 
+def add_encoder_arguments(parser: argparse.ArgumentParser):
+    parser.add_argument(
+        "--backbone",
+        default="",
+        help="keypoint backbone: a timm name, or dino_vits8 / dino_vits16 / "
+        "dino_vitb8 / dino_vitb16 for TAPAS's DINO v1 (default: the scene's, "
+        "DINOv3 ViT-B/16)",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=0,
+        help="descriptor stride, sliding the patch-sized kernel (default: 4)",
+    )
+
+
 def add_scene_argument(parser: argparse.ArgumentParser, default=None):
     parser.add_argument(
         "--scene",

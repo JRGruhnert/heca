@@ -11,8 +11,7 @@ class Reference:
     x: int
     y: int
     xyz: np.ndarray
-
-    #: The entity's own reference picture, used to find the keypoint in a new image.
+    frame: int | None = None
     POSITION: ClassVar[str] = "pos"
 
 

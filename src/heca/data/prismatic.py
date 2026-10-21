@@ -41,24 +41,7 @@ class PrismaticEntity(Entity):
                 f"expected a pool of (N, 3) encoded positions, got "
                 f"{positions.shape}"
             )
-        centred = positions - positions.mean(axis=0)
-        # the travel's own axis: the direction the pool spreads out along most
-        _, vectors = np.linalg.eigh(centred.T @ centred)
-        axis = vectors[:, -1]
-        if axis[int(np.argmax(np.abs(axis)))] < 0:
-            axis = -axis
-        projection = centred @ axis
-        if float(projection.max()) - float(projection.min()) <= 0.0:
-            raise ValueError(
-                "every encoded position is the same point, so the slide has no "
-                "travel to derive ends from"
-            )
-        low_band = positions[projection <= np.quantile(projection, 0.10)]
-        high_band = positions[projection >= np.quantile(projection, 0.90)]
-        return {
-            "min": np.median(low_band, axis=0),
-            "max": np.median(high_band, axis=0),
-        }
+        return {"min": positions.min(axis=0), "max": positions.max(axis=0)}
 
     def extra_part(
         self,

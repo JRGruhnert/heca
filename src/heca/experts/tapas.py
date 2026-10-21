@@ -425,7 +425,14 @@ class TapasExpert(ExpertModel):
 
     def load_demos(self) -> Demos:
         ids = self._all_demo_ids()
-        observations, _ = self._scan_demos(ids, plot=False)
+        # the TPGMM takes pos + rot, never the state or joint blocks
+        self.use_states = False
+        self.use_extra = False
+        try:
+            observations, _ = self._scan_demos(ids, plot=False)
+        finally:
+            self.use_states = True
+            self.use_extra = True
         if len(observations) < self.cfg.max_demos:
             raise ValueError(
                 f"{self.cfg.tag}: only {len(observations)}/{len(ids)} demos "
@@ -642,7 +649,8 @@ class TapasExpert(ExpertModel):
                 q = np.asarray(s.extras["ee_pose"][3:7], dtype=float)
                 s.extras["ee_pose"][3:7] = Quaternion.mul(q_z180, q)
 
-    def fit_conditions(self):
+    def fit_conditions(self, demos: int = 0):
+        """Fit the pre/post conditions; ``demos`` limits them to the first N."""
         logger.info(
             f"[{self.cfg.scene.tag}] Fitting conditions ({self._use_gt}): {self.cfg.tag}"
         )
@@ -651,6 +659,7 @@ class TapasExpert(ExpertModel):
         demos_file = h5py.File(path / f"demos.h5", "r")
         demos_scenes, demos_images = self.scene.load_dataset(
             demos_file,
+            selections=list(range(demos)) if demos else None,
             only_conditions=True,
             with_images=not self._use_gt,
         )
