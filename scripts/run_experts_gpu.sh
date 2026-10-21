@@ -23,6 +23,10 @@ set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/.."
 
+# the interpreter the whole script uses: the activated one by default, overridable
+# for a checkout whose env is not active (PYTHON=/path/to/env/bin/python)
+py="${PYTHON:-python}"
+
 scene="${1:-scene0}"
 gpus="${2:-4}"
 threads="${3:-6}"
@@ -32,30 +36,40 @@ episodes="${5:-100}"
 mkdir -p logs/experts
 
 # the encoders need the clicked references: one annotation.json + pos.png per label
-missing=$(
-    for label in $(python -c "
+if ! "$py" - "$scene" <<'PY'
+import sys
+from pathlib import Path
+
 from heca.scenes.scene import Scene
 from scripts.common.scenes import find_scene_config
-print(' '.join(Scene.get(find_scene_config('$scene'), auto_load=False).entities))
-"); do
-        [[ -f "data/scenes/ogbench/$scene/$label/annotation.json" ]] || echo "$label"
-    done
-)
-if [[ -n "$missing" ]]; then
-    echo "error: $scene has no clicked references for: $missing" >&2
-    echo "       copy data/scenes/ogbench/$scene/<label>/{annotation.json,pos.png}" >&2
-    echo "       or run scripts/d01_select_references.py --scene $scene" >&2
+
+tag = sys.argv[1]
+cfg = find_scene_config(tag)
+scene = Scene.get(cfg, auto_load=False)
+root = Path(scene.save_dir(cfg))
+missing = [
+    f"{label}/{name}.png"
+    for label, entity in scene.entities.items()
+    for name in ("pos", *entity.reference_names)
+    if not (root / label / "annotation.json").exists()
+    or not (root / label / f"{name}.png").exists()
+]
+if missing:
+    print(f"error: {tag} has no clicked references for: {', '.join(missing)}",
+          file=sys.stderr)
+    print("       copy the scene's <label>/annotation.json and <label>/pos.png, or run "
+          f"scripts/d01_select_references.py --scene {tag}", file=sys.stderr)
+    sys.exit(1)
+PY
+then
     exit 1
 fi
-
-demos_text="$condition_demos"
-[[ "$condition_demos" -eq 0 ]] && demos_text="all"
 
 echo "=== scene $scene | $gpus arm(s) | $threads threads each"
 echo "=== condition demos $demos_text | eval episodes $episodes"
 
 # --- one global derivation of the slide ends -----------------------------------
-python - "$scene" <<'PY'
+"$py" - "$scene" <<'PY'
 import sys
 
 from heca.experts.expert import ExpertModel
@@ -73,7 +87,7 @@ print("slide ends derived and saved:",
 PY
 
 # --- the experts of the scene, in config order --------------------------------
-mapfile -t tags < <(python - "$scene" <<'PY'
+mapfile -t tags < <("$py" - "$scene" <<'PY'
 import sys
 
 from scripts.common.scenes import experts_for_scene
@@ -90,7 +104,7 @@ for ((i = 0; i < ${#tags[@]}; i++)); do
     gpu=$((i % gpus))
     tag="${tags[$i]}"
     echo "gpu $gpu <- $tag"
-    CUDA_VISIBLE_DEVICES="$gpu" python scripts/b01_fit_experts.py \
+    CUDA_VISIBLE_DEVICES="$gpu" "$py" scripts/b01_fit_experts.py \
         --scene "$scene" --model "$tag" --jobs 1 --threads "$threads" \
         --condition-demos "$condition_demos" --episodes "$episodes" \
         > "logs/experts/$tag.log" 2>&1 &
