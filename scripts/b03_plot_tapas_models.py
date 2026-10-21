@@ -273,6 +273,11 @@ def evaluate_one(
     model.use_gt(gt)
     model.load()
     model.load_extras()
+    # a visual rollout re-encodes the frame on every env step: the keypoints are
+    # needed (the policy reads positions), the state readout is not -- it never
+    # reaches the TPGMM, and the policies were fitted with it off as well. Asking
+    # Molmo per step is what made episodes take minutes.
+    model.use_states = False
     counts = evaluate_model(model, model.scene, episodes, max_tries)
 
     json_path = results_path(scene_cfg)
