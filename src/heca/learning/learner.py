@@ -65,7 +65,7 @@ class Learner(Persistable):
         # Additional Training Hyperparameters
         normalize_rewards: bool = False
         # Misc
-        save_interval: int = 50
+        save_interval: int = 20
         group: str = ""
 
     def __init__(self, cfg: Config):
