@@ -381,7 +381,18 @@ class DinoEncoder(ImageEncoder):
     def prepare_for_scene(self, config: Scene.Config):
         scene = Scene.get(config)
         if not scene.references_ready():
-            raise RuntimeError
+            missing = [
+                f"{label}.{name}"
+                for label, entity in scene.entities.items()
+                for name in (Reference.POSITION, *entity.reference_names)
+                if name not in scene.references.get(label, {})
+            ]
+            raise RuntimeError(
+                f"{config.tag}: no complete reference set (missing "
+                f"{', '.join(missing)}); click them with "
+                f"scripts/d01_select_references.py --scene {config.tag}, or copy "
+                f"the scene's <label>/annotation.json + <label>/pos.png"
+            )
         self.kp_descriptors = {}
         self.kp_labels = []
         for label, entity in scene.entities.items():

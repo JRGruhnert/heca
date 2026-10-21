@@ -31,8 +31,28 @@ episodes="${5:-100}"
 
 mkdir -p logs/experts
 
+# the encoders need the clicked references: one annotation.json + pos.png per label
+missing=$(
+    for label in $(python -c "
+from heca.scenes.scene import Scene
+from scripts.common.scenes import find_scene_config
+print(' '.join(Scene.get(find_scene_config('$scene'), auto_load=False).entities))
+"); do
+        [[ -f "data/scenes/ogbench/$scene/$label/annotation.json" ]] || echo "$label"
+    done
+)
+if [[ -n "$missing" ]]; then
+    echo "error: $scene has no clicked references for: $missing" >&2
+    echo "       copy data/scenes/ogbench/$scene/<label>/{annotation.json,pos.png}" >&2
+    echo "       or run scripts/d01_select_references.py --scene $scene" >&2
+    exit 1
+fi
+
+demos_text="$condition_demos"
+[[ "$condition_demos" -eq 0 ]] && demos_text="all"
+
 echo "=== scene $scene | $gpus arm(s) | $threads threads each"
-echo "=== condition demos $condition_demos | eval episodes $episodes"
+echo "=== condition demos $demos_text | eval episodes $episodes"
 
 # --- one global derivation of the slide ends -----------------------------------
 python - "$scene" <<'PY'

@@ -98,7 +98,7 @@ class ExpertModel(Persistable, abc.ABC):
     def add_extra_positions(self, demos: h5py.File) -> None:
         wanted = [
             label
-            for label in self.entities
+            for label in self.scene.entities
             if label not in self.scene.extra_references
             and label not in self.scene.extra_positions
         ]
