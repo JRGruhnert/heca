@@ -1,7 +1,14 @@
 import argparse
 import signal
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from functools import partial
+from pathlib import Path
+
+# make ``conf`` and ``scripts.common`` importable when run as a file, not as -m
+_REPO_ROOT = str(Path(__file__).resolve().parents[1])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 
 import matplotlib
 

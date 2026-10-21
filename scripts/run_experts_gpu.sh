@@ -29,9 +29,12 @@ model.scene.finish_extras()
 model.scene.save()
 print("slide ends:", {k: list(v) for k, v in model.scene.extra_references.items()})' "$scene"
 
+# the marker survives the logger's own stdout output, which would otherwise land in
+# this list as if it were a tag
 mapfile -t tags < <("$py" -c 'import sys
 from scripts.common.scenes import experts_for_scene
-print("\n".join(cfg.tag for cfg in experts_for_scene(sys.argv[1])))' "$scene")
+for cfg in experts_for_scene(sys.argv[1]):
+    print("TAG " + cfg.tag)' "$scene" | sed -n 's/^TAG //p')
 
 echo "=== $scene: ${#tags[@]} experts, $gpus GPU(s), $threads threads each"
 echo "=== condition demos $demos, eval episodes $episodes"
