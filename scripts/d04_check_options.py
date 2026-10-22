@@ -186,6 +186,23 @@ def main():
                 compare("pre / start read", pair.pre, start)
                 compare("post / goal read", pair.post, goal)
 
+                # the same pixels in both frames: the camera is fixed and the
+                # buttons do not move, so a button read at a different pixel means
+                # the matcher, and the same pixel with a different metre delta means
+                # the depth or the extrinsics behind it
+                if hasattr(reader, "kp_extractor"):
+                    for name, frame in (("start", x_frame), ("goal", y_frame)):
+                        if frame.rgb.numel() == 0:
+                            logger.warning(f"  {name}: no frame to read")
+                            continue
+                        reader.reset_tracking()
+                        poses = reader.kp_extractor.extract_poses(frame)
+                        listed = " ".join(
+                            f"{label}=({kp.x},{kp.y}) s={kp.score:.2f}"
+                            for label, kp in poses.items()
+                        )
+                        logger.info(f"  {name} pixels: {listed}")
+
         graph.build(start, goal, 0.0)
         options = len(graph.ns_option.items)
         gated = int(graph.ns_option.gated.sum()) if options else options
