@@ -16,6 +16,10 @@
 #   CONDA_BASE        conda installation root    (default: autodetected)
 #   HECA_WANDB_ROOT   parent of the per-arm dirs (default: /export/$USER/heca/wandb)
 #   HECA_ARM_LOG      log file                   (default: $HOME/arm<index>.log)
+#   HECA_ARM_CORES    cores to pin this shard to (default: unpinned)
+#   HECA_ARM_THREADS  BLAS threads               (default: HECA_ARM_CORES, else unset)
+#   HECA_ARM_GPUS     pin to card index%N        (default: the card with most free)
+#   HECA_ARM_CPU=1    no GPU at all
 #
 set -euo pipefail
 
@@ -31,14 +35,38 @@ env_name="${HECA_CONDA_ENV:-hecarim}"
 # HECA_ARM_PREFIX=seq for the non-federated runs) does not append to the first one
 prefix="${HECA_ARM_PREFIX:-arm}"
 log="${HECA_ARM_LOG:-$HOME/$prefix$index.log}"
+# read before any OMP export: nproc answers with OMP_NUM_THREADS once that is set
+available="$(nproc)"
+
+# CPU placement. HECA_ARM_CORES=N gives shard i the fixed block of N cores starting
+# at i*N and pins the training process to exactly that set with taskset, so three
+# arms never fight over the same cores and the split survives a restart. Unset: no
+# pinning, every process may use every core.
+#   HECA_ARM_CORES=20  -> shards see 0-19, 20-39, 40-59 on a 64-core node
+cpus=""
+if [[ -n "${HECA_ARM_CORES:-}" ]]; then
+    first=$(( index * HECA_ARM_CORES ))
+    last=$(( first + HECA_ARM_CORES - 1 ))
+    if (( last >= available )); then
+        echo "error: shard $index with HECA_ARM_CORES=$HECA_ARM_CORES needs cores" >&2
+        echo "       $first-$last, but this node has only $available." >&2
+        exit 1
+    fi
+    cpus="$first-$last"
+fi
 
 # BLAS threads per process, for the single-process scripts that do not pin them
-# themselves (the federated ones do it per rank from --threads)
-if [[ -n "${HECA_ARM_THREADS:-}" ]]; then
-    export OMP_NUM_THREADS="$HECA_ARM_THREADS"
-    export MKL_NUM_THREADS="$HECA_ARM_THREADS"
-    export OPENBLAS_NUM_THREADS="$HECA_ARM_THREADS"
-    export NUMEXPR_NUM_THREADS="$HECA_ARM_THREADS"
+# themselves (the federated ones do it per rank from --threads). A pinned core set
+# fixes the thread count too -- otherwise 64 idle cores still get 8-thread BLAS.
+threads="${HECA_ARM_THREADS:-}"
+if [[ -z "$threads" && -n "$cpus" ]]; then
+    threads="$HECA_ARM_CORES"
+fi
+if [[ -n "$threads" ]]; then
+    export OMP_NUM_THREADS="$threads"
+    export MKL_NUM_THREADS="$threads"
+    export OPENBLAS_NUM_THREADS="$threads"
+    export NUMEXPR_NUM_THREADS="$threads"
 fi
 
 # GPU placement. Unset: inherit whatever the launcher shell had (all cards visible),
@@ -118,6 +146,7 @@ fi
     echo "=== python=$python_bin"
     echo "=== WANDB_DIR=$WANDB_DIR log=$log"
     echo "=== CUDA_VISIBLE_DEVICES='${CUDA_VISIBLE_DEVICES-unset}' gpus=$gpus"
+    echo "=== cpus=${cpus:-<unpinned>} (of $available) threads=$threads"
     if [[ -f .env ]]; then
         echo "=== .env: $(grep -E '^(HECA_DATA|WANDB_DIR|WANDB_MODE|MUJOCO_GL)=' .env | tr '\n' ' ')"
     else
@@ -151,4 +180,8 @@ if [[ -n "${HECA_ARM_DRY:-}" ]]; then
     exit 0
 fi
 
-python -m "$module" 2>&1 | tee -a "$log"
+if [[ -n "$cpus" ]]; then
+    taskset -c "$cpus" python -m "$module" 2>&1 | tee -a "$log"
+else
+    python -m "$module" 2>&1 | tee -a "$log"
+fi

@@ -14,7 +14,10 @@
 # Overridable via environment:
 #   HECA_ARM_STAGGER  seconds between session starts (default: 15)
 #   HECA_ARM_PREFIX   tmux session name prefix     (default: arm)
-#   HECA_ARM_MODULE   training module to run       (default: scripts.c02_train_seq_fl)
+#   HECA_ARM_MODULE   training module to run       (default: scripts/c02_train_seq_fl)
+#   HECA_ARM_CORES    cores per shard, pinned with taskset (default: unpinned)
+#   HECA_ARM_GPUS     cards available to pin onto   (default: unset -> each shard
+#                     takes whichever card has the most free memory)
 #
 set -euo pipefail
 
@@ -41,7 +44,7 @@ for (( i = first; i < first + count; i++ )); do
         echo "skip: session $name already exists"
         continue
     fi
-    placement="HECA_ARM_PREFIX='${prefix}' HECA_ARM_CPU='${HECA_ARM_CPU:-}' HECA_ARM_GPUS='${HECA_ARM_GPUS:-}' HECA_ARM_THREADS='${HECA_ARM_THREADS:-}' HECA_WANDB_ROOT='${HECA_WANDB_ROOT:-}'"
+    placement="HECA_ARM_PREFIX='${prefix}' HECA_ARM_CPU='${HECA_ARM_CPU:-}' HECA_ARM_GPUS='${HECA_ARM_GPUS:-}' HECA_ARM_CORES='${HECA_ARM_CORES:-}' HECA_ARM_THREADS='${HECA_ARM_THREADS:-}' HECA_WANDB_ROOT='${HECA_WANDB_ROOT:-}'"
     tmux new -d -s "$name" "$placement $worker $i $total $module"
     echo "started $name -> shard $i/$total  [$placement]"
     sleep "$stagger"
