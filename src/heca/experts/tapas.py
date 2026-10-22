@@ -5,6 +5,7 @@ import joblib
 from matplotlib import pyplot as plt
 import torch
 import numpy as np
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from functools import cached_property
 from tensordict import TensorDict
@@ -228,26 +229,25 @@ class TapasExpert(ExpertModel):
 
     def _act(self, x, y):
         gen = self._get_prediction(x, y)
-        z, fb, image = x, None, None
-        # a full-batch prediction is open loop: the plan is fixed from x and y and
-        # the scene fed back into the generator is ignored. Re-encoding the frame
-        # per step is what made visual rollouts cost seconds per env step, so only
-        # the closed-loop path pays for it -- the final scene is encoded once below
+        z, fb = x, None
         online = not self.cfg.policy.return_full_batch
+        render = None if online else getattr(self.scene, "render_frame", None)
+        lazy = getattr(self.scene, "lazy_pixels", None)
+        context = lazy() if render is not None and lazy is not None else nullcontext()
         try:
             action = next(gen)
         except StopIteration:
             action = None
-        while action is not None:
-            tdscene, tdimage, fb = self.scene.step(action)
-            image = tdimage
-            z = self.make_scene(tdscene, tdimage) if online else tdscene
-            try:
-                action = gen.send(z)  # online: feed reached scene back
-            except StopIteration:
-                action = None
-        if not online and not self._use_gt and image is not None:
-            z = self.make_scene(z, image)
+        with context:
+            while action is not None:
+                tdscene, tdimage, fb = self.scene.step(action)
+                z = self.make_scene(tdscene, tdimage) if online else tdscene
+                try:
+                    action = gen.send(z)  # online: feed reached scene back
+                except StopIteration:
+                    action = None
+        if render is not None and fb is not None and not self._use_gt:
+            z = self.make_scene(z, render())
         if fb is None:  # nothing executed: prediction error
             logger.warning(f"{self.cfg.tag}: nothing executed, prediction failed.")
             return x, SceneFeedback(

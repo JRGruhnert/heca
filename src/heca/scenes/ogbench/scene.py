@@ -1,4 +1,5 @@
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 import atexit
 import time
@@ -33,6 +34,7 @@ class OGScene(Scene):
         self._env = self._make_env(self.env_id)
         self.task_id: int | None = None
         self.seed: int | None = None
+        self._lazy_pixels = False
         self._last_ee_pose = None
         self._last_ee_yaw = None
         self._viewer_launched = False
@@ -149,10 +151,21 @@ class OGScene(Scene):
     def render_frame(self) -> TDImage:
         return self.to_td_image({"image": self.env.get_pixel_observation()})
 
+    @contextmanager
+    def lazy_pixels(self):
+        ob_type = self.env._ob_type
+        self._lazy_pixels = True
+        self.env._ob_type = "states"
+        try:
+            yield
+        finally:
+            self.env._ob_type = ob_type
+            self._lazy_pixels = False
+
     def to_td_image(self, obs: dict) -> TDImage:
-        image_dict = obs["image"]
+        image_dict = obs.get("image")
         if not isinstance(image_dict, dict):
-            if self.render_frames:
+            if self.render_frames and not self._lazy_pixels:
                 return self.render_frame()
             empty = torch.empty(0)
             return TDImage(
