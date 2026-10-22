@@ -51,16 +51,24 @@ class DinoEncoder(ImageEncoder):
         tracking: TrackingMode = TrackingMode.PARTICLE
         particle_filter: ParticleFilterConfig = ParticleFilterConfig()
         prior: PriorConfig = PriorConfig()
+        # where the keypoint model lives. Empty: the process-wide hardware.device.
+        # A node shared by several runs can give every run's Molmo its own card and
+        # put all the (small, ~0.35 GB) keypoint models on one card instead, which is
+        # also the only way three arms fit on four cards without spilling to host.
+        device: str = ""
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
+        self.device = (
+            torch.device(self.cfg.device) if self.cfg.device else hardware.device
+        )
         self.model = self._create_backbone(self.cfg.backbone)
         self.prefix_tokens = int(getattr(self.model, "num_prefix_tokens", 1))
         self.model, self.patch_size = DinoEncoder.patch_vit_resolution(
             self.model, self.cfg.stride
         )
-        self.model = self.model.to(hardware.device)  # type: ignore[arg-type]
-        logger.info(f"{type(self).__name__}: keypoint model on {hardware.device}")
+        self.model = self.model.to(self.device)  # type: ignore[arg-type]
+        logger.info(f"{type(self).__name__}: keypoint model on {self.device}")
         self.model.eval()  # type: ignore[union-attr]
         data_config = resolve_model_data_config(self.model)
         height, width = self.cfg.image_size
@@ -71,7 +79,7 @@ class DinoEncoder(ImageEncoder):
         self.kp_labels: list[str] = []
         self.priors: dict[str, KeypointPrior] = {}
         self.filter = KeypointParticleFilter(
-            self.cfg.particle_filter, self.cfg.taper_sm
+            self.cfg.particle_filter, self.cfg.taper_sm, device=self.device
         )
 
     @staticmethod
@@ -174,7 +182,7 @@ class DinoEncoder(ImageEncoder):
             assert isinstance(prep, torch.Tensor)
             if prep.ndim == 3:
                 prep = prep.unsqueeze(0)
-            prep = prep.to(hardware.device)
+            prep = prep.to(self.device)
             feats: torch.Tensor = self.model.forward_features(prep)
             # output is unpooled, a (1, 261, 4096) shaped tensor
             # [B, 1 + N, C]

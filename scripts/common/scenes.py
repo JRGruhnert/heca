@@ -1,4 +1,5 @@
 import dataclasses
+import os
 from collections.abc import Iterator, Sequence
 
 from conf.scenes import SCENE_TAGS, scene_module
@@ -21,9 +22,33 @@ def selected_scenes(args) -> list[str]:
     return [args.scene] if args.scene else list(SCENE_TAGS)
 
 
+def place_encoders(agents: list[ExpertModel.Config]) -> list[ExpertModel.Config]:
+    """Honour HECA_KP_DEVICE / HECA_MOLMO_DEVICES for every agent of a scene.
+
+    The two encoders of one process normally share ``hardware.device``. Several
+    runs on one node can instead give every run's Molmo its own card and put all
+    the small keypoint models on a single further card, which is what makes three
+    arms fit on four 11 GB cards without spilling to host memory.
+    """
+    kp_device = os.environ.get("HECA_KP_DEVICE", "").strip()
+    molmo_cards = os.environ.get("HECA_MOLMO_DEVICES", "").strip()
+    if not kp_device and not molmo_cards:
+        return agents
+    for agent in agents:
+        if kp_device:
+            agent.kp_extraction = dataclasses.replace(
+                agent.kp_extraction, device=kp_device
+            )
+        if molmo_cards and hasattr(agent.state_extraction, "gpu_cards"):
+            agent.state_extraction = dataclasses.replace(
+                agent.state_extraction, gpu_cards=molmo_cards
+            )
+    return agents
+
+
 def experts_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
     """The agent configs of one scene; imports that scene only."""
-    return list(scene_module(scene_tag).agents)
+    return place_encoders(list(scene_module(scene_tag).agents))
 
 
 def scene_config(scene_tag: str) -> Scene.Config:

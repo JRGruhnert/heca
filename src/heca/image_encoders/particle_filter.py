@@ -69,9 +69,18 @@ def gaussian_cdf(
 
 
 class KeypointParticleFilter:
-    def __init__(self, config: ParticleFilterConfig, taper: int):
+    def __init__(
+        self,
+        config: ParticleFilterConfig,
+        taper: int,
+        device: torch.device | None = None,
+    ):
         self.cfg = config
         self.taper = taper
+        # the keypoint model's card: the filter mixes the similarity maps with the
+        # camera tensors, so both have to live on the same device, and that is the
+        # device its encoder was placed on -- not the process-wide default
+        self.device = hardware.device if device is None else device
         self.reset()
 
     def reset(self) -> None:
@@ -233,9 +242,9 @@ class KeypointParticleFilter:
     ) -> tuple[np.ndarray, dict[str, torch.Tensor]]:
         """One frame: predict, score, resample, and report the estimate."""
         maps = similarity.unsqueeze(0)  # (1, K, H, W)
-        depth = depth.to(hardware.device)
-        extr = extr.to(hardware.device)
-        intr = intr.to(hardware.device)
+        depth = depth.to(self.device)
+        extr = extr.to(self.device)
+        intr = intr.to(self.device)
         self.image_size = (int(depth.shape[0]), int(depth.shape[1]))
 
         if not self.ready:
@@ -243,7 +252,7 @@ class KeypointParticleFilter:
             return self.estimate_state()
 
         self.coordinates = self.predict_motion(
-            None if gripper_pose is None else gripper_pose.to(hardware.device)
+            None if gripper_pose is None else gripper_pose.to(self.device)
         )
         B, K, P, _ = self.coordinates.shape
         H, W = depth.shape
@@ -308,7 +317,7 @@ class KeypointParticleFilter:
                     self.cfg.depth_model_sigma_abs,
                 )
                 random_mask = (
-                    torch.rand(fresh.shape[:-1], device=hardware.device)
+                    torch.rand(fresh.shape[:-1], device=self.device)
                     < self.cfg.obs_sample_thresh
                 )
                 self.coordinates = torch.where(

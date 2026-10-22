@@ -19,6 +19,7 @@
 #   HECA_ARM_CORES    CPU budget for this shard (default: uncapped)
 #   HECA_ARM_THREADS  BLAS threads               (default: HECA_ARM_CORES, else unset)
 #   HECA_ARM_GPUS     pin to card index%N        (default: the card with most free)
+#   HECA_ARM_KP_GPU    share card N for all keypoint encoders, Molmo on i%N
 #   HECA_ARM_CPU=1    no GPU at all
 #
 set -euo pipefail
@@ -67,7 +68,16 @@ fi
 #   HECA_ARM_CPU=1     -> no GPU at all (the simulator dominates; frees VRAM entirely)
 #   HECA_ARM_GPUS=N    -> this shard sees only card (index % N), which stops every
 #                         process from paying a CUDA context on all four cards
-if [[ -n "${HECA_ARM_CPU:-}" ]]; then
+#   HECA_ARM_KP_GPU=N -> the keypoint encoders of every shard share card N, and
+#                        shard i puts its Molmo on card (i % N). One process then
+#                        sees two cards: its own Molmo card, and N with the
+#                        keypoint models of all shards. Three arms on four cards,
+#                        nothing spilling to host.
+if [[ -n "${HECA_ARM_KP_GPU:-}" ]]; then
+    export CUDA_VISIBLE_DEVICES="$((index % HECA_ARM_KP_GPU)),${HECA_ARM_KP_GPU}"
+    export HECA_MOLMO_DEVICES=0      # visible index of this shard's Molmo card
+    export HECA_KP_DEVICE=cuda:1     # visible index of the shared keypoint card
+elif [[ -n "${HECA_ARM_CPU:-}" ]]; then
     export CUDA_VISIBLE_DEVICES=""
 elif [[ -n "${HECA_ARM_GPUS:-}" ]]; then
     export CUDA_VISIBLE_DEVICES="$((index % HECA_ARM_GPUS))"
@@ -151,6 +161,10 @@ fi
     echo "=== python=$python_bin"
     echo "=== WANDB_DIR=$WANDB_DIR log=$log"
     echo "=== CUDA_VISIBLE_DEVICES='${CUDA_VISIBLE_DEVICES-unset}' gpus=$gpus"
+    if [[ -n "${HECA_KP_DEVICE:-}" ]]; then
+        echo "=== keypoint encoder on ${HECA_KP_DEVICE}," \
+            "Molmo on visible card ${HECA_MOLMO_DEVICES:-all}"
+    fi
     echo "=== cpus=$quota of $available, threads=$threads"
     if [[ -f .env ]]; then
         echo "=== .env: $(grep -E '^(HECA_DATA|WANDB_DIR|WANDB_MODE|MUJOCO_GL)=' .env | tr '\n' ' ')"

@@ -38,6 +38,24 @@ class MolmoEncoder(ImageEncoder):
         # Empty string disables the cap (weights must then fit on the device alone).
         max_gpu_memory: str = "10GiB"
         max_cpu_memory: str = "24GiB"
+        # state questions per forward. The batch is the same frame repeated once per
+        # entity, so its activations (742 MiB for six) are what does not fit beside
+        # the weights on one card; three questions per forward leave ~500 MiB free.
+        state_batch_size: int = 3
+        # visible cards the weights may go on, comma separated ("" = all of them).
+        # With CUDA_VISIBLE_DEVICES="2,3" the answers are 0 and 1, so "0" keeps the
+        # model off the card the keypoint encoder was sent to.
+        gpu_cards: str = ""
+
+        @property
+        def state_batch(self) -> int:
+            """Questions per forward, overridable per run (HECA_MOLMO_BATCH)."""
+            raw = os.environ.get("HECA_MOLMO_BATCH", "").strip()
+            try:
+                value = int(raw) if raw else self.state_batch_size
+            except ValueError:
+                value = self.state_batch_size
+            return max(1, value)
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -86,10 +104,18 @@ class MolmoEncoder(ImageEncoder):
         # activations have to fit the same card, and how much is left differs by
         # card and by what else is resident, so it is overridable without a code edit
         cap = os.environ.get("HECA_MOLMO_GPU_MEMORY", self.cfg.max_gpu_memory)
+        cards = self.cfg.gpu_cards.strip() or os.environ.get(
+            "HECA_MOLMO_DEVICES", ""
+        ).strip()
         max_memory = None
         if half and cap:
             device_map = "auto"
-            max_memory = {index: cap for index in range(torch.cuda.device_count())}
+            indices = (
+                [int(part) for part in cards.split(",") if part.strip()]
+                if cards
+                else list(range(torch.cuda.device_count()))
+            )
+            max_memory = {index: cap for index in indices}
             max_memory["cpu"] = self.cfg.max_cpu_memory
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,
@@ -100,7 +126,8 @@ class MolmoEncoder(ImageEncoder):
         )
         logger.info(
             f"Molmo loaded in {dtype} ({device_map}), map: "
-            f"{getattr(self.model, 'hf_device_map', None)}, gpu cap {cap}"
+            f"{getattr(self.model, 'hf_device_map', None)}, gpu cap {cap}, "
+            f"cards {cards or 'all'}"
         )
         self.model.eval()
 
@@ -121,41 +148,46 @@ class MolmoEncoder(ImageEncoder):
         self.load_model()
         assert self.processor is not None
         assert self.model is not None
-        images = [self.as_image(image)] * len(self.chat_texts)
-        inputs = self.processor(
-            images=images,
-            text=self.chat_texts,
-            return_tensors="pt",
-            padding=True,
-        )
-
-        inputs.pop("token_type_ids", None)
         # with a device map the first module may not be the card everything else
         # lives on, so the batch follows the parameters
         device = next(self.model.parameters()).device
-        inputs = {
-            key: value.to(device) if torch.is_tensor(value) else value
-            for key, value in inputs.items()
-        }
-
-        with torch.inference_mode():
-            outputs = self.model(**inputs)
-
-        logits = outputs.logits  # [B, seq_len, vocab_size]
-
-        # last valid token position for each sample
-        input_lengths = inputs["attention_mask"].sum(dim=1) - 1
-
+        frame = self.as_image(image)
         states: dict[str, tuple[int, float]] = {}
-        for i, label in enumerate(self.entity_labels):
-            next_logits = logits[i, input_lengths[i]]
-            letters = self.entity_letters[i]
-            letter_logits = torch.tensor(
-                [next_logits[self.tokens[letter]] for letter in letters]
+
+        # one forward per batch of questions: fewer images per forward is what keeps
+        # the activations beside the weights on a single card, and entities are
+        # independent, so the split costs only wall clock
+        step = self.cfg.state_batch
+        for begin in range(0, len(self.chat_texts), step):
+            texts = self.chat_texts[begin : begin + step]
+            inputs = self.processor(
+                images=[frame] * len(texts),
+                text=texts,
+                return_tensors="pt",
+                padding=True,
             )
-            probs = torch.softmax(letter_logits, dim=0).numpy()
-            state_idx = int(probs.argmax())
-            states[label] = (state_idx, float(probs[state_idx]))
+            inputs.pop("token_type_ids", None)
+            inputs = {
+                key: value.to(device) if torch.is_tensor(value) else value
+                for key, value in inputs.items()
+            }
+
+            with torch.inference_mode():
+                logits = self.model(**inputs).logits  # [B, seq_len, vocab_size]
+
+            # last valid token position for each sample
+            input_lengths = inputs["attention_mask"].sum(dim=1) - 1
+            for offset, label in enumerate(self.entity_labels[begin : begin + step]):
+                next_logits = logits[offset, input_lengths[offset]]
+                letters = self.entity_letters[begin + offset]
+                letter_logits = torch.tensor(
+                    [next_logits[self.tokens[letter]] for letter in letters]
+                )
+                probs = torch.softmax(letter_logits, dim=0).numpy()
+                state_idx = int(probs.argmax())
+                states[label] = (state_idx, float(probs[state_idx]))
+
+            del inputs, logits
 
         return states
 
