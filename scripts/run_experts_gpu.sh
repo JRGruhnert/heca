@@ -10,6 +10,9 @@
 #   PYTHON              interpreter to use            (default: python)
 #   HECA_EXPERTS_ARGS   extra args for b01_fit_experts, e.g. "--skip-fit --skip-eval"
 #                       to rebuild only the conditions
+#   HECA_EXPERTS_CARDS_PER_PROC  cards each process may use (default: 1). A Molmo
+#                       that does not fit one card is spread over two; then only
+#                       gpus/2 processes run at once, each on its own pair.
 #   HECA_EXPERTS_DRY    print the commands instead of running them
 #   HECA_EXPERTS_BACKUP copy each conditions file to <stem>.bak.joblib when the
 #                       target does not exist yet, so a rebuild stays reversible
@@ -23,6 +26,24 @@ threads="${3:-6}"
 demos="${4:-0}"
 episodes="${5:-100}"
 extra="${HECA_EXPERTS_ARGS:-}"
+# cards per process: a Molmo that does not fit one card is spread over several, and
+# then fewer processes run at once (one per group of cards)
+per="${HECA_EXPERTS_CARDS_PER_PROC:-1}"
+if (( per < 1 || gpus % per != 0 )); then
+    echo "error: $gpus GPU(s) cannot be split into groups of $per" >&2
+    exit 1
+fi
+slots=$(( gpus / per ))
+
+# the card group of run i modulo the number of slots
+cards_for() {
+    local k=$1 out=""
+    for (( c = 0; c < per; c++ )); do
+        out+="${out:+,}$(( k * per + c ))"
+    done
+    echo "$out"
+}
+
 
 mkdir -p logs/experts
 
@@ -33,9 +54,9 @@ if [[ -n "${HECA_EXPERTS_DRY:-}" ]]; then
 from scripts.common.scenes import experts_for_scene
 for cfg in experts_for_scene(sys.argv[1]):
     print("TAG " + cfg.tag)' "$scene" | sed -n 's/^TAG //p')
-    echo "=== $scene: ${#tags[@]} experts, $gpus process(es), extra args '${extra}'"
+    echo "=== $scene: ${#tags[@]} experts, $slots process(es) of $per GPU, extra args '${extra}'"
     for i in "${!tags[@]}"; do
-        echo "would run: gpu $((i % gpus)) <- ${tags[$i]} $extra"
+        echo "would run: gpus $(cards_for $(( i % slots ))) <- ${tags[$i]} $extra"
     done
     exit 0
 fi
@@ -73,14 +94,14 @@ for cfg in experts_for_scene(sys.argv[1]):
             print(f"backed up {dst.relative_to(ExpertModel.root)}")' "$scene"
 fi
 
-echo "=== $scene: ${#tags[@]} experts, $gpus process(es), $threads threads each"
+echo "=== $scene: ${#tags[@]} experts, $slots process(es) of $per GPU, $threads threads"
 echo "=== condition demos $demos, eval episodes $episodes, extra args '${extra}'"
 
 run_one() {
-    local tag="$1" gpu="$2"
-    echo "gpu $gpu <- $tag"
+    local tag="$1" cards="$2"
+    echo "gpus $cards <- $tag"
     # shellcheck disable=SC2086  # extra is a deliberately split argument list
-    CUDA_VISIBLE_DEVICES="$gpu" "$py" scripts/b01_fit_experts.py \
+    CUDA_VISIBLE_DEVICES="$cards" "$py" scripts/b01_fit_experts.py \
         --scene "$scene" --model "$tag" --jobs 1 --threads "$threads" \
         --condition-demos "$demos" --episodes "$episodes" $extra \
         > "logs/experts/$tag.log" 2>&1
@@ -89,15 +110,15 @@ run_one() {
 pids=()
 for i in "${!tags[@]}"; do
     tag="${tags[$i]}"
-    gpu=$((i % gpus))
+    cards="$(cards_for $(( i % slots )))"
     if [[ -n "${HECA_EXPERTS_DRY:-}" ]]; then
-        echo "would run: gpu $gpu <- $tag $extra"
+        echo "would run: gpus $cards <- $tag $extra"
         continue
     fi
-    run_one "$tag" "$gpu" &
+    run_one "$tag" "$cards" &
     pids+=($!)
-    # one process per card: a second Molmo on the same card does not fit
-    if (( ${#pids[@]} >= gpus )); then
+    # one process per card group: a second Molmo beside the first does not fit
+    if (( ${#pids[@]} >= slots )); then
         wait -n || echo "a process exited non-zero" >&2
         pids=("${pids[@]:1}")
     fi
