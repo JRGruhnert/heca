@@ -51,7 +51,9 @@ def main():
 
     experts = []
     for cfg in cfgs:
-        model = ExpertModel.get(cfg)
+        # same order as Heca: the encoders are built before the policy is read, so
+        # a visual check does not load the ground-truth policy first
+        model = ExpertModel.get(cfg, auto_load=False)
         model.use_gt(args.gt)
         model.load()
         experts.append(model)
