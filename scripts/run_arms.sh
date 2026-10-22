@@ -15,7 +15,7 @@
 #   HECA_ARM_STAGGER  seconds between session starts (default: 15)
 #   HECA_ARM_PREFIX   tmux session name prefix     (default: arm)
 #   HECA_ARM_MODULE   training module to run       (default: scripts/c02_train_seq_fl)
-#   HECA_ARM_CORES    cores per shard, pinned with taskset (default: unpinned)
+#   HECA_ARM_CORES    CPU budget per shard as a CPUQuota (default: uncapped)
 #   HECA_ARM_GPUS     cards available to pin onto   (default: unset -> each shard
 #                     takes whichever card has the most free memory)
 #
