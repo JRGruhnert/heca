@@ -52,7 +52,11 @@ def save_references(
     for label, group in references.items():
         merged.setdefault(label, {}).update(group)
     scene.references = merged
-    scene.save()
+    scene.persist_reference_images = True  # this is the one place clicks are written
+    try:
+        scene.save()
+    finally:
+        scene.persist_reference_images = False
     scene.load()  # what the next run will see, read the way it will read it
 
     given = [(label, name) for label, group in references.items() for name in group]

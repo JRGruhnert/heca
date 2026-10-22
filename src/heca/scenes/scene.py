@@ -11,6 +11,7 @@ from typing import Any
 from PIL import Image
 
 
+from heca.misc.logger import logger
 from heca.data.data import DCScene, TDImage
 from heca.data.entity import Entity
 from heca.data.reference import Reference
@@ -136,6 +137,10 @@ class Scene(Persistable):
         self.extra_references: dict[str, dict[str, np.ndarray]] = {}
         self.extra_positions: dict[str, list[np.ndarray]] = {}
         self.render_frames = False
+        # a save writes the clicks only when something deliberately re-annotates the
+        # scene (the selector); every other save -- every Heca start, every expert
+        # pipeline -- must leave the reference images exactly as they are on disk
+        self.persist_reference_images = False
 
     def add_extra_range(self, label: str, lo: float, hi: float) -> None:
         """Fold one expert's demo range into the scene's, over all its experts."""
@@ -310,7 +315,17 @@ class Scene(Persistable):
                 json.loads(existing.read_text()) if existing.exists() else {}
             )
             for name, reference in self.references.get(label, {}).items():
-                notes[name] = save_reference(edir, name, reference, notes.get(name))
+                if self.persist_reference_images:
+                    notes[name] = save_reference(
+                        edir, name, reference, notes.get(name)
+                    )
+                elif (edir / f"{name}.png").exists():
+                    notes.setdefault(name, reference_note(reference))
+                else:
+                    logger.warning(
+                        f"{label}.{name}: no {name}.png in {edir} and this save does "
+                        f"not write reference images; the reference stays missing"
+                    )
             if label in self.extra_ranges:
                 notes["extra"] = list(self.extra_ranges[label])
             if label in self.extra_references:
