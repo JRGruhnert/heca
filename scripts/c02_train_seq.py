@@ -1,3 +1,4 @@
+import faulthandler
 import os
 
 import numpy as np
@@ -74,6 +75,11 @@ def completed_update(args, tag: str, group: str) -> int:
 
 
 def main():
+    # HECA_STACK_DUMP=300 prints every thread's stack every five minutes. A run that
+    # hangs stops logging, and a stack in the log beats guessing where it sits.
+    if stack_dump := int(os.environ.get("HECA_STACK_DUMP", "0") or 0):
+        faulthandler.dump_traceback_later(stack_dump, repeat=True)
+
     # the scene of this arm: one arm per scene, each running the table in order.
     # Without it every arm trains DEFAULTS["scene"], i.e. scene0.
     defaults = dict(DEFAULTS)

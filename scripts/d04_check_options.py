@@ -11,6 +11,7 @@ rejected, so a broken fit is visible before a run is started.
 """
 
 import argparse
+import faulthandler
 
 from heca.data.data import DCScene
 from heca.experts.expert import ExpertModel
@@ -34,6 +35,14 @@ def main():
         "--episodes", type=int, default=10, help="Start states to sample."
     )
     parser.add_argument(
+        "--stack-dump",
+        type=int,
+        default=0,
+        metavar="SECONDS",
+        help="Dump every thread's stack every SECONDS (0 = off). Needs no ptrace, "
+        "so it works where py-spy is refused.",
+    )
+    parser.add_argument(
         "--seeds",
         type=int,
         nargs="*",
@@ -41,6 +50,10 @@ def main():
         help="Fixed seeds for reproducible sampling (default: random).",
     )
     args = parser.parse_args()
+    if args.stack_dump:
+        # a hang is silent otherwise: the loop that hangs prints nothing, and the
+        # log simply stops
+        faulthandler.dump_traceback_later(args.stack_dump, repeat=True)
     if args.threads:
         import torch
 
