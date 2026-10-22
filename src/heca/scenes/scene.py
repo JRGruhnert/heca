@@ -1,5 +1,7 @@
 import abc
 import json
+import os
+import time
 import h5py
 import torch
 import numpy as np
@@ -55,11 +57,63 @@ def reference_from_note(note: dict, image: Image.Image) -> Reference:
     )
 
 
-def save_reference(edir: Path, name: str, reference: Reference) -> dict[str, Any]:
-    """Write one reference beside its siblings, returning its annotation entry."""
+def write_atomically(path: Path, write: Any) -> None:
+    """
+    Replace ``path`` only once it is complete.
+
+    Several processes read the scene (every ``Heca`` loads it, every ``ExpertModel``
+    reads the reference images) while every ``Heca`` in the same start-up writes it,
+    so an in-place writer can be read half-finished: an ``Image.open`` that lands
+    inside the truncate-then-write window of ``Image.save`` raises
+    ``UnidentifiedImageError``, and a ``json.loads`` there raises ``JSONDecodeError``.
+    Writing to a private file and renaming it hides the writes instead of racing them.
+    """
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        write(tmp)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def load_reference_image(path: Path, attempts: int = 5) -> Image.Image:
+    """Read one reference image completely, so a lazy handle cannot go stale.
+
+    Loads the pixels while the file is known to be readable, which both validates it
+    and frees the file handle that a later in-place ``Image.save`` on this path would
+    otherwise read from. Retries cover a writer that predates the atomic save.
+    """
+    for attempt in range(attempts):
+        try:
+            image = Image.open(path)
+            image.load()
+            return image
+        except (OSError, ValueError) as error:
+            if attempt == attempts - 1:
+                raise OSError(
+                    f"cannot read the reference image {path}: {error}. Re-extract it "
+                    f"from the data archive (the click itself is in "
+                    f"{path.with_name('annotation.json')})"
+                ) from error
+            time.sleep(0.1 * (attempt + 1))
+    raise AssertionError("unreachable")
+
+
+def save_reference(
+    edir: Path, name: str, reference: Reference, note: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Write one reference beside its siblings, returning its annotation entry.
+
+    Unchanged references are left alone: rewriting them is what made a concurrent
+    scene load fail, and it is the common case (the scene is saved on every start).
+    """
     edir.mkdir(parents=True, exist_ok=True)
-    reference.image.save(edir / f"{name}.png")
-    return reference_note(reference)
+    written = reference_note(reference)
+    target = edir / f"{name}.png"
+    if target.exists() and note == written:
+        return written
+    write_atomically(target, lambda p: reference.image.save(p, format="PNG"))
+    return written
 
 
 class Scene(Persistable):
@@ -234,7 +288,7 @@ class Scene(Persistable):
                 if note is None:
                     continue
                 self.references[label][name] = reference_from_note(
-                    note, Image.open(edir / f"{name}.png")
+                    note, load_reference_image(edir / f"{name}.png")
                 )
             extra = notes.get("extra")
             if extra is not None:
@@ -256,7 +310,7 @@ class Scene(Persistable):
                 json.loads(existing.read_text()) if existing.exists() else {}
             )
             for name, reference in self.references.get(label, {}).items():
-                notes[name] = save_reference(edir, name, reference)
+                notes[name] = save_reference(edir, name, reference, notes.get(name))
             if label in self.extra_ranges:
                 notes["extra"] = list(self.extra_ranges[label])
             if label in self.extra_references:
@@ -264,7 +318,10 @@ class Scene(Persistable):
                     name: [float(v) for v in xyz]
                     for name, xyz in self.extra_references[label].items()
                 }
-            (edir / "annotation.json").write_text(json.dumps(notes, indent=2) + "\n")
+            text = json.dumps(notes, indent=2) + "\n"
+            stored = edir / "annotation.json"
+            if not stored.exists() or stored.read_text() != text:
+                write_atomically(stored, lambda p: p.write_text(text))
         return True
 
     def references_ready(self) -> bool:
