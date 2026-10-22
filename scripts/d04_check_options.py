@@ -13,6 +13,8 @@ rejected, so a broken fit is visible before a run is started.
 import argparse
 import faulthandler
 
+import numpy as np
+
 from heca.data.data import DCScene
 from heca.experts.expert import ExpertModel
 from heca.graphs.graph import Graph, SubgoalMode
@@ -41,6 +43,18 @@ def main():
         metavar="SECONDS",
         help="Dump every thread's stack every SECONDS (0 = off). Needs no ptrace, "
         "so it works where py-spy is refused.",
+    )
+    parser.add_argument(
+        "--explain",
+        action="store_true",
+        help="Print the read value, the fitted mean and the residual per entity "
+        "for the first episode, so a distance rejection is in metres, not sigma.",
+    )
+    parser.add_argument(
+        "--dump-frames",
+        default="",
+        metavar="DIR",
+        help="Save the start and goal frame of the first episode to DIR.",
     )
     parser.add_argument(
         "--seeds",
@@ -106,7 +120,6 @@ def main():
     reasons: dict[str, int] = {}
     for episode in range(args.episodes):
         if args.seeds:
-            import numpy as np
             import torch
 
             seed = args.seeds[episode % len(args.seeds)]
@@ -121,6 +134,37 @@ def main():
         goal = reader.make_scene(y, y_frame)
         if args.gt:
             start, goal = x, y
+
+        if episode == 0 and (args.explain or args.dump_frames):
+            if args.dump_frames:
+                import os
+
+                from PIL import Image
+
+                os.makedirs(args.dump_frames, exist_ok=True)
+                for name, frame in (("start", x_frame), ("goal", y_frame)):
+                    rgb = frame.rgb
+                    if hasattr(rgb, "detach"):
+                        rgb = rgb.detach().cpu().permute(1, 2, 0).numpy()
+                    array = (rgb * 255.0).astype("uint8") if rgb.max() <= 1.0 else rgb
+                    Image.fromarray(array).save(f"{args.dump_frames}/{name}.png")
+                    logger.info(f"saved {args.dump_frames}/{name}.png {array.shape}")
+            if args.explain:
+                pair = reader.conditions
+                for label, entity in scene.entities.items():
+                    read = np.asarray(start[label].value, dtype=float)
+                    fitted = pair.pre.models[label].get_parameters()
+                    pose = fitted["measurement"]["pose"]
+                    means = np.asarray(pose["means"], dtype=float)
+                    stds = np.sqrt(np.asarray(pose["covariances"], dtype=float))
+                    k = int(np.argmax(np.asarray(fitted["weights"])))
+                    mean_raw = entity.model_to_value(means[k])
+                    logger.info(
+                        f"  {label}: read {np.round(read[:3], 3)} "
+                        f"pre mean {np.round(mean_raw[:3], 3)} "
+                        f"delta {np.round(read[:3] - mean_raw[:3], 3)} m "
+                        f"sigma {np.round(stds[k][:3], 4)}"
+                    )
 
         graph.build(start, goal, 0.0)
         options = len(graph.ns_option.items)
