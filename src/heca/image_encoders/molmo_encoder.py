@@ -130,6 +130,40 @@ class MolmoEncoder(ImageEncoder):
             f"cards {cards or 'all'}"
         )
         self.model.eval()
+        self.split_vocab_lookup()
+
+    def split_vocab_lookup(self):
+        """Stop Molmo's word embedding from fusing its two tables on every call.
+
+        Molmo2 carries two embedding tables and its ``wte.forward`` runs
+        ``F.embedding(x, torch.cat([self.embedding, self.new_embedding]))``: the
+        concatenation allocates a full copy of the vocabulary (~744 MiB in fp16)
+        before the lookup, transiently, on every forward. That copy is what tips an
+        11 GB card over -- it needs ~100 MiB more than is free -- while the actual
+        result is a few MB of rows. Reading the two tables separately gives the
+        same vectors without the intermediate tensor.
+        """
+        wte = getattr(getattr(self.model, "model", None), "transformer", None)
+        wte = getattr(wte, "wte", None)
+        base = getattr(wte, "embedding", None)
+        extra = getattr(wte, "new_embedding", None)
+        if base is None or extra is None:
+            return
+
+        def forward(ids: torch.Tensor) -> torch.Tensor:
+            rows = base.shape[0]
+            first = torch.embedding(base, ids.clamp(max=rows - 1))
+            tail = ids >= rows
+            if not bool(tail.any()):
+                return first
+            shifted = torch.embedding(extra, (ids - rows).clamp(min=0))
+            return torch.where(tail.unsqueeze(-1), shifted, first)
+
+        wte.forward = forward
+        logger.info(
+            f"Molmo vocabulary split into {base.shape[0]} + {extra.shape[0]} rows "
+            f"(no per-call concatenation)"
+        )
 
     @staticmethod
     def as_image(image: TDImage) -> np.ndarray:
