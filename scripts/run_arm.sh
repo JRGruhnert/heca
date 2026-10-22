@@ -41,7 +41,10 @@ if [[ -n "${HECA_ARM_THREADS:-}" ]]; then
     export NUMEXPR_NUM_THREADS="$HECA_ARM_THREADS"
 fi
 
-# GPU placement. Unset: inherit whatever the launcher shell had (all cards visible).
+# GPU placement. Unset: inherit whatever the launcher shell had (all cards visible),
+# and heca's import-time pick then takes the card with the most free memory -- so
+# several arms started together spread themselves over the free cards with nothing
+# to configure, and a half-full node still lands where there is room.
 #   HECA_ARM_CPU=1     -> no GPU at all (the simulator dominates; frees VRAM entirely)
 #   HECA_ARM_GPUS=N    -> this shard sees only card (index % N), which stops every
 #                         process from paying a CUDA context on all four cards
@@ -102,10 +105,19 @@ if [[ ! -e "$(dirname "$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)")" ]];
     exit 1
 fi
 
+# How many cards this process can actually see. A CPU fall back trains for days and
+# looks exactly like a run, so it is checked here instead of being inferred later
+# from "Running on cpu" somewhere in the log.
+gpus="none requested (HECA_ARM_CPU)"
+if [[ -z "${HECA_ARM_CPU:-}" ]]; then
+    gpus="$(python -c 'import torch; print(torch.cuda.device_count() if torch.cuda.is_available() else 0)' 2>&1)"
+fi
+
 {
     echo "=== $(date '+%F %T') | shard $index/$total | module $module"
     echo "=== python=$python_bin"
     echo "=== WANDB_DIR=$WANDB_DIR log=$log"
+    echo "=== CUDA_VISIBLE_DEVICES='${CUDA_VISIBLE_DEVICES-unset}' gpus=$gpus"
     if [[ -f .env ]]; then
         echo "=== .env: $(grep -E '^(HECA_DATA|WANDB_DIR|WANDB_MODE|MUJOCO_GL)=' .env | tr '\n' ' ')"
     else
@@ -119,6 +131,20 @@ fi
         echo "=== experts there: $(find "$data_root_line" -name 'tapas_gt.pt' 2>/dev/null | wc -l)"
     fi
 } | tee -a "$log"
+
+if [[ -z "${HECA_ARM_CPU:-}" ]]; then
+    if ! [[ "$gpus" =~ ^[0-9]+$ ]]; then
+        echo "error: cannot query CUDA: $gpus" >&2
+        exit 1
+    fi
+    if (( gpus == 0 )); then
+        echo "error: no CUDA card visible to this shard" \
+            "(CUDA_VISIBLE_DEVICES='${CUDA_VISIBLE_DEVICES-unset}')." >&2
+        echo "       Refusing to train on the CPU. Unset CUDA_VISIBLE_DEVICES /" >&2
+        echo "       HECA_ARM_GPUS, or set HECA_ARM_CPU=1 for a CPU run on purpose." >&2
+        exit 1
+    fi
+fi
 
 if [[ -n "${HECA_ARM_DRY:-}" ]]; then
     echo "=== dry run: environment is fine, not starting training"
