@@ -33,7 +33,7 @@ DEFAULTS: dict[str, object] = {
     "batch": 1000,
     "repeats": 3,
     "gt": True,
-    "virtual": False,
+    "virtual": True,
 }
 # mean of the second-moment
 # proximal term
