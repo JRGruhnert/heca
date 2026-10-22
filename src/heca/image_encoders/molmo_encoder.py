@@ -27,10 +27,16 @@ class MolmoEncoder(ImageEncoder):
     class Config(ImageEncoder.Config):
         image_size: tuple[int, int] = (256, 256)
         tag: str = "allenai/Molmo2-4B"
-        # per-card budget for the weights, and what may spill to host memory; the
-        # keypoint encoder of the same process already holds ~2 GB of each card.
+        # Per-card budget for the weights, and what may spill to host memory.
+        # The weights are 19.4 GB fp32 on disk, i.e. ~9.3 GB in fp16 -- small enough
+        # for one 11264 MiB card, which shows torch ~10.5 GiB once the CUDA context
+        # is taken, leaving room for the keypoint encoder and the activations of one
+        # 256x256 frame. Capping lower is what makes device_map spread the model over
+        # every visible card instead, and that spread is what collides when several
+        # runs share the node: each one fills all cards evenly, so they all pick the
+        # same "emptiest" card.
         # Empty string disables the cap (weights must then fit on the device alone).
-        max_gpu_memory: str = "8000MiB"
+        max_gpu_memory: str = "10GiB"
         max_cpu_memory: str = "24GiB"
 
     def __init__(self, cfg: Config):
