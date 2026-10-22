@@ -32,9 +32,11 @@ class Buffer(Configurable):
         self.queue: deque[BufferData] = deque(maxlen=cfg.capacity)
         self.step_pointer = 0
         self.tag_capacity = self.cfg.capacity
+        self.discards = 0
 
     def reset(self):
         self.step_pointer = 0
+        self.discards = 0
 
     def add(self, data: BufferData) -> bool:
         self.queue.append(data)
@@ -50,7 +52,7 @@ class Buffer(Configurable):
             1 for d in self.queue if d.terminal and d.reward > 0.0  # or > 0
         )
 
-        total = n_terms + n_truncs
+        total = n_terms + n_truncs + self.discards
         return {
             "stats/n_episodes": total,
             "stats/success_rate": n_success / total if total > 0 else 0.0,

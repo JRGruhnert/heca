@@ -78,10 +78,8 @@ class Heca(Configurable):
                 budget=budget,
             )
             if self._episode_steps == 0:
-                # a discarded episode executes no option, so it produces no
-                # "Predicted ... steps" line and the run looks frozen. Count them and
-                # say why, otherwise a visual run that rejects every start state is
-                # indistinguishable from a hang.
+                if self.learner.train_mode:
+                    self.learner.buffer.discards += 1
                 self._discards += 1
                 elapsed = time.monotonic() - self._discards_since
                 logger.warning(
