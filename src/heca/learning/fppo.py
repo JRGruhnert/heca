@@ -7,6 +7,7 @@ from heca.learning import dist as pdist
 from heca.learning.optim import ClientAdamW
 from heca.learning.ppo import PPO
 from heca.misc import hardware, logger
+from heca.misc.base import latest_checkpoint
 
 
 class FPPO(PPO):
@@ -92,6 +93,12 @@ class FPPO(PPO):
         if directory is None:
             return None
         return directory / f"ckp_{self.current_update}.pt"
+
+    def _load(self, path: Path):
+        shared = type(self).shared_dir(self.cfg)
+        if shared is not None and latest_checkpoint(shared, "ckp") is not None:
+            return super()._load(shared)
+        return super()._load(path)
 
     def _save_global(self) -> None:
         """Rank 0 writes the aggregated model where all clients can find it."""
