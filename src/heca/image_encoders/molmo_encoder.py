@@ -82,13 +82,14 @@ class MolmoEncoder(ImageEncoder):
         half = hardware.device.type == "cuda"
         dtype = torch.float16 if half else torch.float32
         device_map: Any = hardware.device
+        # the cap is a living number: weights + keypoint encoder + a demo batch's
+        # activations have to fit the same card, and how much is left differs by
+        # card and by what else is resident, so it is overridable without a code edit
+        cap = os.environ.get("HECA_MOLMO_GPU_MEMORY", self.cfg.max_gpu_memory)
         max_memory = None
-        if half and self.cfg.max_gpu_memory:
+        if half and cap:
             device_map = "auto"
-            max_memory = {
-                index: self.cfg.max_gpu_memory
-                for index in range(torch.cuda.device_count())
-            }
+            max_memory = {index: cap for index in range(torch.cuda.device_count())}
             max_memory["cpu"] = self.cfg.max_cpu_memory
         self.model = AutoModelForImageTextToText.from_pretrained(
             self.cfg.tag,
@@ -99,7 +100,7 @@ class MolmoEncoder(ImageEncoder):
         )
         logger.info(
             f"Molmo loaded in {dtype} ({device_map}), map: "
-            f"{getattr(self.model, 'hf_device_map', None)}"
+            f"{getattr(self.model, 'hf_device_map', None)}, gpu cap {cap}"
         )
         self.model.eval()
 
