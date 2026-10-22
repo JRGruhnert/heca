@@ -35,6 +35,22 @@ dest="${HECA_REFS_DEST:-data/scenes/ogbench/$scene}"
 [[ -d "$dest" ]] || { echo "error: no scene directory $dest" >&2; exit 1; }
 command -v zstd >/dev/null || { echo "error: zstd is not on PATH" >&2; exit 1; }
 
+# the image check needs PIL, which lives in the project env, not in the login shell
+py="${PYTHON:-python}"
+if ! command -v "$py" >/dev/null || ! "$py" -c 'import PIL' 2>/dev/null; then
+    for candidate in "$HOME/miniconda3/envs/hecarim/bin/python" \
+                     "$HOME/anaconda3/envs/hecarim/bin/python"; do
+        if [[ -x "$candidate" ]] && "$candidate" -c 'import PIL' 2>/dev/null; then
+            py="$candidate"
+            break
+        fi
+    done
+fi
+"$py" -c 'import PIL' 2>/dev/null || {
+    echo "error: no python with PIL found; set PYTHON=/path/to/envs/hecarim/bin/python" >&2
+    exit 1
+}
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -50,7 +66,7 @@ if (( ${#found[@]} == 0 )); then
 fi
 echo "=== ${#found[@]} image(s) in the archive for $scene"
 
-python - "$dest" "$force" "${found[@]}" <<'PY'
+"$py" - "$dest" "$force" "${found[@]}" <<'PY'
 import shutil
 import sys
 from pathlib import Path
