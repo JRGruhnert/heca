@@ -62,7 +62,7 @@ RUNS: list[dict[str, object]] = [
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
-    {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 ]
