@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from gym import Env
 import h5py
+import mujoco
 import numpy as np
 import ogbench
 import torch
@@ -26,12 +27,21 @@ class OGScene(Scene):
         viewer: bool = False
         frame_time: float = 0.05
         mode: str = "randomized"
+        # Which camera the frames come from. The scene has two: "front" is what
+        # ManipSpaceEnv.render picks for state observations, "front_pixels" is what
+        # the recorded demos used. They are 0.27 m apart, so rendering through the
+        # wrong one puts every live keypoint a metre away from the reference the
+        # conditions were fitted on -- with the fitted spread at 2 mm that rejects
+        # every episode. Pinning the name here keeps render, extrinsics and
+        # intrinsics on the camera the demos, references and conditions used.
+        camera: str = "front_pixels"
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
         self.env_id = "vi-" + cfg.tag if cfg.vis else "gt-" + cfg.tag
         self._env = self._make_env(self.env_id)
+        self._pin_camera()
         self.task_id: int | None = None
         self.seed: int | None = None
         self._lazy_pixels = False
@@ -40,6 +50,41 @@ class OGScene(Scene):
         self._viewer_launched = False
         self._meta_xyz_center = np.array([0.425, 0.0, 0.0], dtype=np.float32)
         self._meta_xyz_scaler = np.array([10.0], dtype=np.float32)
+
+    def _pin_camera(self) -> None:
+        """Render and report extrinsics through the configured camera.
+
+        ``ManipSpaceEnv`` derives the camera from the observation type
+        ("front" for states, "front_pixels" for pixels), which is what made live
+        frames disagree with the recorded ones; resolving the name from the config
+        instead removes that dependency.
+        """
+        name = self.cfg.camera
+        if not name:
+            return
+        env = self.env
+        resolve = getattr(env, "_resolve_camera_name", None)
+        if resolve is None:
+            return
+        cam_id = int(mujoco.mj_name2id(env._model, mujoco.mjtObj.mjOBJ_CAMERA, name))
+        if cam_id < 0:
+            logger.warning(f"{self.cfg.label}: no camera {name!r} in the scene")
+            return
+        env._resolve_camera_name = lambda camera=None, _name=name: (
+            camera if camera is not None else _name
+        )
+        # ManipSpaceEnv.render keeps its own copy of that choice (it never calls
+        # _resolve_camera_name), so the pixels have to be pinned as well -- otherwise
+        # the image comes from one camera and the extrinsics from the other
+        render = env.render
+
+        def render_through(camera=None, *args, _name=name, **kwargs):
+            return render(
+                camera=_name if camera is None else camera, *args, **kwargs
+            )
+
+        env.render = render_through
+        logger.info(f"{self.cfg.label}: rendering through camera {name!r}")
 
     @property
     def tasks(self) -> list[dict[str, Any]]:

@@ -152,6 +152,14 @@ class TapasExpert(ExpertModel):
         # i.e. mean and covariance and a Mahalanobis test: fitting tracking noise
         # with a mixture makes the gating accept whatever cluster the noise forms.
         conditions_components: int = 1
+        # Read the visual conditions off live frames instead of the stored demo
+        # images. Off by default: with OGScene.camera pinned to the camera the demos
+        # were recorded with, both sources agree (0.00 m apart on static entities),
+        # and the demo images are faster and cover the recorded start states. Turning
+        # it on fits the distribution the arm actually samples, which is the fallback
+        # if a scene's stored frames and its live camera ever diverge again.
+        conditions_from_live: bool = False
+        conditions_live_samples: int = 200
         segment_ids: list[int] | None = None
         max_con_comps: int = 10
         fix_bimodal: bool = False
@@ -662,6 +670,35 @@ class TapasExpert(ExpertModel):
                 q = np.asarray(s.extras["ee_pose"][3:7], dtype=float)
                 s.extras["ee_pose"][3:7] = Quaternion.mul(q_z180, q)
 
+    def live_condition_scenes(self) -> tuple[list[DCScene], list[DCScene]]:
+        """Start and goal scenes read the way the agent reads them.
+
+        ``scene.sample_task`` resets the environment, renders the start frame and
+        (in visual mode) the goal frame, which is exactly the pair the arm sees at
+        run time; reading those instead of the stored demo images is what keeps the
+        fitted conditions in the same frame as the live reads.
+        """
+        total = max(1, int(self.cfg.conditions_live_samples))
+        began = time.perf_counter()
+        start_scenes: list[DCScene] = []
+        end_scenes: list[DCScene] = []
+        for done in range(1, total + 1):
+            (_, start_frame), (_, goal_frame) = self.scene.sample_task(
+                with_scenes=False
+            )
+            self.reset_tracking()
+            start_scenes.append(self.from_image(start_frame))
+            self.reset_tracking()
+            end_scenes.append(self.from_image(goal_frame))
+            if done % 20 == 0 or done == total:
+                elapsed = time.perf_counter() - began
+                left = elapsed / done * (total - done)
+                logger.info(
+                    f"{self.cfg.tag}: conditions {done}/{total} live samples, "
+                    f"{elapsed / 60:.1f} min elapsed, ~{left / 60:.1f} min left"
+                )
+        return start_scenes, end_scenes
+
     def fit_conditions(self, demos: int = 0):
         """Fit the pre/post conditions; ``demos`` limits them to the first N."""
         logger.info(
@@ -682,6 +719,8 @@ class TapasExpert(ExpertModel):
         if self._use_gt:
             start_scenes = [demo[0] for demo in demos_scenes]
             end_scenes = [demo[-1] for demo in demos_scenes]
+        elif self.cfg.conditions_from_live:
+            start_scenes, end_scenes = self.live_condition_scenes()
         else:
             # one line every 20 demos: the state questions are the slow part, so
             # without it a conditions stage that takes an hour looks like a hang
