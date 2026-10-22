@@ -19,7 +19,7 @@ DEFAULTS: dict[str, object] = {
     "wandb": True,
     "batch": 1000,
     "repeats": 3,
-    "gt": True,
+    "gt": False,
     "virtual": False,
 }
 
@@ -74,7 +74,12 @@ def completed_update(args, tag: str, group: str) -> int:
 
 
 def main():
-    planned = list(get_sim_args(DEFAULTS, RUNS))
+    # the scene of this arm: one arm per scene, each running the table in order.
+    # Without it every arm trains DEFAULTS["scene"], i.e. scene0.
+    defaults = dict(DEFAULTS)
+    if scene := os.environ.get("HECA_SCENE"):
+        defaults["scene"] = scene
+    planned = list(get_sim_args(defaults, RUNS))
     shard = os.environ.get("PLAN_SHARD")
     if shard:
         index, total = (int(part) for part in shard.split("/"))
