@@ -65,6 +65,24 @@ def main():
         use_rotation=False,
         position_jitter=0.0,
     )
+    if not args.gt:
+        import torch
+
+        if torch.cuda.is_available():
+            free = [
+                torch.cuda.mem_get_info(index)[0] / 2**30
+                for index in range(torch.cuda.device_count())
+            ]
+            listed = ", ".join(f"{i}:{gib:.1f} GiB" for i, gib in enumerate(free))
+            logger.info(f"free per visible card -- {listed}")
+            if sum(free) < 10.0:
+                logger.error(
+                    "Molmo alone is 9.3 GiB of weights, so this needs >= 10 GiB free "
+                    "across the visible cards; they are held by another process. "
+                    "Kill it, or point CUDA_VISIBLE_DEVICES at idle cards."
+                )
+                raise SystemExit(2)
+
     reader = experts[0]
     logger.info(
         f"{len(cfgs)} experts, use_gt={args.gt}, "
