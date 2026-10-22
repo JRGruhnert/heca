@@ -151,20 +151,40 @@ def main():
                     logger.info(f"saved {args.dump_frames}/{name}.png {array.shape}")
             if args.explain:
                 pair = reader.conditions
-                for label, entity in scene.entities.items():
-                    read = np.asarray(start[label].value, dtype=float)
-                    fitted = pair.pre.models[label].get_parameters()
-                    pose = fitted["measurement"]["pose"]
-                    means = np.asarray(pose["means"], dtype=float)
-                    stds = np.sqrt(np.asarray(pose["covariances"], dtype=float))
-                    k = int(np.argmax(np.asarray(fitted["weights"])))
-                    mean_raw = entity.model_to_value(means[k])
-                    logger.info(
-                        f"  {label}: read {np.round(read[:3], 3)} "
-                        f"pre mean {np.round(mean_raw[:3], 3)} "
-                        f"delta {np.round(read[:3] - mean_raw[:3], 3)} m "
-                        f"sigma {np.round(stds[k][:3], 4)}"
-                    )
+
+                def compare(role, condition, scene_read):
+                    logger.info(f"  -- {role} ({condition.label})")
+                    for label, entity in scene.entities.items():
+                        read = np.asarray(scene_read[label].value, dtype=float)
+                        # exactly what Condition.test scores: the variance floor and
+                        # the component choice both come from here
+                        up = condition.models[label].get_parameters().copy()
+                        p = entity.scoring_parameters(up)
+                        sample = entity.model_value(read)
+                        groups = entity.pose_groups(True)
+                        k, z, zd = entity._best_component(
+                            sample[:-1], p, groups=groups
+                        )
+                        mean = np.asarray(p["measurement"]["pose"]["means"])[k]
+                        std = np.sqrt(
+                            np.asarray(p["measurement"]["pose"]["covariances"])[k]
+                        )
+                        mean_raw = entity.model_to_value(mean)
+                        residual = read[:3] - mean_raw[:3]
+                        per_dim = [
+                            float(np.sqrt(np.sum(zd[g] ** 2))) for g in groups
+                        ]
+                        logger.info(
+                            f"  {label:8s} read {np.round(read[:3], 3)} "
+                            f"component {k} mean {np.round(mean_raw[:3], 3)} "
+                            f"delta {np.round(residual, 3)} m, sigma "
+                            f"{np.round(std[:3], 3)}, z={z:.2f} "
+                            f"{'OK' if z <= 4.03 else 'REJECT'} "
+                            f"(groups {np.round(per_dim, 2)})"
+                        )
+
+                compare("pre / start read", pair.pre, start)
+                compare("post / goal read", pair.post, goal)
 
         graph.build(start, goal, 0.0)
         options = len(graph.ns_option.items)
