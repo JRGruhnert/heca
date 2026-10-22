@@ -27,24 +27,9 @@ class MolmoEncoder(ImageEncoder):
     class Config(ImageEncoder.Config):
         image_size: tuple[int, int] = (256, 256)
         tag: str = "allenai/Molmo2-4B"
-        # Per-card budget for the weights, and what may spill to host memory.
-        # The weights are 19.4 GB fp32 on disk, i.e. ~9.3 GB in fp16 -- small enough
-        # for one 11264 MiB card, which shows torch ~10.5 GiB once the CUDA context
-        # is taken, leaving room for the keypoint encoder and the activations of one
-        # 256x256 frame. Capping lower is what makes device_map spread the model over
-        # every visible card instead, and that spread is what collides when several
-        # runs share the node: each one fills all cards evenly, so they all pick the
-        # same "emptiest" card.
-        # Empty string disables the cap (weights must then fit on the device alone).
         max_gpu_memory: str = "10GiB"
         max_cpu_memory: str = "24GiB"
-        # state questions per forward. The batch is the same frame repeated once per
-        # entity, so its activations (742 MiB for six) are what does not fit beside
-        # the weights on one card; three questions per forward leave ~500 MiB free.
-        state_batch_size: int = 3
-        # visible cards the weights may go on, comma separated ("" = all of them).
-        # With CUDA_VISIBLE_DEVICES="2,3" the answers are 0 and 1, so "0" keeps the
-        # model off the card the keypoint encoder was sent to.
+        state_batch_size: int = 1
         gpu_cards: str = ""
 
         @property
@@ -104,9 +89,10 @@ class MolmoEncoder(ImageEncoder):
         # activations have to fit the same card, and how much is left differs by
         # card and by what else is resident, so it is overridable without a code edit
         cap = os.environ.get("HECA_MOLMO_GPU_MEMORY", self.cfg.max_gpu_memory)
-        cards = self.cfg.gpu_cards.strip() or os.environ.get(
-            "HECA_MOLMO_DEVICES", ""
-        ).strip()
+        cards = (
+            self.cfg.gpu_cards.strip()
+            or os.environ.get("HECA_MOLMO_DEVICES", "").strip()
+        )
         max_memory = None
         if half and cap:
             device_map = "auto"
@@ -229,18 +215,16 @@ class MolmoEncoder(ImageEncoder):
         inputs: dict[str, Any],
         input_lengths: torch.Tensor,
     ) -> torch.Tensor:
-        """Logits of each sample's last real token, shape ``[B, vocab]``.
+        try:
+            out = self.model(**inputs, logits_to_keep=1)
+            logits = getattr(out, "logits", None)
+            if logits is not None and logits.dim() == 3:
+                return logits[:, -1, :]
+        except TypeError:
+            pass
 
-        A plain forward materialises ``[B, seq_len, vocab]`` -- ~550 MB for three
-        questions over a 152k vocabulary -- and that tensor is what tips a 10 GiB
-        card over the edge beside 9 GB of weights. The state question only reads a
-        handful of letter positions of the last token, so the hidden states suffice
-        and the output projection runs on one row per sample instead, which is a
-        few hundred kB. Falls back to the full logits when the model exposes no
-        hidden states or no output embedding.
-        """
-        out = None
         hidden = None
+        out = None
         try:
             out = self.model(**inputs, output_hidden_states=True)
             hidden = getattr(out, "hidden_states", None)
