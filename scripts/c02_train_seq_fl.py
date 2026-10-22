@@ -33,7 +33,7 @@ DEFAULTS: dict[str, object] = {
     "batch": 1000,
     "repeats": 3,
     "gt": True,
-    "virtual": True,
+    "virtual": False,
 }
 # mean of the second-moment
 # proximal term
@@ -56,22 +56,22 @@ DEFAULTS: dict[str, object] = {
 #     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 #     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 # ]
-# RUNS: list[dict[str, object]] = [
-#     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5},  # FedAdamW
-#     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
-#     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
-#     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
-#     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
-# {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
-#     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
-#     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
-# ]
 RUNS: list[dict[str, object]] = [
-    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},
-    {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},
-    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},
-    {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.1},
+    #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5},  # FedAdamW
+    #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5},  # FedAdamW
+    #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
+    #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
+    #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
+    #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 ]
+# RUNS: list[dict[str, object]] = [
+#     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},
+#     {"network": "a0", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},
+#     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},
+#     {"network": "a0", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.1},
+# ]
 
 
 def client_cfg(args, tag: str, group: str, scene: str):
