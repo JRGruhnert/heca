@@ -172,24 +172,65 @@ class MolmoEncoder(ImageEncoder):
                 for key, value in inputs.items()
             }
 
-            with torch.inference_mode():
-                logits = self.model(**inputs).logits  # [B, seq_len, vocab_size]
-
             # last valid token position for each sample
             input_lengths = inputs["attention_mask"].sum(dim=1) - 1
+            with torch.inference_mode():
+                next_logits = self.last_token_logits(inputs, input_lengths)
+
             for offset, label in enumerate(self.entity_labels[begin : begin + step]):
-                next_logits = logits[offset, input_lengths[offset]]
                 letters = self.entity_letters[begin + offset]
-                letter_logits = torch.tensor(
-                    [next_logits[self.tokens[letter]] for letter in letters]
+                letter_logits = torch.stack(
+                    [next_logits[offset][self.tokens[letter]] for letter in letters]
                 )
-                probs = torch.softmax(letter_logits, dim=0).numpy()
+                probs = torch.softmax(letter_logits, dim=0).detach().cpu().numpy()
                 state_idx = int(probs.argmax())
                 states[label] = (state_idx, float(probs[state_idx]))
 
-            del inputs, logits
+            del inputs, next_logits
 
         return states
+
+    def last_token_logits(
+        self,
+        inputs: dict[str, Any],
+        input_lengths: torch.Tensor,
+    ) -> torch.Tensor:
+        """Logits of each sample's last real token, shape ``[B, vocab]``.
+
+        A plain forward materialises ``[B, seq_len, vocab]`` -- ~550 MB for three
+        questions over a 152k vocabulary -- and that tensor is what tips a 10 GiB
+        card over the edge beside 9 GB of weights. The state question only reads a
+        handful of letter positions of the last token, so the hidden states suffice
+        and the output projection runs on one row per sample instead, which is a
+        few hundred kB. Falls back to the full logits when the model exposes no
+        hidden states or no output embedding.
+        """
+        out = None
+        hidden = None
+        try:
+            out = self.model(**inputs, output_hidden_states=True)
+            hidden = getattr(out, "hidden_states", None)
+        except TypeError:
+            out = None
+
+        head = None
+        if hidden:
+            getter = getattr(self.model, "get_output_embeddings", None)
+            head = getter() if callable(getter) else None
+            if head is None:
+                head = getattr(self.model, "lm_head", None)
+
+        if hidden and head is not None:
+            last = hidden[-1]
+            index = input_lengths.to(last.device)
+            rows = last[torch.arange(index.shape[0], device=last.device), index]
+            return head(rows.to(next(head.parameters()).device))
+
+        logits = getattr(out, "logits", None)
+        if logits is None:
+            logits = self.model(**inputs).logits
+        index = input_lengths.to(logits.device)
+        return logits[torch.arange(index.shape[0], device=logits.device), index]
 
     def prepare_for_scene(self, cfg: Scene.Config):
         scene = Scene.get(cfg)
