@@ -524,6 +524,41 @@ class Entity(Configurable):
     def prepare_single(self, up: dict) -> dict:
         return self.scoring_parameters(up)
 
+    def score_detail(
+        self, sample: np.ndarray, up: dict, rotation: bool, eps: float = 1e-15
+    ) -> tuple[bool, str]:
+        """Travel the gates :meth:`score_single` applies, naming the one that stopped.
+
+        The gates are a whitelist around the demos, so "nothing applies" is normal
+        when the read sits outside it -- but which gate fired decides what to fix,
+        and without this the option just disappears.
+        """
+        p = self.scoring_parameters(up)
+        sample = self.model_value(sample)
+        pose = sample[:-1]
+        state = int(sample[-1])
+        groups = self.pose_groups(rotation)
+        best_k, z, zd = self._best_component(pose, p, eps=eps, groups=groups)
+        chi_sqrt = _chi_sqrt(self.cfg.z_quantile_joint, len(groups))
+        if z > chi_sqrt:
+            return False, f"distance z={z:.2f} > {chi_sqrt:.2f} (component {best_k})"
+        squared = self.group_squared(zd, groups)
+        if squared.size and float(squared.max()) > self._z_dim_sigma**2:
+            worst = int(np.argmax(squared))
+            return False, (
+                f"one dimension {np.sqrt(squared[worst]):.2f} sigma > "
+                f"{self._z_dim_sigma:.2f} (component {best_k})"
+            )
+        weights = p["measurement"]["state"]["pis"][best_k]
+        if state >= len(weights):
+            return False, f"state {state} outside the {len(weights)} fitted states"
+        if weights[state] < self.cfg.score_state_floor:
+            return False, (
+                f"state {state} has weight {weights[state]:.2g} < "
+                f"{self.cfg.score_state_floor} (component {best_k})"
+            )
+        return True, ""
+
     def score_prepared(
         self,
         sample: np.ndarray,
@@ -543,7 +578,10 @@ class Entity(Configurable):
 
         if not (z <= chi_sqrt and capped):
             return False
-        return bool(pis[best_k][state] >= self.cfg.score_state_floor)
+        weights = pis[best_k]
+        if state >= len(weights):
+            return False  # a state the component never saw is not a candidate
+        return bool(weights[state] >= self.cfg.score_state_floor)
 
     def score_state(
         self,

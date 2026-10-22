@@ -173,6 +173,11 @@ class Graph:
             raise RuntimeError("dead_end needs a build() first")
         return bool(gated.all()) if gated.numel() else True
 
+    @property
+    def dead_end_hint(self) -> str:
+        """Which entity rejected which option at the last build ("" when none)."""
+        return getattr(self.ns_option, "dead_end_hint", "")
+
     def set_goal_rows(self):
         for label, entity in self.entities.items():
             for role, vmode in (

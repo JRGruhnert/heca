@@ -47,6 +47,13 @@ class Condition:
         up = self.models[elabel].get_parameters().copy()
         return self.entities[elabel].score_single(x.value, up, rotation=rotation)
 
+    def test_detail(
+        self, elabel: str, x: DCEntity, rotation: bool
+    ) -> tuple[bool, str]:
+        """As :meth:`test`, plus the reason when it rejects."""
+        up = self.models[elabel].get_parameters().copy()
+        return self.entities[elabel].score_detail(x.value, up, rotation=rotation)
+
     def sample(self, elabel: str) -> DCEntity:
         value = self.models[elabel].sample(1)[0]
         if isinstance(value, torch.Tensor):

@@ -24,6 +24,8 @@ class OptionNodes(NodeSet[OptionNode]):
     def __init__(self):
         super().__init__()
         self.horizon: int = 1
+        # why the last build gated every option: entity and the gate that rejected
+        self.dead_end_hint: str = ""
 
     def set_horizon(self, max_steps: int):
         self.horizon = max_steps
@@ -94,7 +96,47 @@ class OptionNodes(NodeSet[OptionNode]):
 
     def gates(self, ns_entity: EntityNodes, rotation: bool = True) -> torch.Tensor:
         gated = [not self._gated(o, ns_entity, rotation) for o in self.items]
-        return torch.tensor(gated, dtype=torch.float32)
+        tensor = torch.tensor(gated, dtype=torch.float32)
+        # only when nothing applies, and only then: the detail walk is a few extra
+        # condition tests, and a start state with no option is the case that used to
+        # log one line with no information in it
+        self.dead_end_hint = (
+            self._rejection_summary(ns_entity, rotation)
+            if tensor.numel() and bool(tensor.all())
+            else ""
+        )
+        return tensor
+
+    def _rejection_summary(
+        self, ns_entity: EntityNodes, rotation: bool = True, limit: int = 4
+    ) -> str:
+        """The entities that reject, with the gate that did it."""
+        seen: dict[str, str] = {}
+        for option in self.items:
+            for src in option.sources[EntityNodes.type]:
+                post = ns_entity.get_by_key(src)
+                if post.con is None:
+                    continue
+                for role, node in (
+                    ("post", post),
+                    *(
+                        (
+                            "pre",
+                            ns_entity.get_by_key(src2),
+                        )
+                        for src2 in post.sources[EntityNodes.type]
+                    ),
+                ):
+                    if node.con is None or node.entity in seen:
+                        continue
+                    ok, reason = node.con.test_detail(node.entity, node.data, rotation)
+                    if not ok:
+                        seen[node.entity] = f"{role}:{node.entity} {reason}"
+            if len(seen) >= limit:
+                break
+        if not seen:
+            return "every option gated, but no single entity rejected"
+        return " | ".join(list(seen.values())[:limit])
 
     def _gated(
         self, o: OptionNode, ns_entity: EntityNodes, rotation: bool = True

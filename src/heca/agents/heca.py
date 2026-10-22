@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -34,6 +35,8 @@ class Heca(Configurable):
 
         self._episode_steps = 0
         self._budget = 0.0
+        self._discards = 0
+        self._discards_since = time.monotonic()
         self.scene = Scene.get(self.cfg.experts[0].scene)
 
         for a in self.cfg.experts:
@@ -75,14 +78,34 @@ class Heca(Configurable):
                 budget=budget,
             )
             if self._episode_steps == 0:
+                # a discarded episode executes no option, so it produces no
+                # "Predicted ... steps" line and the run looks frozen. Count them and
+                # say why, otherwise a visual run that rejects every start state is
+                # indistinguishable from a hang.
+                self._discards += 1
+                elapsed = time.monotonic() - self._discards_since
                 logger.warning(
-                    "discarding episode: no option applies to the start state"
+                    f"discarding episode: no option applies to the start state "
+                    f"({self._discards} in a row, {elapsed / self._discards:.1f} s "
+                    f"each){': ' + self.graph.dead_end_hint if self.graph.dead_end_hint else ''}"
                 )
+                if self._discards in (5, 10) or self._discards % 50 == 0:
+                    logger.warning(
+                        f"{self._discards} episodes discarded, no option executed "
+                        f"yet ({elapsed / 60:.1f} min). The start state read is "
+                        f"outside every fitted component; see the hint above."
+                    )
             else:
                 queue = self.learner.buffer.queue
                 if queue and self.learner.train_mode:
                     queue[-1].terminal = True
             return x, fb, False
+        if self._discards:
+            logger.info(
+                f"first option executed after {self._discards} discarded episodes"
+            )
+            self._discards = 0
+            self._discards_since = time.monotonic()
         option = self.learner.predict(data)
         a, s = self.graph.select(option)
         self.graph.ns_option.decay()
