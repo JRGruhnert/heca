@@ -10,16 +10,10 @@ from torch.multiprocessing.spawn import start_processes
 from heca.misc import hardware, logger
 
 DEFAULT_PORT = 29500
-DEFAULT_TIMEOUT_MIN = 30.0
+DEFAULT_TIMEOUT_MIN = 120.0
 
 
 def collective_timeout() -> timedelta:
-    """Timeout for one collective on the process group.
-
-    A rank that is merely slow (oversubscribed node, GPU contention) must not
-    take down an otherwise healthy shard, so the default is generous.
-    Override with HECA_PG_TIMEOUT_MINUTES=<minutes> (e.g. 5 to fail fast).
-    """
     raw = os.environ.get("HECA_PG_TIMEOUT_MINUTES", "").strip()
     if not raw:
         return timedelta(minutes=DEFAULT_TIMEOUT_MIN)
@@ -68,7 +62,7 @@ def pin_intra_op_threads(threads: int = 1) -> None:
 def init(rank: int, world_size: int, port: int = DEFAULT_PORT) -> None:
     """Join the process group (gloo: everything here runs on CPU).
 
-    The collective timeout comes from HECA_PG_TIMEOUT_MINUTES (default 30):
+    The collective timeout comes from HECA_PG_TIMEOUT_MINUTES (default 120):
     too low and a slow-but-alive rank kills the shard.
     """
     os.environ.setdefault("MASTER_ADDR", "127.0.0.1")
