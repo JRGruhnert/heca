@@ -20,7 +20,7 @@ DEFAULTS: dict[str, object] = {
     "wandb": True,
     "batch": 1000,
     "repeats": 3,
-    "gt": False,
+    "gt": True,
     "virtual": False,
 }
 
