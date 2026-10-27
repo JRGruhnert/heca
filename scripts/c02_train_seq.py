@@ -14,7 +14,7 @@ from scripts.common.helper import generate_client, get_sim_args, latest_update
 import conf.networks
 
 DEFAULTS: dict[str, object] = {
-    "tag": "final",
+    "tag": "roma",
     "scene": "scene0",
     "smode": SubgoalMode.BOTH,
     "wandb": True,
