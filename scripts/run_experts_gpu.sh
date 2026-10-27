@@ -77,7 +77,8 @@ if [[ -n "$groups_str" ]]; then
 fi
 if (( ${#groups[@]} )); then
     slots=${#groups[@]}
-    per=1
+    # report the width of the group, not 1: each worker owns both cards of it
+    per=$(awk -F, '{print NF; exit}' <<< "${groups[0]}")
 elif (( per < 1 || gpus % per != 0 )); then
     echo "error: $gpus GPU(s) cannot be split into groups of $per" >&2
     exit 1
