@@ -236,11 +236,17 @@ def plot_scene(
     return _plot_scene_impl(scene_tag, results, out_dir, max_tries, episodes)
 
 
-def results_path(scene_cfg: Scene.Config) -> Path:
-    """Shared, stateless results file for one scene."""
+def results_path(scene_cfg: Scene.Config, suffix: str = "") -> Path:
+    """Shared, stateless results file for one scene and keypoint backend.
+
+    The entry is keyed by the agent tag alone, and the tag is the same for every
+    backend, so a run with a non-dino encoder has to write its own file -- else
+    it silently replaces the DINO numbers with its own.
+    """
     out_dir = Scene.save_dir(scene_cfg) / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir / f"eval_success_{scene_cfg.tag}.json"
+    tail = f"-{suffix}" if suffix else ""
+    return out_dir / f"eval_success_{scene_cfg.tag}{tail}.json"
 
 
 def load_results(json_path: Path) -> dict:
@@ -273,9 +279,11 @@ def update_results(json_path: Path, entry: dict, episodes: int, max_tries: int):
     return data
 
 
-def plot_results(scene_cfg: Scene.Config, json_path: Path | None = None) -> Path | None:
+def plot_results(
+    scene_cfg: Scene.Config, json_path: Path | None = None, suffix: str = ""
+) -> Path | None:
     """(Re)plot the current scene chart from the persisted results json."""
-    json_path = json_path or results_path(scene_cfg)
+    json_path = json_path or results_path(scene_cfg, suffix)
     data = load_results(json_path)
     agents = data.get("agents", [])
     if not agents:
@@ -283,6 +291,12 @@ def plot_results(scene_cfg: Scene.Config, json_path: Path | None = None) -> Path
     episodes = int(data.get("episodes", 100))
     max_tries = int(data.get("max_tries", 3))
     return plot_scene(scene_cfg.tag, agents, json_path.parent, max_tries, episodes)
+
+
+def backend_suffix(cfg: ExpertModel.Config) -> str:
+    """The keypoint backend of a model, empty for the default DINO encoder."""
+    backend = getattr(cfg.kp_extraction, "backend", "dino")
+    return "" if backend == "dino" else str(backend)
 
 
 def evaluate_one(
@@ -320,7 +334,7 @@ def evaluate_one(
             model._use_gt = gt
     counts = evaluate_model(model, model.scene, episodes, max_tries, conditions)
 
-    json_path = results_path(scene_cfg)
+    json_path = results_path(scene_cfg, backend_suffix(cfg))
     update_results(
         json_path,
         {"scene": scene_cfg.tag, "tag": cfg.tag, "counts": dict(counts)},

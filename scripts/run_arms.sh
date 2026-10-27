@@ -45,7 +45,7 @@ for (( i = first; i < first + count; i++ )); do
         echo "skip: session $name already exists"
         continue
     fi
-    placement="HECA_ARM_PREFIX='${prefix}' HECA_ARM_CPU='${HECA_ARM_CPU:-}' HECA_ARM_GPUS='${HECA_ARM_GPUS:-}' HECA_ARM_KP_GPU='${HECA_ARM_KP_GPU:-}' HECA_ARM_CORES='${HECA_ARM_CORES:-}' HECA_ARM_THREADS='${HECA_ARM_THREADS:-}' HECA_WANDB_ROOT='${HECA_WANDB_ROOT:-}'"
+    placement="HECA_ARM_PREFIX='${prefix}' HECA_ARM_CPU='${HECA_ARM_CPU:-}' HECA_ARM_GPUS='${HECA_ARM_GPUS:-}' HECA_ARM_KP_GPU='${HECA_ARM_KP_GPU:-}' HECA_ARM_CORES='${HECA_ARM_CORES:-}' HECA_KP_BACKEND='${HECA_KP_BACKEND:-}' HECA_ARM_THREADS='${HECA_ARM_THREADS:-}' HECA_WANDB_ROOT='${HECA_WANDB_ROOT:-}'"
     tmux new -d -s "$name" "$placement $worker $i $total $module"
     echo "started $name -> shard $i/$total  [$placement]"
     sleep "$stagger"

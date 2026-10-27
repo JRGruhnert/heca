@@ -208,6 +208,8 @@ class Entity(Configurable):
         score_variance_scale: float = 1.0
         score_state_smoothing: float = 0.0
         score_state_floor: float = 1e-6
+        subgoal: str = "mahalanobis"
+        subgoal_candidates: int = 21
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -704,7 +706,8 @@ class Entity(Configurable):
         vars2 = p2["measurement"]["pose"]["covariances"]
         pis2 = p2["measurement"]["state"]["pis"]
 
-        chi = _chi2_ppf(self.cfg.z_quantile_joint, self.pose_dof)
+        radius = _chi_sqrt(self.cfg.z_quantile_joint, len(self.pose_groups(True)))
+        chi = radius**2
 
         def agrees(i: int, j: int) -> bool:
             var1 = np.maximum(vars1[i], eps)
@@ -739,7 +742,117 @@ class Entity(Configurable):
         logger.debug(f"containment={value:.4f}")
         return value > 0.0
 
-    def best_sample(self, up1: dict, up2: dict, eps: float = 1e-15):
+    def best_sample(
+        self, up1: dict, up2: dict, mahalanobis: bool = True, eps: float = 1e-15
+    ):
+        """A configuration satisfying both conditions, or ``None``."""
+        if not mahalanobis:
+            return self.product_sample(up1, up2, eps=eps)
+        return self.mahalanobis_sample(up1, up2, eps=eps)
+
+    def _region_violation(
+        self, pose: np.ndarray, mu: np.ndarray, var: np.ndarray, chi: float, eps=1e-15
+    ) -> float:
+        """How far outside one component's credible region ``pose`` is, in radii.
+
+        > 1 means outside. Both checks of the gate are in here: the per-dimension
+        cap and the joint ellipsoid, each normalised by its own threshold.
+        """
+        z = np.abs(pose - mu) / np.sqrt(np.maximum(var, eps))
+        cap = float(self._z_dim_sigma)
+        return max(float(z.max()) / cap, float(np.linalg.norm(z)) / chi)
+
+    def _box_chebyshev(
+        self, mu1: np.ndarray, var1: np.ndarray, mu2: np.ndarray, var2: np.ndarray
+    ) -> np.ndarray:
+        """min_x max(|x-mu_i|/s_i) over both components; an LP in (x, t)."""
+        d = len(mu1)
+        c = np.zeros(d + 1)
+        c[-1] = 1.0
+        a, b = [], []
+        for mu, s in ((mu1, np.sqrt(var1)), (mu2, np.sqrt(var2))):
+            for sign in (1, -1):
+                for k in range(d):
+                    row = np.zeros(d + 1)
+                    row[k] = sign / s[k]
+                    row[-1] = -1.0
+                    a.append(row)
+                    b.append(sign * mu[k] / s[k])
+        result = minimize(
+            lambda x: x[-1],
+            np.concatenate([0.5 * (mu1 + mu2), [1.0]]),
+            jac=lambda x: np.eye(d + 1)[-1],
+            method="SLSQP",
+            bounds=[(None, None)] * (d + 1),
+            constraints=[
+                {
+                    "type": "ineq",
+                    "fun": lambda x, row=row, bound=bound: bound - row @ x,
+                }
+                for row, bound in zip(a, b)
+            ],
+            options={"maxiter": 200, "ftol": 1e-10},
+        )
+        if result.success:
+            return np.asarray(result.x[:d], dtype=float)
+        return 0.5 * (mu1 + mu2)
+
+    def mahalanobis_sample(self, up1: dict, up2: dict, eps: float = 1e-15):
+        p1 = self.secure_mix_parameters(up1)
+        p2 = self.secure_mix_parameters(up2)
+        w1, w2 = p1["weights"], p2["weights"]
+        m1 = p1["measurement"]["pose"]["means"]
+        m2 = p2["measurement"]["pose"]["means"]
+        v1 = p1["measurement"]["pose"]["covariances"]
+        v2 = p2["measurement"]["pose"]["covariances"]
+        pi1 = p1["measurement"]["state"]["pis"]
+        pi2 = p2["measurement"]["state"]["pis"]
+        chi = _chi_sqrt(self.cfg.z_quantile_joint, len(self.pose_groups(True)))
+
+        best = None
+        for i in range(len(w1)):
+            for j in range(len(w2)):
+                if not self._ellipsoids_intersect(
+                    m1[i], v1[i], m2[j], v2[j], chi**2, self._z_dim_sigma, eps
+                ):
+                    continue
+                n_states = max(len(pi1[i]), len(pi2[j]))
+                a = np.pad(np.asarray(pi1[i], float), (0, n_states - len(pi1[i])))
+                b = np.pad(np.asarray(pi2[j], float), (0, n_states - len(pi2[j])))
+                tau = float(self.cfg.score_state_floor)
+                joint = np.where((a >= tau) & (b >= tau), a * b, 0.0)
+                if joint.max() <= 0.0:
+                    continue
+                state = int(np.argmax(joint))
+                candidates = [
+                    self._box_chebyshev(m1[i], v1[i], m2[j], v2[j]),
+                    0.5 * (m1[i] + m2[j]),
+                ]
+                steps = max(2, int(self.cfg.subgoal_candidates))
+                candidates += [
+                    m1[i] + f * (m2[j] - m1[i]) for f in np.linspace(0.0, 1.0, steps)
+                ]
+                for pose in candidates:
+                    violation = max(
+                        self._region_violation(pose, m1[i], v1[i], chi, eps),
+                        self._region_violation(pose, m2[j], v2[j], chi, eps),
+                    )
+                    if violation > 1.0:
+                        continue
+                    value = np.concatenate([pose, [state]])
+                    if not (
+                        self.score_single(value, up1, rotation=True)
+                        and self.score_single(value, up2, rotation=True)
+                    ):
+                        continue
+                    rank = (round(violation, 6), -np.log(w1[i]) - np.log(w2[j]))
+                    if best is None or rank < best[0]:
+                        best = (rank, pose, state)
+        if best is None:
+            return None
+        return self.model_to_value(np.concatenate([best[1], [best[2]]]))
+
+    def product_sample(self, up1: dict, up2: dict, eps: float = 1e-15):
         p1 = self.secure_mix_parameters(up1)
         p2 = self.secure_mix_parameters(up2)
 

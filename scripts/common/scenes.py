@@ -32,9 +32,12 @@ def place_encoders(agents: list[ExpertModel.Config]) -> list[ExpertModel.Config]
     """
     kp_device = os.environ.get("HECA_KP_DEVICE", "").strip()
     molmo_cards = os.environ.get("HECA_MOLMO_DEVICES", "").strip()
-    if not kp_device and not molmo_cards:
+    backend = os.environ.get("HECA_KP_BACKEND", "").strip()
+    if not kp_device and not molmo_cards and not backend:
         return agents
     for agent in agents:
+        if backend and getattr(agent.kp_extraction, "backend", "dino") != backend:
+            agent.kp_extraction = _backend_config(backend, agent.kp_extraction)
         if kp_device:
             agent.kp_extraction = dataclasses.replace(
                 agent.kp_extraction, device=kp_device
@@ -44,6 +47,16 @@ def place_encoders(agents: list[ExpertModel.Config]) -> list[ExpertModel.Config]
                 agent.state_extraction, gpu_cards=molmo_cards
             )
     return agents
+
+
+def _backend_config(backend: str, base):
+    """The keypoint config of one backend, keeping the card it was told to use."""
+    device = getattr(base, "device", "")
+    if backend == "roma":
+        from heca.image_encoders.roma_encoder import RomaEncoder
+
+        return RomaEncoder.Config(device=device)
+    return dataclasses.replace(base, backend="dino", device=device)
 
 
 def experts_for_scene(scene_tag: str) -> list[ExpertModel.Config]:
@@ -56,20 +69,33 @@ def scene_config(scene_tag: str) -> Scene.Config:
     return experts_for_scene(scene_tag)[0].scene
 
 
-def select_encoder(tag: str, backbone: str = "", stride: int = 0):
+def select_encoder(
+    tag: str, backbone: str = "", stride: int = 0, backend: str = "dino"
+):
+    """Point a scene's agents at one keypoint matcher."""
     agents = experts_for_scene(tag)
     base = agents[0].kp_extraction
-    if not backbone and not stride:
+    if not backbone and not stride and backend == getattr(
+        base, "backend", "dino"
+    ):
         return base
-    changes: dict = {}
-    if backbone:
-        changes["backbone"] = backbone
-    if stride:
-        changes["stride"] = stride
-    chosen = dataclasses.replace(base, **changes)
-    chosen = dataclasses.replace(
-        chosen, label=f"kp_{chosen.backbone.split('.')[0]}_{chosen.stride}"
-    )
+
+    if backend == "roma":
+        from heca.image_encoders.roma_encoder import RomaEncoder
+
+        chosen = RomaEncoder.Config(device=getattr(base, "device", ""))
+    else:
+        chosen = base
+        changes: dict = {}
+        if backbone:
+            changes["backbone"] = backbone
+        if stride:
+            changes["stride"] = stride
+        if changes:
+            chosen = dataclasses.replace(chosen, **changes)
+            chosen = dataclasses.replace(
+                chosen, label=f"kp_{chosen.backbone.split('.')[0]}_{chosen.stride}"
+            )
     for agent in agents:
         agent.kp_extraction = chosen
     return chosen

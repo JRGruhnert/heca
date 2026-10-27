@@ -162,7 +162,7 @@ def main():
         if args.scene and tag != args.scene:
             continue
         # before the configs go to the workers, so they carry the choice
-        select_encoder(tag, args.backbone, args.stride)
+        select_encoder(tag, args.backbone, args.stride, args.kp_backend)
         models = [
             m
             for m in experts_for_scene(tag)

@@ -25,7 +25,9 @@ def main():
         SceneRefSelector.Config(
             scene=scene_cfg,
             dataset_name=args.dataset,
-            kp_extraction=select_encoder(args.scene, args.backbone, args.stride),
+            kp_extraction=select_encoder(
+                args.scene, args.backbone, args.stride, args.kp_backend
+            ),
         )
     )
     selector.run()

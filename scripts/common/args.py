@@ -31,6 +31,14 @@ def add_viewer_argument(parser: argparse.ArgumentParser):
 
 def add_encoder_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
+        "--kp-backend",
+        choices=("dino", "roma"),
+        default="dino",
+        help="keypoint matcher: dino (descriptor search) or roma (dense "
+        "correspondences). The state encoder stays the same; the fitted artifacts "
+        "are named after it (tapas_img-roma.pt, conditions-vis-roma.joblib).",
+    )
+    parser.add_argument(
         "--backbone",
         default="",
         help="keypoint backbone: a timm name, or dino_vits8 / dino_vits16 / "

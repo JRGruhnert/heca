@@ -17,8 +17,12 @@ import numpy as np
 from heca.experts.expert import ExpertModel
 from heca.misc import logger
 from heca.scenes.scene import Scene
-from scripts.common.args import add_scene_argument, add_threads_argument
-from scripts.common.scenes import experts_for_scene, scene_config
+from scripts.common.args import (
+    add_encoder_arguments,
+    add_scene_argument,
+    add_threads_argument,
+)
+from scripts.common.scenes import experts_for_scene, scene_config, select_encoder
 
 IMAGE_KEYS = {"rgb", "depth", "mask", "extrinsics", "intrinsics", "demo"}
 
@@ -39,6 +43,7 @@ def depth_range(frame) -> tuple[float, float]:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
+    add_encoder_arguments(parser)
     add_threads_argument(parser)
     parser.add_argument("--fit-frames", type=int, default=6, help="Demo frames.")
     parser.add_argument("--act-frames", type=int, default=3, help="Live frames.")
@@ -48,6 +53,7 @@ def main():
 
         torch.set_num_threads(args.threads)
 
+    select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
     scene = Scene.get(scene_config(args.scene))
     cfg = experts_for_scene(args.scene)[0]
     model = ExpertModel.get(cfg, auto_load=False)

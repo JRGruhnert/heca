@@ -307,12 +307,15 @@ class TapasExpert(ExpertModel):
     def eval(self):
         self.policy.eval()
 
+    @property
+    def kp_backend(self) -> str:
+        """Which keypoint encoder this expert reads with: dino, roma, ..."""
+        return getattr(self.cfg.kp_extraction, "backend", "dino")
+
     def policy_path(self, path: Path) -> Path:
-        if self._use_gt:
-            file_name = "tapas_gt.pt"
-        else:
-            file_name = "tapas_img.pt"
-        return path / file_name
+        kind = "gt" if self._use_gt else "img"
+        suffix = "" if self.kp_backend == "dino" else f"-{self.kp_backend}"
+        return path / f"tapas_{kind}{suffix}.pt"
 
     def _save(self, path: Path):
         filepath = self.policy_path(path)
@@ -392,8 +395,9 @@ class TapasExpert(ExpertModel):
 
     @property
     def conditions_cache_path(self) -> Path:
-        name = "conditions-gt.joblib" if self._use_gt else "conditions-vis.joblib"
-        return self.load_dir(self.cfg) / name
+        kind = "gt" if self._use_gt else "vis"
+        suffix = "" if self.kp_backend == "dino" else f"-{self.kp_backend}"
+        return self.load_dir(self.cfg) / f"conditions-{kind}{suffix}.joblib"
 
     def fit_stage1(self, demos: Demos):
         self.policy._local_marginals = None
@@ -738,10 +742,20 @@ class TapasExpert(ExpertModel):
                         f"{elapsed / 60:.1f} min elapsed, ~{left / 60:.1f} min left"
                     )
 
-        # the scene's entities, not ``self.entities``: that is the scene's entities
-        # intersected with the *fitted* model's frames, and this also has to run
-        # when the policies were fitted in an earlier run (--skip-fit)
-        entities = self.scene.entities
+        try:
+            needed = self.tps
+        except Exception:  # no fitted model to read the frame names from
+            needed = set()
+        if not needed:
+            logger.warning(
+                f"{self.cfg.tag}: no fitted frames, fitting the condition over all "
+                f"scene entities instead of this option's own"
+            )
+            entities = self.scene.entities
+        else:
+            entities = {k: v for k, v in self.scene.entities.items() if k in needed}
+        if sorted(entities) != sorted(self.scene.entities):
+            logger.info(f"{self.cfg.tag}: condition over {sorted(entities)}")
         for entity in entities.values():
             entity.cfg.max_fit_components = self.cfg.conditions_components
         for key in entities:

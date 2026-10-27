@@ -11,6 +11,23 @@ from heca.data.reference import Keypoint
 from heca.utils.quaternion import Quaternion
 
 
+def device_from_spec(spec: str) -> torch.device | None:
+    """The device a config string names, or None when it names none.
+
+    A bare number is a CUDA card, so "1" and "cuda:1" are the same device. The
+    card variables are plain indices everywhere else -- HECA_MOLMO_DEVICES is
+    handed to accelerate's max_memory map, whose keys have to be integers -- so
+    they are spelled as plain indices here too.
+    """
+    spec = (spec or "").strip()
+    if not spec:
+        return None
+    try:
+        return torch.device(f"cuda:{int(spec)}")
+    except ValueError:
+        return torch.device(spec)
+
+
 class ImageEncoder(Registerable):
     @dataclass(kw_only=True)
     class Config(Registerable.Config):
@@ -93,14 +110,46 @@ class ImageEncoder(Registerable):
         )
 
     @staticmethod
+    def pixels_and_depth_to_world(
+        x_pixel: torch.Tensor,  # B, N
+        y_pixel: torch.Tensor,  # B, N
+        depth: torch.Tensor,  # B, N camera-axis depth
+        extr: torch.Tensor,  # 4, 4 or B, 4, 4   world -> camera
+        intr: torch.Tensor,  # 3, 3 or B, 3, 3
+    ) -> torch.Tensor:
+        """Pixels plus their depth -> world points, as (B, N, 3).
+
+        ``extr`` is world -> camera (what ``get_camera_extrinsics`` returns) and the
+        depth is MuJoCo's, measured along the viewing direction in a camera frame
+        that is x-right, y-up, z-back. The mapping is spelled out here rather than
+        routed through the +z-forward pinhole helper, because no single sign flip
+        reproduces that frame: reading it as z-forward and y-down mirrors every
+        keypoint and puts it about a metre from the object it belongs to.
+        """
+        batch = x_pixel.shape[0]
+        k = intr.reshape(-1, 3, 3)
+        if k.shape[0] == 1 and batch > 1:
+            k = k.expand(batch, -1, -1)
+        u = (x_pixel.float() - k[:, 0, 2:3]) / k[:, 0, 0:1]
+        v = (y_pixel.float() - k[:, 1, 2:3]) / k[:, 1, 1:2]
+        camera = torch.stack((u * depth, -v * depth, -depth), dim=-1)
+
+        to_world = torch.inverse(extr.reshape(-1, 4, 4))
+        if to_world.shape[0] == 1 and batch > 1:
+            to_world = to_world.expand(batch, -1, -1)
+        rotation = to_world[:, :3, :3]
+        translation = to_world[:, :3, 3]
+        return camera @ rotation.transpose(-1, -2) + translation.unsqueeze(1)
+
+    @staticmethod
     def hard_pixels_to_3D_world(
         y_pixel: torch.Tensor,  # B, N
         x_pixel: torch.Tensor,  # B, N
         depth: torch.Tensor,  # (H, W) or (N, H, W)
-        extr: torch.Tensor,  # 4, 4 or N, 4, 4
+        extr: torch.Tensor,  # 4, 4 or N, 4, 4   world -> camera
         intr: torch.Tensor,  # 3, 3 or N, 3, 3
     ) -> torch.Tensor:
-        """Pixels plus their measured depth -> world points, as (B, N, 3)."""
+        """The same mapping, reading the depth of each pixel out of a depth image."""
         B, N = x_pixel.shape
         if depth.ndim == 3:
             rows = torch.arange(
@@ -108,39 +157,34 @@ class ImageEncoder(Registerable):
             ).repeat_interleave(N)
             z = depth[rows, y_pixel.flatten(), x_pixel.flatten()].reshape(B, N)
         else:
-            # depth is (H, W), so the row comes first and the projection takes u = x
             z = depth[y_pixel.flatten(), x_pixel.flatten()].reshape(B, N)
-        return ImageEncoder.batched_pinhole_projection_image_to_world_coordinates_orig(
-            x_pixel, y_pixel, z, intr, extr
-        )
+        return ImageEncoder.pixels_and_depth_to_world(x_pixel, y_pixel, z, extr, intr)
 
     @staticmethod
     def pixels_to_world(
         x: torch.Tensor,  # (B, N)
         y: torch.Tensor,  # (B, N)
-        z: torch.Tensor,  # (B, N) camera-frame depth
-        extr: torch.Tensor,  # (B, 4, 4)
+        z: torch.Tensor,  # (B, N) camera-axis depth
+        extr: torch.Tensor,  # (B, 4, 4) world -> camera
         intr: torch.Tensor,  # (B, 3, 3)
     ) -> torch.Tensor:
-        return ImageEncoder.batched_pinhole_projection_image_to_world_coordinates_orig(
-            x, y, z, intr, extr
-        )
+        return ImageEncoder.pixels_and_depth_to_world(x, y, z, extr, intr)
 
     @staticmethod
     def world_to_pixels(
         points: torch.Tensor,  # (N, 3)
-        extr: torch.Tensor,  # (4, 4) camera to world
+        extr: torch.Tensor,  # (4, 4) world -> camera
         intr: torch.Tensor,  # (3, 3)
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        world_to_camera = torch.inverse(extr)
+        """World points -> pixels and their depth, the inverse of the mapping above."""
         homogeneous = torch.cat(
             [points, torch.ones_like(points[..., :1])], dim=-1
         )  # (N, 4)
-        camera = homogeneous @ world_to_camera.transpose(-1, -2)
-        z = camera[..., 2]
+        camera = homogeneous @ extr.transpose(-1, -2)
+        z = -camera[..., 2]
         safe = torch.where(z.abs() < 1e-8, torch.full_like(z, 1e-8), z)
         x = intr[..., 0, 0] * camera[..., 0] / safe + intr[..., 0, 2]
-        y = intr[..., 1, 1] * camera[..., 1] / safe + intr[..., 1, 2]
+        y = -intr[..., 1, 1] * camera[..., 1] / safe + intr[..., 1, 2]
         return torch.stack([x, y], dim=-1), z
 
     @staticmethod

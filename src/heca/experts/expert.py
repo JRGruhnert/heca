@@ -140,11 +140,10 @@ class ExpertModel(Persistable, abc.ABC):
             reference = references[label][Reference.POSITION].xyz
             position = keypoint.xyz
             if keypoint.score < self.cfg.score_threshold:
-                logger.warning(
-                    f"{label}: keypoint confidence {keypoint.score:.3f} below "
-                    f"{self.cfg.score_threshold}, falling back to its reference"
+                logger.debug(
+                    f"{label}: match confidence {keypoint.score:.3f} is below "
+                    f"{self.cfg.score_threshold}, keeping the measured position"
                 )
-                position = reference
 
             if self.use_extra:
                 positions = {
@@ -192,9 +191,9 @@ class ExpertModel(Persistable, abc.ABC):
             ]
             if not weak or len(weak) == len(frames):
                 if weak:
-                    logger.warning(
-                        f"{label}: nothing detected in any of the {len(frames)} "
-                        "frames, its values are all reference positions"
+                    logger.debug(
+                        f"{label}: every frame read below {self.cfg.score_threshold}; "
+                        "keeping the measured values"
                     )
                 continue
             logger.warning(

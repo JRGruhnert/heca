@@ -13,6 +13,21 @@
 #   HECA_EXPERTS_CARDS_PER_PROC  cards each process may use (default: 1). A Molmo
 #                       that does not fit one card is spread over two; then only
 #                       gpus/2 processes run at once, each on its own pair.
+#   HECA_EXPERTS_GROUPS one group of GLOBAL card indices per process, e.g.
+#                       "0,2 1,2" for two processes over three cards (groups may
+#                       overlap). Setting it overrides the gpus / CARDS_PER_PROC
+#                       arguments and runs one process per group.
+#   HECA_EXPERTS_MOLMO_LOCAL  LOCAL index inside a group that carries the Molmo
+#   HECA_EXPERTS_KP_LOCAL     LOCAL index inside a group that carries the keypoint
+#                       encoder, i.e. the card the process sees as cuda:0, cuda:1.
+#                       They are exported as HECA_MOLMO_DEVICES / HECA_KP_DEVICE
+#                       -- plain local indices, the same spelling for both --
+#                       while CUDA_VISIBLE_DEVICES holds the group itself, so
+#                       "GROUPS=0,1 MOLMO_LOCAL=0 KP_LOCAL=1" puts the Molmo on
+#                       global card 0 and the DINO / RoMa model on global card 1.
+#   HECA_EXPERTS_MOLMO_GPUS / HECA_EXPERTS_KP_GPU  shorthand for exactly that
+#                       layout: one process per listed Molmo card, every process
+#                       sharing the single keypoint card.
 #   HECA_EXPERTS_DRY    print the commands instead of running them
 #   HECA_EXPERTS_BACKUP copy each conditions file to <stem>.bak.joblib when the
 #                       target does not exist yet, so a rebuild stays reversible
@@ -26,14 +41,49 @@ threads="${3:-6}"
 demos="${4:-0}"
 episodes="${5:-100}"
 extra="${HECA_EXPERTS_ARGS:-}"
+[[ -n "${HECA_KP_BACKEND:-}" ]] && extra="$extra --kp-backend $HECA_KP_BACKEND"
 # cards per process: a Molmo that does not fit one card is spread over several, and
 # then fewer processes run at once (one per group of cards)
 per="${HECA_EXPERTS_CARDS_PER_PROC:-1}"
-if (( per < 1 || gpus % per != 0 )); then
+# Layout "one Molmo per card, all keypoint encoders on one card":
+#   HECA_EXPERTS_MOLMO_GPUS=0,1  HECA_EXPERTS_KP_GPU=2
+# Worker i then sees (molmo[i], kp) with its Molmo on visible card 0 and its
+# keypoint encoder on visible card 1, so the two Molmos never share a card and the
+# DINO / RoMa models of all workers fit on the third one.
+molmo_gpus="${HECA_EXPERTS_MOLMO_GPUS:-}"
+kp_gpu="${HECA_EXPERTS_KP_GPU:-}"
+
+# General form: one group of GLOBAL card indices per worker, plus the LOCAL index
+# inside a group that carries each model.
+#   HECA_EXPERTS_GROUPS="0,2 1,2" HECA_EXPERTS_MOLMO_LOCAL=0 HECA_EXPERTS_KP_LOCAL=1
+# means: worker A sees global cards 0 and 2, worker B sees 1 and 2 (the keypoint card
+# is shared), and inside each worker the Molmo is local card 0 while the keypoint
+# encoder is local card 1. Groups may overlap; they need not be disjoint.
+groups_str="${HECA_EXPERTS_GROUPS:-}"
+molmo_local="${HECA_EXPERTS_MOLMO_LOCAL:-}"
+kp_local="${HECA_EXPERTS_KP_LOCAL:-}"
+if [[ -z "$groups_str" && -n "$molmo_gpus" && -n "$kp_gpu" ]]; then
+    # older shorthand: one Molmo per listed card, all keypoint encoders on one card
+    groups_str=""
+    for card in ${molmo_gpus//,/ }; do
+        groups_str+="${card},${kp_gpu} "
+    done
+    molmo_local=0
+    kp_local=1
+fi
+groups=()
+if [[ -n "$groups_str" ]]; then
+    read -r -a groups <<< "$groups_str"
+fi
+if (( ${#groups[@]} )); then
+    slots=${#groups[@]}
+    per=1
+elif (( per < 1 || gpus % per != 0 )); then
     echo "error: $gpus GPU(s) cannot be split into groups of $per" >&2
     exit 1
+else
+    slots=$(( gpus / per ))
 fi
-slots=$(( gpus / per ))
 
 # the card group of run i modulo the number of slots
 cards_for() {
@@ -56,7 +106,11 @@ for cfg in experts_for_scene(sys.argv[1]):
     print("TAG " + cfg.tag)' "$scene" | sed -n 's/^TAG //p')
     echo "=== $scene: ${#tags[@]} experts, $slots process(es) of $per GPU, extra args '${extra}'"
     for i in "${!tags[@]}"; do
-        echo "would run: gpus $(cards_for $(( i % slots ))) <- ${tags[$i]} $extra"
+        if (( ${#groups[@]} )); then
+            echo "would run: gpus ${groups[$(( i % ${#groups[@]} ))]} (molmo local ${molmo_local:-?}, kp local ${kp_local:-?}) <- ${tags[$i]} $extra"
+        else
+            echo "would run: gpus $(cards_for $(( i % slots ))) <- ${tags[$i]} $extra"
+        fi
     done
     exit 0
 fi
@@ -81,14 +135,16 @@ for cfg in experts_for_scene(sys.argv[1]):
     print("TAG " + cfg.tag)' "$scene" | sed -n 's/^TAG //p')
 
 if [[ -n "${HECA_EXPERTS_BACKUP:-}" ]]; then
-    # one save dir per expert; the conditions live beside its checkpoint
+    # one save dir per expert: conditions and fitted policies live beside it
     "$py" -c 'import shutil, sys
 from heca.experts.expert import ExpertModel
 from scripts.common.scenes import experts_for_scene
 for cfg in experts_for_scene(sys.argv[1]):
-    for name in ("conditions-vis.joblib", "conditions-gt.joblib"):
-        src = ExpertModel.save_dir(cfg) / name
-        dst = src.parent / (src.stem + ".bak.joblib")
+    save_dir = ExpertModel.save_dir(cfg)
+    files = [save_dir / n for n in ("conditions-vis.joblib", "conditions-gt.joblib")]
+    files += sorted(save_dir.glob("tapas_*.pt"))  # a refit costs hours
+    for src in files:
+        dst = src.with_suffix(".bak" + src.suffix)
         if src.exists() and not dst.exists():
             shutil.copy2(src, dst)
             print(f"backed up {dst.relative_to(ExpertModel.root)}")' "$scene"
@@ -108,12 +164,18 @@ run_one() {
 }
 
 pids=()
+if (( ${#groups[@]} )); then
+    # both are local indices into the group, spelled as plain numbers
+    [[ -n "$molmo_local" ]] && export HECA_MOLMO_DEVICES="$molmo_local"
+    [[ -n "$kp_local" ]] && export HECA_KP_DEVICE="$kp_local"
+fi
+
 for i in "${!tags[@]}"; do
     tag="${tags[$i]}"
-    cards="$(cards_for $(( i % slots )))"
-    if [[ -n "${HECA_EXPERTS_DRY:-}" ]]; then
-        echo "would run: gpus $cards <- $tag $extra"
-        continue
+    if (( ${#groups[@]} )); then
+        cards="${groups[$(( i % ${#groups[@]} ))]}"
+    else
+        cards="$(cards_for $(( i % slots )))"
     fi
     run_one "$tag" "$cards" &
     pids+=($!)

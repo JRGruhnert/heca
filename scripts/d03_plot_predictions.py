@@ -103,7 +103,7 @@ def main() -> None:
             f"{Scene.save_dir(scene_cfg)}; run scripts/d01_select_references.py"
         )
 
-    select_encoder(args.scene, args.backbone, args.stride)
+    select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
     model = ExpertModel.get(find_scene_models(args.scene)[0], auto_load=False)
     keypoints = ImageEncoder.get(model.cfg.kp_extraction)
     keypoints.prepare_for_scene(scene_cfg)

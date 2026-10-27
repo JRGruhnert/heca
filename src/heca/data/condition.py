@@ -47,9 +47,7 @@ class Condition:
         up = self.models[elabel].get_parameters().copy()
         return self.entities[elabel].score_single(x.value, up, rotation=rotation)
 
-    def test_detail(
-        self, elabel: str, x: DCEntity, rotation: bool
-    ) -> tuple[bool, str]:
+    def test_detail(self, elabel: str, x: DCEntity, rotation: bool) -> tuple[bool, str]:
         """As :meth:`test`, plus the reason when it rejects."""
         up = self.models[elabel].get_parameters().copy()
         return self.entities[elabel].score_detail(x.value, up, rotation=rotation)
@@ -143,9 +141,16 @@ class Condition:
         for key in set(self.entities).intersection(set(other.entities)):
             up1 = self.models[key].get_parameters().copy()
             up2 = other.models[key].get_parameters().copy()
-            if not self.entities[key].containment_score(up1, up2):
-                return None
             value = self.entities[key].best_sample(up1, up2)
+            if value is None:
+                logger.debug(f"{key}: no configuration satisfies both conditions")
+                return None
+            if not (
+                self.entities[key].score_single(value, up1, rotation=True)
+                and self.entities[key].score_single(value, up2, rotation=True)
+            ):
+                logger.debug(f"{key}: configuration rejected by one of the conditions")
+                return None
             if (aa := self._default_aa(key, value)) is not None:
                 value[Entity.POS_DIM : Entity.POS_DIM + Entity.ROT_DIM] = aa
             values[key] = value

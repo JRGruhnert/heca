@@ -76,7 +76,7 @@ fi
 if [[ -n "${HECA_ARM_KP_GPU:-}" ]]; then
     export CUDA_VISIBLE_DEVICES="$((index % HECA_ARM_KP_GPU)),${HECA_ARM_KP_GPU}"
     export HECA_MOLMO_DEVICES=0      # visible index of this shard's Molmo card
-    export HECA_KP_DEVICE=cuda:1     # visible index of the shared keypoint card
+    export HECA_KP_DEVICE=1          # visible index of the shared keypoint card
 elif [[ -n "${HECA_ARM_CPU:-}" ]]; then
     export CUDA_VISIBLE_DEVICES=""
 elif [[ -n "${HECA_ARM_GPUS:-}" ]]; then
@@ -161,6 +161,7 @@ fi
     echo "=== python=$python_bin"
     echo "=== WANDB_DIR=$WANDB_DIR log=$log"
     echo "=== CUDA_VISIBLE_DEVICES='${CUDA_VISIBLE_DEVICES-unset}' gpus=$gpus"
+    [[ -n "${HECA_KP_BACKEND:-}" ]] && echo "=== keypoint backend ${HECA_KP_BACKEND}"
     if [[ -n "${HECA_KP_DEVICE:-}" ]]; then
         echo "=== keypoint encoder on ${HECA_KP_DEVICE}," \
             "Molmo on visible card ${HECA_MOLMO_DEVICES:-all}"

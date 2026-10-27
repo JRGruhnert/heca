@@ -21,16 +21,18 @@ from heca.graphs.graph import Graph, SubgoalMode
 from heca.misc import logger
 from heca.scenes.scene import Scene
 from scripts.common.args import (
+    add_encoder_arguments,
     add_scene_argument,
     add_threads_argument,
     add_use_gt_argument,
 )
-from scripts.common.scenes import experts_for_scene, scene_config
+from scripts.common.scenes import experts_for_scene, scene_config, select_encoder
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
+    add_encoder_arguments(parser)
     add_use_gt_argument(parser)
     add_threads_argument(parser)
     parser.add_argument(
@@ -73,6 +75,7 @@ def main():
 
         torch.set_num_threads(args.threads)
 
+    select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
     cfgs = experts_for_scene(args.scene)
     scene: Scene = Scene.get(scene_config(args.scene))
 

@@ -17,7 +17,7 @@ from heca.scenes.scene import Scene
 from heca.misc import hardware, logger
 from heca.data.data import TDImage
 from heca.data.reference import Keypoint, Reference
-from heca.image_encoders.image_encoder import ImageEncoder
+from heca.image_encoders.image_encoder import device_from_spec, ImageEncoder
 from heca.image_encoders.particle_filter import (
     KeypointParticleFilter,
     ParticleFilterConfig,
@@ -51,17 +51,12 @@ class DinoEncoder(ImageEncoder):
         tracking: TrackingMode = TrackingMode.PARTICLE
         particle_filter: ParticleFilterConfig = ParticleFilterConfig()
         prior: PriorConfig = PriorConfig()
-        # where the keypoint model lives. Empty: the process-wide hardware.device.
-        # A node shared by several runs can give every run's Molmo its own card and
-        # put all the (small, ~0.35 GB) keypoint models on one card instead, which is
-        # also the only way three arms fit on four cards without spilling to host.
         device: str = ""
+        backend: str = "dino"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.device = (
-            torch.device(self.cfg.device) if self.cfg.device else hardware.device
-        )
+        self.device = device_from_spec(self.cfg.device) or hardware.device
         self.model = self._create_backbone(self.cfg.backbone)
         self.prefix_tokens = int(getattr(self.model, "num_prefix_tokens", 1))
         self.model, self.patch_size = DinoEncoder.patch_vit_resolution(
