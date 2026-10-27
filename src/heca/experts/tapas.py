@@ -148,16 +148,6 @@ class TapasExpert(ExpertModel):
         )
         repeat_actions: int = 0
         gt_frames: list[list[str]] | None = None
-        # components per condition GMM. One means a single Gaussian per entity,
-        # i.e. mean and covariance and a Mahalanobis test: fitting tracking noise
-        # with a mixture makes the gating accept whatever cluster the noise forms.
-        conditions_components: int = 1
-        # Read the visual conditions off live frames instead of the stored demo
-        # images. Off by default: with OGScene.camera pinned to the camera the demos
-        # were recorded with, both sources agree (0.00 m apart on static entities),
-        # and the demo images are faster and cover the recorded start states. Turning
-        # it on fits the distribution the arm actually samples, which is the fallback
-        # if a scene's stored frames and its live camera ever diverge again.
         conditions_from_live: bool = False
         conditions_live_samples: int = 200
         segment_ids: list[int] | None = None
@@ -756,8 +746,6 @@ class TapasExpert(ExpertModel):
             entities = {k: v for k, v in self.scene.entities.items() if k in needed}
         if sorted(entities) != sorted(self.scene.entities):
             logger.info(f"{self.cfg.tag}: condition over {sorted(entities)}")
-        for entity in entities.values():
-            entity.cfg.max_fit_components = self.cfg.conditions_components
         for key in entities:
             pre_data[key] = np.stack([s[key].value for s in start_scenes])
             post_data[key] = np.stack([s[key].value for s in end_scenes])

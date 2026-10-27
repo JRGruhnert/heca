@@ -1,3 +1,4 @@
+import sys
 from dataclasses import dataclass
 
 import numpy as np
@@ -35,9 +36,10 @@ class RomaEncoder(ImageEncoder):
                 "RomaEncoder needs the romav2 package: pip install romav2"
             ) from error
 
-        # RoMaV2 loads its weights onto a module-level device and derives every
-        # frame from it, so it has to be told before construction
         module.device = self.device
+        for name, loaded in list(sys.modules.items()):
+            if name.split(".")[0] == "romav2" and hasattr(loaded, "device"):
+                loaded.device = self.device
         template = RoMaV2.Cfg()
         self.model = RoMaV2(
             RoMaV2.Cfg(
