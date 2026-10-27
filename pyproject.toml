@@ -25,6 +25,7 @@ dependencies = [
     "captum",
     "einops",
     "decord2",
+    "romav2",
     "molmo_utils",
     "accelerate",
     "sentencepiece",
