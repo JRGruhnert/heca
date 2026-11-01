@@ -38,5 +38,6 @@ data.zip
 
 # sweep logs (manifest + per-run stdout/stderr)
 /logs
+.logs/
 .deps/
 .torch/

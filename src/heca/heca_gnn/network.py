@@ -251,6 +251,7 @@ class Network(Configurable, nn.Module):
         return self.critic_net(self.critic_rows(data))
 
     def upgrade(self, checkpoint: Mapping[str, torch.Tensor]):
+        checkpoint = upgraded_state(checkpoint)
         current = set(self.state_dict())
         given = set(checkpoint)
         shared = current & given
@@ -306,3 +307,15 @@ class Network(Configurable, nn.Module):
             keys[1]: row.memory for keys, row in rows.items() if row.memory is not None
         }
         return NetworkOutput(logits, value, memory)
+
+
+def upgraded_state(checkpoint: Mapping[str, torch.Tensor]) -> dict:
+    """Rename the tensors of checkpoints written before 6bfa709e.
+
+    That commit only renamed a norm layer's role from "interaction_option" to
+    "relation_option"; the weights themselves are the same.
+    """
+    return {
+        key.replace("interaction_option", "relation_option"): value
+        for key, value in checkpoint.items()
+    }

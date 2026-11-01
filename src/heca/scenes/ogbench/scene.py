@@ -27,14 +27,8 @@ class OGScene(Scene):
         viewer: bool = False
         frame_time: float = 0.05
         mode: str = "randomized"
-        # Which camera the frames come from. The scene has two: "front" is what
-        # ManipSpaceEnv.render picks for state observations, "front_pixels" is what
-        # the recorded demos used. They are 0.27 m apart, so rendering through the
-        # wrong one puts every live keypoint a metre away from the reference the
-        # conditions were fitted on -- with the fitted spread at 2 mm that rejects
-        # every episode. Pinning the name here keeps render, extrinsics and
-        # intrinsics on the camera the demos, references and conditions used.
         camera: str = "front_pixels"
+        container_wide_success: bool = False
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
@@ -73,15 +67,10 @@ class OGScene(Scene):
         env._resolve_camera_name = lambda camera=None, _name=name: (
             camera if camera is not None else _name
         )
-        # ManipSpaceEnv.render keeps its own copy of that choice (it never calls
-        # _resolve_camera_name), so the pixels have to be pinned as well -- otherwise
-        # the image comes from one camera and the extrinsics from the other
         render = env.render
 
         def render_through(camera=None, *args, _name=name, **kwargs):
-            return render(
-                camera=_name if camera is None else camera, *args, **kwargs
-            )
+            return render(camera=_name if camera is None else camera, *args, **kwargs)
 
         env.render = render_through
         logger.info(f"{self.cfg.label}: rendering through camera {name!r}")
@@ -120,7 +109,7 @@ class OGScene(Scene):
                 env_only=True,
                 mode=self.cfg.mode,
                 dataset_only=False,
-                # control_timestep=0.5,
+                container_wide_success=self.cfg.container_wide_success,
             ),
         )
 

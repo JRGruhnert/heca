@@ -63,7 +63,7 @@ def save_summary(*, root: Path, network: str, payload: dict) -> Path:
     """Write the across-seed summary JSON for one network (paper table row)."""
     out_dir = root / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
-    action = ""
+    action = "_container" if payload.get("container") else ""
     path = out_dir / f"{network}_{payload['mode']}{action}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
     logger.info(f"  saved {path}")
@@ -80,6 +80,7 @@ def benchmark_key(cell: dict) -> tuple:
         cell.get("gt"),
         cell.get("virtual"),
         cell.get("mode"),
+        cell.get("container"),
         cell.get("greedy"),
     )
 
@@ -99,6 +100,7 @@ def save_benchmark(root: Path, payload: dict) -> Path:
         "gt": payload["gt"],
         "virtual": payload["virtual"],
         "mode": payload["mode"],
+        "container": payload.get("container", False),
         "greedy": payload["greedy"],
         "checkpoint": payload["checkpoints"],
         "n_seeds": payload["n_seeds"],
@@ -211,7 +213,7 @@ def weight_key(checkpoint: dict, weights: str) -> dict:
 def save_result(run_dir: Path, payload: dict) -> Path:
     out_dir = run_dir / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
-    action = ""
+    action = "_container" if payload.get("container") else ""
     stem = Path(str(payload["checkpoint"])).stem
     path = out_dir / f"{stem}_{payload['mode']}{action}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
@@ -282,6 +284,7 @@ def main():
     )
     ap.add_argument("--gt", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
+    ap.add_argument("--container", action="store_true")
     args = ap.parse_args()
     args.tag = (
         resolve_tags(args.root, args.tag)
@@ -294,9 +297,13 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
+    experts = find_scene_models(args.scene)
+    for expert in experts:
+        expert.scene.container_wide_success = args.container
+
     heca = Heca.get(
         Heca.Config(
-            experts=find_scene_models(args.scene),
+            experts=experts,
             learner=PPO.Config(
                 tag=args.tag[0],
                 network=conf.networks.get(args.network),
@@ -357,6 +364,7 @@ def main():
                     "gt": args.gt,
                     "virtual": args.virtual,
                     "mode": args.mode,
+                    "container": args.container,
                     "greedy": True,
                     "episodes": args.episodes,
                     "seed": args.seed,
@@ -387,6 +395,7 @@ def main():
                 "gt": args.gt,
                 "virtual": args.virtual,
                 "mode": args.mode,
+                "container": args.container,
                 "greedy": True,
                 "checkpoints": args.ckp,
                 "episodes_per_seed": args.episodes,
@@ -463,6 +472,7 @@ def main():
                 "network": args.network,
                 "weights": args.weights,
                 "mode": args.mode,
+                "container": args.container,
                 "greedy": True,
                 "per_task": args.per_task,
                 "epochs": args.epochs,
@@ -506,6 +516,7 @@ def main():
             "gt": args.gt,
             "virtual": args.virtual,
             "mode": args.mode,
+            "container": args.container,
             "greedy": True,
             "checkpoints": args.ckp,
             "per_task": args.per_task,

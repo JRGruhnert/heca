@@ -33,6 +33,22 @@ class MolmoEncoder(ImageEncoder):
         gpu_cards: str = ""
 
         @property
+        def torch_dtype(self):
+            """Weight dtype: fp16 on a card, or whatever HECA_MOLMO_DTYPE names."""
+            raw = os.environ.get("HECA_MOLMO_DTYPE", "").strip().lower()
+            named = {
+                "bf16": torch.bfloat16,
+                "bfloat16": torch.bfloat16,
+                "fp16": torch.float16,
+                "half": torch.float16,
+                "fp32": torch.float32,
+                "float": torch.float32,
+            }
+            if raw in named:
+                return named[raw]
+            return torch.float16 if hardware.device.type == "cuda" else torch.float32
+
+        @property
         def state_batch(self) -> int:
             """Questions per forward, overridable per run (HECA_MOLMO_BATCH)."""
             raw = os.environ.get("HECA_MOLMO_BATCH", "").strip()
@@ -77,17 +93,9 @@ class MolmoEncoder(ImageEncoder):
         self.load_processor()
         if self.model is not None:
             return
-        # 4.85B parameters: fp32 is 19.4 GB, which no card here holds, and fp16 is
-        # 9.7 GB -- still more than is left once the keypoint encoder of the same
-        # process is up (~2 GB) on an 11 GB card. So the weights go through a device
-        # map with a cap: the overflow lands in host memory instead of an OOM.
-        # fp16 rather than bf16 because Turing accelerates fp16 and emulates bf16.
         half = hardware.device.type == "cuda"
-        dtype = torch.float16 if half else torch.float32
+        dtype = self.cfg.torch_dtype
         device_map: Any = hardware.device
-        # the cap is a living number: weights + keypoint encoder + a demo batch's
-        # activations have to fit the same card, and how much is left differs by
-        # card and by what else is resident, so it is overridable without a code edit
         cap = os.environ.get("HECA_MOLMO_GPU_MEMORY", self.cfg.max_gpu_memory)
         cards = (
             self.cfg.gpu_cards.strip()
@@ -202,7 +210,9 @@ class MolmoEncoder(ImageEncoder):
                 letter_logits = torch.stack(
                     [next_logits[offset][self.tokens[letter]] for letter in letters]
                 )
-                probs = torch.softmax(letter_logits, dim=0).detach().cpu().numpy()
+                probs = (
+                    torch.softmax(letter_logits, dim=0).float().detach().cpu().numpy()
+                )
                 state_idx = int(probs.argmax())
                 states[label] = (state_idx, float(probs[state_idx]))
 

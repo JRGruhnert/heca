@@ -44,24 +44,61 @@ def frame_at(file: h5py.File, row: int, scene: Scene):
     return scene.to_td_image(obs)
 
 
+def darker(color, factor: float = 0.55):
+    """A shade of ``color`` for the marks drawn on top of it."""
+    return tuple(factor * channel for channel in color[:3]) + tuple(color[3:] or (1.0,))
+
+
 def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
-    names = [name for name, values in groups.items() if values]
+    """One violin per entity: body in the entity's colour, marks in a darker shade.
+
+    Every group is a distance to the ground truth, so zero is the smallest value
+    either distribution can take and the y axis runs from there to the largest.
+    """
+    names = [name for name, values in groups.items() if len(values) > 1]
     data = [np.asarray(groups[name], dtype=float) for name in names]
     if not data:
         logger.warning(f"{out.name}: nothing to plot")
         return
-    figure, axis = plt.subplots(figsize=(1.4 * len(names) + 2.0, 4.5))
-    axis.violinplot(data, showmeans=True, showextrema=False)
+    palette = plt.get_cmap("tab10")
+    colors = [palette(index % 10) for index in range(len(names))]
+    figure, axis = plt.subplots(figsize=(1.5 * len(names) + 2.0, 4.6))
+    parts = axis.violinplot(
+        data, positions=range(1, len(names) + 1), widths=0.8, showextrema=False
+    )
+    for body, color in zip(parts["bodies"], colors):
+        body.set_facecolor(color)
+        body.set_edgecolor(darker(color))
+        body.set_alpha(0.55)
+        body.set_linewidth(1.0)
+
     spread = np.random.default_rng(0)
-    for index, values in enumerate(data, start=1):
+    for index, (values, color) in enumerate(zip(data, colors), start=1):
+        shade = darker(color)
         axis.scatter(
-            index + spread.uniform(-0.07, 0.07, len(values)),
+            index + spread.uniform(-0.06, 0.06, len(values)),
             values,
             s=6,
-            alpha=0.45,
+            color=shade,
+            alpha=0.5,
             linewidths=0,
         )
+        # min, median and max drawn across the entity's column
+        for value, width, style in (
+            (0.0, 0.34, (0, (4, 3))),
+            (float(np.median(values)), 0.34, "-"),
+            (float(values.max()), 0.34, (0, (2, 2))),
+        ):
+            axis.plot(
+                [index - width, index + width],
+                [value, value],
+                color=shade,
+                linewidth=1.6,
+                linestyle=style,
+            )
+
     axis.set_xticks(range(1, len(names) + 1), names)
+    axis.set_ylim(bottom=0.0)
     axis.set_ylabel(ylabel)
     axis.set_title(title)
     axis.grid(axis="y", alpha=0.3)
@@ -164,7 +201,7 @@ def main():
         )
     violin(
         errors,
-        "position error after the reference offset [m]",
+        "distance to the ground-truth position [m]",
         f"{args.scene} / {args.kp_backend}: visual keypoint vs ground truth",
         out_dir / f"position-error-{args.kp_backend}.png",
     )

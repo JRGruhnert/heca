@@ -1,5 +1,4 @@
 import math
-import os
 import warnings
 from functools import lru_cache
 from typing import Any, ClassVar
@@ -13,10 +12,8 @@ from scipy.stats import chi2, norm
 from heca.misc.base import Configurable
 from heca.data.data import DCEntity, DCScene
 from heca.utils.quaternion import Quaternion
+from heca.data.socp import minimax_point
 from heca.misc import logger
-
-SCORE_VARIANCE_SCALE: float = float(os.environ.get("HECA_SCORE_SCALE", "1.0"))
-SCORE_STATE_SMOOTHING: float = float(os.environ.get("HECA_SCORE_SMOOTHING", "0.0"))
 
 
 @lru_cache(maxsize=256)
@@ -196,6 +193,8 @@ class Entity(Configurable):
         n_states: int = 1
         question: str = ""
         answers: list[str] = field(default_factory=list)
+        # noun phrase the state questions talk about, for text prototypes
+        phrase: str = ""
         max_fit_components: int = 10
         z_quantile_joint: float = 0.999
         z_quantile_dim: float = 0.999
@@ -210,6 +209,8 @@ class Entity(Configurable):
         score_state_floor: float = 1e-6
         subgoal: str = "mahalanobis"
         subgoal_candidates: int = 21
+        # "socp" solves the minimax point exactly, "grid" keeps the candidate set
+        subgoal_solver: str = "socp"
 
     def __init__(self, cfg: Config):
         self.cfg = cfg
@@ -492,11 +493,11 @@ class Entity(Configurable):
 
     @property
     def score_scale(self) -> float:
-        return float(self.cfg.score_variance_scale) * SCORE_VARIANCE_SCALE
+        return float(self.cfg.score_variance_scale)
 
     @property
     def score_smoothing(self) -> float:
-        return min(float(self.cfg.score_state_smoothing) + SCORE_STATE_SMOOTHING, 1.0)
+        return min(float(self.cfg.score_state_smoothing), 1.0)
 
     def scoring_parameters(self, up: dict, eps: float = 1e-15) -> dict:
         p = self.secure_mix_parameters(up, add_variance=True)
@@ -824,13 +825,25 @@ class Entity(Configurable):
                 if joint.max() <= 0.0:
                     continue
                 state = int(np.argmax(joint))
-                candidates = [
+                candidates = (
+                    []
+                    if self.cfg.subgoal_solver == "socp"
+                    else [
+                        m1[i] + f * (m2[j] - m1[i])
+                        for f in np.linspace(
+                            0.0, 1.0, max(2, int(self.cfg.subgoal_candidates))
+                        )
+                    ]
+                )
+                if self.cfg.subgoal_solver == "socp":
+                    _t, pose = minimax_point(
+                        m1[i], v1[i], m2[j], v2[j], chi, self._z_dim_sigma
+                    )
+                    if pose is not None and _t <= 1.0:
+                        candidates.append(pose)
+                candidates += [
                     self._box_chebyshev(m1[i], v1[i], m2[j], v2[j]),
                     0.5 * (m1[i] + m2[j]),
-                ]
-                steps = max(2, int(self.cfg.subgoal_candidates))
-                candidates += [
-                    m1[i] + f * (m2[j] - m1[i]) for f in np.linspace(0.0, 1.0, steps)
                 ]
                 for pose in candidates:
                     violation = max(

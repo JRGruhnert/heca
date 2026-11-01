@@ -17,7 +17,7 @@ from heca.misc import hardware, logger
 from heca.misc.base import Persistable, latest_checkpoint
 from heca.data.entity import Entity
 from heca.graphs.data import HecaData, TrunkMemory
-from heca.heca_gnn.network import Network, NetworkOutput
+from heca.heca_gnn.network import Network, NetworkOutput, upgraded_state
 from heca.learning.buffers.buffer import Buffer, BufferData
 from heca.scenes.scene import SceneFeedback
 
@@ -283,7 +283,7 @@ class Learner(Persistable):
         }
 
     def _restore(self, checkpoint: dict):
-        self.network.load_state_dict(checkpoint["network"])
+        self.network.load_state_dict(upgraded_state(checkpoint["network"]))
         self.optim.load_state_dict(checkpoint["optimizer"])
         self.current_update = int(checkpoint["current_update"])
 
