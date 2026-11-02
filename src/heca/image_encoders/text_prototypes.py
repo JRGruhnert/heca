@@ -75,16 +75,14 @@ class TextPrototypeEncoder(ImageEncoder):
         self.prototypes = {}
         for label, entity in wanted.items():
             phrase = self.phrase(label, entity)
+            context = " ".join(scene.description.split())
+            question = entity.cfg.question or ""
             answers = [
-                template.format(phrase=phrase, answer=answer)
+                f"The {phrase} is {answer}. {context} {question}".strip()
                 for answer in entity.cfg.answers
-                for template in self.cfg.templates
             ]
             embeddings = self.embed_text(answers)
-            per_answer = embeddings.reshape(
-                len(entity.cfg.answers), len(self.cfg.templates), -1
-            ).mean(1)
-            self.prototypes[label] = torch.nn.functional.normalize(per_answer, dim=-1)
+            self.prototypes[label] = torch.nn.functional.normalize(embeddings, dim=-1)
         self.entity_labels = list(wanted)
         logger.info(
             f"{type(self).__name__}: {len(self.entity_labels)} entities with states"

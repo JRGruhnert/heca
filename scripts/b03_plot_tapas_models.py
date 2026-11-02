@@ -159,6 +159,7 @@ def _plot_scene_impl(
     out_dir: Path,
     max_tries: int,
     episodes: int,
+    stem: str = "",
 ) -> Path:
     results = [
         {**r, "counts": {int(k): v for k, v in r["counts"].items()}} for r in results
@@ -219,7 +220,7 @@ def _plot_scene_impl(
         )
 
     fig.tight_layout()
-    path = out_dir / f"eval_success_{scene_tag}.png"
+    path = out_dir / f"{stem or f'eval_success_{scene_tag}'}.png"
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     return path
@@ -231,18 +232,14 @@ def plot_scene(
     out_dir: Path,
     max_tries: int,
     episodes: int,
+    stem: str = "",
 ) -> Path:
     """Stacked bar chart of per-attempt success rates."""
-    return _plot_scene_impl(scene_tag, results, out_dir, max_tries, episodes)
+    return _plot_scene_impl(scene_tag, results, out_dir, max_tries, episodes, stem)
 
 
 def results_path(scene_cfg: Scene.Config, suffix: str = "") -> Path:
-    """Shared, stateless results file for one scene and keypoint backend.
-
-    The entry is keyed by the agent tag alone, and the tag is the same for every
-    backend, so a run with a non-dino encoder has to write its own file -- else
-    it silently replaces the DINO numbers with its own.
-    """
+    """Shared, stateless results file for one scene and keypoint backend."""
     out_dir = Scene.save_dir(scene_cfg) / "plots"
     out_dir.mkdir(parents=True, exist_ok=True)
     tail = f"-{suffix}" if suffix else ""
@@ -290,13 +287,13 @@ def plot_results(
         return None
     episodes = int(data.get("episodes", 100))
     max_tries = int(data.get("max_tries", 3))
-    return plot_scene(scene_cfg.tag, agents, json_path.parent, max_tries, episodes)
+    return plot_scene(
+        scene_cfg.tag, agents, json_path.parent, max_tries, episodes, json_path.stem
+    )
 
 
 def backend_suffix(cfg: ExpertModel.Config) -> str:
-    """The keypoint backend of a model, empty for the default DINO encoder."""
-    backend = getattr(cfg.kp_extraction, "backend", "dino")
-    return "" if backend == "dino" else str(backend)
+    return str(getattr(cfg.kp_extraction, "backend", "dino"))
 
 
 def evaluate_one(

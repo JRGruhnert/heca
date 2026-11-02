@@ -22,6 +22,13 @@
 # --stats          print the transfer statistics
 # --with-experts   also pull the fitted expert models (experts/*/*.pt, ~8 GB);
 #                  they are not checkpoints of a training run, off by default
+# --results        pull the eval JSONs and every image (.png/.jpg), without weights
+# --conditions     pull the fitted conditions (condition*.joblib), i.e. the gt,
+#                  pos, dino and roma variants, and nothing else
+#
+# With neither --results nor --conditions the script pulls the whole artefact set
+# (checkpoints, conditions and plots); the two selectors combine, so
+# ``--results --conditions`` gives the numbers, figures and fitted conditions.
 #
 set -euo pipefail
 
@@ -30,20 +37,28 @@ usage() {
     exit 1
 }
 
+#: the checkout this script lives in, so DEST does not depend on where it is run
+REPO_ROOT="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+
 # --- cluster settings: fill these in once ------------------------------------
-REMOTE="${HECA_REMOTE:-}"                # e.g. me@server:~/heca/data
-JUMP="${HECA_JUMP:-}"                    # e.g. me@login.example, empty = direct
+REMOTE="gruhneja@10.4.28.57:~/heca/data"                # e.g. me@server:~/heca/data
+JUMP="gruhneja@login.informatik.uni-freiburg.de"                    # e.g. me@login.example, empty = direct
 PASSWORD_FILE="${HECA_PASSWORD_FILE:-}"  # e.g. ~/.heca_pw, chmod 600
+PASSWORD=""                              # or paste it here; written to a 0600
+                                         # temp file, so it never shows in ps
+DEST="${HECA_DEST:-$REPO_ROOT/data-server}"  # where it lands locally
 # ----------------------------------------------------------------------------
 
 remote="$REMOTE"
-dest="${HECA_DEST:-data}"
+dest="$DEST"
 jump="$JUMP"
 password_file="$PASSWORD_FILE"
 dry_run=0
 list_only=0
 stats=0
 with_experts=0
+results=0
+conditions=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -55,6 +70,8 @@ while [[ $# -gt 0 ]]; do
         --list)          list_only=1;        shift ;;
         --stats)         stats=1;            shift ;;
         --with-experts)  with_experts=1;     shift ;;
+        --results)       results=1;          shift ;;
+        --conditions)    conditions=1;       shift ;;
         -h|--help)       usage ;;
         *) echo "error: unknown argument '$1'" >&2; usage ;;
     esac
@@ -70,7 +87,16 @@ done
 
 filters="$(mktemp)"
 trap 'rm -f "$filters"' EXIT
-cat >"$filters" <<'EOF'
+if [[ $results == 1 || $conditions == 1 ]]; then
+    echo '+ */' >>"$filters"
+    if [[ $results == 1 ]]; then
+        printf '%s\n' '+ *.json' '+ *.png' '+ *.jpg' '+ *.jpeg' >>"$filters"
+    fi
+    if [[ $conditions == 1 ]]; then
+        echo '+ scenes/*/*/experts/*/condition*.joblib' >>"$filters"
+    fi
+else
+    cat >"$filters" <<'EOF'
 # descend into every directory, so the patterns below are reachable
 + */
 # 1. learner checkpoints of the training runs (network/<folder>/<run tag>/ckp_*.pt)
@@ -82,8 +108,9 @@ cat >"$filters" <<'EOF'
 + scenes/*/*/experts/*/plots/***
 + scenes/*/*/*.png
 EOF
-# the fitted expert models are ~8 GB and are not training checkpoints
-[[ $with_experts == 1 ]] && echo '+ scenes/*/*/experts/*/*.pt' >>"$filters"
+    # the fitted expert models are ~8 GB and are not training checkpoints
+    [[ $with_experts == 1 ]] && echo '+ scenes/*/*/experts/*/*.pt' >>"$filters"
+fi
 echo '- *' >>"$filters"
 
 ssh_cmd="ssh"
@@ -95,6 +122,17 @@ if [[ -n "$password_file" ]]; then
         exit 1
     }
     ssh_cmd="sshpass -f $password_file $ssh_cmd"
+elif [[ -n "$PASSWORD" ]]; then
+    command -v sshpass >/dev/null || {
+        echo "error: PASSWORD needs sshpass (not found on PATH)" >&2
+        exit 1
+    }
+    # not passed as -p: that would put the secret in the process list
+    secret="$(mktemp)"
+    chmod 600 "$secret"
+    printf '%s' "$PASSWORD" >"$secret"
+    trap 'rm -f "$filters" "$secret"' EXIT
+    ssh_cmd="sshpass -f $secret $ssh_cmd"
 fi
 
 # --inplace --append-verify is what makes an interrupted run resume: the partial
@@ -125,4 +163,10 @@ if [[ $list_only == 1 ]]; then
     exit 0
 fi
 echo
-echo "done: $dest/ now holds checkpoints, conditions and plots only"
+what="checkpoints, conditions and plots"
+if [[ $results == 1 || $conditions == 1 ]]; then
+    what=""
+    [[ $results == 1 ]] && what="the eval JSONs and figures"
+    [[ $conditions == 1 ]] && what="${what:+$what, }the fitted conditions"
+fi
+echo "done: $dest/ now holds $what"
