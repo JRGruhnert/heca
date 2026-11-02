@@ -24,11 +24,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+import conf.networks
 from heca.misc import logger
 from scripts.c04_eval import DEFAULT_ROOT, parse_run
 
 #: The three ways to evaluate: (ground truth observations, virtual stepping).
 MODES = {"gt": (True, False), "virt": (True, True), "vis": (False, False)}
+
+#: Every evaluation is scored on scene0, also for federated runs whose tag names
+#: no scene at all.
+SCENE = "scene0"
 
 
 def by_step(path: Path) -> int:
@@ -39,6 +44,26 @@ def experiment(name: str) -> str:
     """The run tag without its seed, which is what identifies one experiment."""
     stem, _, seed = name.rpartition("_s")
     return stem if stem and seed.isdigit() else name
+
+
+def run_parts(name: str, default_scene: str) -> dict:
+    """``parse_run`` for tags without a scene prefix, i.e. federated runs.
+
+    A federated tag looks like ``final-a0-gt-virt-fed-k1-mu0.01_s0``: it names no
+    scene, because the model was trained across all of them, so evaluation picks
+    the scene it is scored on.
+    """
+    parts = parse_run(name)
+    if parts["network"] is not None or "_" in experiment(name):
+        return parts
+    tokens = [token for token in experiment(name).split("-") if token]
+    return {
+        "scene": default_scene,
+        "network": next((t for t in tokens if t in conf.networks.CONFIGS), None),
+        "gt": "gt" in tokens,
+        "virtual": "virt" in tokens,
+        "seed": parts["seed"],
+    }
 
 
 def steps_of(run_dirs: list[Path]) -> list[int]:
@@ -53,7 +78,9 @@ def steps_of(run_dirs: list[Path]) -> list[int]:
     return sorted(common)
 
 
-def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool) -> list:
+def plan(
+    root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str
+) -> list:
     """One entry per group and checkpoint: (tags, parsed tag, ckp).
 
     Only runs whose tag matches the mode are collected, so a run trained without
@@ -63,7 +90,7 @@ def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool) -> list:
     for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         if not any(run_dir.glob("ckp_*.pt")):
             continue
-        parts = parse_run(run_dir.name)
+        parts = run_parts(run_dir.name, default_scene)
         if parts["network"] is None:
             logger.warning(f"skip {run_dir.name}: the tag names no known network")
             continue
@@ -73,7 +100,7 @@ def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool) -> list:
 
     jobs = []
     for run_dirs in groups.values():
-        parts = parse_run(run_dirs[0].name)
+        parts = run_parts(run_dirs[0].name, default_scene)
         names = [run_dir.name for run_dir in run_dirs]
         checkpoints = ["latest"] if not all_ckp else [
             f"ckp_{step}.pt" for step in steps_of(run_dirs)
@@ -137,7 +164,7 @@ def main():
     args = parser.parse_args()
     gt, virtual = MODES[args.mode]
 
-    jobs = plan(args.root, args.all_checkpoints, gt, virtual)
+    jobs = plan(args.root, args.all_checkpoints, gt, virtual, SCENE)
     if not jobs:
         raise SystemExit(f"no checkpointed run under {args.root} matches --{args.mode}")
 

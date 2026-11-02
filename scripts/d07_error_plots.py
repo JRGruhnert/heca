@@ -14,6 +14,7 @@ answered wrong, plus the accuracy it reached.
 """
 
 import argparse
+import json
 from pathlib import Path
 
 import h5py
@@ -62,9 +63,14 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
         return
     palette = plt.get_cmap("tab10")
     colors = [palette(index % 10) for index in range(len(names))]
+    body_width = 0.6  # narrower than the default 0.8, so the columns stay apart
+    mark_half = 0.12  # half-length of the min / median / max marks
     figure, axis = plt.subplots(figsize=(1.5 * len(names) + 2.0, 4.6))
     parts = axis.violinplot(
-        data, positions=range(1, len(names) + 1), widths=0.8, showextrema=False
+        data,
+        positions=range(1, len(names) + 1),
+        widths=body_width,
+        showextrema=False,
     )
     for body, color in zip(parts["bodies"], colors):
         body.set_facecolor(color)
@@ -76,7 +82,7 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
     for index, (values, color) in enumerate(zip(data, colors), start=1):
         shade = darker(color)
         axis.scatter(
-            index + spread.uniform(-0.06, 0.06, len(values)),
+            index + spread.uniform(-mark_half, mark_half, len(values)),
             values,
             s=6,
             color=shade,
@@ -84,13 +90,13 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
             linewidths=0,
         )
         # min, median and max drawn across the entity's column
-        for value, width, style in (
-            (0.0, 0.34, (0, (4, 3))),
-            (float(np.median(values)), 0.34, "-"),
-            (float(values.max()), 0.34, (0, (2, 2))),
+        for value, style in (
+            (0.0, (0, (4, 3))),
+            (float(np.median(values)), "-"),
+            (float(values.max()), (0, (2, 2))),
         ):
             axis.plot(
-                [index - width, index + width],
+                [index - mark_half, index + mark_half],
                 [value, value],
                 color=shade,
                 linewidth=1.6,
@@ -100,7 +106,7 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
     axis.set_xticks(range(1, len(names) + 1), names)
     axis.set_ylim(bottom=0.0)
     axis.set_ylabel(ylabel)
-    axis.set_title(title)
+    # axis.set_title(title)
     axis.grid(axis="y", alpha=0.3)
     figure.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -124,74 +130,112 @@ def main():
     parser.add_argument(
         "--no-states", action="store_true", help="Skip the state encoder (no Molmo)."
     )
+    parser.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Re-measure even when a cache of the measurements exists.",
+    )
     args = parser.parse_args()
     if args.threads:
         import torch
 
         torch.set_num_threads(args.threads)
 
-    select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
-    scene = Scene.get(scene_config(args.scene))
-    model = ExpertModel.get(experts_for_scene(args.scene)[0], auto_load=False)
-    model.use_gt(False)
-    model.use_states = not args.no_states
-    model.load()
-    labels = list(scene.entities)
-    out_dir = Path(args.out) if args.out else Path(scene.save_dir(scene.cfg))
+    scene_cfg = scene_config(args.scene)
+    out_dir = Path(args.out) if args.out else Path(Scene.save_dir(scene_cfg))
+    cache = out_dir / f"measurements-{args.kp_backend}.json"
+    cached = json.loads(cache.read_text()) if cache.exists() else None
+    fresh = (
+        cached is not None
+        and cached.get("samples") == args.samples
+        and cached.get("seed") == args.seed
+        and cached.get("with_states") == (not args.no_states)
+        and not args.refresh
+    )
+    if fresh:
+        logger.info(f"{cache.name}: reusing the cached measurements")
+        payload = cached
+    else:
+        select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
+        scene = Scene.get(scene_config(args.scene))
+        model = ExpertModel.get(experts_for_scene(args.scene)[0], auto_load=False)
+        model.use_gt(False)
+        model.use_states = not args.no_states
+        model.load()
+        labels = list(scene.entities)
+        out_dir = Path(args.out) if args.out else Path(scene.save_dir(scene.cfg))
 
-    root = Path(scene.save_dir(scene.cfg))
-    candidates = [path for path in sorted(root.glob("*.h5"))]
-    dataset = None
-    for path in candidates:
-        with h5py.File(path, "r") as probe:
-            if "rgb" in probe and f"heca_{labels[0]}_pos" in probe:
-                dataset = path
-                break
-    if dataset is None:
-        raise SystemExit(f"no dataset with frames and ground truth in {root}")
-    logger.info(f"{dataset.name}: frames and ground truth")
+        root = Path(scene.save_dir(scene.cfg))
+        candidates = [path for path in sorted(root.glob("*.h5"))]
+        dataset = None
+        for path in candidates:
+            with h5py.File(path, "r") as probe:
+                if "rgb" in probe and f"heca_{labels[0]}_pos" in probe:
+                    dataset = path
+                    break
+        if dataset is None:
+            raise SystemExit(f"no dataset with frames and ground truth in {root}")
+        logger.info(f"{dataset.name}: frames and ground truth")
 
-    with h5py.File(dataset, "r") as file:
-        total = len(file["rgb"])
+        with h5py.File(dataset, "r") as file:
+            total = len(file["rgb"])
 
-        offsets: dict[str, np.ndarray] = {}
-        for label in labels:
-            reference = scene.references[label][Reference.POSITION]
-            frame = frame_at(file, reference.frame, scene)
-            model.reset_tracking()
-            keypoint = model.kp_extractor.extract_poses(frame)[label]
-            truth = np.asarray(file[f"heca_{label}_pos"][reference.frame], dtype=float)
-            offsets[label] = truth - keypoint.xyz
-            logger.info(
-                f"{label}: reference offset {np.round(offsets[label], 3)} m "
-                f"(read {np.round(keypoint.xyz, 3)})"
-            )
-
-        rows = np.sort(
-            np.random.default_rng(args.seed).choice(total, args.samples, replace=False)
-        )
-        errors: dict[str, list[float]] = {label: [] for label in labels}
-        scores: dict[str, list[float]] = {label: [] for label in labels}
-        correct: dict[str, int] = {label: 0 for label in labels}
-        for done, row in enumerate(rows, start=1):
-            frame = frame_at(file, row, scene)
-            model.reset_tracking()
-            poses = model.kp_extractor.extract_poses(frame)
-            states = (
-                model.ste_extractor.extract_states(frame) if model.use_states else {}
-            )
+            offsets: dict[str, np.ndarray] = {}
             for label in labels:
-                truth = np.asarray(file[f"heca_{label}_pos"][row], dtype=float)
-                corrected = poses[label].xyz + offsets[label]
-                errors[label].append(float(np.linalg.norm(corrected - truth)))
-                if label in states:
-                    index, probability = states[label]
-                    expected = int(np.ravel(file[f"heca_{label}_ste"][row])[0])
-                    hit = index == expected
-                    correct[label] += int(hit)
-                    scores[label].append(float(probability) if hit else 0.0)
-            if done % 10 == 0 or done == len(rows):
-                logger.info(f"{done}/{len(rows)} frames read")
+                reference = scene.references[label][Reference.POSITION]
+                frame = frame_at(file, reference.frame, scene)
+                model.reset_tracking()
+                keypoint = model.kp_extractor.extract_poses(frame)[label]
+                truth = np.asarray(file[f"heca_{label}_pos"][reference.frame], dtype=float)
+                offsets[label] = truth - keypoint.xyz
+                logger.info(
+                    f"{label}: reference offset {np.round(offsets[label], 3)} m "
+                    f"(read {np.round(keypoint.xyz, 3)})"
+                )
+
+            rows = np.sort(
+                np.random.default_rng(args.seed).choice(total, args.samples, replace=False)
+            )
+            errors: dict[str, list[float]] = {label: [] for label in labels}
+            scores: dict[str, list[float]] = {label: [] for label in labels}
+            correct: dict[str, int] = {label: 0 for label in labels}
+            for done, row in enumerate(rows, start=1):
+                frame = frame_at(file, row, scene)
+                model.reset_tracking()
+                poses = model.kp_extractor.extract_poses(frame)
+                states = (
+                    model.ste_extractor.extract_states(frame) if model.use_states else {}
+                )
+                for label in labels:
+                    truth = np.asarray(file[f"heca_{label}_pos"][row], dtype=float)
+                    corrected = poses[label].xyz + offsets[label]
+                    errors[label].append(float(np.linalg.norm(corrected - truth)))
+                    if label in states:
+                        index, probability = states[label]
+                        expected = int(np.ravel(file[f"heca_{label}_ste"][row])[0])
+                        hit = index == expected
+                        correct[label] += int(hit)
+                        scores[label].append(float(probability) if hit else 0.0)
+                if done % 10 == 0 or done == len(rows):
+                    logger.info(f"{done}/{len(rows)} frames read")
+        payload = {
+            "scene": args.scene,
+            "backend": args.kp_backend,
+            "samples": args.samples,
+            "seed": args.seed,
+            "with_states": not args.no_states,
+            "labels": labels,
+            "errors": errors,
+            "scores": scores,
+            "correct": correct,
+        }
+        cache.write_text(json.dumps(payload, indent=2) + "\n")
+        logger.info(f"cached the measurements to {cache}")
+
+    errors = payload["errors"]
+    scores = payload["scores"]
+    correct = payload["correct"]
+    labels = payload["labels"]
 
     for label in labels:
         values = np.asarray(errors[label])
