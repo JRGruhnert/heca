@@ -1,4 +1,4 @@
-"""Evaluate every checkpointed run under a root, with the flags its tag names.
+"""Evaluate every checkpointed run under the network folder, on scene0.
 
 One group of runs (the tag minus its seed) is one ``c04_eval`` call carrying
 every seed of that group, so the summary keeps its across-seed mean +- std.
@@ -11,8 +11,13 @@ federated runs therefore use their server weights. Exactly one of
 
 says how to evaluate *and* which runs it applies to: only tags carrying the same
 ``-gt``/``-virt`` markers are evaluated, so ``--virt`` covers the ``-gt-virt``
-runs and ``--gt`` the ``-gt`` ones. ``--container`` switches the scene to
+runs and ``--gt`` the ``-gt`` ones. Every run is scored on scene0, federated ones
+included, since their tag names no scene. ``--container`` switches the scene to
 ogbench's container-wide success instead of the strict one.
+
+A run's checkpoints are ``ckp_*.pt`` in its own directory, or -- for a federated
+run, whose clients keep their own states -- ``clients/global/ckp_*.pt``, the
+shared server model.
 
     python -m scripts.c05_eval_all --virt
     python -m scripts.c05_eval_all --virt --container
@@ -26,7 +31,8 @@ from pathlib import Path
 
 import conf.networks
 from heca.misc import logger
-from scripts.c04_eval import DEFAULT_ROOT, parse_run
+from heca.misc.paths import data_root
+from scripts.c04_eval import parse_run
 
 #: The three ways to evaluate: (ground truth observations, virtual stepping).
 MODES = {"gt": (True, False), "virt": (True, True), "vis": (False, False)}
@@ -34,6 +40,12 @@ MODES = {"gt": (True, False), "virt": (True, True), "vis": (False, False)}
 #: Every evaluation is scored on scene0, also for federated runs whose tag names
 #: no scene at all.
 SCENE = "scene0"
+
+#: Where a run keeps its checkpoints, relative to the run directory: its learner's
+#: own, else the shared federated model every client of that run resumes from.
+CHECKPOINTS = ("ckp_*.pt", "clients/global/ckp_*.pt")
+
+DEFAULT_ROOT = data_root() / "network"
 
 
 def by_step(path: Path) -> int:
@@ -47,12 +59,7 @@ def experiment(name: str) -> str:
 
 
 def run_parts(name: str, default_scene: str) -> dict:
-    """``parse_run`` for tags without a scene prefix, i.e. federated runs.
-
-    A federated tag looks like ``final-a0-gt-virt-fed-k1-mu0.01_s0``: it names no
-    scene, because the model was trained across all of them, so evaluation picks
-    the scene it is scored on.
-    """
+    """``parse_run`` for tags without a scene prefix, i.e. federated runs."""
     parts = parse_run(name)
     if parts["network"] is not None or "_" in experiment(name):
         return parts
@@ -66,30 +73,38 @@ def run_parts(name: str, default_scene: str) -> dict:
     }
 
 
-def steps_of(run_dirs: list[Path]) -> list[int]:
+def checkpoints_of(run_dir: Path) -> tuple[list[Path], str]:
+    """This run's checkpoints, and the directory they sit in relative to it."""
+    for pattern in CHECKPOINTS:
+        found = sorted(run_dir.glob(pattern), key=by_step)
+        if found:
+            return found, pattern.rsplit("/", 1)[0] if "/" in pattern else ""
+    return [], ""
+
+
+def run_dirs(root: Path) -> list[Path]:
+    """Every checkpointed run under ``root``: the folder's runs and its subfolders'."""
+    found = [path for path in sorted(root.glob("*")) if path.is_dir()]
+    found += [path for path in sorted(root.glob("*/*")) if path.is_dir()]
+    return [path for path in found if checkpoints_of(path)[0]]
+
+
+def steps_of(dirs: list[Path]) -> list[int]:
     """The checkpoint steps every run of a group has, so a step is comparable."""
     common = set.intersection(
-        *({by_step(path) for path in run_dir.glob("ckp_*.pt")} for run_dir in run_dirs)
+        *({by_step(path) for path in checkpoints_of(run_dir)[0]} for run_dir in dirs)
     )
-    for run_dir in run_dirs:
-        missing = {by_step(p) for p in run_dir.glob("ckp_*.pt")} - common
+    for run_dir in dirs:
+        missing = {by_step(p) for p in checkpoints_of(run_dir)[0]} - common
         if missing:
             logger.warning(f"{run_dir.name}: no checkpoint at step(s) {sorted(missing)}")
     return sorted(common)
 
 
-def plan(
-    root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str
-) -> list:
-    """One entry per group and checkpoint: (tags, parsed tag, ckp).
-
-    Only runs whose tag matches the mode are collected, so a run trained without
-    virtual stepping cannot be evaluated as if it had been.
-    """
+def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str) -> list:
+    """One entry per group and checkpoint: (tags, parsed tag, relative ckp)."""
     groups: dict[str, list[Path]] = {}
-    for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
-        if not any(run_dir.glob("ckp_*.pt")):
-            continue
+    for run_dir in run_dirs(root):
         parts = run_parts(run_dir.name, default_scene)
         if parts["network"] is None:
             logger.warning(f"skip {run_dir.name}: the tag names no known network")
@@ -99,13 +114,16 @@ def plan(
         groups.setdefault(experiment(run_dir.name), []).append(run_dir)
 
     jobs = []
-    for run_dirs in groups.values():
-        parts = run_parts(run_dirs[0].name, default_scene)
-        names = [run_dir.name for run_dir in run_dirs]
-        checkpoints = ["latest"] if not all_ckp else [
-            f"ckp_{step}.pt" for step in steps_of(run_dirs)
-        ]
-        jobs += [(names, parts, checkpoint) for checkpoint in checkpoints]
+    for dirs in groups.values():
+        parts = run_parts(dirs[0].name, default_scene)
+        names = [str(run_dir.relative_to(root)) for run_dir in dirs]
+        _, prefix = checkpoints_of(dirs[0])
+        if all_ckp:
+            chosen = [f"ckp_{step}.pt" for step in steps_of(dirs)]
+        else:
+            chosen = [max(checkpoints_of(dirs[0])[0], key=by_step).name]
+        for name in chosen:
+            jobs.append((names, parts, f"{prefix}/{name}" if prefix else name))
     return jobs
 
 
