@@ -9,8 +9,10 @@ federated runs therefore use their server weights. Exactly one of
     --virt   ground truth, virtual stepping
     --vis    images, real stepping
 
-says how to evaluate, and ``--container`` switches the scene to ogbench's
-container-wide success instead of the strict one.
+says how to evaluate *and* which runs it applies to: only tags carrying the same
+``-gt``/``-virt`` markers are evaluated, so ``--virt`` covers the ``-gt-virt``
+runs and ``--gt`` the ``-gt`` ones. ``--container`` switches the scene to
+ogbench's container-wide success instead of the strict one.
 
     python -m scripts.c05_eval_all --virt
     python -m scripts.c05_eval_all --virt --container
@@ -51,14 +53,21 @@ def steps_of(run_dirs: list[Path]) -> list[int]:
     return sorted(common)
 
 
-def plan(root: Path, all_ckp: bool) -> list:
-    """One entry per group and checkpoint: (tags, parsed tag, ckp)."""
+def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool) -> list:
+    """One entry per group and checkpoint: (tags, parsed tag, ckp).
+
+    Only runs whose tag matches the mode are collected, so a run trained without
+    virtual stepping cannot be evaluated as if it had been.
+    """
     groups: dict[str, list[Path]] = {}
     for run_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         if not any(run_dir.glob("ckp_*.pt")):
             continue
-        if parse_run(run_dir.name)["network"] is None:
+        parts = parse_run(run_dir.name)
+        if parts["network"] is None:
             logger.warning(f"skip {run_dir.name}: the tag names no known network")
+            continue
+        if (parts["gt"], parts["virtual"]) != (gt, virtual):
             continue
         groups.setdefault(experiment(run_dir.name), []).append(run_dir)
 
@@ -128,9 +137,9 @@ def main():
     args = parser.parse_args()
     gt, virtual = MODES[args.mode]
 
-    jobs = plan(args.root, args.all_checkpoints)
+    jobs = plan(args.root, args.all_checkpoints, gt, virtual)
     if not jobs:
-        raise SystemExit(f"no checkpointed run under {args.root}")
+        raise SystemExit(f"no checkpointed run under {args.root} matches --{args.mode}")
 
     for index, job in enumerate(jobs, 1):
         names, parts, checkpoint = job
