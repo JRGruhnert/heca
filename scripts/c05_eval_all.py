@@ -101,7 +101,14 @@ def steps_of(dirs: list[Path]) -> list[int]:
     return sorted(common)
 
 
-def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str) -> list:
+def plan(
+    root: Path,
+    all_ckp: bool,
+    gt: bool,
+    virtual: bool,
+    default_scene: str,
+    only: list[str] | None = None,
+) -> list:
     """One entry per group and checkpoint: (tags, parsed tag, relative ckp)."""
     groups: dict[str, list[Path]] = {}
     for run_dir in run_dirs(root):
@@ -111,6 +118,8 @@ def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str)
             continue
         if (parts["gt"], parts["virtual"]) != (gt, virtual):
             continue
+        if only and not any(token in run_dir.name for token in only):
+            continue
         groups.setdefault(experiment(run_dir.name), []).append(run_dir)
 
     jobs = []
@@ -118,16 +127,25 @@ def plan(root: Path, all_ckp: bool, gt: bool, virtual: bool, default_scene: str)
         parts = run_parts(dirs[0].name, default_scene)
         names = [str(run_dir.relative_to(root)) for run_dir in dirs]
         _, prefix = checkpoints_of(dirs[0])
-        if all_ckp:
-            chosen = [f"ckp_{step}.pt" for step in steps_of(dirs)]
-        else:
-            chosen = [max(checkpoints_of(dirs[0])[0], key=by_step).name]
+        steps = steps_of(dirs)
+        if not steps:
+            logger.warning(f"skip {dirs[0].name}: no checkpoint step shared by every seed")
+            continue
+        last = {
+            run_dir.name: by_step(checkpoints_of(run_dir)[0][-1]) for run_dir in dirs
+        }
+        if len(set(last.values())) > 1:
+            logger.warning(
+                f"{dirs[0].name}: seeds end at different steps {last}, "
+                f"evaluating the newest common one (ckp_{steps[-1]})"
+            )
+        chosen = [f"ckp_{step}.pt" for step in (steps if all_ckp else steps[-1:])]
         for name in chosen:
             jobs.append((names, parts, f"{prefix}/{name}" if prefix else name))
     return jobs
 
 
-def command(root: Path, job: tuple, gt: bool, virtual: bool, container: bool) -> list:
+def command(root: Path, job: tuple, args, gt: bool, virtual: bool) -> list:
     names, parts, checkpoint = job
     cmd = [
         sys.executable,
@@ -146,8 +164,11 @@ def command(root: Path, job: tuple, gt: bool, virtual: bool, container: bool) ->
         "--gt" if gt else "--no-gt",
         "--virtual" if virtual else "--no-virtual",
     ]
-    if container:
+    cmd += ["--per-task", str(args.per_task), "--epochs", str(args.epochs)]
+    if args.container:
         cmd.append("--container")
+    if args.only:
+        cmd += ["--only", *args.only]
     return cmd
 
 
@@ -163,6 +184,13 @@ def main():
     )
     parser.add_argument(
         "--container", action="store_true", help="container-wide success"
+    )
+    parser.add_argument(
+        "--per-task", type=int, default=50, help="rollouts per task (default 50)"
+    )
+    parser.add_argument("--epochs", type=int, default=3, help="task sweeps (default 3)")
+    parser.add_argument(
+        "--only", nargs="+", default=None, help="keep runs whose name contains one of these"
     )
     parser.add_argument("--dry-run", action="store_true")
     mode = parser.add_mutually_exclusive_group(required=True)
@@ -182,7 +210,7 @@ def main():
     args = parser.parse_args()
     gt, virtual = MODES[args.mode]
 
-    jobs = plan(args.root, args.all_checkpoints, gt, virtual, SCENE)
+    jobs = plan(args.root, args.all_checkpoints, gt, virtual, SCENE, args.only)
     if not jobs:
         raise SystemExit(f"no checkpointed run under {args.root} matches --{args.mode}")
 
@@ -193,7 +221,7 @@ def main():
             f"{' container' if args.container else ''} / {parts['network']} / "
             f"{checkpoint} ({len(names)} seed(s))"
         )
-        cmd = command(args.root, job, gt, virtual, args.container)
+        cmd = command(args.root, job, args, gt, virtual)
         if args.dry_run:
             print(" ".join(cmd))
         else:
