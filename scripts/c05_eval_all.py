@@ -112,7 +112,7 @@ def plan(root, gt, virtual, scene, only, all_ckp) -> list[dict]:
             jobs.append(
                 {
                     "run_dir": run_dir,
-                    "name": run_dir.name,
+                    "name": str(run_dir.relative_to(root)),
                     "parts": parts,
                     "ckp_rel": f"{prefix}/{path.name}" if prefix else path.name,
                     "fed": bool(prefix),
