@@ -40,7 +40,10 @@ def score_chunks(
                 out = net(data[t])
             dist = Categorical(logits=out.logits)
             logprobs.append(dist.log_prob(actions[t : t + 1]))
-            values.append(out.value)
+            if net.cfg.option_critic:
+                values.append(out.value[0, int(actions[t].item())].reshape(1))
+            else:
+                values.append(out.value)
             entropies.append(dist.entropy())
             if pos < len(seg) - 1:
                 carried = out.memory
@@ -61,16 +64,46 @@ class PPO(Learner):
         target_kl: float | None = 0.01
         clip_value_loss: bool = True
         seq_len: int = 0  # Truncated-BPTT chunk
+        use_vtrace: bool = False  # V-trace advantages instead of GAE
 
     def __init__(self, cfg: Config):
         super().__init__(cfg)
         self.cfg = cfg
 
     def learn(self):
-        adv, rtn = self.buffer.compute_advantages()
+        if self.cfg.use_vtrace:
+            old_data = self.buffer.data
+            old_actions = self.buffer.actions.detach().squeeze(-1)
+            logprobs, values, _ = self.network.evaluate(old_data, old_actions)
+            adv, rtn = self._vtrace_advantages(logprobs, values)
+        else:
+            adv, rtn = self.buffer.compute_advantages()
 
         self._mini_batch_loop(adv, rtn)
         self._anneal()
+
+    def _vtrace_advantages(
+        self, current_logprobs: torch.Tensor, current_values: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """V-trace over the buffer: the current policy's ratios against the
+        rollout-time (behavior) records."""
+        from heca.learning.buffers.stream_buffer import vtrace
+
+        rewards = [d.reward for d in self.buffer.queue]
+        terminals = [d.terminal or d.truncated for d in self.buffer.queue]
+        behavior_lp = torch.stack(
+            [d.logprob for d in self.buffer.queue]
+        ).detach().squeeze(-1)
+        behavior_v = torch.stack([d.value for d in self.buffer.queue]).detach().squeeze(-1)
+        return vtrace(
+            rewards,
+            terminals,
+            behavior_lp,
+            behavior_v,
+            current_logprobs,
+            current_values,
+            self.buffer.cfg.gamma,
+        )
 
     def _anneal(self, optim: torch.optim.Optimizer | None = None):
         """Learning-rate schedule for ``optim`` (defaults to the local one)."""

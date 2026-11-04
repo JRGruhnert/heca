@@ -6,8 +6,9 @@ from heca.heca_gnn.trunc import TruncOutput
 
 
 class CriticNetwork(nn.Module):
-    def __init__(self, feature_dim: int, use_memory: bool):
+    def __init__(self, feature_dim: int, use_memory: bool, option: bool = False):
         super().__init__()
+        self.option = option
         self.norm = nn.LayerNorm(feature_dim)
 
         if use_memory:
@@ -23,5 +24,8 @@ class CriticNetwork(nn.Module):
         )
 
     def forward(self, data: TruncOutput) -> torch.Tensor:
+        if self.option:
+            option_x = self.film(self.norm(data.option), data.memory)
+            return self.mlp(option_x).view(1, -1)  # (1, n_options)
         state_x = self.film(self.norm(data.state), data.memory)
         return self.mlp(state_x).reshape(1)  # (1,)

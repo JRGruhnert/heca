@@ -148,11 +148,17 @@ class Learner(Persistable):
                 out: NetworkOutput = net(data)
             dist = Categorical(logits=out.logits)
             action = dist.sample()
+            # the buffer only ever needs the value of the option that was taken
+            value = (
+                out.value[0, int(action.item())].reshape(1)
+                if self.network.cfg.option_critic
+                else out.value
+            )
             self.pocket = TempStore(
                 data=data,
                 action=action,
                 logprob=dist.log_prob(action),
-                value=out.value,
+                value=value,
             )
         else:
             with torch.inference_mode():

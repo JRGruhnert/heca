@@ -1,44 +1,46 @@
 """Evaluate every checkpointed run under the network folder, on scene0.
 
-One group of runs (the tag minus its seed) is one ``c04_eval`` call carrying
-every seed of that group, so the summary keeps its across-seed mean +- std.
-Everything else is c04_eval's own default: its episodes, mode and weights --
-federated runs therefore use their server weights. Exactly one of
+Each run is evaluated at its own newest checkpoint (the step of one seed is
+never forced down to another seed's). Results are kept in one registry file per
+(network, fed, eval mode, container):
 
-    --gt     ground truth, real stepping
-    --virt   ground truth, virtual stepping
-    --vis    images, real stepping
+    data/network/eval/{network}[_fed]_{mode}[_container].json
 
-says how to evaluate *and* which runs it applies to: only tags carrying the same
-``-gt``/``-virt`` markers are evaluated, so ``--virt`` covers the ``-gt-virt``
-runs and ``--gt`` the ``-gt`` ones. Every run is scored on scene0, federated ones
-included, since their tag names no scene. ``--container`` switches the scene to
-ogbench's container-wide success instead of the strict one.
+with one entry per run plus the across-seed aggregates (per observation
+protocol: gt / gt-virt / vis). Re-running the sweep only evaluates runs whose
+registry entry is missing or older than their newest checkpoint; ``--force``
+re-evaluates everything. ``benchmark.json`` stays the compact per-configuration
+aggregate, split by fed and container as well. The sweep ends with a per-run
+checkpoint table, so runs that stopped early are visible at a glance.
 
-A run's checkpoints are ``ckp_*.pt`` in its own directory, or -- for a federated
-run, whose clients keep their own states -- ``clients/global/ckp_*.pt``, the
-shared server model.
+Exactly one of ``--gt`` / ``--virt`` / ``--vis`` says which observation protocol
+to evaluate (and which runs it applies to). ``--container`` switches the scene
+to ogbench's container-wide success. Federated runs are detected by their
+checkpoint location (``clients/global/ckp_*.pt``) and get their own files.
 
     python -m scripts.c05_eval_all --virt
     python -m scripts.c05_eval_all --virt --container
-    python -m scripts.c05_eval_all --vis --all-checkpoints --dry-run
+    python -m scripts.c05_eval_all --vis --force --dry-run
 """
 
 import argparse
+import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import conf.networks
 from heca.misc import logger
 from heca.misc.paths import data_root
-from scripts.c04_eval import parse_run
+from scripts.c04_eval import parse_run, save_benchmark, t_critical
+from scripts.common.eval_registry import is_fresh, load_registry, registry_path, save_registry
 
-#: The three ways to evaluate: (ground truth observations, virtual stepping).
+#: The three observation protocols: (ground truth observations, virtual stepping).
 MODES = {"gt": (True, False), "virt": (True, True), "vis": (False, False)}
 
 #: Every evaluation is scored on scene0, also for federated runs whose tag names
-#: no scene at all.
+#: name no scene at all.
 SCENE = "scene0"
 
 #: Where a run keeps its checkpoints, relative to the run directory: its learner's
@@ -74,7 +76,7 @@ def run_parts(name: str, default_scene: str) -> dict:
 
 
 def checkpoints_of(run_dir: Path) -> tuple[list[Path], str]:
-    """This run's checkpoints, and the directory they sit in relative to it."""
+    """This run's checkpoints (sorted by step), and their directory prefix."""
     for pattern in CHECKPOINTS:
         found = sorted(run_dir.glob(pattern), key=by_step)
         if found:
@@ -89,30 +91,11 @@ def run_dirs(root: Path) -> list[Path]:
     return [path for path in found if checkpoints_of(path)[0]]
 
 
-def steps_of(dirs: list[Path]) -> list[int]:
-    """The checkpoint steps every run of a group has, so a step is comparable."""
-    common = set.intersection(
-        *({by_step(path) for path in checkpoints_of(run_dir)[0]} for run_dir in dirs)
-    )
-    for run_dir in dirs:
-        missing = {by_step(p) for p in checkpoints_of(run_dir)[0]} - common
-        if missing:
-            logger.warning(f"{run_dir.name}: no checkpoint at step(s) {sorted(missing)}")
-    return sorted(common)
-
-
-def plan(
-    root: Path,
-    all_ckp: bool,
-    gt: bool,
-    virtual: bool,
-    default_scene: str,
-    only: list[str] | None = None,
-) -> list:
-    """One entry per group and checkpoint: (tags, parsed tag, relative ckp)."""
-    groups: dict[str, list[Path]] = {}
+def plan(root, gt, virtual, scene, only, all_ckp) -> list[dict]:
+    """One job per (run, checkpoint): the run's own newest step by default."""
+    jobs: list[dict] = []
     for run_dir in run_dirs(root):
-        parts = run_parts(run_dir.name, default_scene)
+        parts = run_parts(run_dir.name, scene)
         if parts["network"] is None:
             logger.warning(f"skip {run_dir.name}: the tag names no known network")
             continue
@@ -120,56 +103,108 @@ def plan(
             continue
         if only and not any(token in run_dir.name for token in only):
             continue
-        groups.setdefault(experiment(run_dir.name), []).append(run_dir)
-
-    jobs = []
-    for dirs in groups.values():
-        parts = run_parts(dirs[0].name, default_scene)
-        names = [str(run_dir.relative_to(root)) for run_dir in dirs]
-        _, prefix = checkpoints_of(dirs[0])
-        steps = steps_of(dirs)
-        if not steps:
-            logger.warning(f"skip {dirs[0].name}: no checkpoint step shared by every seed")
+        ckps, prefix = checkpoints_of(run_dir)
+        if not ckps:
+            logger.warning(f"skip {run_dir.name}: no checkpoint found")
             continue
-        last = {
-            run_dir.name: by_step(checkpoints_of(run_dir)[0][-1]) for run_dir in dirs
-        }
-        if len(set(last.values())) > 1:
-            logger.warning(
-                f"{dirs[0].name}: seeds end at different steps {last}, "
-                f"evaluating the newest common one (ckp_{steps[-1]})"
+        chosen = ckps if all_ckp else ckps[-1:]
+        for path in chosen:
+            jobs.append(
+                {
+                    "run_dir": run_dir,
+                    "name": run_dir.name,
+                    "parts": parts,
+                    "ckp_rel": f"{prefix}/{path.name}" if prefix else path.name,
+                    "fed": bool(prefix),
+                }
             )
-        chosen = [f"ckp_{step}.pt" for step in (steps if all_ckp else steps[-1:])]
-        for name in chosen:
-            jobs.append((names, parts, f"{prefix}/{name}" if prefix else name))
     return jobs
 
 
-def command(root: Path, job: tuple, args, gt: bool, virtual: bool) -> list:
-    names, parts, checkpoint = job
-    cmd = [
+def command(root: Path, job: dict, args, gt: bool, virtual: bool) -> list:
+    return [
         sys.executable,
         "-m",
         "scripts.c04_eval",
         "--root",
         str(root),
         "--tag",
-        *names,
+        job["name"],
         "--network",
-        parts["network"],
+        job["parts"]["network"],
         "--ckp",
-        checkpoint,
+        job["ckp_rel"],
         "--scene",
-        parts["scene"],
+        job["parts"]["scene"],
+        "--mode",
+        args.eval_mode,
         "--gt" if gt else "--no-gt",
         "--virtual" if virtual else "--no-virtual",
-    ]
-    cmd += ["--per-task", str(args.per_task), "--epochs", str(args.epochs)]
-    if args.container:
-        cmd.append("--container")
-    if args.only:
-        cmd += ["--only", *args.only]
-    return cmd
+        "--per-task",
+        str(args.per_task),
+        "--epochs",
+        str(args.epochs),
+        "--no-summary",
+    ] + (["--container"] if args.container else [])
+
+
+def result_file(run_dir: Path, ckp_rel: str, mode: str, container: bool) -> Path:
+    action = "_container" if container else ""
+    return run_dir / "eval" / f"{Path(ckp_rel).stem}_{mode}{action}.json"
+
+
+def merge_result(registry: dict, job: dict, result: dict) -> None:
+    registry.setdefault("runs", {})[job["name"]] = {
+        "checkpoint": job["ckp_rel"],
+        "gt": job["parts"]["gt"],
+        "virtual": job["parts"]["virtual"],
+        "success_rate": result["success_rate"],
+        "std_over_tasks": result.get("std_over_tasks", 0.0),
+        "episodes": result.get("episodes"),
+        "truncated": result.get("truncated"),
+        "tasks": result.get("tasks", []),
+        "timestamp": result.get("timestamp"),
+    }
+
+
+def update_benchmark(root, reg_path, network, fed, mode, container, scene) -> None:
+    """Push each protocol aggregate of the registry into the benchmark table."""
+    registry = load_registry(reg_path)
+    for key, agg in registry.get("protocols", {}).items():
+        rates = list(agg["success_rate_per_seed"].values())
+        n = len(rates)
+        episodes = [
+            registry["runs"][name].get("episodes") or 0
+            for name in agg["success_rate_per_seed"]
+        ]
+        episodes_per_seed = int(sum(episodes) / n) if n and any(episodes) else 0
+        std = agg["std"]
+        sem = std / (n**0.5) if n > 1 else 0.0
+        ci = t_critical(n) * sem if n > 1 else 0.0
+        save_benchmark(
+            root,
+            {
+                "network": network,
+                "scene": scene,
+                "weights": "network",
+                "gt": "gt" in key,
+                "virtual": "virt" in key,
+                "fed": fed,
+                "mode": mode,
+                "container": container,
+                "greedy": True,
+                "checkpoints": "per-run",
+                "n_seeds": n,
+                "tags": list(agg["success_rate_per_seed"].keys()),
+                "success_rate_per_seed": rates,
+                "episodes_per_seed": episodes_per_seed,
+                "mean": agg["mean"],
+                "std": std,
+                "sem": sem,
+                "ci95": ci,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
 
 
 def main():
@@ -180,10 +215,18 @@ def main():
     parser.add_argument(
         "--all-checkpoints",
         action="store_true",
-        help="evaluate every common checkpoint step instead of the last one",
+        help="evaluate every checkpoint step of each run instead of the newest one",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="re-evaluate runs whose registry entry is already up to date",
     )
     parser.add_argument(
         "--container", action="store_true", help="container-wide success"
+    )
+    parser.add_argument(
+        "--eval-mode", default="task", help="c04_eval scene mode (default: task)"
     )
     parser.add_argument(
         "--per-task", type=int, default=50, help="rollouts per task (default 50)"
@@ -210,22 +253,78 @@ def main():
     args = parser.parse_args()
     gt, virtual = MODES[args.mode]
 
-    jobs = plan(args.root, args.all_checkpoints, gt, virtual, SCENE, args.only)
+    jobs = plan(args.root, gt, virtual, SCENE, args.only, args.all_checkpoints)
     if not jobs:
         raise SystemExit(f"no checkpointed run under {args.root} matches --{args.mode}")
 
+    evaluated: list[tuple[str, str, str]] = []  # (run, checkpoint, status)
     for index, job in enumerate(jobs, 1):
-        names, parts, checkpoint = job
+        reg_path = registry_path(
+            args.root, job["parts"]["network"], job["fed"], args.eval_mode, args.container
+        )
+        registry = load_registry(reg_path)
+        result_path = result_file(
+            job["run_dir"], job["ckp_rel"], args.eval_mode, args.container
+        )
+        if is_fresh(registry, job["name"], job["ckp_rel"]) and not args.force:
+            logger.info(
+                f"[{index}/{len(jobs)}] skip {job['name']} @ {job['ckp_rel']} "
+                f"(already in {reg_path.relative_to(args.root)})"
+            )
+            evaluated.append((job["name"], job["ckp_rel"], "skip"))
+            continue
+        if result_path.exists() and not args.force:
+            # a previous sweep (or a manual c04_eval) already wrote this result:
+            # adopt it into the registry instead of re-running the episodes
+            logger.info(
+                f"[{index}/{len(jobs)}] adopt {job['name']} @ {job['ckp_rel']} "
+                f"(existing {result_path.relative_to(job['run_dir'])})"
+            )
+            evaluated.append((job["name"], job["ckp_rel"], "adopted"))
+            if args.dry_run:
+                continue
+            merge_result(registry, job, json.loads(result_path.read_text()))
+            save_registry(reg_path, registry)
+            continue
+
         logger.info(
             f"[{index}/{len(jobs)}] {args.mode}"
-            f"{' container' if args.container else ''} / {parts['network']} / "
-            f"{checkpoint} ({len(names)} seed(s))"
+            f"{' container' if args.container else ''} / "
+            f"{job['parts']['network']} / {job['name']} @ {job['ckp_rel']}"
         )
         cmd = command(args.root, job, args, gt, virtual)
         if args.dry_run:
             print(" ".join(cmd))
-        else:
-            subprocess.run(cmd, check=True)
+            continue
+        subprocess.run(cmd, check=True)
+
+        if not result_path.exists():
+            logger.error(f"no result file written at {result_path}; not merged")
+            evaluated.append((job["name"], job["ckp_rel"], "missing"))
+            continue
+        merge_result(registry, job, json.loads(result_path.read_text()))
+        save_registry(reg_path, registry)
+        evaluated.append((job["name"], job["ckp_rel"], "evaluated"))
+
+    if args.dry_run:
+        return
+
+    # keep benchmark cells in sync with every registry the sweep touched
+    for network in {job["parts"]["network"] for job in jobs}:
+        for fed in (False, True):
+            reg_path = registry_path(
+                args.root, network, fed, args.eval_mode, args.container
+            )
+            if not reg_path.exists():
+                continue
+            update_benchmark(
+                args.root, reg_path, network, fed, args.eval_mode, args.container, SCENE
+            )
+
+    # the per-run checkpoint table: early-stopped seeds are visible at a glance
+    print("\n== per-run checkpoints ==")
+    for name, ckp, status in evaluated:
+        print(f"  {name:<40} {ckp:<30} {status}")
 
 
 if __name__ == "__main__":

@@ -82,6 +82,7 @@ def benchmark_key(cell: dict) -> tuple:
         cell.get("mode"),
         cell.get("container"),
         cell.get("greedy"),
+        cell.get("fed", False),
     )
 
 
@@ -102,6 +103,7 @@ def save_benchmark(root: Path, payload: dict) -> Path:
         "mode": payload["mode"],
         "container": payload.get("container", False),
         "greedy": payload["greedy"],
+        "fed": payload.get("fed", False),
         "checkpoint": payload["checkpoints"],
         "n_seeds": payload["n_seeds"],
         "episodes_per_seed": payload["episodes_per_seed"],
@@ -285,6 +287,12 @@ def main():
     ap.add_argument("--gt", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--container", action="store_true")
+    ap.add_argument(
+        "--no-summary",
+        action="store_true",
+        help="skip the summary file and the benchmark cell (used by the sweep "
+        "driver, which aggregates over the per-run results itself)",
+    )
     args = ap.parse_args()
     args.tag = (
         resolve_tags(args.root, args.tag)
@@ -385,31 +393,32 @@ def main():
             f"± {100 * spread:.2f} (1 SD over seeds)"
             + (f", 95% CI ± {100 * ci:.2f}" if len(per_tag) > 1 else "")
         )
-        save_summary(
-            root=args.root,
-            network=args.network,
-            payload={
-                "network": args.network,
-                "weights": args.weights,
-                "scene": args.scene,
-                "gt": args.gt,
-                "virtual": args.virtual,
-                "mode": args.mode,
-                "container": args.container,
-                "greedy": True,
-                "checkpoints": args.ckp,
-                "episodes_per_seed": args.episodes,
-                "episode_seed": args.seed,
-                "n_seeds": len(per_tag),
-                "tags": args.tag,
-                "success_rate_per_seed": per_tag,
-                "mean": mean(per_tag),
-                "std": spread,
-                "sem": sem,
-                "ci95": ci,
-                "timestamp": datetime.now().isoformat(timespec="seconds"),
-            },
-        )
+        if not args.no_summary:
+            save_summary(
+                root=args.root,
+                network=args.network,
+                payload={
+                    "network": args.network,
+                    "weights": args.weights,
+                    "scene": args.scene,
+                    "gt": args.gt,
+                    "virtual": args.virtual,
+                    "mode": args.mode,
+                    "container": args.container,
+                    "greedy": True,
+                    "checkpoints": args.ckp,
+                    "episodes_per_seed": args.episodes,
+                    "episode_seed": args.seed,
+                    "n_seeds": len(per_tag),
+                    "tags": args.tag,
+                    "success_rate_per_seed": per_tag,
+                    "mean": mean(per_tag),
+                    "std": spread,
+                    "sem": sem,
+                    "ci95": ci,
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                },
+            )
         return
 
     tasks = heca.scene.tasks
@@ -506,33 +515,34 @@ def main():
         + (f", 95% CI ± {100 * ci:.2f}" if len(per_tag) > 1 else "")
         + f" in {fmt_duration(time.perf_counter() - started)}"
     )
-    save_summary(
-        root=args.root,
-        network=args.network,
-        payload={
-            "network": args.network,
-            "scene": args.scene,
-            "weights": args.weights,
-            "gt": args.gt,
-            "virtual": args.virtual,
-            "mode": args.mode,
-            "container": args.container,
-            "greedy": True,
-            "checkpoints": args.ckp,
-            "per_task": args.per_task,
-            "epochs": args.epochs,
-            "episodes_per_seed": sum(counts),
-            "episode_seed": args.seed,
-            "n_seeds": len(per_tag),
-            "tags": args.tag,
-            "success_rate_per_seed": per_tag,
-            "mean": mean(per_tag),
-            "std": spread,
-            "sem": sem,
-            "ci95": ci,
-            "timestamp": datetime.now().isoformat(timespec="seconds"),
-        },
-    )
+    if not args.no_summary:
+        save_summary(
+            root=args.root,
+            network=args.network,
+            payload={
+                "network": args.network,
+                "scene": args.scene,
+                "weights": args.weights,
+                "gt": args.gt,
+                "virtual": args.virtual,
+                "mode": args.mode,
+                "container": args.container,
+                "greedy": True,
+                "checkpoints": args.ckp,
+                "per_task": args.per_task,
+                "epochs": args.epochs,
+                "episodes_per_seed": sum(counts),
+                "episode_seed": args.seed,
+                "n_seeds": len(per_tag),
+                "tags": args.tag,
+                "success_rate_per_seed": per_tag,
+                "mean": mean(per_tag),
+                "std": spread,
+                "sem": sem,
+                "ci95": ci,
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+            },
+        )
 
 
 if __name__ == "__main__":

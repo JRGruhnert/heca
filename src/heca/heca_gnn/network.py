@@ -37,6 +37,7 @@ class Network(Configurable, nn.Module):
         use_condition_gat: bool = False
         use_summary_gcn: bool = False
         use_memory: bool = False
+        option_critic: bool = False
         goal_conditioning: str = "residual"  # "hyperedge" | "residual"
         use_statistics: bool = False
         pair_norm: bool = False
@@ -125,7 +126,9 @@ class Network(Configurable, nn.Module):
             }
         )
         self.actor_net = ActorNetwork(cfg.feature_dim, cfg.use_memory)
-        self.critic_net = CriticNetwork(cfg.feature_dim, cfg.use_memory)
+        self.critic_net = CriticNetwork(
+            cfg.feature_dim, cfg.use_memory, option=cfg.option_critic
+        )
 
         self.to(hardware.device)
 
@@ -248,7 +251,8 @@ class Network(Configurable, nn.Module):
         return self.mask_gated(self.actor_net(self.actor_rows(data)), data)
 
     def critic(self, data: HecaData) -> torch.Tensor:
-        return self.critic_net(self.critic_rows(data))
+        keys = self.a_keys if self.cfg.option_critic else self.c_keys
+        return self.critic_net(self._rows(data)[keys])
 
     def upgrade(self, checkpoint: Mapping[str, torch.Tensor]):
         checkpoint = upgraded_state(checkpoint)
@@ -288,7 +292,10 @@ class Network(Configurable, nn.Module):
             entropy = dist.entropy()
 
             logprobs.append(logprob)
-            state_values.append(out.value)
+            if self.cfg.option_critic:
+                state_values.append(out.value[0, int(actions[i].item())].reshape(1))
+            else:
+                state_values.append(out.value)
             entropies.append(entropy)
 
         return (
@@ -302,7 +309,8 @@ class Network(Configurable, nn.Module):
 
         actor_rows = rows[self.a_keys]
         logits = self.mask_gated(self.actor_net(actor_rows), data)
-        value = self.critic_net(rows[self.c_keys])
+        critic_rows = rows[self.a_keys] if self.cfg.option_critic else rows[self.c_keys]
+        value = self.critic_net(critic_rows)
         memory = {
             keys[1]: row.memory for keys, row in rows.items() if row.memory is not None
         }

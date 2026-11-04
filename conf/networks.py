@@ -17,6 +17,8 @@ a12 = Network.Config(use_option_relation=True, jitter_scope="entity")
 a13 = Network.Config(
     use_option_relation=True, use_statistics=True, jitter_scope="entity"
 )
+a14 = Network.Config(option_critic=True)
+a15 = Network.Config(option_critic=True, use_option_relation=True)
 # FEDERATED ONLY ABLATIONS
 x0 = Network.Config(sync=("!actor_head", "!critic_head"))  # federate trunk
 x1 = Network.Config(sync=("root",))  # federate only root
@@ -36,6 +38,8 @@ NETWORK_NAMES = [
     "a11",
     "a12",
     "a13",
+    "a14",
+    "a15",
     "x0",
     "x1",
 ]
