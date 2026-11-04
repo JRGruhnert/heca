@@ -58,21 +58,45 @@ def main():
     )
 
     per_seed: list[float] = []
+    classes: list[int] = []
     with h5py.File(file_path, "r") as file:
-        total = len(file["rgb"])
+        with_labels = [l for l, e in scene.entities.items() if e.cfg.n_states > 1]
+        truth = {
+            label: np.asarray(file[f"heca_{label}_ste"]).ravel() for label in with_labels
+        }
+        classes = sorted({int(v) for t in truth.values() for v in np.unique(t)})
+        per_class = max(args.samples // (len(with_labels) * len(classes)), 1)
+        logger.info(
+            f"{args.model}: {len(with_labels)} entities, classes {classes}, "
+            f"{per_class} per (entity, class) per seed"
+        )
         for seed in args.seeds:
+            rng = np.random.default_rng(seed)
+            cases: list[tuple[str, int]] = []
+            for label in with_labels:
+                for value in classes:
+                    pool = np.flatnonzero(truth[label] == value)
+                    picks = rng.choice(pool, size=min(per_class, len(pool)), replace=False)
+                    cases += [(label, int(row)) for row in picks]
+            rng.shuffle(cases)
+
+            cache: dict[int, dict] = {}
             hits = seen = 0
-            for done, row in enumerate(rows(total, args.samples, seed), start=1):
-                row = int(row)
-                for label, (state, _) in encoder.extract_states(
-                    frame_at(file, row, scene)
-                ).items():
-                    seen += 1
-                    hits += int(state == truth_state(file, label, row))
-                if done % 50 == 0 or done == args.samples:
-                    logger.info(f"{args.model} seed {seed}: {done}/{args.samples} frames")
+            for done, (label, row) in enumerate(cases, start=1):
+                if row not in cache:
+                    cache[row] = encoder.extract_states(frame_at(file, row, scene))
+                found = cache[row].get(label)
+                if found is None:
+                    continue
+                seen += 1
+                hits += int(found[0] == int(truth[label][row]))
+                if done % 100 == 0 or done == len(cases):
+                    logger.info(f"{args.model} seed {seed}: {done}/{len(cases)} cases")
             per_seed.append(hits / max(seen, 1))
-            logger.info(f"{args.model} seed {seed}: {hits}/{seen} = {100 * hits / max(seen, 1):.1f}%")
+            logger.info(
+                f"{args.model} seed {seed}: {hits}/{seen} = {100 * hits / max(seen, 1):.1f}% "
+                f"({len(cache)} frames, balanced over {len(classes)} classes x {len(with_labels)} entities)"
+            )
 
     values = np.asarray(per_seed, dtype=float)
     payload = {

@@ -41,3 +41,5 @@ data.zip
 .logs/
 .deps/
 .torch/
+data.tar.zst
+data-server/

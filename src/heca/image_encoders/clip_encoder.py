@@ -7,6 +7,15 @@ from heca.image_encoders.text_prototypes import TextPrototypeEncoder
 from heca.misc import logger
 
 
+def _load(model_class, tag: str):
+    """Load safetensors first: transformers refuses .bin files under torch < 2.6."""
+    try:
+        return model_class.from_pretrained(tag, use_safetensors=True)
+    except (OSError, ValueError):
+        logger.warning(f"{tag}: no safetensors weights, falling back to torch.load")
+        return model_class.from_pretrained(tag)
+
+
 class ClipEncoder(TextPrototypeEncoder):
     """State readout through OpenAI CLIP: text prompts against the frame."""
 
@@ -20,7 +29,7 @@ class ClipEncoder(TextPrototypeEncoder):
             return
         from transformers import CLIPModel, CLIPProcessor
 
-        self.model = CLIPModel.from_pretrained(self.cfg.tag).to(self.device).eval()
+        self.model = _load(CLIPModel, self.cfg.tag).to(self.device).eval()
         self.processor = CLIPProcessor.from_pretrained(self.cfg.tag)
         logger.info(f"{type(self).__name__}: {self.cfg.tag} on {self.device}")
 

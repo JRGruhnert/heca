@@ -74,12 +74,14 @@ class OGScene0(OGScene):
             ),
             "button0": StaticEntity.Config(
                 question="What is the color of the left button?",
-                answers=["white", "red"],
+                answers=["red", "white"],
+                phrase="button on the bottom left",
                 n_states=2,
             ),
             "button1": StaticEntity.Config(
                 question="What is the color of the right button?",
-                answers=["white", "red"],
+                answers=["red", "white"],
+                phrase="button on the bottom right",
                 n_states=2,
             ),
             "cube0": FreeEntity.Config(

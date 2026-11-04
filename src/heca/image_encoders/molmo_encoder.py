@@ -278,22 +278,17 @@ class MolmoEncoder(ImageEncoder):
 
         for label, entity in wanted:
             letters = molmo.ALPHABET[: len(entity.cfg.answers)]
+            phrase = entity.cfg.phrase or "".join(
+                c for c in label if not c.isdigit()
+            )
             choices = "\n".join(
-                f"{letter}: {state}"
+                f"{letter}: The {phrase} is {state}."
                 for letter, state in zip(letters, entity.cfg.answers)
             )
-            question_str = dedent(f"""
-            {scene.description} 
-
-            Task:
-            {self.task_str}  
-
-            Question:
-            {entity.cfg.question} 
-
-            Answers:
-            {choices}      
-            """)
+            question_str = (
+                f"Which of these describes the image?\n{choices}\n"
+                "Answer with the single letter."
+            )
 
             messages = [
                 {
