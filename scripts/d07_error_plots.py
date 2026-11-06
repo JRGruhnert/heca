@@ -50,7 +50,7 @@ def darker(color, factor: float = 0.55):
     return tuple(factor * channel for channel in color[:3]) + tuple(color[3:] or (1.0,))
 
 
-def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
+def violin(groups: dict[str, list[float]], ylabel: str, out: Path):
     """One violin per entity: body in the entity's colour, marks in a darker shade.
 
     Every group is a distance to the ground truth, so zero is the smallest value
@@ -65,7 +65,7 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
     colors = [palette(index % 10) for index in range(len(names))]
     body_width = 0.6  # narrower than the default 0.8, so the columns stay apart
     mark_half = 0.12  # half-length of the min / median / max marks
-    figure, axis = plt.subplots(figsize=(1.5 * len(names) + 2.0, 4.6))
+    figure, axis = plt.subplots(figsize=(1.5 * len(names) + 2.0, 3.8))
     parts = axis.violinplot(
         data,
         positions=range(1, len(names) + 1),
@@ -106,7 +106,6 @@ def violin(groups: dict[str, list[float]], ylabel: str, title: str, out: Path):
     axis.set_xticks(range(1, len(names) + 1), names)
     axis.set_ylim(bottom=0.0)
     axis.set_ylabel(ylabel)
-    # axis.set_title(title)
     axis.grid(axis="y", alpha=0.3)
     figure.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +245,6 @@ def main():
     violin(
         errors,
         "distance to the ground-truth position [m]",
-        f"{args.scene} / {args.kp_backend}: visual keypoint vs ground truth",
         out_dir / f"position-error-{args.kp_backend}.png",
     )
 
@@ -259,7 +257,6 @@ def main():
         violin(
             scores,
             "state confidence for the ground-truth answer (0 = wrong)",
-            f"{args.scene}: state readout vs ground truth",
             out_dir / f"state-score-{args.kp_backend}.png",
         )
 

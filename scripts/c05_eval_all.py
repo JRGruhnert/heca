@@ -202,6 +202,7 @@ def update_benchmark(root, reg_path, network, fed, mode, container, scene) -> No
                 "std": std,
                 "sem": sem,
                 "ci95": ci,
+                "tasks": agg.get("tasks", []),
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
             },
         )

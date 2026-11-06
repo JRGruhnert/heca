@@ -33,7 +33,7 @@ DEFAULTS: dict[str, object] = {
     "batch": 1000,
     "repeats": 3,
     "gt": True,
-    "virtual": False,
+    "virtual": True,
 }
 # mean of the second-moment
 # proximal term
@@ -62,7 +62,7 @@ RUNS: list[dict[str, object]] = [
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 0.01},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
-    {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
+    {"network": "a12", "k": 1, "fedadamw_alpha": 0.5, "mu": 0.1},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 1, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
     #     # {"network": "a10", "k": 5, "fedadamw_alpha": 0.5, "mu": 1.0},  # FedAdamW + FedProx
 ]

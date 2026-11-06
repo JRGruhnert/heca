@@ -41,5 +41,7 @@ data.zip
 .logs/
 .deps/
 .torch/
+.figwork/
+.cache/
 data.tar.zst
 data-server/

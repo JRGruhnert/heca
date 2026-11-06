@@ -1,3 +1,19 @@
+"""Plot training curves from wandb: mean and ±1 SD band across seeds.
+
+Crash/restart handling: runs of the same name (a crashed run and its restart)
+are merged into one series -- the run with the most data wins wherever their
+steps overlap, and gaps are filled from the other runs, so a run covering
+[0, 500] and its restart covering [500, 1000] patch into [0, 1000]. Runs whose
+name belongs to the same wandb group (seeds ``_s0``/``_s1``/``_s2``) are then
+aggregated as the mean with a ±1 SD band.
+
+Plots are minimal on purpose: axis labels and a legend only when several groups
+are drawn -- titles and descriptions are added in LaTeX.
+
+    python -m scripts.d01_plot_wandb_curves --group 'final-a*-gt-virt' \
+        --metric stats/success_rate --x update
+"""
+
 import argparse
 import fnmatch
 import json
@@ -94,8 +110,32 @@ def capacity_of(run, fallback: int) -> int:
 
 
 # --------------------------------------------------------------------------- #
-# aggregation
+# crash/restart handling and aggregation
 # --------------------------------------------------------------------------- #
+def merge_runs(series: list[tuple[np.ndarray, np.ndarray]]) -> tuple[np.ndarray, np.ndarray]:
+    """Merge duplicate runs of one name into a single series.
+
+    The run with the most data (largest last step, then most points) wins
+    wherever steps overlap; the others fill its gaps. A run covering [0, 500]
+    and its restart covering [500, 1000] therefore patch into [0, 1000], and a
+    falsely started run at [0, 5] next to a full [0, 1000] run contributes
+    nothing.
+    """
+    if len(series) == 1:
+        return series[0]
+    order = sorted(
+        range(len(series)),
+        key=lambda i: (-float(series[i][0].max()), -len(series[i][0])),
+    )
+    merged: dict[float, float] = {}
+    for i in order:
+        for x, y in zip(series[i][0], series[i][1]):
+            merged.setdefault(float(x), float(y))
+    xs = np.array(sorted(merged), dtype=float)
+    ys = np.array([merged[x] for x in xs], dtype=float)
+    return xs, ys
+
+
 def smooth(values: np.ndarray, window: int) -> np.ndarray:
     """Centered moving average over ``window`` samples (edges use fewer)."""
     if window <= 1 or len(values) < 2:
@@ -178,7 +218,7 @@ def short_labels(groups: list[str]) -> dict[str, str]:
 # plotting
 # --------------------------------------------------------------------------- #
 def plot_metric(
-    ax, metric: str, curves: dict[str, dict], x_label: str, band: str, seeds: bool
+    ax, metric: str, curves: dict[str, dict], x_label: str, seeds: bool, x_max=None
 ):
     colors = plt.get_cmap("tab10")
     for i, (group, curve) in enumerate(curves.items()):
@@ -191,12 +231,15 @@ def plot_metric(
         if half.any():
             ax.fill_between(grid, mean - half, mean + half, alpha=0.2, color=color)
 
-    band_label = {"sd": "±1 SD", "ci": "95% CI", "none": "no band"}[band]
     ax.set_xlabel(x_label)
     ax.set_ylabel(metric.removeprefix("stats/").removeprefix("train/"))
-    ax.set_title(f"{metric} — mean across seeds ({band_label})")
     ax.grid(True, alpha=0.3)
-    ax.legend(fontsize=8, title="group", title_fontsize=8)
+    if len(curves) > 1:
+        ax.legend(fontsize=8)
+    ends = [c["grid"][-1] for c in curves.values() if len(c["grid"])]
+    if ends:
+        # no margin: the axis runs from 0 to the end of the data exactly
+        ax.set_xlim(0, float(x_max) if x_max is not None else max(ends))
 
 
 def main():
@@ -206,7 +249,9 @@ def main():
         nargs="+",
         required=True,
         help="wandb group name(s) or shell-style pattern(s) of them, e.g. "
-        "'final-a*-gt-virt'. Each matched group becomes one mean curve.",
+        "'final-a*-gt-virt'. Each matched group becomes one mean curve. "
+        "An entry may carry its own legend tag as 'tag=pattern', e.g. "
+        "'a0=final-a0-gt-virt' draws that group as 'a0'.",
     )
     parser.add_argument(
         "--metric",
@@ -232,6 +277,12 @@ def main():
         default=DEFAULT_CAPACITY,
         help=f"Option steps per update when the run config does not say "
         f"(default {DEFAULT_CAPACITY}).",
+    )
+    parser.add_argument(
+        "--x-max",
+        type=float,
+        default=None,
+        help="Axis maximum (default: the end of the data, with no margin).",
     )
     parser.add_argument(
         "--smooth",
@@ -260,7 +311,19 @@ def main():
         "in the group; lower it to keep the full length of long runs).",
     )
     parser.add_argument(
-        "--points", type=int, default=400, help="Points on the common grid."
+        "--points", type=int, default=1000, help="Points on the common grid."
+    )
+    parser.add_argument(
+        "--data-only",
+        action="store_true",
+        help="Skip the PNG: write the raw JSON (mean/std arrays) only.",
+    )
+    parser.add_argument(
+        "--csv",
+        action="store_true",
+        help="Also write a pgfplots-ready CSV per metric "
+        "(columns: update, <group>_mean, <group>_std, <group>_lower, "
+        "<group>_upper).",
     )
     parser.add_argument(
         "--tail",
@@ -276,9 +339,18 @@ def main():
     parser.add_argument(
         "--per-run",
         action="store_true",
-        help="Ignore grouping: draw every run as its own curve.",
+        help="Ignore seed grouping: draw every run name as its own curve.",
     )
     args = parser.parse_args()
+
+    entries = [
+        (tag, pattern)
+        for tag, pattern in (
+            entry.split("=", 1) if "=" in entry else (None, entry)
+            for entry in args.group
+        )
+    ]
+    patterns = [pattern for _, pattern in entries]
 
     config = WandBConfig()
     api = wandb.Api()
@@ -286,44 +358,86 @@ def main():
         runs = list(
             api.runs(
                 f"{config.entity}/{config.project}",
-                filters={"group": {"$regex": _regex_any(args.group)}},
+                filters={"group": {"$regex": _regex_any(patterns)}},
                 per_page=200,
             )
         )
     except Exception:
         runs = list(api.runs(f"{config.entity}/{config.project}", per_page=200))
 
-    groups = match_groups(runs, args.group)
-    if args.per_run:
-        groups = {group: members for group, members in groups.items()}
+    groups = match_groups(runs, patterns)
     if not groups:
         available = sorted({g for run in runs if (g := group_of(run))})
         raise SystemExit(
-            f"No runs matched {args.group} in {config.entity}/{config.project}.\n"
+            f"No runs matched {patterns} in {config.entity}/{config.project}.\n"
             f"Groups seen: {available[:20] or 'none'}"
         )
 
+    # legend labels: an explicit tag wins, otherwise the group's own name
+    label_map = {group: group for group in groups}
+    for tag, pattern in ((t, p) for t, p in entries if t is not None):
+        for group in groups:
+            if fnmatch.fnmatch(group, pattern):
+                label_map[group] = tag
+
+    # per group: merge duplicate names (crashed + restarted), then aggregate seeds
     curves: dict[str, dict] = {}
     for metric in args.metric:
         curves[metric] = {}
     print(f"group aggregation ({len(groups)} group(s)):")
     for group, members in groups.items():
+        # bucket the runs by name: duplicates of one name are one seed
+        by_name: dict[str, list] = {}
+        for run in members:
+            by_name.setdefault(str(run.name), []).append(run)
+
         for metric in args.metric:
-            series, names, grid_list = [], [], []
-            for run in members:
-                loaded = load_run_series(run, metric, args.samples)
-                if loaded is None:
+            series: list[tuple[np.ndarray, np.ndarray]] = []
+            provenance: dict[str, list[str]] = {}
+            for name, runs_of_name in by_name.items():
+                pieces: list[tuple[np.ndarray, np.ndarray]] = []
+                for run in runs_of_name:
+                    loaded = load_run_series(run, metric, args.samples)
+                    if loaded is None:
+                        continue
+                    steps, values = loaded
+                    x = (
+                        steps * capacity_of(run, args.capacity)
+                        if args.x == "env"
+                        else steps
+                    )
+                    pieces.append((x, values))
+                if not pieces:
                     continue
-                steps, values = loaded
-                x = (
-                    steps * capacity_of(run, args.capacity)
-                    if args.x == "env"
-                    else steps
-                )
-                series.append((x, values))
-                names.append(str(run.name))
+                merged_x, merged_y = merge_runs(pieces)
+                series.append((merged_x, merged_y))
+                provenance[name] = sorted(
+                    {str(r.name) for r in runs_of_name} - {name}
+                ) or [name]
+
             if not series:
                 continue
+            if args.per_run:
+                # one curve per run name instead of one curve per group
+                for name, (sx, sy) in zip(provenance, series):
+                    grid = np.linspace(sx.min(), sx.max(), args.points)
+                    smoothed = (sx, smooth(sy, args.smooth))
+                    mean, half, stacked = aggregate([smoothed], grid, args.band)
+                    label = (
+                        f"{label_map[group]}/{name}"
+                        if len(groups) > 1 or len(series) > 1
+                        else name
+                    )
+                    curves[metric][f"{group}/{name}"] = {
+                        "grid": grid,
+                        "mean": mean,
+                        "half": half,
+                        "stacked": stacked,
+                        "runs": provenance[name],
+                        "label": label,
+                    }
+                continue
+
             grid = common_grid(series, args.points, args.min_seeds)
             smoothed = [(s, smooth(v, args.smooth)) for s, v in series]
             mean, half, stacked = aggregate(smoothed, grid, args.band)
@@ -332,12 +446,12 @@ def main():
                 "mean": mean,
                 "half": half,
                 "stacked": stacked,
-                "runs": names,
-                "label": group,
+                "runs": list(provenance.keys()),
+                "label": label_map[group],
             }
             print(
                 f"  {group:<28} {metric:<24} seeds={len(series)} "
-                f"(of {len(members)}) x=[{grid[0]:.0f},{grid[-1]:.0f}]"
+                f"(of {len(by_name)} names) x=[{grid[0]:.0f},{grid[-1]:.0f}]"
             )
 
     if not any(curves[m] for m in args.metric):
@@ -347,41 +461,28 @@ def main():
         for metric in args.metric:
             labels = short_labels(list(curves[metric]))
             for group, curve in curves[metric].items():
-                curve["label"] = labels[group]
+                curve["label"] = (
+                    label_map[group] if label_map[group] != group else labels[group]
+                )
 
     x_label = "environment steps" if args.x == "env" else "updates"
-    n_fig = len(args.metric)
-    fig, axes = plt.subplots(n_fig, 1, figsize=(9, 4.4 * n_fig), squeeze=False)
-    for ax, metric in zip(axes[:, 0], args.metric):
-        if curves[metric]:
-            plot_metric(ax, metric, curves[metric], x_label, args.band, args.seeds)
-        else:
-            ax.set_title(f"{metric} (no data)")
-            ax.text(0.5, 0.5, "no data", ha="center", va="transAxes")
-    band_label = {"sd": "±1 SD", "ci": "95% CI", "none": "no band"}[args.band]
-    seeds_info = ", ".join(
-        f"{g}: n={len(c['runs'])}" for g, c in next(iter(curves.values())).items()
-    )
-    note = (
-        f"{seeds_info} | seeds=mean across runs, band={band_label} | "
-        f"smooth={'moving avg ' + str(args.smooth) + ' ' + ('updates' if args.x == 'update' else 'points') if args.smooth > 1 else 'off'} | "
-        f"x={x_label}"
-    )
-    if any(m.startswith("stats/") for m in args.metric):
-        note += (
-            "\n'stats/*' comes from training rollouts (buffer statistics), "
-            "not from an evaluation protocol."
-        )
-    fig.suptitle("Training curves — group aggregation", fontsize=14)
-    fig.text(0.5, 0.005, note, ha="center", fontsize=8, color="0.25")
-    fig.tight_layout(rect=(0, 0.03, 1, 0.97))
+    if not args.data_only:
+        n_fig = len(args.metric)
+        fig, axes = plt.subplots(n_fig, 1, figsize=(6, 3.4 * n_fig), squeeze=False)
+        for ax, metric in zip(axes[:, 0], args.metric):
+            if curves[metric]:
+                plot_metric(ax, metric, curves[metric], x_label, args.seeds, args.x_max)
+            else:
+                ax.text(0.5, 0.5, "no data", ha="center", va="center", transform=ax.transAxes)
+        fig.tight_layout()
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", "-".join(sorted(groups)))[:80]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", "-".join(sorted(curves[args.metric[0]])))[:80]
     path = out_dir / f"curves_{stem}.png"
-    fig.savefig(path, dpi=200, bbox_inches="tight")
-    plt.close(fig)
+    if not args.data_only:
+        fig.savefig(path, dpi=200, bbox_inches="tight")
+        plt.close(fig)
 
     payload = {
         "groups": {},
@@ -396,9 +497,11 @@ def main():
         f"{args.tail:.0%} of the curve, and at its end):"
     )
     for group, members in groups.items():
+        names = sorted({str(run.name) for run in members})
         payload["groups"][group] = {
-            "runs": [str(run.name) for run in members],
-            "n_seeds": len(members),
+            "runs": names,
+            "n_names": len(names),
+            "n_runs": len(members),
         }
     for metric in args.metric:
         payload["metrics"][metric] = {}
@@ -416,24 +519,93 @@ def main():
                 else 0.0
             )
             payload["metrics"][metric][group] = {
+                "label": curve["label"],
                 "n_seeds": curve["stacked"].shape[0],
                 "tail_mean": tail_mean,
                 "tail_sd_across_seeds": tail_sd,
                 "final": tail_end,
                 "grid": curve["grid"].tolist(),
                 "mean": curve["mean"].tolist(),
+                **({"std": curve["half"].tolist()} if args.band == "sd" else {}),
                 "band_half_width": curve["half"].tolist(),
                 "runs": curve["runs"],
             }
             print(
-                f"  {group:<28} {metric:<24} "
+                f"  {label_map[group]:<28} {metric:<24} "
                 f"{100 * tail_mean if 'rate' in metric else tail_mean:8.4f}"
                 f" ± {100 * tail_sd if 'rate' in metric else tail_sd:.4f}"
                 f"  (n={curve['stacked'].shape[0]})"
             )
     json_path = path.with_suffix(".json")
     json_path.write_text(json.dumps(payload, indent=2) + "\n")
-    print(f"\nSaved {path}\nSaved {json_path}")
+    saved = [str(json_path)] if args.data_only else [str(path), str(json_path)]
+
+    if args.csv:
+        import csv as csv_module
+
+        for metric in args.metric:
+            metric_groups = list(curves[metric])
+            if not metric_groups:
+                continue
+            grids = [curves[metric][g]["grid"] for g in metric_groups]
+            shared = all(np.allclose(grids[0], g) for g in grids[1:])
+            csv_path = out_dir / f"curves_{stem}_{metric.replace('/', '-')}.csv"
+            with csv_path.open("w", newline="") as fh:
+                writer = csv_module.writer(fh)
+                std_of = (
+                    (lambda c, i: c["half"][i]) if args.band == "sd" else (lambda c, i: 0.0)
+                )
+                if shared:
+                    writer.writerow(
+                        ["update"]
+                        + [
+                            f"{curves[metric][g]['label']}_{suffix}"
+                            for g in metric_groups
+                            for suffix in ("mean", "std", "lower", "upper")
+                        ]
+                    )
+                    for i in range(len(grids[0])):
+                        row = [f"{grids[0][i]:.6g}"]
+                        for g in metric_groups:
+                            c = curves[metric][g]
+                            mean = c["mean"][i]
+                            std = std_of(c, i)
+                            row += [
+                                f"{mean:.8g}",
+                                f"{std:.8g}",
+                                f"{mean - std:.8g}",
+                                f"{mean + std:.8g}",
+                            ]
+                        writer.writerow(row)
+                else:
+                    writer.writerow(
+                        [
+                            f"{curves[metric][g]['label']}_{suffix}"
+                            for g in metric_groups
+                            for suffix in ("update", "mean", "std", "lower", "upper")
+                        ]
+                    )
+                    length = max(len(c["grid"]) for c in [curves[metric][g] for g in metric_groups])
+                    for i in range(length):
+                        row = []
+                        for g in metric_groups:
+                            c = curves[metric][g]
+                            if i < len(c["grid"]):
+                                mean = c["mean"][i]
+                                std = std_of(c, i)
+                                row += [
+                                    f"{c['grid'][i]:.6g}",
+                                    f"{mean:.8g}",
+                                    f"{std:.8g}",
+                                    f"{mean - std:.8g}",
+                                    f"{mean + std:.8g}",
+                                ]
+                            else:
+                                row += ["", "", "", "", ""]
+                        writer.writerow(row)
+            saved.append(str(csv_path))
+
+    print(f"\nSaved " + "\nSaved ".join(saved))
 
 
 def _regex_any(patterns: list[str]) -> str:

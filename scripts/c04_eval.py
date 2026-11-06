@@ -59,6 +59,43 @@ def t_critical(n: int) -> float:
         return 1.96  # normal approximation fallback
 
 
+def per_task_aggregate(
+    tags: list[str],
+    rates_by_tag: list[list[float]],
+    epoch_wins: list[list[list[int]]],
+    per_task: int,
+    tasks: list[dict],
+) -> list[dict]:
+    """Per-task success rates across seeds: one entry per task."""
+    per_episode = max(1, per_task)
+    out = []
+    for idx, task in enumerate(tasks):
+        rates = [rates[idx] for rates in rates_by_tag if idx < len(rates)]
+        epochs = (
+            len(epoch_wins[0][idx])
+            if epoch_wins and epoch_wins[0] and idx < len(epoch_wins[0])
+            else 0
+        )
+        per_epoch = [
+            mean([epoch_wins[t][idx][e] for t in range(len(tags))]) / per_episode
+            for e in range(epochs)
+        ]
+        out.append(
+            {
+                "task_id": idx + 1,
+                "task_name": str(task.get("task_name", idx + 1)),
+                "mean": mean(rates),
+                "std": stdev(rates) if len(rates) > 1 else 0.0,
+                "n_seeds": len(rates),
+                "success_rate_per_seed": {
+                    tag: rate for tag, rate in zip(tags, rates)
+                },
+                "success_rate_per_epoch": per_epoch,
+            }
+        )
+    return out
+
+
 def save_summary(*, root: Path, network: str, payload: dict) -> Path:
     """Write the across-seed summary JSON for one network (paper table row)."""
     out_dir = root / "eval"
@@ -113,6 +150,7 @@ def save_benchmark(root: Path, payload: dict) -> Path:
         "std": payload["std"],
         "sem": payload["sem"],
         "ci95": payload["ci95"],
+        "tasks": payload.get("tasks", []),
         "timestamp": payload["timestamp"],
     }
     cells = [c for c in cells if benchmark_key(c) != benchmark_key(cell)]
@@ -288,6 +326,14 @@ def main():
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--container", action="store_true")
     ap.add_argument(
+        "--penalty-lambda",
+        type=float,
+        default=0.0,
+        help="Repeated-execution penalty during evaluation (same form as "
+        "training: p = 1 - exp(-lambda * (k-1) ** power)). 0 disables it.",
+    )
+    ap.add_argument("--penalty-power", type=float, default=3.0)
+    ap.add_argument(
         "--no-summary",
         action="store_true",
         help="skip the summary file and the benchmark cell (used by the sweep "
@@ -326,6 +372,8 @@ def main():
             reload=False,
             use_gt=args.gt,
             smode=SubgoalMode.BOTH,
+            penalty_lambda=args.penalty_lambda,
+            penalty_power=args.penalty_power,
         )
     )
 
@@ -428,6 +476,8 @@ def main():
         )
 
     per_tag: list[float] = []
+    task_rates: list[list[float]] = []
+    epoch_wins: list[list[list[int]]] = []  # tag -> task -> wins per epoch
     for tag in args.tag:
         path = find_checkpoint(args.root / tag, args.ckp)
         checkpoint = torch.load(path, map_location=hardware.device, weights_only=False)
@@ -442,6 +492,7 @@ def main():
 
         wins = [0] * len(tasks)
         counts = [0] * len(tasks)
+        wins_by_epoch: list[list[int]] = [[] for _ in tasks]
         truncated_total = 0
         index = 0
         for _epoch in range(args.epochs):
@@ -453,11 +504,14 @@ def main():
                 index += args.per_task
                 wins[idx] += task_wins
                 counts[idx] += args.per_task
+                wins_by_epoch[idx].append(task_wins)
                 truncated_total += task_truncated
 
         rates = [w / c for w, c in zip(wins, counts)]
         overall = mean(rates)
         per_tag.append(overall)
+        task_rates.append(list(rates))
+        epoch_wins.append(wins_by_epoch)
         table = "\n".join(
             f"  {idx + 1}. {str(task.get('task_name', idx + 1)):<24} "
             f"{wins[idx]:>4}/{counts[idx]:<4} = {100 * rates[idx]:5.1f}%"
@@ -500,6 +554,11 @@ def main():
                         "success": wins[idx],
                         "episodes": counts[idx],
                         "success_rate": rates[idx],
+                        "episodes_per_epoch": args.per_task,
+                        "wins_per_epoch": wins_by_epoch[idx],
+                        "success_rate_per_epoch": [
+                            w / args.per_task for w in wins_by_epoch[idx]
+                        ],
                     }
                     for idx, task in enumerate(tasks)
                 ],
@@ -540,6 +599,9 @@ def main():
                 "std": spread,
                 "sem": sem,
                 "ci95": ci,
+                "tasks": per_task_aggregate(
+                    args.tag, task_rates, epoch_wins, args.per_task, tasks
+                ),
                 "timestamp": datetime.now().isoformat(timespec="seconds"),
             },
         )
