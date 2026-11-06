@@ -1,6 +1,6 @@
 from heca.heca_gnn.network import Network
 
-# NETWOR ABLATIONS
+# NETWORK ABLATIONS
 a0 = Network.Config()
 a1 = Network.Config(goal_conditioning="hyperedge")
 a2 = Network.Config(use_condition_gat=True)
