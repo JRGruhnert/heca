@@ -174,7 +174,7 @@ def _plot_scene_impl(
             pct[i, t - 1] = 100.0 * c.get(t, 0) / total
         pct[i, max_tries] = 100.0 * c.get(0, 0) / total  # failed / gave up
 
-    fig, ax = plt.subplots(figsize=(max(6.0, 0.9 * n), 6.0))
+    fig, ax = plt.subplots(figsize=(max(4.5, 0.6 * n), 4.2))
     xpos = np.arange(n)
     bottom = np.zeros(n)
     cmap = plt.get_cmap("summer")
@@ -200,24 +200,10 @@ def _plot_scene_impl(
 
     ax.set_xticks(xpos)
     ax.set_xticklabels(tags, rotation=45, ha="right", fontsize=8)
-    ax.set_ylim(0, 105)
+    ax.set_ylim(0, 102)
     ax.set_ylabel("episodes [%]")
-    ax.set_title(f"Tapas success reliability — {scene_tag} ({episodes} episodes/agent)")
+    ax.grid(True, alpha=0.3)
     ax.legend(loc="upper right", fontsize=8)
-
-    # Total success rate above each bar (success on any attempt).
-    for i, r in enumerate(results):
-        c = r["counts"]
-        total = sum(c.values())
-        ok = total - c.get(0, 0)
-        ax.text(
-            i,
-            101.5,
-            f"{100.0 * ok / total:.0f}%",
-            ha="center",
-            va="bottom",
-            fontsize=7,
-        )
 
     fig.tight_layout()
     path = out_dir / f"{stem or f'eval_success_{scene_tag}'}.png"
@@ -370,8 +356,27 @@ def main():
         default=3,
         help="Max attempts per episode before giving up.",
     )
+    parser.add_argument(
+        "--replot",
+        action="store_true",
+        help="Skip evaluation: re-plot the chart from the persisted results jsons.",
+    )
 
     args = parser.parse_args()
+
+    if args.replot:
+        for scene_cfg, _ in agents_by_scene():
+            if args.scene and scene_cfg.tag != args.scene:
+                continue
+            out_dir = Scene.save_dir(scene_cfg) / "plots"
+            jsons = sorted(out_dir.glob(f"eval_success_{scene_cfg.tag}*.json"))
+            for json_path in jsons:
+                path = plot_results(scene_cfg, json_path)
+                if path is not None:
+                    logger.info(f"[{scene_cfg.tag}] replotted {path} from {json_path.name}")
+                else:
+                    logger.info(f"[{scene_cfg.tag}] {json_path.name}: no agents to plot")
+        return
 
     for scene_cfg, models in agents_by_scene():
         if args.scene and scene_cfg.tag != args.scene:

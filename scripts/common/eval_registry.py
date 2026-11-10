@@ -42,26 +42,81 @@ def load_registry(path: Path) -> dict[str, Any]:
     return {"runs": {}}
 
 
+def _task_aggregate(pairs: list[tuple[str, dict]]) -> list[dict]:
+    """Per-task success rates across seeds, one entry per task.
+
+    ``pairs`` is the (run name, run entry) list of one protocol; only entries
+    that carry a ``tasks`` list (task-mode evaluations) contribute.
+    """
+    cells: dict[tuple, dict] = {}
+    for name, entry in pairs:
+        for task in entry.get("tasks") or []:
+            key = (task.get("task_id"), str(task.get("task_name", "")))
+            cell = cells.setdefault(
+                key,
+                {
+                    "task_id": task.get("task_id"),
+                    "task_name": str(task.get("task_name", "")),
+                    "success_rate_per_seed": {},
+                },
+            )
+            cell["success_rate_per_seed"][name] = float(task["success_rate"])
+            per_epoch = cell.setdefault("per_epoch", {})
+            for epoch, rate in enumerate(task.get("success_rate_per_epoch") or []):
+                per_epoch.setdefault(epoch, []).append(float(rate))
+    out = []
+    for (task_id, _), cell in sorted(
+        cells.items(), key=lambda item: (item[0][0] is None, item[0][0] or 0)
+    ):
+        rates = list(cell["success_rate_per_seed"].values())
+        per_epoch = cell.pop("per_epoch", {})
+        out.append(
+            {
+                **cell,
+                "mean": mean(rates),
+                "std": stdev(rates) if len(rates) > 1 else 0.0,
+                "n_seeds": len(rates),
+                **(
+                    {
+                        "success_rate_per_epoch": [
+                            mean(per_epoch[e]) for e in range(max(per_epoch) + 1)
+                        ]
+                    }
+                    if per_epoch
+                    else {}
+                ),
+            }
+        )
+    return out
+
+
 def save_registry(path: Path, registry: dict[str, Any]) -> None:
     """Write the registry with its aggregate header recomputed from ``runs``."""
-    protocols: dict[str, list[tuple[str, float]]] = {}
+    protocols: dict[str, list[tuple[str, dict]]] = {}
     for name, entry in registry.get("runs", {}).items():
         key = ("gt" if entry.get("gt") else "") + (
             "-virt" if entry.get("virtual") else ""
         )
         key = key or "vis"
-        protocols.setdefault(key, []).append((name, float(entry["success_rate"])))
+        protocols.setdefault(key, []).append((name, entry))
 
-    registry["protocols"] = {
-        key: {
+    aggregates: dict[str, dict] = {}
+    for key, pairs in sorted(protocols.items()):
+        rates = [float(entry["success_rate"]) for _, entry in pairs]
+        if not rates:
+            continue
+        aggregate = {
             "n_seeds": len(pairs),
             "mean": mean(rates),
             "std": stdev(rates) if len(rates) > 1 else 0.0,
-            "success_rate_per_seed": {name: rate for name, rate in pairs},
+            "success_rate_per_seed": {
+                name: float(entry["success_rate"]) for name, entry in pairs
+            },
         }
-        for key, pairs in sorted(protocols.items())
-        if (rates := [rate for _, rate in pairs])
-    }
+        if any(entry.get("tasks") for _, entry in pairs):
+            aggregate["tasks"] = _task_aggregate(pairs)
+        aggregates[key] = aggregate
+    registry["protocols"] = aggregates
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(registry, indent=2) + "\n")
 

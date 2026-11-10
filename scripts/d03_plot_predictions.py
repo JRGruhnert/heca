@@ -8,7 +8,8 @@ matplotlib.use("Agg")
 import h5py  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-
+from matplotlib import patheffects as pe  # noqa: E402
+from matplotlib.patches import Circle
 from heca.data.reference import Reference  # noqa: E402
 from heca.experts.expert import ExpertModel  # noqa: E402
 from heca.guis.scene_sample_selector import demo_dataset  # noqa: E402
@@ -38,7 +39,7 @@ def mark(axis, x: float, y: float, color: str, marker: str, text: str) -> None:
         markerfacecolor="none",
         linestyle="none",
     )
-    axis.annotate(
+    annotation = axis.annotate(
         text,
         (x, y),
         textcoords="offset points",
@@ -46,7 +47,51 @@ def mark(axis, x: float, y: float, color: str, marker: str, text: str) -> None:
         color=color,
         fontsize=9,
         fontweight="bold",
+        path_effects=[pe.withStroke(linewidth=1.2, foreground="black")],
     )
+    annotation.set_in_layout(False)  # the label must not resize the panel
+
+
+def mark_dashed(
+    axis,
+    x: float,
+    y: float,
+    color: str,
+    text: str,
+    dashes: tuple[int, int, int] | None = None,
+    marker_pt: float = 10.0,
+    text_offset: int = 8,
+) -> None:
+
+    bbox = axis.get_window_extent()
+    xlo, xhi = axis.get_xlim()
+    px_per_data = bbox.width / (xhi - xlo) if xhi > xlo else 1.0
+    radius = (marker_pt * axis.figure.dpi / 72.0) / 2.0 / px_per_data
+    if dashes is None:
+        linestyle = (0, ())
+    else:  # (offset, on, off)
+        linestyle = (dashes[0], (dashes[1], dashes[2]))
+    axis.add_patch(
+        Circle(
+            (x, y),
+            radius=radius,
+            fill=False,
+            edgecolor=color,
+            linewidth=2,
+            linestyle=linestyle,
+        )
+    )
+    annotation = axis.annotate(
+        text,
+        (x, y),
+        textcoords="offset points",
+        xytext=(text_offset, 8),
+        color=color,
+        fontsize=9,
+        fontweight="bold",
+        path_effects=[pe.withStroke(linewidth=1.2, foreground="black")],
+    )
+    annotation.set_in_layout(False)  # the label must not resize the panel
 
 
 def lattice(
@@ -60,6 +105,34 @@ def lattice(
     rows = [r * stride + patch / 2 for r in range(grid_hw[0])]
     columns = [c * stride + patch / 2 for c in range(grid_hw[1])]
     return rows, columns
+
+
+def flow_color(dx: np.ndarray, dy: np.ndarray) -> np.ndarray:
+    """Dense-correspondence colour wheel: hue = direction, saturation = magnitude."""
+    from matplotlib.colors import hsv_to_rgb
+
+    magnitude = np.hypot(dx, dy)
+    peak = float(magnitude.max()) if magnitude.size else 0.0
+    saturation = (
+        np.clip(magnitude / peak, 0.0, 1.0) if peak > 0 else np.zeros_like(magnitude)
+    )
+    angle = (np.arctan2(dy, dx) + np.pi) / (2 * np.pi)  # [0, 1]
+    return hsv_to_rgb(np.stack([angle, saturation, np.ones_like(angle)], axis=-1))
+
+
+def colour_wheel(radius_px: int = 48) -> np.ndarray:
+    """An RGB colour-wheel legend: hue = angle, saturation = radius, white outside."""
+    from matplotlib.colors import hsv_to_rgb
+
+    grid = np.linspace(-1.0, 1.0, 2 * radius_px + 1)
+    xx, yy = np.meshgrid(grid, grid)
+    radius = np.hypot(xx, yy)
+    hue = (np.arctan2(yy, xx) + np.pi) / (2 * np.pi)
+    wheel = hsv_to_rgb(
+        np.stack([hue, np.clip(radius, 0.0, 1.0), np.ones_like(radius)], axis=-1)
+    )
+    wheel[radius > 1.0] = 1.0
+    return wheel
 
 
 def main() -> None:
@@ -103,14 +176,17 @@ def main() -> None:
             f"{Scene.save_dir(scene_cfg)}; run scripts/d01_select_references.py"
         )
 
-    select_encoder(args.scene, args.backbone, args.stride, args.kp_backend)
+    dino_cfg = select_encoder(args.scene, args.backbone, args.stride, "dino")
+    roma_cfg = select_encoder(args.scene, "", 0, "roma")
     model = ExpertModel.get(find_scene_models(args.scene)[0], auto_load=False)
-    keypoints = ImageEncoder.get(model.cfg.kp_extraction)
-    keypoints.prepare_for_scene(scene_cfg)
+    dino = ImageEncoder.get(dino_cfg)
+    dino.prepare_for_scene(scene_cfg)
     # each frame is located on its own: a belief carried in from another frame
     # would mix a tracking error with the reference error this is here to show
-    keypoints.cfg.tracking = TrackingMode.NONE
-    keypoints.reset_tracking()
+    dino.cfg.tracking = TrackingMode.NONE
+    dino.reset_tracking()
+    roma = ImageEncoder.get(roma_cfg)
+    roma.prepare_for_scene(scene_cfg)
     scene = model.scene
 
     dataset_path = demo_dataset(scene_cfg, args.dataset)
@@ -138,35 +214,29 @@ def main() -> None:
     moved: dict[str, list[float]] = {w: [] for w in wanted}
     for frame in indices:
         image = frame_image(scene, dataset, frame)
-        maps, confidence = keypoints.similarity_maps(image)
-        poses = keypoints.extract_poses(image)
+        maps, confidence = dino.similarity_maps(image)
+        dino_poses = dino.extract_poses(image)
+        roma_poses = roma.extract_poses(image)
         rgb = (image.rgb.permute(1, 2, 0).numpy() * 255).astype(np.uint8)
         height, width = rgb.shape[:2]
 
         for label in wanted:
             reference: Reference = scene.references[label][Reference.POSITION]
             clicked = (reference.x, reference.y)
-            reported = (poses[label].x, poses[label].y)
-            gap = float(np.hypot(reported[0] - clicked[0], reported[1] - clicked[1]))
+            dino_reported = (dino_poses[label].x, dino_poses[label].y)
+            roma_reported = (roma_poses[label].x, roma_poses[label].y)
+            gap = float(
+                np.hypot(dino_reported[0] - clicked[0], dino_reported[1] - clicked[1])
+            )
             moved[label].append(gap)
 
-            figure, axes = plt.subplots(1, 3, figsize=(13.5, 5.0))
-            axes[0].imshow(np.asarray(reference.image))
-            axes[0].set_title(
-                f"{label}: what you clicked ({clicked[0]}, {clicked[1]})", fontsize=10
-            )
-            mark(axes[0], clicked[0], clicked[1], "red", "o", "clicked")
-
-            axes[1].imshow(rgb)
-
-            similarity = np.asarray(
-                maps[keypoints.kp_labels.index(label)].detach().cpu()
-            )
+            # dense-correspondence panel (dino)
+            similarity = np.asarray(maps[dino.kp_labels.index(label)].detach().cpu())
             grid_h, grid_w = similarity.shape
-            stride, patch = keypoints.cfg.stride, keypoints.patch_size
+            stride, patch = dino.cfg.stride, dino.patch_size
             # a map on the token grid has to be placed at its window centres; an
             # upsampled map is already at the frame size, so an index is a pixel
-            on_lattice = (grid_h, grid_w) == keypoints.compute_patch_grid_size(
+            on_lattice = (grid_h, grid_w) == dino.compute_patch_grid_size(
                 (height, width)
             ) and grid_h < height
             if on_lattice:
@@ -186,53 +256,105 @@ def main() -> None:
                     rows[-1] + half,
                     rows[0] - half,
                 )
-                axes[1].plot(
-                    np.tile(columns, len(rows)),
-                    np.repeat(rows, len(columns)),
-                    ".",
-                    color="orange",
-                    markersize=1.5,
-                )
             else:
                 extent = (-0.5, width - 0.5, height - 0.5, -0.5)
-            shape_text = (
-                f"{grid_h}x{grid_w} tokens, {patch}px window every {stride}px"
-                if on_lattice
-                else f"{grid_h}x{grid_w} px, descriptors upsampled to the frame"
-            )
-            axes[2].imshow(similarity, cmap="viridis", extent=extent)
-            axes[2].set_title(
-                f"similarity map {shape_text}, "
-                f"peak {float(confidence[keypoints.kp_labels.index(label)]):.2f}",
-                fontsize=10,
-            )
-            mark(axes[2], peak_x, peak_y, "red", "o", "")
-            if args.grid and on_lattice:
-                # the token's own centre, next to where the encoder says it is
-                mark(axes[1], peak_x, peak_y, "orange", "x", "token")
-            mark(axes[1], reported[0], reported[1], "red", "o", "reported")
-            axes[1].set_title(
-                f"frame {frame}: reports ({reported[0]}, {reported[1]}), "
-                f"{gap:.0f} px from the click",
-                fontsize=10,
-            )
-            axes[2].set_yticklabels([])
-            axes[2].set_xticklabels([])
-            print(
-                f"  {'':>4} {label:<9} map {shape_text.split(',')[0]}, peak "
-                f"({peak_x:.0f}, {peak_y:.0f})"
-            )
 
-            for axis in axes:
-                axis.set_xticks([])
-                axis.set_yticks([])
+            # warp panel (roma)
+            ref_image, _, _ = roma.references[label]
+            frame_rgb = image.rgb
+            if frame_rgb.ndim == 3:
+                frame_rgb = frame_rgb[None]
+            preds = roma.model.match(ref_image, frame_rgb.to(roma.device))
+            warp = preds["warp_AB"]
+            if warp.ndim == 4:
+                warp = warp[0]
+            warp = warp.permute(2, 0, 1).cpu().numpy()  # (2, H, W) normalised
+            gh, gw = warp.shape[1], warp.shape[2]
+            warp_ys = np.linspace(-1.0, 1.0, gh)
+            warp_xs = np.linspace(-1.0, 1.0, gw)
+            warp_gx, warp_gy = np.meshgrid(warp_xs, warp_ys)
+            warp_rgb = flow_color(warp[0] - warp_gx, warp[1] - warp_gy)
+
+            def draw(ax_ref, ax_frame, ax_dc, ax_warp) -> None:
+                ax_ref.imshow(
+                    np.asarray(reference.image), extent=(0, width, height, 0)
+                )
+                mark_dashed(
+                    ax_ref,
+                    clicked[0],
+                    clicked[1],
+                    "springgreen",
+                    "reference",
+                )
+
+                ax_frame.imshow(rgb)
+                mark_dashed(
+                    ax_frame,
+                    dino_reported[0],
+                    dino_reported[1],
+                    "deeppink",
+                    "dino",
+                    dashes=(0, 2, 2),
+                )
+                mark_dashed(
+                    ax_frame,
+                    roma_reported[0],
+                    roma_reported[1],
+                    "cyan",
+                    "roma",
+                    dashes=(2, 2, 2),
+                    text_offset=-32,
+                )
+
+                ax_dc.imshow(similarity, cmap="viridis", extent=extent)
+                dc_legend = ax_dc.inset_axes([0.02, 0.02, 0.10, 0.10])
+                dc_legend.imshow(
+                    np.linspace(0.0, 1.0, 64)[None, :], cmap="viridis", aspect="auto"
+                )
+                dc_legend.set_xticks([])
+                dc_legend.set_yticks([])
+                for spine in dc_legend.spines.values():
+                    spine.set_edgecolor("black")
+                    spine.set_linewidth(0.6)
+
+                ax_warp.imshow(warp_rgb, extent=(0, width, height, 0))
+                warp_legend = ax_warp.inset_axes([0.02, 0.02, 0.10, 0.10])
+                warp_legend.imshow(colour_wheel(), aspect="equal")
+                warp_legend.set_xticks([])
+                warp_legend.set_yticks([])
+                for spine in warp_legend.spines.values():
+                    spine.set_edgecolor("black")
+                    spine.set_linewidth(0.6)
+
+                for ax in (ax_ref, ax_frame, ax_dc, ax_warp):
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+
+            # 1 x 4 strip: reference, frame, dense correspondence, warp
+            figure, axes = plt.subplots(1, 4, figsize=(18.0, 5.0))
+            draw(*axes)
             figure.tight_layout()
-            path = out_dir / f"predictions_{frame:06d}_{label}.png"
-            figure.savefig(path, dpi=120, bbox_inches="tight")
+            figure.savefig(
+                out_dir / f"predictions_strip_{frame:06d}_{label}.png",
+                dpi=120,
+                bbox_inches="tight",
+            )
+            plt.close(figure)
+
+            # 2 x 2 grid: reference + frame on top, dense correspondence + warp below
+            figure, axes = plt.subplots(2, 2, figsize=(9.0, 9.0))
+            draw(axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1])
+            figure.tight_layout(h_pad=1.1, w_pad=1.1)
+            figure.savefig(
+                out_dir / f"predictions_grid_{frame:06d}_{label}.png",
+                dpi=120,
+                bbox_inches="tight",
+            )
             plt.close(figure)
             print(
-                f"  frame {frame:>7} {label:<9} clicked {clicked} reported {reported} "
-                f"-> {gap:5.1f} px apart, confidence {poses[label].score:.2f}"
+                f"  frame {frame:>7} {label:<9} clicked {clicked} "
+                f"dino {dino_reported} roma {roma_reported} "
+                f"-> {gap:5.1f} px apart (dino)"
             )
 
     print("  summary, pixels between the clicked and the reported point per label:")

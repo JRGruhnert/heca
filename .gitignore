@@ -40,6 +40,8 @@ data.zip
 /logs
 .logs/
 .deps/
+csv/
+out/
 .torch/
 .figwork/
 .cache/

@@ -14,7 +14,7 @@ from scripts.common.helper import generate_client, get_sim_args, latest_update
 import conf.networks
 
 DEFAULTS: dict[str, object] = {
-    "tag": "roma",
+    "tag": "final",
     "scene": "scene0",
     "smode": SubgoalMode.BOTH,
     "wandb": True,
@@ -35,11 +35,24 @@ RUNS: list[dict[str, object]] = [
     # {"network": "a7"},
     # {"network": "a8"},
     # {"network": "a9"},
-    {"network": "a10"},
+    # {"network": "a10"},
     # {"network": "a11"},
     # {"network": "a12"},
     # {"network": "a13"},
-    # {"network": "a14", "gt": True, "virtual": True, "tag": "final"},
+    {
+        "network": "a14",
+        "gt": True,
+        "virtual": True,
+        "tag": "final",
+        "penalty_lambda": 0.02,
+    },
+    {
+        "network": "a15",
+        "gt": True,
+        "virtual": True,
+        "tag": "final",
+        "penalty_lambda": 0.02,
+    },
     # {"network": "a15", "gt": True, "virtual": True, "tag": "final"},
 ]
 

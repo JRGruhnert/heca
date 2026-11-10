@@ -250,12 +250,12 @@ def weight_key(checkpoint: dict, weights: str) -> dict:
     return checkpoint[key]
 
 
-def save_result(run_dir: Path, payload: dict) -> Path:
+def save_result(run_dir: Path, payload: dict, suffix: str = "") -> Path:
     out_dir = run_dir / "eval"
     out_dir.mkdir(parents=True, exist_ok=True)
     action = "_container" if payload.get("container") else ""
     stem = Path(str(payload["checkpoint"])).stem
-    path = out_dir / f"{stem}_{payload['mode']}{action}.json"
+    path = out_dir / f"{stem}_{payload['mode']}{action}{suffix}.json"
     path.write_text(json.dumps(payload, indent=2) + "\n")
     logger.info(f"  saved {path}")
     return path
@@ -326,6 +326,12 @@ def main():
     ap.add_argument("--virtual", action=argparse.BooleanOptionalAction, default=True)
     ap.add_argument("--container", action="store_true")
     ap.add_argument(
+        "--result-suffix",
+        default="",
+        help="appended to the per-run result file name, e.g. '_gt' so a "
+        "gt-only evaluation does not overwrite the default protocol's files",
+    )
+    ap.add_argument(
         "--penalty-lambda",
         type=float,
         default=0.0,
@@ -372,8 +378,6 @@ def main():
             reload=False,
             use_gt=args.gt,
             smode=SubgoalMode.BOTH,
-            penalty_lambda=args.penalty_lambda,
-            penalty_power=args.penalty_power,
         )
     )
 
@@ -431,6 +435,7 @@ def main():
                     "checkpoint_unexpected": len(unexpected),
                     "timestamp": datetime.now().isoformat(timespec="seconds"),
                 },
+                args.result_suffix,
             )
 
         spread = stdev(per_tag) if len(per_tag) > 1 else 0.0
@@ -563,6 +568,7 @@ def main():
                     for idx, task in enumerate(tasks)
                 ],
             },
+            args.result_suffix,
         )
 
     spread = stdev(per_tag) if len(per_tag) > 1 else 0.0

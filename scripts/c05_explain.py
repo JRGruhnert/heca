@@ -98,7 +98,7 @@ def gradient_saliency(
 
     with torch.no_grad():
         per_row = (
-            entity.grad.abs().sum(dim=1)
+            entity.grad.sum(dim=1)
             if entity.grad is not None
             else torch.zeros(entity.shape[0])
         )
@@ -196,13 +196,24 @@ def occlusion(
     return result
 
 
-def plot_step(path: Path, explanation: StepExplanation, top: int = 12) -> None:
-    """Option logits, per-entity saliency and per-entity occlusion, one figure."""
-    fig, axes = plt.subplots(1, 3, figsize=(19, 6))
+def plot_step(path: Path, explanation: StepExplanation) -> None:
+    """Option logits (z-scored) and signed per-entity saliency, one figure.
 
+    Minimal on purpose: no titles or axis labels, the legend lives in LaTeX.
+    Panel 1: per-step z-scored logits of every option in its fixed graph index
+    order, as a thin-bar distribution centred on 0 (gold = chosen, grey x =
+    gated off). Panel 2: signed d logit(chosen)/d entity rows, centred on 0.
+    """
     logits = np.asarray(explanation.logits, dtype=float)
     finite = np.isfinite(logits)
-    order = np.argsort(-np.where(finite, logits, -np.inf))[:top]
+    centre = logits[finite].mean() if finite.any() else 0.0
+    scale = logits[finite].std() if finite.sum() > 1 else 1.0
+    z = np.where(finite, (logits - centre) / max(scale, 1e-9), 0.0)
+    order = np.arange(len(logits))
+
+    fig, axes = plt.subplots(1, 2, figsize=(6.5, 2.5), squeeze=False)
+    ax = axes[0, 0]
+
     colours = [
         (
             "gold"
@@ -211,49 +222,262 @@ def plot_step(path: Path, explanation: StepExplanation, top: int = 12) -> None:
         )
         for i in order
     ]
-    axes[0].bar(
-        range(len(order)), np.where(finite[order], logits[order], 0.0), color=colours
-    )
-    axes[0].set_xticks(range(len(order)))
-    axes[0].set_xticklabels(
-        [explanation.labels[i][:22] for i in order], rotation=60, ha="right", fontsize=7
-    )
-    axes[0].set_ylabel("logit")
-    axes[0].set_title(
-        f"step {explanation.step}: option logits (budget {explanation.budget:.0f}, "
-        f"value {explanation.value:.2f})\ngold = chosen, grey = gated off"
-    )
+    ax.bar(order, z, width=0.6, color=colours)
+    for idx in order[~finite]:  # gated off: mark the zero-height bar visibly
+        ax.plot(idx, 0.0, marker="x", color="grey", markersize=3.0)
+    ax.axhline(0.0, color="black", linewidth=0.8)
+    span = float(np.abs(z[finite]).max()) if finite.any() else 1.0
+    ax.set_xlim(-1.0, len(z))
+    ax.set_ylim(-1.15 * max(span, 1e-6), 1.15 * max(span, 1e-6))
+    ax.grid(True, alpha=0.3, axis="y")
 
+    ax2 = axes[0, 1]
     names = sorted(explanation.entity_saliency)
-    axes[1].bar(
-        names, [explanation.entity_saliency[n] for n in names], color="tab:purple"
+    values = [explanation.entity_saliency[n] for n in names]
+    ax2.bar(
+        names,
+        values,
+        color=["tab:red" if v >= 0.0 else "tab:blue" for v in values],
     )
-    axes[1].set_title("saliency: |d logit(chosen) / d entity rows|")
-    axes[1].tick_params(axis="x", rotation=45)
-
-    width = 0.25
-    x = np.arange(len(names))
-    for offset, key, colour in (
-        (-width, "current", "tab:blue"),
-        (0.0, "goal", "tab:orange"),
-        (width, "comps", "tab:green"),
-    ):
-        axes[2].bar(
-            x + offset,
-            [explanation.occluded[n][key] for n in names],
-            width=width,
-            label=key,
-            color=colour,
-        )
-    axes[2].axhline(0.0, color="black", linewidth=0.8)
-    axes[2].set_xticks(x)
-    axes[2].set_xticklabels(names, rotation=45)
-    axes[2].set_ylabel("change in logit(chosen)")
-    axes[2].set_title("occlusion: zeroing an entity's rows / goal / comps")
-    axes[2].legend(fontsize=8)
+    ax2.axhline(0.0, color="black", linewidth=0.8)
+    ax2.tick_params(axis="x", rotation=45, labelsize=7)
 
     fig.tight_layout()
     fig.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def logit_grid(steps: list[dict], n_steps: int = 16) -> np.ndarray:
+    """(n_options, n_steps) z-scored logits, each column scaled to its own [0, 1].
+
+    Gated options sit at -0.05 (below the viridis scale, i.e. darkest) and steps
+    after the end of the episode are NaN, drawn as white.
+    """
+    n_options = len(steps[0]["labels"])
+    zs = []
+    for s in steps:
+        logits = np.asarray(s["logits"], dtype=float)
+        finite = np.isfinite(logits)
+        centre = logits[finite].mean() if finite.any() else 0.0
+        scale = logits[finite].std() if finite.sum() > 1 else 1.0
+        zs.append(np.where(finite, (logits - centre) / max(scale, 1e-9), np.nan))
+
+    taken = min(len(zs), n_steps)
+    display = np.full((n_options, n_steps), np.nan)
+    for t in range(taken):
+        col = zs[t].copy()
+        finite = np.isfinite(col)
+        n_finite = int(finite.sum())
+        if n_finite > 1:  # each column scaled to its own min/max
+            lo, hi = float(col[finite].min()), float(col[finite].max())
+            rng = (hi - lo) or 1.0
+            col[finite] = (col[finite] - lo) / rng
+        elif n_finite == 1:
+            col[finite] = 0.5
+        col[~finite] = -0.05  # gated -> below vmin -> darkest viridis
+        display[:, t] = col
+    return display
+
+
+def saliency_grid(
+    steps: list[dict], n_steps: int = 16
+) -> tuple[np.ndarray, list[str]]:
+    """(n_entities, n_steps) signed entity saliency and the entity names."""
+    entities = sorted(steps[0]["entity_saliency"])
+    taken = min(len(steps), n_steps)
+    grid = np.full((len(entities), n_steps), np.nan)
+    for t in range(taken):
+        for row, name in enumerate(entities):
+            grid[row, t] = float(steps[t]["entity_saliency"].get(name, 0.0))
+    return grid, entities
+
+
+def saliency_span(grid: np.ndarray) -> float:
+    """Symmetric colormap limit for a saliency grid (1.0 when it is all zero)."""
+    return float(np.nanmax(np.abs(grid))) if np.isfinite(grid).any() else 1.0
+
+
+def plot_episode_heatmaps(path: Path, steps: list[dict], n_steps: int = 16) -> None:
+    """Two heatmaps over the episode: option logits and entity saliency.
+
+    Top: steps x options (fixed order), cells = z-scored logits; every column
+    is scaled to its own min/max, so each step's strongest option is yellow
+    (viridis), gated options sit below the scale (darkest), white = after the
+    episode ended. Bottom: steps x entities, cells = signed saliency (RdYlGn:
+    red = pushes the choice down, green = up).
+    """
+    if not steps:
+        return
+    n_options = len(steps[0]["labels"])
+    display = logit_grid(steps, n_steps)
+    es_grid, entities = saliency_grid(steps, n_steps)
+    es_span = saliency_span(es_grid)
+
+    fig, axes = plt.subplots(
+        2,
+        1,
+        figsize=(4.8, 6.75),
+        gridspec_kw={"height_ratios": (n_options, len(entities))},
+        squeeze=False,
+    )
+
+    ax = axes[0, 0]
+    logit_cmap = plt.get_cmap("viridis").copy()
+    logit_cmap.set_bad("white")
+    ax.imshow(
+        np.ma.masked_invalid(display),
+        cmap=logit_cmap,
+        vmin=0.0,
+        vmax=1.0,
+        aspect=0.5,
+        interpolation="nearest",
+    )
+    ax.set_yticks([])
+    ax.set_xticks(range(n_steps))
+    ax.set_xticklabels([])
+
+    ax2 = axes[1, 0]
+    sal_cmap = plt.get_cmap("RdYlGn").copy()
+    sal_cmap.set_bad("white")
+    ax2.imshow(
+        np.ma.masked_invalid(es_grid),
+        cmap=sal_cmap,
+        vmin=-max(es_span, 1e-6),
+        vmax=max(es_span, 1e-6),
+        aspect=0.5,
+        interpolation="nearest",
+    )
+    ax2.set_yticks(range(len(entities)), entities, fontsize=10)
+    ax2.set_xticks(range(n_steps))
+    ax2.tick_params(labelsize=10)
+
+    fig.tight_layout()
+    fig.savefig(path, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+
+
+def plot_compare(
+    path: Path,
+    columns: list[tuple[str, dict]],
+    rows: str = "both",
+    ylabels: str = "left",
+    n_steps: int = 16,
+    shared_scale: bool = False,
+    y_options: bool = False,
+    dpi: int = 200,
+) -> None:
+    """Several explain runs side by side, each keeping the stacked layout.
+
+    ``columns`` is a list of ``(title, payload)`` with payload a ``ckp_*_ep*.json``
+    document from this script.  Every column draws the same panels as
+    :func:`plot_episode_heatmaps` -- option logits above entity saliency -- so a
+    column is exactly the figure that was drawn before, and the runs are
+    compared by putting their columns next to each other.  The panels are
+    height-ratioed by their row counts, which is what keeps the 40-option
+    logits heatmap and the 5-entity saliency heatmap readable in one figure.
+
+    ``rows``: ``"both"`` (default), ``"logits"`` or ``"saliency"`` to draw only
+    one panel per column.  ``ylabels``: ``"left"`` (default) puts the entity
+    names on the leftmost column only -- printing them under every column is
+    what forces the large horizontal gap -- ``"all"`` or ``"none"``.  With
+    ``y_options`` the leftmost column also labels its option rows.
+    ``shared_scale`` uses one saliency colour scale for every column so the
+    colours are comparable across runs.
+    """
+    if not columns:
+        return
+    if rows not in ("both", "logits", "saliency"):
+        raise ValueError(f"rows must be both|logits|saliency, got {rows!r}")
+
+    grids = []
+    for title, payload in columns:
+        steps = payload["explanations"]
+        logit = logit_grid(steps, n_steps) if rows in ("both", "logits") else None
+        sal, entities = (
+            saliency_grid(steps, n_steps) if rows in ("both", "saliency") else (None, None)
+        )
+        grids.append((title, logit, sal, entities))
+
+    n = len(grids)
+    n_options = len(columns[0][1]["explanations"][0]["labels"])
+    n_entities = len(grids[0][3] or [])
+    span = (
+        max(saliency_span(g[2]) for g in grids if g[2] is not None)
+        if shared_scale
+        else None
+    )
+
+    ratios = {
+        "both": (n_options, n_entities),
+        "logits": (n_options,),
+        "saliency": (n_entities,),
+    }[rows]
+    # size the canvas so the cells keep aspect=0.5 exactly (0.3 in per step,
+    # as in plot_episode_heatmaps); otherwise the axes are letterboxed inside
+    # their boxes and the panels drift apart vertically
+    cell = 0.3
+    fig, axes = plt.subplots(
+        len(ratios),
+        n,
+        figsize=(n_steps * cell * n, 0.5 * cell * sum(ratios)),
+        gridspec_kw={
+            "height_ratios": ratios,
+            "wspace": 0.03,
+            "hspace": 0.03,
+        },
+        squeeze=False,
+    )
+    logit_cmap = plt.get_cmap("viridis").copy()
+    logit_cmap.set_bad("white")
+    sal_cmap = plt.get_cmap("RdYlGn").copy()
+    sal_cmap.set_bad("white")
+
+    for col, (_, logit, sal, entities) in enumerate(grids):
+        row = 0
+        if logit is not None:
+            ax = axes[row, col]
+            ax.imshow(
+                np.ma.masked_invalid(logit),
+                cmap=logit_cmap,
+                vmin=0.0,
+                vmax=1.0,
+                aspect=0.5,
+                interpolation="nearest",
+            )
+            if col == 0 and y_options:
+                labels = columns[col][1]["explanations"][0]["labels"]
+                ax.set_yticks(range(len(labels)), labels, fontsize=5)
+            else:
+                ax.set_yticks([])
+            ax.set_xticks(range(n_steps))
+            ax.set_xticklabels([])
+            row += 1
+        if sal is not None:
+            ax = axes[row, col]
+            limit = max(span if span is not None else saliency_span(sal), 1e-6)
+            ax.imshow(
+                np.ma.masked_invalid(sal),
+                cmap=sal_cmap,
+                vmin=-limit,
+                vmax=limit,
+                aspect=0.5,
+                interpolation="nearest",
+            )
+            if ylabels == "none" or (ylabels == "left" and col > 0):
+                ax.set_yticks([])
+            else:
+                ax.set_yticks(range(len(entities)), entities, fontsize=9)
+            ax.set_xticks(range(n_steps))
+            ax.set_xticklabels([])
+
+    # step numbers on the bottom panel of every column, exactly as in
+    # plot_episode_heatmaps (the logits heatmap above it has none)
+    for col in range(n):
+        bottom = axes[-1, col]
+        bottom.set_xticks(range(n_steps))
+        bottom.set_xticklabels([str(i) for i in range(n_steps)], fontsize=9)
+
+    fig.savefig(path, dpi=dpi, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -274,7 +498,7 @@ def plot_graph(path: Path, graph: Graph, explanation: StepExplanation) -> None:
 
     importance = {key: 0.0 for key in G.nodes}
     for key, value in explanation.row_saliency.items():
-        importance[key] = value
+        importance[key] = abs(value)
     top = max(importance.values()) or 1.0
     for key in G.nodes:
         importance[key] /= top
@@ -323,7 +547,7 @@ def plot_graph(path: Path, graph: Graph, explanation: StepExplanation) -> None:
             (
                 "gold"
                 if k == explanation.chosen_label
-                else ("tab:green" if explanation.gated[i] else "lightgrey")
+                else ("lightgrey" if explanation.gated[i] else "tab:green")
             )
             for i, k in enumerate(option_keys)
         ],
@@ -356,11 +580,6 @@ def plot_graph(path: Path, graph: Graph, explanation: StepExplanation) -> None:
                 ax=ax,
             )
     nx.draw_networkx_labels(G, pos, {k: k[:20] for k in G.nodes}, font_size=6, ax=ax)
-    ax.set_title(
-        f"step {explanation.step}: chosen {explanation.chosen_label}\n"
-        "entity size/colour = saliency, condition edge width = saliency, "
-        "gold = chosen option, grey options = gated off"
-    )
     ax.axis("off")
     fig.tight_layout()
     fig.savefig(path, dpi=200, bbox_inches="tight")
@@ -473,6 +692,19 @@ def main():
     )
     ap.add_argument("--seed", type=int, default=0, help="env RNG seed")
     ap.add_argument(
+        "--mode",
+        choices=("randomized", "task"),
+        default="randomized",
+        help="scene mode to explain: the training distribution, or one fixed "
+        "task setup (repeatable across networks via --seed and --task-id)",
+    )
+    ap.add_argument(
+        "--task-id",
+        type=int,
+        default=1,
+        help="with --mode task: the ogbench task id (1-based, default 1)",
+    )
+    ap.add_argument(
         "--method",
         choices=("saliency", "occlusion", "both"),
         default="both",
@@ -512,13 +744,14 @@ def main():
             smode=SubgoalMode.BOTH,
         )
     )
-    heca.scene.set_mode("randomized")
+    heca.scene.set_mode(args.mode)
     graph = heca.graph
     captured = capture_build(heca)
 
     logger.info(
         f"{len(args.tag)} tag(s), net={args.network}, {args.episodes} episode(s), "
-        f"{args.steps or 'all'} step(s) each, method={args.method}"
+        f"{args.steps or 'all'} step(s) each, method={args.method}, "
+        f"mode={args.mode}" + (f", task_id={args.task_id}" if args.mode == "task" else "")
     )
     if not heca.learner.network.cfg.use_statistics:
         logger.warning(
@@ -545,6 +778,8 @@ def main():
         out_dir.mkdir(parents=True, exist_ok=True)
 
         for episode in range(args.episodes):
+            if args.mode == "task":
+                heca.scene.task_id = args.task_id
             heca.scene.seed = args.seed + episode
             x, y = heca.sample()
             steps: list[dict] = []
@@ -601,11 +836,18 @@ def main():
                 if fb.end or finished or step > 64:
                     break
 
+            if args.plots and steps:
+                plot_episode_heatmaps(
+                    out_dir / f"{path.stem}_ep{episode:02d}_heatmap.png", steps
+                )
+
             payload = {
                 "tag": tag,
                 "checkpoint": path.name,
                 "scene": args.scene,
                 "network": args.network,
+                "mode": args.mode,
+                "task_id": args.task_id if args.mode == "task" else None,
                 "seed": heca.scene.seed,
                 "episode": episode,
                 "success": bool(fb.success) if fb else False,

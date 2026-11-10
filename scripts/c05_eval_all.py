@@ -1,7 +1,8 @@
 """Evaluate every checkpointed run under the network folder, on scene0.
 
 Each run is evaluated at its own newest checkpoint (the step of one seed is
-never forced down to another seed's). Results are kept in one registry file per
+never forced down to another seed's); ``--step N`` caps that at step N
+instead, taking the newest checkpoint each run has at or before N. Results are kept in one registry file per
 (network, fed, eval mode, container):
 
     data/network/eval/{network}[_fed]_{mode}[_container].json
@@ -14,13 +15,19 @@ aggregate, split by fed and container as well. The sweep ends with a per-run
 checkpoint table, so runs that stopped early are visible at a glance.
 
 Exactly one of ``--gt`` / ``--virt`` / ``--vis`` says which observation protocol
-to evaluate (and which runs it applies to). ``--container`` switches the scene
-to ogbench's container-wide success. Federated runs are detected by their
-checkpoint location (``clients/global/ckp_*.pt``) and get their own files.
+to evaluate (and which runs it applies to). By default every run is evaluated
+twice, one after the other: plain success and ogbench's container-wide success
+(``--containers both``; ``--containers plain`` / ``container`` or the legacy
+``--no-container`` / ``--container`` narrow it to one). Each definition keeps
+its own registry, result files and benchmark rows. Federated runs are detected
+by their checkpoint location (``clients/global/ckp_*.pt``) and get their own
+files.
 
     python -m scripts.c05_eval_all --virt
-    python -m scripts.c05_eval_all --virt --container
+    python -m scripts.c05_eval_all --virt --no-container
     python -m scripts.c05_eval_all --vis --force --dry-run
+    python -m scripts.c05_eval_all --virt --step 500   # <= 500, per run
+    python -m scripts.c05_eval_all --virt --containers both
 """
 
 import argparse
@@ -91,8 +98,14 @@ def run_dirs(root: Path) -> list[Path]:
     return [path for path in found if checkpoints_of(path)[0]]
 
 
-def plan(root, gt, virtual, scene, only, all_ckp) -> list[dict]:
-    """One job per (run, checkpoint): the run's own newest step by default."""
+def plan(root, gt, virtual, scene, only, all_ckp, step=None) -> list[dict]:
+    """One job per (run, checkpoint).
+
+    The run's own newest step by default; ``--all-checkpoints`` takes every
+    step; ``--step N`` takes the newest checkpoint of the run with step <= N,
+    so the requested step is an upper bound and a run that stopped earlier is
+    still evaluated at the last step it reached.
+    """
     jobs: list[dict] = []
     for run_dir in run_dirs(root):
         parts = run_parts(run_dir.name, scene)
@@ -107,7 +120,23 @@ def plan(root, gt, virtual, scene, only, all_ckp) -> list[dict]:
         if not ckps:
             logger.warning(f"skip {run_dir.name}: no checkpoint found")
             continue
-        chosen = ckps if all_ckp else ckps[-1:]
+        if all_ckp:
+            chosen = ckps
+        elif step is not None:
+            before = [path for path in ckps if by_step(path) <= step]
+            if not before:
+                logger.warning(
+                    f"skip {run_dir.name}: no checkpoint at or before step {step} "
+                    f"(first is {by_step(ckps[0])})"
+                )
+                continue
+            chosen = before[-1:]
+            if by_step(chosen[0]) != step:
+                logger.info(
+                    f"{run_dir.name}: step {step} not present, using {chosen[0].name}"
+                )
+        else:
+            chosen = ckps[-1:]
         for path in chosen:
             jobs.append(
                 {
@@ -121,7 +150,7 @@ def plan(root, gt, virtual, scene, only, all_ckp) -> list[dict]:
     return jobs
 
 
-def command(root: Path, job: dict, args, gt: bool, virtual: bool) -> list:
+def command(root: Path, job: dict, args, gt: bool, virtual: bool, container: bool) -> list:
     return [
         sys.executable,
         "-m",
@@ -145,7 +174,7 @@ def command(root: Path, job: dict, args, gt: bool, virtual: bool) -> list:
         "--epochs",
         str(args.epochs),
         "--no-summary",
-    ] + (["--container"] if args.container else [])
+    ] + (["--container"] if container else [])
 
 
 def result_file(run_dir: Path, ckp_rel: str, mode: str, container: bool) -> Path:
@@ -213,18 +242,50 @@ def main():
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--root", type=Path, default=DEFAULT_ROOT)
-    parser.add_argument(
+    checkpoint = parser.add_mutually_exclusive_group()
+    checkpoint.add_argument(
         "--all-checkpoints",
         action="store_true",
         help="evaluate every checkpoint step of each run instead of the newest one",
+    )
+    checkpoint.add_argument(
+        "--step",
+        "--ckp-step",
+        type=int,
+        default=None,
+        metavar="N",
+        help="evaluate the newest checkpoint with step <= N: the step is an "
+        "upper bound, and a run whose newest checkpoint is earlier is evaluated "
+        "at that one instead (logged). Runs with no checkpoint at or before N "
+        "are skipped.",
     )
     parser.add_argument(
         "--force",
         action="store_true",
         help="re-evaluate runs whose registry entry is already up to date",
     )
-    parser.add_argument(
-        "--container", action="store_true", help="container-wide success"
+    containers = parser.add_mutually_exclusive_group()
+    containers.add_argument(
+        "--containers",
+        choices=("both", "plain", "container"),
+        default="both",
+        help="which success definition(s) to evaluate, one after the other: "
+        "plain, container (ogbench container-wide success) or both (default). "
+        "Each gets its own registry, result files and benchmark rows.",
+    )
+    containers.add_argument(
+        "--container",
+        dest="containers",
+        action="store_const",
+        const="container",
+        help="only container-wide success (same as --containers container)",
+    )
+    containers.add_argument(
+        "--no-container",
+        dest="containers",
+        action="store_const",
+        const="plain",
+        help="only plain success (same as --containers plain)",
     )
     parser.add_argument(
         "--eval-mode", default="task", help="c04_eval scene mode (default: task)"
@@ -253,59 +314,79 @@ def main():
     )
     args = parser.parse_args()
     gt, virtual = MODES[args.mode]
+    container_modes = {"both": (False, True), "plain": (False,), "container": (True,)}[
+        args.containers
+    ]
 
-    jobs = plan(args.root, gt, virtual, SCENE, args.only, args.all_checkpoints)
+    jobs = plan(
+        args.root, gt, virtual, SCENE, args.only, args.all_checkpoints, args.step
+    )
     if not jobs:
-        raise SystemExit(f"no checkpointed run under {args.root} matches --{args.mode}")
+        raise SystemExit(
+            f"no checkpointed run under {args.root} matches --{args.mode}"
+            + (
+                f" with a checkpoint at or before step {args.step}"
+                if args.step is not None
+                else ""
+            )
+        )
 
     evaluated: list[tuple[str, str, str]] = []  # (run, checkpoint, status)
-    for index, job in enumerate(jobs, 1):
-        reg_path = registry_path(
-            args.root, job["parts"]["network"], job["fed"], args.eval_mode, args.container
-        )
-        registry = load_registry(reg_path)
-        result_path = result_file(
-            job["run_dir"], job["ckp_rel"], args.eval_mode, args.container
-        )
-        if is_fresh(registry, job["name"], job["ckp_rel"]) and not args.force:
-            logger.info(
-                f"[{index}/{len(jobs)}] skip {job['name']} @ {job['ckp_rel']} "
-                f"(already in {reg_path.relative_to(args.root)})"
+    total = len(jobs) * len(container_modes)
+    index = 0
+    for job in jobs:
+        for container in container_modes:
+            index += 1
+            label = "container" if container else "plain"
+            reg_path = registry_path(
+                args.root,
+                job["parts"]["network"],
+                job["fed"],
+                args.eval_mode,
+                container,
             )
-            evaluated.append((job["name"], job["ckp_rel"], "skip"))
-            continue
-        if result_path.exists() and not args.force:
-            # a previous sweep (or a manual c04_eval) already wrote this result:
-            # adopt it into the registry instead of re-running the episodes
-            logger.info(
-                f"[{index}/{len(jobs)}] adopt {job['name']} @ {job['ckp_rel']} "
-                f"(existing {result_path.relative_to(job['run_dir'])})"
+            registry = load_registry(reg_path)
+            result_path = result_file(
+                job["run_dir"], job["ckp_rel"], args.eval_mode, container
             )
-            evaluated.append((job["name"], job["ckp_rel"], "adopted"))
+            if is_fresh(registry, job["name"], job["ckp_rel"]) and not args.force:
+                logger.info(
+                    f"[{index}/{total}] skip {label} {job['name']} @ {job['ckp_rel']} "
+                    f"(already in {reg_path.relative_to(args.root)})"
+                )
+                evaluated.append((job["name"], job["ckp_rel"], f"skip {label}"))
+                continue
+            if result_path.exists() and not args.force:
+                # a previous sweep (or a manual c04_eval) already wrote this
+                # result: adopt it instead of re-running the episodes
+                logger.info(
+                    f"[{index}/{total}] adopt {label} {job['name']} @ {job['ckp_rel']} "
+                    f"(existing {result_path.relative_to(job['run_dir'])})"
+                )
+                evaluated.append((job["name"], job["ckp_rel"], f"adopted {label}"))
+                if args.dry_run:
+                    continue
+                merge_result(registry, job, json.loads(result_path.read_text()))
+                save_registry(reg_path, registry)
+                continue
+
+            logger.info(
+                f"[{index}/{total}] {args.mode} {label} / "
+                f"{job['parts']['network']} / {job['name']} @ {job['ckp_rel']}"
+            )
+            cmd = command(args.root, job, args, gt, virtual, container)
             if args.dry_run:
+                print(" ".join(cmd))
+                continue
+            subprocess.run(cmd, check=True)
+
+            if not result_path.exists():
+                logger.error(f"no result file written at {result_path}; not merged")
+                evaluated.append((job["name"], job["ckp_rel"], f"missing {label}"))
                 continue
             merge_result(registry, job, json.loads(result_path.read_text()))
             save_registry(reg_path, registry)
-            continue
-
-        logger.info(
-            f"[{index}/{len(jobs)}] {args.mode}"
-            f"{' container' if args.container else ''} / "
-            f"{job['parts']['network']} / {job['name']} @ {job['ckp_rel']}"
-        )
-        cmd = command(args.root, job, args, gt, virtual)
-        if args.dry_run:
-            print(" ".join(cmd))
-            continue
-        subprocess.run(cmd, check=True)
-
-        if not result_path.exists():
-            logger.error(f"no result file written at {result_path}; not merged")
-            evaluated.append((job["name"], job["ckp_rel"], "missing"))
-            continue
-        merge_result(registry, job, json.loads(result_path.read_text()))
-        save_registry(reg_path, registry)
-        evaluated.append((job["name"], job["ckp_rel"], "evaluated"))
+            evaluated.append((job["name"], job["ckp_rel"], f"evaluated {label}"))
 
     if args.dry_run:
         return
@@ -313,14 +394,15 @@ def main():
     # keep benchmark cells in sync with every registry the sweep touched
     for network in {job["parts"]["network"] for job in jobs}:
         for fed in (False, True):
-            reg_path = registry_path(
-                args.root, network, fed, args.eval_mode, args.container
-            )
-            if not reg_path.exists():
-                continue
-            update_benchmark(
-                args.root, reg_path, network, fed, args.eval_mode, args.container, SCENE
-            )
+            for container in container_modes:
+                reg_path = registry_path(
+                    args.root, network, fed, args.eval_mode, container
+                )
+                if not reg_path.exists():
+                    continue
+                update_benchmark(
+                    args.root, reg_path, network, fed, args.eval_mode, container, SCENE
+                )
 
     # the per-run checkpoint table: early-stopped seeds are visible at a glance
     print("\n== per-run checkpoints ==")
