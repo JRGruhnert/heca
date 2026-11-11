@@ -69,12 +69,19 @@ def scene_config(scene_tag: str) -> Scene.Config:
     return experts_for_scene(scene_tag)[0].scene
 
 
+#: each scene's own keypoint config, captured before anything mutates it, so
+#: switching back to dino restores the scene default instead of whatever was
+#: selected last
+_DEFAULT_KP: dict[str, object] = {}
+
+
 def select_encoder(
     tag: str, backbone: str = "", stride: int = 0, backend: str = "dino"
 ):
     """Point a scene's agents at one keypoint matcher."""
     agents = experts_for_scene(tag)
     base = agents[0].kp_extraction
+    pristine = _DEFAULT_KP.setdefault(tag, base)
     if not backbone and not stride and backend == getattr(
         base, "backend", "dino"
     ):
@@ -85,7 +92,15 @@ def select_encoder(
 
         chosen = RomaEncoder.Config(device=getattr(base, "device", ""))
     else:
-        chosen = base
+        # the scene's own dino config, not ``base``: ``base`` is whatever the
+        # agents point at right now, so reusing it would keep a previously
+        # selected roma encoder and silently ignore ``backend="dino"``
+        if getattr(pristine, "backend", "dino") == "dino":
+            chosen = pristine
+        else:
+            from heca.image_encoders.dino_encoder import DinoEncoder
+
+            chosen = DinoEncoder.Config(device=getattr(base, "device", ""))
         changes: dict = {}
         if backbone:
             changes["backbone"] = backbone

@@ -109,13 +109,20 @@ def main() -> None:
         with path.open(newline="") as handle:
             reader = csv.DictReader(handle)
             fields = reader.fieldnames or []
+            axis_fields = [f"error_offset_{axis}" for axis in ("x", "y", "z")]
+            for axis_field in axis_fields:
+                if axis_field not in fields:
+                    fields.append(axis_field)
             for row in reader:
                 offset = offsets.get(row["entity"], np.zeros(3))
                 if offset is None:
                     offset = np.zeros(3)
                 seen = np.array([row["vis_x"], row["vis_y"], row["vis_z"]], dtype=float)
                 truth = np.array([row["gt_x"], row["gt_y"], row["gt_z"]], dtype=float)
-                row["error_offset"] = f"{float(np.linalg.norm(seen + offset - truth)):.6f}"
+                corrected = seen + offset - truth
+                row["error_offset"] = f"{float(np.linalg.norm(corrected)):.6f}"
+                for axis in ("x", "y", "z"):
+                    row[f"error_offset_{axis}"] = f"{abs(float(corrected[('xyz'.index(axis))])):.6f}"
                 updated += 1
                 rows.append(row)
         with path.open("w", newline="") as handle:

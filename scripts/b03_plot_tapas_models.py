@@ -92,6 +92,13 @@ def get_env_safely(scene: Scene) -> SceneEnvBase:
     return cast(SceneEnvBase, scene.env.unwrapped)
 
 
+def read_suffix(model: ExpertModel) -> str:
+    """``gt`` for the ground-truth policy, ``img_<backend>`` for image reads."""
+    if getattr(model, "_use_gt", True):
+        return "gt"  # no keypoint encoder is involved
+    return f"img_{backend_suffix(model.cfg)}"
+
+
 def save_prediction_plots(model: ExpertModel, episode: int, attempt: int) -> int:
     """Persist the figures a prediction batch opened (TAPAS ``dbg_prediction``)."""
     out_dir = ExpertModel.save_dir(model.cfg) / "plots"
@@ -99,7 +106,7 @@ def save_prediction_plots(model: ExpertModel, episode: int, attempt: int) -> int
     written = 0
     for num in plt.get_fignums():
         figure = plt.figure(num)
-        suffix = backend_suffix(model.cfg)
+        suffix = read_suffix(model)
         path = out_dir / (
             f"{model.cfg.tag}_{suffix}_prediction"
             f"_ep{episode:02d}_try{attempt:02d}_{num}.png"
@@ -123,7 +130,7 @@ def save_model_plots(model: ExpertModel, demo_idx: int = 0, extended: bool = Fal
         for num in plt.get_fignums():
             figure = plt.figure(num)
             path = out_dir / (
-                f"{model.cfg.tag}_{backend_suffix(model.cfg)}_model_{label}_{num}.png"
+                f"{model.cfg.tag}_{read_suffix(model)}_model_{label}_{num}.png"
             )
             figure.savefig(path, dpi=150, bbox_inches="tight")
             logger.info(f"Saved model plot to {path}")
@@ -596,7 +603,13 @@ def main():
                     logger.info(f"[{scene_cfg.tag}] {json_path.name}: no agents to plot")
         return
 
-    backends = ["dino", "roma"] if args.kp_backend == "all" else [args.kp_backend]
+    # the ground-truth policy carries no keypoint encoder: one pass, and the
+    # --kp-backend choice is meaningless there
+    backends = (
+        ["dino"]
+        if args.gt
+        else (["dino", "roma"] if args.kp_backend == "all" else [args.kp_backend])
+    )
     for backend in backends:
         for tag in scene_tags():
             if args.scene and tag != args.scene:

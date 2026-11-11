@@ -47,5 +47,8 @@ out/
 .cache/
 data.tar.zst
 data-server/
+eval-server/
+plots_server/
+visual-server/
 eval/
 visual/

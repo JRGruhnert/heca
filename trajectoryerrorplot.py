@@ -14,7 +14,7 @@ import numpy as np
 # ============================================================================
 CSV_DIR = "visual"  # folder holding <model>_<backend>_errors.csv
 CSV_GLOB = "*_errors.csv"
-OUT_DIR = "out"
+OUT_DIR = "out/errors"
 SCENE = "scene0"
 ERROR_COLUMN = "error_offset"  # b06/b07 output; "error" is the fallback
 GRID_POINTS = 100  # points per segment of the normalized-step axis
@@ -23,7 +23,7 @@ SMOOTH_FRACTION = 0.05  # gaussian sigma as a fraction of the segment length
 # Axis
 DPI = 300  # 300 for papers, 150 for quick looks
 XMIN = 0.0  # every segment is normalized to its own unit interval
-YMIN = 0.0  # set to None to fit the data
+YMIN = -0.01  # set to None to fit the data
 YMAX = None  # set to None to fit mean+std with padding
 PAD = 0.05  # fractional padding when a limit is None
 # Figure
@@ -57,6 +57,7 @@ TITLE_SIZE = 9  # axes title
 
 XLABEL = "Normalized step"
 YLABEL = "Trajectory error [m]"
+YLABEL_AXIS = "Trajectory {axis} error [m]"
 
 
 # ============================================================================
@@ -69,11 +70,14 @@ def num(value) -> float:
         return float("nan")
 
 
-def read_rows(path: Path) -> tuple[dict[str, dict[int, dict[int, float]]], str]:
-    """Per entity, per demo: the error per step, plus the column that was used.
+def read_rows(
+    path: Path,
+) -> tuple[dict[str, dict[int, dict[int, dict[str, float]]]], str, bool]:
+    """Per entity, per demo: ``{"total", "x", "y", "z"}`` error per step.
 
-    The error column falls back to ``error`` when the offset-corrected one is
-    missing.
+    ``total`` is the error column (the offset-corrected one when present, else
+    ``error``); the per-axis values are ``|vis_<axis> - gt_<axis>|`` in the same
+    units (metres).
     """
     with open(path, newline="") as fh:
         rows = list(csv.DictReader(fh))
@@ -86,16 +90,37 @@ def read_rows(path: Path) -> tuple[dict[str, dict[int, dict[int, float]]], str]:
             f"       available: {', '.join(header)}"
         )
     column = ERROR_COLUMN if ERROR_COLUMN in header else "error"
+    has_axes = all(
+        key in header
+        for key in ("gt_x", "gt_y", "gt_z", "vis_x", "vis_y", "vis_z")
+    )
+    # b07 writes the offset-corrected per-axis columns; the raw |vis - gt| is
+    # only the fallback for CSVs that were not corrected yet
+    axis_columns = {
+        axis: f"error_offset_{axis}" for axis in ("x", "y", "z")
+    }
+    axis_columns = {
+        axis: name for axis, name in axis_columns.items() if name in header
+    }
 
-    per_entity: dict[str, dict[int, dict[int, float]]] = {}
+    has_segment = "segment" in header and "segment_t" in header
+
+    per_entity: dict[str, dict[int, dict[int, dict[str, float]]]] = {}
     for row in rows:
         entity = str(row.get("entity", ""))
         demo = int(num(row["demo"]))
         step = int(num(row["timestep"]))
-        per_entity.setdefault(entity, {}).setdefault(demo, {})[step] = num(
-            row[column]
-        )
-    return per_entity, column
+        values = {"total": num(row[column])}
+        if has_axes:
+            for axis in ("x", "y", "z"):
+                value = num(row[axis_columns[axis]]) if axis in axis_columns else float("nan")
+                if np.isnan(value):
+                    value = abs(num(row[f"vis_{axis}"]) - num(row[f"gt_{axis}"]))
+                values[axis] = value
+        values["segment"] = num(row["segment"]) if has_segment else float("nan")
+        values["segment_t"] = num(row["segment_t"]) if has_segment else float("nan")
+        per_entity.setdefault(entity, {}).setdefault(demo, {})[step] = values
+    return per_entity, column, has_axes, has_segment
 
 
 def model_expert(model_tag: str):
@@ -185,6 +210,18 @@ def smooth(values: np.ndarray, fraction: float) -> np.ndarray:
     return np.convolve(padded, kernel, mode="valid")
 
 
+def segment_curve_t(
+    t_values: np.ndarray, errors: np.ndarray, grid: np.ndarray
+) -> np.ndarray | None:
+    """A segment curve from an already normalized in-segment time axis."""
+    order = np.argsort(t_values)
+    t = t_values[order]
+    e = errors[order]
+    if len(t) < 2 or t[-1] <= t[0]:
+        return None
+    return np.interp(grid, t, smooth(e, SMOOTH_FRACTION))
+
+
 def segment_curve(
     steps: np.ndarray,
     errors: np.ndarray,
@@ -206,6 +243,7 @@ def segment_curve(
 
 def plot(
     title: str,
+    kind: str,
     axis_labels: bool,
     grid: np.ndarray,
     segments: dict[str, dict[int, dict[str, np.ndarray]]],
@@ -251,7 +289,7 @@ def plot(
             if SHOW_BAND and np.any(std > 1e-12):
                 ax.fill_between(
                     x,
-                    mean - std,
+                    np.maximum(mean - std, 0.0),  # error cannot go below 0
                     mean + std,
                     color=color,
                     alpha=BAND_ALPHA,
@@ -291,24 +329,29 @@ def plot(
 
     if axis_labels:
         ax.set_xlabel(XLABEL)
-        ax.set_ylabel(YLABEL)
+        ax.set_ylabel(
+            YLABEL if kind == "total" else YLABEL_AXIS.format(axis=kind)
+        )
     ax.tick_params(direction="in", top=True, right=True)
     ax.grid(GRID)
     ax.legend(loc=LEGEND_LOC, frameon=False)
     fig.tight_layout()
     Path(OUT_DIR).mkdir(parents=True, exist_ok=True)
-    suffix = "_labeled" if axis_labels else ""
-    output_path = Path(OUT_DIR) / f"{title}_trajectoryerror{suffix}.png"
+    suffix = "" if kind == "total" else f"_{kind}"
+    labeled = "_labeled" if axis_labels else ""
+    output_path = Path(OUT_DIR) / f"{title}_trajectoryerror{suffix}{labeled}.png"
     fig.savefig(output_path, dpi=DPI)
     plt.close(fig)
     print(f"wrote {output_path}")
 
 
-def curves_for_model(path: Path) -> tuple[dict[str, dict[int, dict[str, np.ndarray]]], int]:
-    """Per entity, per segment: the normalized error curves of every demo."""
+def curves_for_model(
+    path: Path,
+) -> tuple[dict[str, dict[str, dict[int, list[np.ndarray]]]], int]:
+    """Per error kind, per entity, per segment: the normalized demo curves."""
     model_stem = path.stem.removesuffix("_errors")
     model_tag = split_model_tag(model_stem)
-    per_entity, column = read_rows(path)
+    per_entity, column, has_axes, has_segment = read_rows(path)
     print(f"{model_stem}: column {column!r}")
 
     _, expert = model_expert(model_tag)
@@ -320,6 +363,43 @@ def curves_for_model(path: Path) -> tuple[dict[str, dict[int, dict[str, np.ndarr
         entities = sorted(per_entity)
         print(f"{model_stem}: no task parameters, using {entities}")
 
+    grid = np.linspace(0.0, 1.0, GRID_POINTS)
+    kinds = ["total", "x", "y", "z"] if has_axes else ["total"]
+    curves: dict[str, dict[str, dict[int, list[np.ndarray]]]] = {
+        kind: {} for kind in kinds
+    }
+    n_segments = 1
+
+    if has_segment:
+        # the CSV already carries the segmentation (segment + normalized
+        # in-segment time): use it as is
+        print(f"{model_stem}: using the CSV segmentation (segment, segment_t)")
+        for entity in entities:
+            per_kind = {kind: {} for kind in kinds}
+            for demo, steps in per_entity[entity].items():
+                groups: dict[int, list[int]] = {}
+                for step, values in steps.items():
+                    seg = values["segment"]
+                    if np.isnan(seg):
+                        continue
+                    groups.setdefault(int(seg), []).append(step)
+                for seg, seg_steps in groups.items():
+                    seg_steps = sorted(seg_steps, key=lambda s: steps[s]["segment_t"])
+                    t_values = np.asarray(
+                        [steps[s]["segment_t"] for s in seg_steps], dtype=float
+                    )
+                    n_segments = max(n_segments, seg + 1)
+                    for kind in kinds:
+                        errors = np.asarray(
+                            [steps[s][kind] for s in seg_steps], dtype=float
+                        )
+                        curve = segment_curve_t(t_values, errors, grid)
+                        if curve is not None:
+                            per_kind[kind].setdefault(seg, []).append(curve)
+            for kind in kinds:
+                curves[kind][entity] = per_kind[kind]
+        return curves, n_segments
+
     demo_ids = sorted({demo for demos in per_entity.values() for demo in demos})
     demo_ranges = demo_segments(expert, demo_ids) if expert is not None else {}
     for demo in demo_ids:
@@ -330,24 +410,23 @@ def curves_for_model(path: Path) -> tuple[dict[str, dict[int, dict[str, np.ndarr
         else:
             print(f"  demo {demo}: no segmentation, one segment")
 
-    grid = np.linspace(0.0, 1.0, GRID_POINTS)
-    segments: dict[str, dict[int, list[np.ndarray]]] = {}
-    n_segments = 1
     for entity in entities:
-        per_segment: dict[int, list[np.ndarray]] = {}
+        per_kind = {kind: {} for kind in kinds}
         for demo, steps in per_entity[entity].items():
             ordered = np.asarray(sorted(steps), dtype=float)
-            errors = np.asarray([steps[s] for s in sorted(steps)])
-            ranges = demo_ranges.get(demo) or [
-                (int(ordered[0]), int(ordered[-1]) + 1)
-            ]
+            ranges = demo_ranges.get(demo) or [(int(ordered[0]), int(ordered[-1]) + 1)]
             n_segments = max(n_segments, len(ranges))
-            for k, (seg_start, seg_end) in enumerate(ranges):
-                curve = segment_curve(ordered, errors, seg_start, seg_end, grid)
-                if curve is not None:
-                    per_segment.setdefault(k, []).append(curve)
-        segments[entity] = per_segment
-    return segments, n_segments
+            for kind in kinds:
+                errors = np.asarray(
+                    [steps[s][kind] for s in sorted(steps)], dtype=float
+                )
+                for k, (seg_start, seg_end) in enumerate(ranges):
+                    curve = segment_curve(ordered, errors, seg_start, seg_end, grid)
+                    if curve is not None:
+                        per_kind[kind].setdefault(k, []).append(curve)
+        for kind in kinds:
+            curves[kind][entity] = per_kind[kind]
+    return curves, n_segments
 
 
 def main() -> None:
@@ -367,12 +446,13 @@ def main() -> None:
 
     for path in files:
         title = path.stem.removesuffix("_errors")
-        segments, n_segments = curves_for_model(path)
-        if not any(any(seg.values()) for seg in segments.values()):
-            continue
+        curves, n_segments = curves_for_model(path)
         grid = np.linspace(0.0, 1.0, GRID_POINTS)
-        plot(title, True, grid, segments, n_segments)
-        plot(title, False, grid, segments, n_segments)
+        for kind, segments in curves.items():
+            if not any(any(seg.values()) for seg in segments.values()):
+                continue
+            plot(title, kind, True, grid, segments, n_segments)
+            plot(title, kind, False, grid, segments, n_segments)
 
 
 if __name__ == "__main__":

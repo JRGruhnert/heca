@@ -32,20 +32,31 @@ from heca.misc.paths import data_root
 NETWORKS = [f"a{i}" for i in range(0, 13)]  # a0 .. a12
 
 
-def run_dirs(root: Path, network: str) -> list[Path]:
-    return sorted(
+def run_dirs(root: Path, network: str, only: list[str] | None = None) -> list[Path]:
+    """Run dirs of one network; ``only`` keeps names containing one of the words."""
+    dirs = sorted(
         p
         for p in (root / "standard").glob(f"scene0_*-{network}-gt-virt_s*")
         if p.is_dir()
     )
+    if only:
+        dirs = [p for p in dirs if any(token in p.name for token in only)]
+    return dirs
 
 
-def newest_result(run_dir: Path, suffix: str) -> dict | None:
-    """The newest-checkpoint per-run result file (plain or container)."""
+def _step_of(path: Path) -> int | None:
+    token = path.stem.split("_")[1] if len(path.stem.split("_")) > 1 else ""
+    return int(token) if token.isdigit() else None
+
+
+def newest_result(run_dir: Path, suffix: str, step: int | None = None) -> dict | None:
+    """One per-run result file: the newest checkpoint, or the newest <= ``step``."""
     files = sorted(
         run_dir.glob(f"eval/ckp_*_task{suffix}.json"),
-        key=lambda p: int(p.stem.split("_")[1]) if p.stem.split("_")[1].isdigit() else -1,
+        key=lambda p: _step_of(p) if _step_of(p) is not None else -1,
     )
+    if step is not None:
+        files = [f for f in files if _step_of(f) is not None and _step_of(f) <= step]
     if not files:
         return None
     try:
@@ -54,26 +65,45 @@ def newest_result(run_dir: Path, suffix: str) -> dict | None:
         return None
 
 
-def per_seed_rates(root: Path, network: str, container: bool) -> list[float]:
+def per_seed_rates(
+    root: Path,
+    network: str,
+    container: bool,
+    step: int | None = None,
+    only: list[str] | None = None,
+) -> list[float]:
     suffix = "_container" if container else ""
     rates = []
-    for run_dir in run_dirs(root, network):
-        payload = newest_result(run_dir, suffix)
+    for run_dir in run_dirs(root, network, only):
+        payload = newest_result(run_dir, suffix, step)
         if payload and isinstance(payload.get("success_rate"), (int, float)):
             rates.append(float(payload["success_rate"]))
     return rates
 
 
-def write_success_rates(root: Path) -> None:
+def networks_of(root: Path) -> list[str]:
+    """Networks that actually have run dirs (a0..a15, not the hardcoded list)."""
+    found = []
+    for path in sorted((root / "standard").glob("scene0_*")):
+        for token in path.name.split("-"):
+            if token.startswith("a") and token[1:].isdigit() and token not in found:
+                found.append(token)
+    return sorted(found, key=lambda n: int(n[1:])) or NETWORKS
+
+
+def write_success_rates(
+    root: Path, step: int | None = None, only: list[str] | None = None
+) -> None:
     rows = {
         "sr": [],
         "std": [],
         "sr-container": [],
         "std-container": [],
     }
-    for network in NETWORKS:
-        plain = per_seed_rates(root, network, container=False)
-        wide = per_seed_rates(root, network, container=True)
+    nets = networks_of(root)
+    for network in nets:
+        plain = per_seed_rates(root, network, container=False, step=step, only=only)
+        wide = per_seed_rates(root, network, container=True, step=step, only=only)
         rows["sr"].append(mean(plain) if plain else "")
         rows["std"].append(stdev(plain) if len(plain) > 1 else "")
         rows["sr-container"].append(mean(wide) if wide else "")
@@ -82,19 +112,21 @@ def write_success_rates(root: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as fh:
         writer = csv.writer(fh)
-        writer.writerow(["network"] + NETWORKS)
+        writer.writerow(["network"] + nets)
         for name, values in rows.items():
             writer.writerow([name] + values)
     print(f"wrote {path}")
 
 
-def write_task_rates(root: Path) -> None:
+def write_task_rates(
+    root: Path, step: int | None = None, only: list[str] | None = None
+) -> None:
     tasks: list[str] = []
     matrix: dict[str, list[float]] = {}
-    for network in NETWORKS:
+    for network in networks_of(root):
         rates: list[list[float]] = []
-        for run_dir in run_dirs(root, network):
-            payload = newest_result(run_dir, "")
+        for run_dir in run_dirs(root, network, only):
+            payload = newest_result(run_dir, "", step)
             if not payload or not isinstance(payload.get("tasks"), list):
                 continue
             row = {}
@@ -203,10 +235,26 @@ def main():
         "--root", type=Path, default=data_root() / "network",
         help="directory holding the run dirs (default: <data>/network)",
     )
+    parser.add_argument(
+        "--step",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Build the tables from the newest evaluation with step <= N (one row "
+        "per network, i.e. a single 750-step evaluation) instead of the newest "
+        "result on disk.",
+    )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        default=None,
+        help="Keep only run dirs whose name contains one of these words, e.g. "
+        "'--only final' to match the sweep's --only.",
+    )
     args = parser.parse_args()
 
-    write_success_rates(args.root)
-    write_task_rates(args.root)
+    write_success_rates(args.root, args.step, args.only)
+    write_task_rates(args.root, args.step, args.only)
     hits = updates_to_90()
     if hits:
         write_epochs_to_90(args.root, hits)
