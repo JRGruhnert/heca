@@ -80,6 +80,8 @@ from scripts.common.scenes import (
 COLUMNS = [
     "demo",
     "timestep",
+    "segment",
+    "segment_t",
     "entity",
     "gt_x",
     "gt_y",
@@ -89,6 +91,7 @@ COLUMNS = [
     "vis_z",
     "error",
     "error_offset",
+    "error_segment",
     "score",
 ]
 
@@ -130,6 +133,26 @@ def reference_offsets(
                 f"(read {np.round(keypoint.xyz, 3)})"
             )
     return offsets
+
+
+def segment_ids(expert: TapasExpert, scene_frames: list) -> np.ndarray:
+    """Per-frame segment index, with TAPAS's own velocity segmentation.
+
+    The fit builds one TPGMM segment per velocity pause and expresses each
+    segment in the frame at its start; ``_velocity_segments`` on the packed
+    action reproduces exactly the boundaries ``load_demos`` uses.
+    """
+    was = expert._use_gt
+    expert._use_gt = True  # the conversion is GT-only, as in _scan_demos
+    try:
+        td = expert.dcscenes_to_tdtapas(scene_frames)
+    finally:
+        expert._use_gt = was
+    vel = np.linalg.norm(td.action[:, :3].numpy().astype(float), axis=1)
+    seg_cfg = expert.cfg.policy.model.demos_segmentation
+    boundaries = expert._velocity_segments(vel, seg_cfg)
+    frames = np.arange(len(scene_frames))
+    return np.searchsorted(np.asarray(boundaries), frames, side="right")
 
 
 def preselected_demos(expert: TapasExpert) -> list[int]:
@@ -187,31 +210,83 @@ def track_tapas(
                 file, selections=[demo_id], with_images=True
             )
             scene_frames, image_frames = scenes[0], images[0]
+            seg = segment_ids(expert, scene_frames)  # DCScenes, before truncation
             if max_frames:
                 scene_frames = scene_frames[:max_frames]
                 image_frames = image_frames[:max_frames]
+                seg = seg[:max_frames]
             expert.reset_tracking()  # one belief chain per trajectory, as in the fit
+
+            truth: list[dict[str, np.ndarray]] = []
+            seen: list[dict[str, tuple[np.ndarray, float]]] = []
             for step, image in enumerate(image_frames):
                 poses = expert.kp_extractor.extract_poses(image)
+                frame_truth: dict[str, np.ndarray] = {}
+                frame_seen: dict[str, tuple[np.ndarray, float]] = {}
                 for label in labels:
                     raw = np.asarray(scene_frames[step][label].value[:3], dtype=float)
-                    truth = scene.unnormalize_position(raw)
                     keypoint = poses[label]
-                    seen = np.asarray(keypoint.xyz, dtype=float)
-                    offset = offsets.get(label, np.zeros(3))
+                    frame_truth[label] = scene.unnormalize_position(raw)
+                    frame_seen[label] = (
+                        np.asarray(keypoint.xyz, dtype=float),
+                        float(keypoint.score),
+                    )
+                truth.append(frame_truth)
+                seen.append(frame_seen)
+
+            # per segment: align at the segment's first frame, the way the fit
+            # expresses every segment in the frame at its start
+            segment_offset: dict[tuple[int, str], np.ndarray] = {}
+            for segment in sorted(set(int(v) for v in seg)):
+                first = int(np.flatnonzero(seg == segment)[0])
+                for label in labels:
+                    segment_offset[(segment, label)] = (
+                        truth[first][label] - seen[first][label][0]
+                    )
+
+            # 0 -> 1 within each segment, the x axis of the per-segment plots
+            segment_t = np.zeros(len(image_frames))
+            for segment_value in set(int(v) for v in seg):
+                where = np.flatnonzero(seg == segment_value)
+                if len(where) > 1:
+                    segment_t[where] = np.arange(len(where)) / (len(where) - 1)
+
+            for step in range(len(image_frames)):
+                segment = int(seg[step])
+                for label in labels:
+                    point, score = seen[step][label]
+                    error = float(np.linalg.norm(point - truth[step][label]))
+                    corrected = float(
+                        np.linalg.norm(
+                            point + offsets.get(label, np.zeros(3)) - truth[step][label]
+                        )
+                    )
+                    per_segment = float(
+                        np.linalg.norm(
+                            point
+                            + segment_offset.get((segment, label), np.zeros(3))
+                            - truth[step][label]
+                        )
+                    )
                     rows.append(
                         [
                             demo_id,
                             step,
+                            segment,
+                            f"{float(segment_t[step]):.4f}",
                             label,
-                            *[f"{value:.6f}" for value in truth],
-                            *[f"{value:.6f}" for value in seen],
-                            f"{float(np.linalg.norm(seen - truth)):.6f}",
-                            f"{float(np.linalg.norm(seen + offset - truth)):.6f}",
-                            f"{float(keypoint.score):.4f}",
+                            *[f"{value:.6f}" for value in truth[step][label]],
+                            *[f"{value:.6f}" for value in point],
+                            f"{error:.6f}",
+                            f"{corrected:.6f}",
+                            f"{per_segment:.6f}",
+                            f"{score:.4f}",
                         ]
                     )
-            logger.info(f"  demo {demo_id}: {len(image_frames)} frame(s) read")
+            logger.info(
+                f"  demo {demo_id}: {len(image_frames)} frame(s) read, "
+                f"{len(set(int(v) for v in seg))} segment(s)"
+            )
 
     if not rows:
         logger.warning(f"{expert.cfg.tag} / {backend}: nothing measured")
@@ -224,16 +299,20 @@ def track_tapas(
         writer.writerow(COLUMNS)
         writer.writerows(rows)
 
-    by_entity: dict[str, list[tuple[float, float]]] = {}
+    by_entity: dict[str, list[tuple[float, float, float]]] = {}
     for row in rows:
-        by_entity.setdefault(row[2], []).append((float(row[9]), float(row[10])))
+        by_entity.setdefault(row[4], []).append(
+            (float(row[11]), float(row[12]), float(row[13]))
+        )
     for label in sorted(by_entity):
         values = np.asarray([item[0] for item in by_entity[label]])
         corrected = np.asarray([item[1] for item in by_entity[label]])
+        per_segment = np.asarray([item[2] for item in by_entity[label]])
         logger.info(
             f"[{expert.cfg.tag} {backend}] {label:10s} n={len(values):5d} "
             f"error mean {values.mean():.3f} / median {np.median(values):.3f} / "
-            f"max {values.max():.3f} m | offset-corrected {corrected.mean():.3f} m"
+            f"max {values.max():.3f} m | reference-offset {corrected.mean():.3f} m "
+            f"| segment-offset {per_segment.mean():.3f} m"
         )
     logger.info(
         f"wrote {path} ({len(rows)} row(s), "
@@ -261,6 +340,7 @@ def pipeline_model(
     frames and they are independent: this is what makes a four-model run finish
     in an afternoon instead of a week.
     """
+    out_dir = Path(out_dir)
     scene = Scene.get(scene_cfg)
     logger.info(f"[{scene_cfg.tag}] === trajectory errors for {cfg.tag} ({backend}) ===")
     expert = ExpertModel.get(cfg, auto_load=False)
@@ -341,12 +421,13 @@ def main():
             "image encoder's, and the ground truth is only the comparison target"
         )
 
-    jobs = []
     for backend in backends:
+        jobs = []
         for tag in scene_tags():
             if args.scene and tag != args.scene:
                 continue
-            # before the configs go to the workers, so they carry the choice
+            # the selection mutates the shared configs, so the jobs of one
+            # backend must be submitted before the next backend selects
             select_encoder(tag, args.backbone, args.stride, backend)
             models = [
                 model
@@ -354,49 +435,40 @@ def main():
                 if not (args.model and model.tag != args.model)
             ]
             for model in models:
-                jobs.append((scene_config(tag), model, backend))
-
-    if not jobs:
-        logger.error(
-            f"No scene/model matches the given filters "
-            f"(scene={args.scene!r}, model={args.model!r})."
+                jobs.append((scene_config(tag), model))
+        if not jobs:
+            continue
+        workers = len(jobs) if args.jobs <= 0 else min(args.jobs, len(jobs))
+        logger.info(
+            f"[{backend}] tracking {len(jobs)} model(s) with {workers} process(es) "
+            f"(each worker loads its own encoder)."
         )
-        raise SystemExit(1)
-
-    workers = len(jobs) if args.jobs <= 0 else min(args.jobs, len(jobs))
-    logger.info(
-        f"Tracking {len(jobs)} model/backend job(s) with {workers} process(es) "
-        f"(each worker loads its own encoder)."
-    )
-    threads = pdist.threads_for(workers, args.threads)
-    logger.info(f"Threads per worker: {threads} (for {workers} process(es))")
-    # spawn, not fork: hardware.device initialises CUDA when this module is
-    # imported, and a forked child cannot re-initialise it (see b01_fit_experts)
-    pool = ProcessPoolExecutor(
-        max_workers=workers,
-        initializer=partial(pdist.pin_intra_op_threads, threads),
-        mp_context=mp.get_context("spawn"),
-    )
-    futures = [
-        pool.submit(
-            pipeline_model,
-            scene_cfg,
-            cfg,
-            backend,
-            out_dir,
-            args.max_demos,
-            args.demos,
-            args.max_frames,
-            not args.no_offsets,
+        threads = pdist.threads_for(workers, args.threads)
+        pool = ProcessPoolExecutor(
+            max_workers=workers,
+            initializer=partial(pdist.pin_intra_op_threads, threads),
+            mp_context=mp.get_context("spawn"),
         )
-        for scene_cfg, cfg, backend in jobs
-    ]
-    try:
-        for future in as_completed(futures):
-            future.result()
-    finally:
-        # the workers share this process group, so an interrupt reaches them too
-        pool.shutdown(wait=False, cancel_futures=True)
+        futures = [
+            pool.submit(
+                pipeline_model,
+                scene_cfg,
+                model,
+                backend,
+                out_dir,
+                args.max_demos,
+                args.demos,
+                args.max_frames,
+                not args.no_offsets,
+            )
+            for scene_cfg, model in jobs
+        ]
+        try:
+            for future in as_completed(futures):
+                future.result()
+        finally:
+            # the workers share this process group, so an interrupt reaches them
+            pool.shutdown(wait=False, cancel_futures=True)
 
 
 if __name__ == "__main__":
