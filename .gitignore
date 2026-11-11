@@ -47,3 +47,5 @@ out/
 .cache/
 data.tar.zst
 data-server/
+eval/
+visual/

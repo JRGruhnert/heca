@@ -91,13 +91,175 @@ def get_env_safely(scene: Scene) -> SceneEnvBase:
     return cast(SceneEnvBase, scene.env.unwrapped)
 
 
+def save_prediction_plots(model: ExpertModel, episode: int, attempt: int) -> int:
+    """Persist the figures a prediction batch opened (TAPAS ``dbg_prediction``)."""
+    out_dir = ExpertModel.save_dir(model.cfg) / "plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    written = 0
+    for num in plt.get_fignums():
+        figure = plt.figure(num)
+        path = (
+            out_dir
+            / f"{model.cfg.tag}_prediction_ep{episode:02d}_try{attempt:02d}_{num}.png"
+        )
+        figure.savefig(path, dpi=150, bbox_inches="tight")
+        logger.info(f"Saved prediction plot to {path}")
+        written += 1
+    plt.close("all")
+    return written
+
+
+def save_model_plots(model: ExpertModel, demo_idx: int = 0, extended: bool = False) -> int:
+    """The model's own diagnostics, each call guarded and saved on its own."""
+    out_dir = ExpertModel.save_dir(model.cfg) / "plots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    inner = model.model
+    demos = getattr(inner, "_demos", None)
+
+    def capture(label: str) -> int:
+        written = 0
+        for num in plt.get_fignums():
+            figure = plt.figure(num)
+            path = out_dir / f"{model.cfg.tag}_model_{label}_{num}.png"
+            figure.savefig(path, dpi=150, bbox_inches="tight")
+            logger.info(f"Saved model plot to {path}")
+            written += 1
+        plt.close("all")
+        return written
+
+    calls = {
+        "model": lambda: inner.plot_model(
+            scatter=True,
+            annotate_gaussians=True,
+            annotate_trajs=True,
+            mean_as_base=False,
+            time_based=True,
+        ),
+        "hmm": inner.plot_hmm_transition_matrix,
+    }
+    if extended:
+        # these need state a loaded model no longer carries (they are built
+        # during fit_trajectories), so they are opt-in and may only warn
+        calls |= {
+            "components": lambda: _model_components(inner, demos),
+            "basis": inner.plot_basis,
+            "states": lambda: inner.plot_state_sequence_for_demo(demo_idx=demo_idx),
+        }
+    written = 0
+    for label, call in calls.items():
+        try:
+            call()
+        except Exception as exc:  # a plot that needs absent state must not stop the run
+            logger.warning(f"{model.cfg.tag}: model plot {label!r} failed ({exc})")
+            plt.close("all")
+            continue
+        written += capture(label)
+    logger.info(f"{model.cfg.tag}: {written} model plot figure(s) written")
+    return written
+
+
+def _model_components(inner, demos) -> None:
+    """``plot_model_components`` needs the joint models, recomputed from the demos."""
+    if demos is None:
+        raise RuntimeError("the model carries no demos to rebuild the joint models")
+    joint_models = None
+    trans_marginals = None
+    _, trans_marginals, joint_models = inner.get_marginals_and_joint(
+        fix_frames=True,
+        time_based=True,
+        heal_time_variance=True,
+        frame_trans=demos._frame_origins_fixed.numpy(),
+        frame_quats=demos._frame_origins_fixed_wquats.numpy(),
+    )
+    inner.plot_model_components(joint_models, trans_marginals)
+    inner.plot_model_frames(joint_models, trans_marginals)
+
+
+def predict_only(
+    cfg: ExpertModel.Config,
+    scene_cfg: Scene.Config,
+    batches: int,
+    gt: bool,
+    model_plots: bool = False,
+    demo_idx: int = 0,
+    model_plots_all: bool = False,
+) -> int:
+    """Capture prediction batches without running a success test.
+
+    The success evaluation is the expensive part (episodes x attempts of env
+    stepping); a prediction batch is a single forward prediction from one
+    observation. This resets the env, sets a start and a goal, asks the policy
+    for one batch per reset and saves the figures -- no scoring, no results
+    json, no chart.
+    """
+    cfg.policy.dbg_prediction = True  # the batch plot is opened by the policy
+    model = ExpertModel.get(cfg, auto_load=False)
+    model.use_gt(gt)
+    model.load()
+    model.load_extras()
+    model.use_states = False
+    if model_plots or model_plots_all:
+        save_model_plots(model, demo_idx, extended=model_plots_all)
+
+    scene = model.scene
+    if gt:
+        conditions = model.conditions
+    else:
+        # the task itself always comes from the ground-truth conditions (see
+        # evaluate_one); only the observation the policy sees is rendered
+        model.__dict__.pop("conditions", None)
+        model._use_gt = True
+        try:
+            conditions = model.conditions
+        finally:
+            model._use_gt = gt
+
+    env = get_env_safely(scene)
+    anchors = anchor_entities(conditions)
+    visual = not model._use_gt
+    saved = 0
+    for index in range(batches):
+        env.reset(options={"render_goal": True})
+        pre_info, post_info = sample_task_conditions(conditions, scene, anchors)
+        env.set_start(pre_info)
+        env.set_goal(post_info)
+        goal_info = dict(env.get_reset_info()["goal"])
+        y = scene.to_dc_scene(goal_info)
+        if visual:
+            env._render_goal = True
+            env.set_goal(goal_info, return_info=False)
+            rendered = getattr(env, "_cur_goal_rendered", None)
+            if rendered is not None:
+                goal_info["image"] = rendered
+                y = model.make_scene(y, scene.to_td_image(goal_info))
+            env.set_start(pre_info)
+        ob_info = env.compute_ob_info()
+        x = scene.to_dc_scene(ob_info)
+        if visual:
+            x = model.make_scene(x, scene.render_frame())
+        logger.info(f"[{scene_cfg.tag}] {cfg.tag}: predicting batch {index + 1}/{batches}")
+        model.act(x, y)
+        written = save_prediction_plots(model, index, 1)
+        saved += written
+        if written == 0:
+            logger.warning(
+                f"{cfg.tag}: the policy opened no figure for batch {index + 1}; "
+                "the model may not take the batch-prediction path"
+            )
+    logger.info(f"[{scene_cfg.tag}] {cfg.tag}: {saved} prediction figure(s) written")
+    return saved
+
+
 def evaluate_model(
     model: ExpertModel,
     scene: Scene,
     episodes: int,
     max_tries: int,
     conditions: ConPair,
+    capture: int = 0,
 ) -> Counter:
+    """``capture`` is the number of prediction batches to save as figures."""
+    budget = int(capture)
     env = get_env_safely(scene)
     counts: Counter = Counter()
     anchors = anchor_entities(conditions)
@@ -138,6 +300,8 @@ def evaluate_model(
                 # compute_ob_info carries no image, so the frame is rendered
                 x = model.make_scene(x, scene.render_frame())
             _, fb = model.act(x, y)
+            if budget > 0:
+                budget -= save_prediction_plots(model, ep, attempt) or 1
             if fb.success:
                 succeeded_on = attempt
                 break
@@ -288,8 +452,14 @@ def evaluate_one(
     episodes: int,
     max_tries: int,
     gt: bool,
+    capture: int = 0,
+    model_plots: bool = False,
+    demo_idx: int = 0,
+    model_plots_all: bool = False,
 ) -> Counter:
     """Evaluate one model, persist its result, re-plot the scene chart."""
+    # the policy reads this when it predicts a whole batch; set before load()
+    cfg.policy.dbg_prediction = capture > 0
     # select the variant first: `load()` picks tapas_gt.pt or tapas_img.pt from it
     model = ExpertModel.get(cfg, auto_load=False)
     model.use_gt(gt)
@@ -300,6 +470,8 @@ def evaluate_one(
     # reaches the TPGMM, and the policies were fitted with it off as well. Asking
     # Molmo per step is what made episodes take minutes.
     model.use_states = False
+    if model_plots or model_plots_all:
+        save_model_plots(model, demo_idx, extended=model_plots_all)
     # the task instance is sampled from the *ground-truth* conditions even for a
     # visual policy: a visual condition describes the tracked keypoint, and its
     # position block is that keypoint while its rotation block is hard zero, so
@@ -315,7 +487,9 @@ def evaluate_one(
             conditions = model.conditions
         finally:
             model._use_gt = gt
-    counts = evaluate_model(model, model.scene, episodes, max_tries, conditions)
+    counts = evaluate_model(
+        model, model.scene, episodes, max_tries, conditions, capture
+    )
 
     json_path = results_path(scene_cfg, backend_suffix(cfg))
     update_results(
@@ -357,6 +531,41 @@ def main():
         help="Max attempts per episode before giving up.",
     )
     parser.add_argument(
+        "--dbg-prediction",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Save N TAPAS prediction-batch plots (dbg_prediction), one per "
+        "attempt, into the model's plots/ folder (0 = off). Raise --episodes to "
+        "collect them from more than one episode.",
+    )
+    parser.add_argument(
+        "--predict-only",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Only capture N prediction-batch plots: no success evaluation, no "
+        "results json, no chart.",
+    )
+    parser.add_argument(
+        "--model-plots",
+        action="store_true",
+        help="Also save the model's own diagnostics (plot_model, HMM "
+        "transition matrices) into the model's plots/ folder.",
+    )
+    parser.add_argument(
+        "--model-plots-all",
+        action="store_true",
+        help="Also try the plots that need fit-time state (components, basis, "
+        "state sequence); on a loaded model these usually only warn.",
+    )
+    parser.add_argument(
+        "--demo-idx",
+        type=int,
+        default=0,
+        help="Demo index for the state-sequence plot (default 0).",
+    )
+    parser.add_argument(
         "--replot",
         action="store_true",
         help="Skip evaluation: re-plot the chart from the persisted results jsons.",
@@ -388,7 +597,28 @@ def main():
         for cfg in models:
             if args.model and cfg.tag != args.model:
                 continue
-            evaluate_one(cfg, scene_cfg, args.episodes, args.max_tries, args.gt)
+            if args.predict_only:
+                predict_only(
+                    cfg,
+                    scene_cfg,
+                    args.predict_only,
+                    args.gt,
+                    args.model_plots,
+                    args.demo_idx,
+                    args.model_plots_all,
+                )
+                continue
+            evaluate_one(
+                cfg,
+                scene_cfg,
+                args.episodes,
+                args.max_tries,
+                args.gt,
+                args.dbg_prediction,
+                args.model_plots,
+                args.demo_idx,
+                args.model_plots_all,
+            )
 
 
 if __name__ == "__main__":
