@@ -30,13 +30,14 @@ from heca.data.data import DCEntity, DCScene
 from heca.experts.expert import ExpertModel
 from heca.misc import logger
 from scripts.common.args import (
+    add_encoder_arguments,
     add_model_argument,
     add_scene_argument,
     add_tag_argument,
     add_use_gt_argument,
     add_viewer_argument,
 )
-from scripts.common.scenes import agents_by_scene
+from scripts.common.scenes import agents_by_scene, scene_tags, select_encoder
 
 
 def sample_dcscene(con: Condition) -> DCScene:
@@ -98,9 +99,10 @@ def save_prediction_plots(model: ExpertModel, episode: int, attempt: int) -> int
     written = 0
     for num in plt.get_fignums():
         figure = plt.figure(num)
-        path = (
-            out_dir
-            / f"{model.cfg.tag}_prediction_ep{episode:02d}_try{attempt:02d}_{num}.png"
+        suffix = backend_suffix(model.cfg)
+        path = out_dir / (
+            f"{model.cfg.tag}_{suffix}_prediction"
+            f"_ep{episode:02d}_try{attempt:02d}_{num}.png"
         )
         figure.savefig(path, dpi=150, bbox_inches="tight")
         logger.info(f"Saved prediction plot to {path}")
@@ -120,7 +122,9 @@ def save_model_plots(model: ExpertModel, demo_idx: int = 0, extended: bool = Fal
         written = 0
         for num in plt.get_fignums():
             figure = plt.figure(num)
-            path = out_dir / f"{model.cfg.tag}_model_{label}_{num}.png"
+            path = out_dir / (
+                f"{model.cfg.tag}_{backend_suffix(model.cfg)}_model_{label}_{num}.png"
+            )
             figure.savefig(path, dpi=150, bbox_inches="tight")
             logger.info(f"Saved model plot to {path}")
             written += 1
@@ -515,9 +519,14 @@ def evaluate_one(
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_scene_argument(parser)
+    add_encoder_arguments(parser)
     add_model_argument(parser)
     add_viewer_argument(parser)
     add_use_gt_argument(parser)
+    for action in parser._actions:
+        if action.dest == "kp_backend":
+            action.choices = ("dino", "roma", "all")
+            action.default = "all"
     parser.add_argument(
         "--episodes",
         type=int,
@@ -587,38 +596,45 @@ def main():
                     logger.info(f"[{scene_cfg.tag}] {json_path.name}: no agents to plot")
         return
 
-    for scene_cfg, models in agents_by_scene():
-        if args.scene and scene_cfg.tag != args.scene:
-            continue
-        if args.viewer:
-            Scene.get(scene_cfg, auto_load=False).cfg.viewer = True
-        logger.info(f"[{scene_cfg.tag}] evaluating {len(models)} agents")
-
-        for cfg in models:
-            if args.model and cfg.tag != args.model:
+    backends = ["dino", "roma"] if args.kp_backend == "all" else [args.kp_backend]
+    for backend in backends:
+        for tag in scene_tags():
+            if args.scene and tag != args.scene:
                 continue
-            if args.predict_only:
-                predict_only(
+            # before the configs are built, so they carry the choice
+            select_encoder(tag, args.backbone, args.stride, backend)
+            scene_cfg, models = next(
+                (cfg, ms) for cfg, ms in agents_by_scene() if cfg.tag == tag
+            )
+            if args.viewer:
+                Scene.get(scene_cfg, auto_load=False).cfg.viewer = True
+            logger.info(f"[{scene_cfg.tag} / {backend}] {len(models)} agent(s)")
+
+            for cfg in models:
+                if args.model and cfg.tag != args.model:
+                    continue
+                if args.predict_only:
+                    predict_only(
+                        cfg,
+                        scene_cfg,
+                        args.predict_only,
+                        args.gt,
+                        args.model_plots,
+                        args.demo_idx,
+                        args.model_plots_all,
+                    )
+                    continue
+                evaluate_one(
                     cfg,
                     scene_cfg,
-                    args.predict_only,
+                    args.episodes,
+                    args.max_tries,
                     args.gt,
+                    args.dbg_prediction,
                     args.model_plots,
                     args.demo_idx,
                     args.model_plots_all,
                 )
-                continue
-            evaluate_one(
-                cfg,
-                scene_cfg,
-                args.episodes,
-                args.max_tries,
-                args.gt,
-                args.dbg_prediction,
-                args.model_plots,
-                args.demo_idx,
-                args.model_plots_all,
-            )
 
 
 if __name__ == "__main__":
