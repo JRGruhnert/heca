@@ -166,8 +166,10 @@ def add_weight_decay_argument(parser: argparse.ArgumentParser):
 def add_use_gt_argument(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--gt",
-        action="store_true",
-        help="Use ground-truth observations if selected.",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Use ground-truth observations if selected (default: the visual, "
+        "image-encoder read; --no-gt states it explicitly).",
     )
 
 
